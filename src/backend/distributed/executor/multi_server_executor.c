@@ -171,7 +171,6 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 {
 	/* each task placement (assignment) corresponds to one worker node */
 	uint32 nodeCount = list_length(task->taskPlacementList);
-	uint32 nodeIndex = 0;
 
 	TaskExecution *taskExecution = CitusMakeNode(TaskExecution);
 
@@ -186,7 +185,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->connectionIdArray = palloc0(nodeCount * sizeof(int32));
 	taskExecution->fileDescriptorArray = palloc0(nodeCount * sizeof(int32));
 
-	for (nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
+	for (uint32 nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
 	{
 		taskExecution->taskStatusArray[nodeIndex] = initialTaskExecStatus;
 		taskExecution->transmitStatusArray[nodeIndex] = EXEC_TRANSMIT_UNASSIGNED;
@@ -206,8 +205,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 void
 CleanupTaskExecution(TaskExecution *taskExecution)
 {
-	uint32 nodeIndex = 0;
-	for (nodeIndex = 0; nodeIndex < taskExecution->nodeCount; nodeIndex++)
+	for (uint32 nodeIndex = 0; nodeIndex < taskExecution->nodeCount; nodeIndex++)
 	{
 		int32 connectionId = taskExecution->connectionIdArray[nodeIndex];
 		int32 fileDescriptor = taskExecution->fileDescriptorArray[nodeIndex];
@@ -285,14 +283,12 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 bool
 CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats)
 {
-	uint64 maxIntermediateResultInBytes = 0;
-
 	if (!SubPlanLevel || MaxIntermediateResult < 0)
 	{
 		return false;
 	}
 
-	maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+	uint64 maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
 	if (executionStats->totalIntermediateResultSize < maxIntermediateResultInBytes)
 	{
 		return false;

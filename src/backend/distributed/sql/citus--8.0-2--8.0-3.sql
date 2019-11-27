@@ -1,4 +1,4 @@
---  citus--8.0-2--8.0-3 
+--  citus--8.0-2--8.0-3
 SET search_path = 'pg_catalog';
 
 CREATE FUNCTION master_remove_partition_metadata(logicalrelid regclass,

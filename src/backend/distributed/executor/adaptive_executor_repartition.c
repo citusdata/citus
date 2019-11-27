@@ -86,21 +86,18 @@ static void RemoveTempJobDirs(List *jobIds);
 void
 ExecuteDependedTasks(List *topLevelTasks)
 {
-	List *allTasks = NIL;
-
 	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
 
-	List *jobIds = NIL;
 
 	EnsureNoModificationsHaveBeenDone();
 
-	allTasks = TaskAndExecutionList(topLevelTasks);
+	List *allTasks = TaskAndExecutionList(topLevelTasks);
 
 	FillTaskGroups(&allTasks, &mapOutputFetchTasks, &mergeTasks);
 	PutMapOutputFetchQueryStrings(&mapOutputFetchTasks);
 
-	jobIds = CreateTemporarySchemas(mergeTasks);
+	List *jobIds = CreateTemporarySchemas(mergeTasks);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
 
@@ -145,10 +142,9 @@ PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
 	foreach(taskCell, *mapOutputFetchTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		StringInfo mapFetchTaskQueryString = NULL;
 		Task *mapTask = (Task *) linitial(task->dependedTaskList);
 
-		mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
+		StringInfo mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
 		task->queryString = mapFetchTaskQueryString->data;
 	}
 }
@@ -163,7 +159,6 @@ PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
 static StringInfo
 MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
 {
-	StringInfo mapFetchQueryString = NULL;
 	uint32 partitionFileId = mapFetchTask->partitionId;
 	uint32 mergeTaskId = mapFetchTask->upstreamTaskId;
 
@@ -177,7 +172,7 @@ MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
 	Assert(mapFetchTask->taskType == MAP_OUTPUT_FETCH_TASK);
 	Assert(mapTask->taskType == MAP_TASK);
 
-	mapFetchQueryString = makeStringInfo();
+	StringInfo mapFetchQueryString = makeStringInfo();
 	appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,
 					 mapTask->jobId, mapTask->taskId, partitionFileId,
 					 mergeTaskId, /* fetch results to merge task */

@@ -9,4 +9,3 @@ COMMENT ON FUNCTION pg_catalog.alter_role_if_exists(
     role_name text,
     utility_query text)
     IS 'runs the utility query, if the role exists';
-    

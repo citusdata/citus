@@ -56,25 +56,25 @@ EXPLAIN (COSTS FALSE)
 DROP TABLE lineitem_hash;
 DROP TABLE orders_hash;
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1
 ORDER BY 1;
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 OR count(*) > 10
 ORDER BY 1;
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 AND count(*) > 20
 ORDER BY 1;
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 0 AND count(*) FILTER (WHERE value_3=2) > 3 AND min(value_2) IN (0,1,2,3);

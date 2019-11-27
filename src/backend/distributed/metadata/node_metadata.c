@@ -128,7 +128,6 @@ master_add_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-	int nodeId = 0;
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
@@ -153,8 +152,8 @@ master_add_node(PG_FUNCTION_ARGS)
 		nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	}
 
-	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-							 &nodeAlreadyExists);
+	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+								 &nodeAlreadyExists);
 
 	/*
 	 * After adding new node, if the node did not already exist, we will activate
@@ -185,15 +184,14 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
-	int nodeId = 0;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
 	nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
 	CheckCitusVersion(ERROR);
 
-	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-							 &nodeAlreadyExists);
+	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+								 &nodeAlreadyExists);
 
 	PG_RETURN_INT32(nodeId);
 }
@@ -217,7 +215,6 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(4);
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
-	int nodeId = 0;
 
 	nodeMetadata.groupId = GroupForNode(primaryNameString, primaryPort);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
@@ -226,8 +223,8 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-							 &nodeAlreadyExists);
+	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+								 &nodeAlreadyExists);
 
 	PG_RETURN_INT32(nodeId);
 }
@@ -307,11 +304,9 @@ master_disable_node(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-		ErrorData *edata = NULL;
-
 		/* CopyErrorData() requires (CurrentMemoryContext != ErrorContext) */
 		MemoryContextSwitchTo(savedContext);
-		edata = CopyErrorData();
+		ErrorData *edata = CopyErrorData();
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Disabling %s:%d failed", workerNode->workerName,
@@ -397,14 +392,12 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 static void
 PropagateRolesToNewNode(WorkerNode *newWorkerNode)
 {
-	List *ddlCommands = NIL;
-
 	if (!EnableAlterRolePropagation)
 	{
 		return;
 	}
 
-	ddlCommands = GenerateAlterRoleIfExistsCommandAllRoles();
+	List *ddlCommands = GenerateAlterRoleIfExistsCommandAllRoles();
 
 	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
 											   newWorkerNode->workerPort,
@@ -419,8 +412,6 @@ PropagateRolesToNewNode(WorkerNode *newWorkerNode)
 static WorkerNode *
 ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
-
 	CheckCitusVersion(ERROR);
 
 	EnsureCoordinator();
@@ -428,7 +419,7 @@ ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
@@ -581,13 +572,12 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 static int
 ActivateNode(char *nodeName, int nodePort)
 {
-	WorkerNode *newWorkerNode = NULL;
 	bool isActive = true;
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
+	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
 	PropagateRolesToNewNode(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
@@ -621,14 +611,13 @@ master_update_node(PG_FUNCTION_ARGS)
 	int32 lock_cooldown = PG_GETARG_INT32(4);
 
 	char *newNodeNameString = text_to_cstring(newNodeName);
-	WorkerNode *workerNode = NULL;
-	WorkerNode *workerNodeWithSameAddress = NULL;
 	List *placementList = NIL;
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
 
-	workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString, newNodePort);
+	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
+																	 newNodePort);
 	if (workerNodeWithSameAddress != NULL)
 	{
 		/* a node with the given hostname and port already exists in the metadata */
@@ -646,7 +635,7 @@ master_update_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	workerNode = LookupNodeByNodeId(nodeId);
+	WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
@@ -734,25 +723,22 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 {
 	const bool indexOK = true;
 
-	Relation pgDistNode = NULL;
-	TupleDesc tupleDescriptor = NULL;
 	ScanKeyData scanKey[1];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
 
-	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
-	tupleDescriptor = RelationGetDescr(pgDistNode);
+	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodeId));
 
-	scanDescriptor = systable_beginscan(pgDistNode, DistNodeNodeIdIndexId(), indexOK,
-										NULL, 1, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, DistNodeNodeIdIndexId(),
+													indexOK,
+													NULL, 1, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
@@ -791,8 +777,6 @@ Datum
 get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 {
 	ShardInterval *shardInterval = NULL;
-	char distributionMethod = 0;
-	Oid relationId = InvalidOid;
 
 	CheckCitusVersion(ERROR);
 
@@ -806,7 +790,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 						errmsg("relation cannot be NULL")));
 	}
 
-	relationId = PG_GETARG_OID(0);
+	Oid relationId = PG_GETARG_OID(0);
 	EnsureTablePermissions(relationId, ACL_SELECT);
 
 	if (!IsDistributedTable(relationId))
@@ -815,7 +799,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 						errmsg("relation is not distributed")));
 	}
 
-	distributionMethod = PartitionMethod(relationId);
+	char distributionMethod = PartitionMethod(relationId);
 	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		List *shardIntervalList = LoadShardIntervalList(relationId);
@@ -829,12 +813,6 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
 	{
-		Var *distributionColumn = NULL;
-		Oid distributionDataType = InvalidOid;
-		Oid inputDataType = InvalidOid;
-		char *distributionValueString = NULL;
-		Datum inputDatum = 0;
-		Datum distributionValueDatum = 0;
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		/* if given table is not reference table, distributionValue cannot be NULL */
@@ -845,15 +823,15 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 								   "than reference tables.")));
 		}
 
-		inputDatum = PG_GETARG_DATUM(1);
-		inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
-		distributionValueString = DatumToString(inputDatum, inputDataType);
+		Datum inputDatum = PG_GETARG_DATUM(1);
+		Oid inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
+		char *distributionValueString = DatumToString(inputDatum, inputDataType);
 
-		distributionColumn = DistPartitionKey(relationId);
-		distributionDataType = distributionColumn->vartype;
+		Var *distributionColumn = DistPartitionKey(relationId);
+		Oid distributionDataType = distributionColumn->vartype;
 
-		distributionValueDatum = StringToDatum(distributionValueString,
-											   distributionDataType);
+		Datum distributionValueDatum = StringToDatum(distributionValueString,
+													 distributionDataType);
 
 		shardInterval = FindShardInterval(distributionValueDatum, cacheEntry);
 	}
@@ -881,18 +859,17 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 WorkerNode *
 FindWorkerNode(char *nodeName, int32 nodePort)
 {
-	WorkerNode *cachedWorkerNode = NULL;
 	HTAB *workerNodeHash = GetWorkerNodeHash();
 	bool handleFound = false;
-	void *hashKey = NULL;
 
 	WorkerNode *searchedNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	strlcpy(searchedNode->workerName, nodeName, WORKER_LENGTH);
 	searchedNode->workerPort = nodePort;
 
-	hashKey = (void *) searchedNode;
-	cachedWorkerNode = (WorkerNode *) hash_search(workerNodeHash, hashKey, HASH_FIND,
-												  &handleFound);
+	void *hashKey = (void *) searchedNode;
+	WorkerNode *cachedWorkerNode = (WorkerNode *) hash_search(workerNodeHash, hashKey,
+															  HASH_FIND,
+															  &handleFound);
 	if (handleFound)
 	{
 		WorkerNode *workerNode = (WorkerNode *) palloc(sizeof(WorkerNode));
@@ -939,22 +916,19 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 List *
 ReadDistNode(bool includeNodesFromOtherClusters)
 {
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
 	List *workerNodeList = NIL;
-	TupleDesc tupleDescriptor = NULL;
 
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
-	scanDescriptor = systable_beginscan(pgDistNode,
-										InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	tupleDescriptor = RelationGetDescr(pgDistNode);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		WorkerNode *workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
@@ -989,7 +963,6 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	char *nodeDeleteCommand = NULL;
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 
 	if (NodeIsPrimary(workerNode))
@@ -1012,12 +985,12 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
-	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }
 
 
@@ -1059,11 +1032,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 				NodeMetadata *nodeMetadata,
 				bool *nodeAlreadyExists)
 {
-	int nextNodeIdInt = 0;
-	WorkerNode *workerNode = NULL;
-	char *nodeDeleteCommand = NULL;
-	uint32 primariesWithMetadata = 0;
-
 	EnsureCoordinator();
 
 	*nodeAlreadyExists = false;
@@ -1075,7 +1043,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	 */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)
 	{
 		/* fill return data and return */
@@ -1122,24 +1090,24 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	}
 
 	/* generate the new node id from the sequence */
-	nextNodeIdInt = GetNextNodeId();
+	int nextNodeIdInt = GetNextNodeId();
 
 	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, nodeMetadata);
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
 	/* send the delete command to all primary nodes with metadata */
-	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 
 	/* finally prepare the insert command and send it to all primary nodes */
-	primariesWithMetadata = CountPrimariesWithMetadata();
+	uint32 primariesWithMetadata = CountPrimariesWithMetadata();
 	if (primariesWithMetadata != 0)
 	{
 		List *workerNodeList = list_make1(workerNode);
 		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
+		SendCommandToWorkersWithMetadata(nodeInsertCommand);
 	}
 
 	return workerNode->nodeId;
@@ -1157,7 +1125,6 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
-	WorkerNode *newWorkerNode = NULL;
 
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
@@ -1206,12 +1173,12 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
-	newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 
 	heap_close(pgDistNode, NoLock);
 
 	/* we also update the column at worker nodes */
-	SendCommandToWorkers(WORKERS_WITH_METADATA, metadataSyncCommand);
+	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 	return newWorkerNode;
 }
 
@@ -1257,18 +1224,16 @@ GetNodeTuple(const char *nodeName, int32 nodePort)
 	const bool indexOK = false;
 
 	ScanKeyData scanKey[2];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	HeapTuple nodeTuple = NULL;
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
-	scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		nodeTuple = heap_copytuple(heapTuple);
@@ -1298,18 +1263,16 @@ GetNextGroupId()
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum groupIdDatum = 0;
-	int32 groupId = 0;
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique shardId from sequence */
-	groupIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	Datum groupIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	groupId = DatumGetInt32(groupIdDatum);
+	int32 groupId = DatumGetInt32(groupIdDatum);
 
 	return groupId;
 }
@@ -1332,18 +1295,16 @@ GetNextNodeId()
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum nextNodeIdDatum;
-	int nextNodeId = 0;
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique shardId from sequence */
-	nextNodeIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	Datum nextNodeIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	nextNodeId = DatumGetUInt32(nextNodeIdDatum);
+	int nextNodeId = DatumGetUInt32(nextNodeIdDatum);
 
 	return nextNodeId;
 }
@@ -1377,9 +1338,6 @@ EnsureCoordinator(void)
 static void
 InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMetadata)
 {
-	Relation pgDistNode = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_node];
 	bool isNulls[Natts_pg_dist_node];
 
@@ -1404,10 +1362,10 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
 		nodeMetadata->shouldHaveShards);
 
-	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
-	tupleDescriptor = RelationGetDescr(pgDistNode);
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
 	CatalogTupleInsert(pgDistNode, heapTuple);
 
@@ -1430,8 +1388,6 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	const int scanKeyCount = 2;
 	bool indexOK = false;
 
-	HeapTuple heapTuple = NULL;
-	SysScanDesc heapScan = NULL;
 	ScanKeyData scanKey[2];
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1447,10 +1403,10 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 
-	heapScan = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-								  NULL, scanKeyCount, scanKey);
+	SysScanDesc heapScan = systable_beginscan(pgDistNode, InvalidOid, indexOK,
+											  NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(heapScan);
+	HeapTuple heapTuple = systable_getnext(heapScan);
 
 	if (!HeapTupleIsValid(heapTuple))
 	{
@@ -1481,11 +1437,8 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 static WorkerNode *
 TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
-	WorkerNode *workerNode = NULL;
 	Datum datumArray[Natts_pg_dist_node];
 	bool isNullArray[Natts_pg_dist_node];
-	char *nodeName = NULL;
-	char *nodeRack = NULL;
 
 	Assert(!HeapTupleHasNulls(heapTuple));
 
@@ -1502,10 +1455,10 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-	nodeName = DatumGetCString(datumArray[Anum_pg_dist_node_nodename - 1]);
-	nodeRack = DatumGetCString(datumArray[Anum_pg_dist_node_noderack - 1]);
+	char *nodeName = DatumGetCString(datumArray[Anum_pg_dist_node_nodename - 1]);
+	char *nodeRack = DatumGetCString(datumArray[Anum_pg_dist_node_noderack - 1]);
 
-	workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
+	WorkerNode *workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	workerNode->nodeId = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeid - 1]);
 	workerNode->workerPort = DatumGetUInt32(datumArray[Anum_pg_dist_node_nodeport - 1]);
 	workerNode->groupId = DatumGetInt32(datumArray[Anum_pg_dist_node_groupid - 1]);
@@ -1546,12 +1499,11 @@ StringToDatum(char *inputString, Oid dataType)
 	Oid typIoFunc = InvalidOid;
 	Oid typIoParam = InvalidOid;
 	int32 typeModifier = -1;
-	Datum datum = 0;
 
 	getTypeInputInfo(dataType, &typIoFunc, &typIoParam);
 	getBaseTypeAndTypmod(dataType, &typeModifier);
 
-	datum = OidInputFunctionCall(typIoFunc, inputString, typIoParam, typeModifier);
+	Datum datum = OidInputFunctionCall(typIoFunc, inputString, typIoParam, typeModifier);
 
 	return datum;
 }
@@ -1563,12 +1515,11 @@ StringToDatum(char *inputString, Oid dataType)
 char *
 DatumToString(Datum datum, Oid dataType)
 {
-	char *outputString = NULL;
 	Oid typIoFunc = InvalidOid;
 	bool typIsVarlena = false;
 
 	getTypeOutputInfo(dataType, &typIoFunc, &typIsVarlena);
-	outputString = OidOutputFunctionCall(typIoFunc, datum);
+	char *outputString = OidOutputFunctionCall(typIoFunc, datum);
 
 	return outputString;
 }
@@ -1582,34 +1533,29 @@ static bool
 UnsetMetadataSyncedForAll(void)
 {
 	bool updatedAtLeastOne = false;
-	Relation relation = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[2];
 	int scanKeyCount = 2;
 	bool indexOK = false;
-	HeapTuple heapTuple = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	CatalogIndexState indstate;
 
 	/*
 	 * Concurrent master_update_node() calls might iterate and try to update
 	 * pg_dist_node in different orders. To protect against deadlock, we
 	 * get an exclusive lock here.
 	 */
-	relation = heap_open(DistNodeRelationId(), ExclusiveLock);
-	tupleDescriptor = RelationGetDescr(relation);
+	Relation relation = heap_open(DistNodeRelationId(), ExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_hasmetadata,
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_metadatasynced,
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
 
-	indstate = CatalogOpenIndexes(relation);
+	CatalogIndexState indstate = CatalogOpenIndexes(relation);
 
-	scanDescriptor = systable_beginscan(relation,
-										InvalidOid, indexOK,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(relation,
+													InvalidOid, indexOK,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		updatedAtLeastOne = true;
@@ -1617,7 +1563,6 @@ UnsetMetadataSyncedForAll(void)
 
 	while (HeapTupleIsValid(heapTuple))
 	{
-		HeapTuple newHeapTuple = NULL;
 		Datum values[Natts_pg_dist_node];
 		bool isnull[Natts_pg_dist_node];
 		bool replace[Natts_pg_dist_node];
@@ -1629,8 +1574,9 @@ UnsetMetadataSyncedForAll(void)
 		values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(false);
 		replace[Anum_pg_dist_node_metadatasynced - 1] = true;
 
-		newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
-										 replace);
+		HeapTuple newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values,
+												   isnull,
+												   replace);
 
 		CatalogTupleUpdateWithInfo(relation, &newHeapTuple->t_self, newHeapTuple,
 								   indstate);

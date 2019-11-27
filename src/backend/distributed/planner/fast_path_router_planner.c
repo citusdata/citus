@@ -71,8 +71,6 @@ static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn);
 PlannedStmt *
 FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo boundParams)
 {
-	PlannedStmt *result = NULL;
-
 	/*
 	 * To support prepared statements for fast-path queries, we resolve the
 	 * external parameters at this point. Note that this is normally done by
@@ -98,7 +96,7 @@ FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo boundParams)
 		(Node *) eval_const_expressions(NULL, (Node *) parse->jointree->quals);
 
 
-	result = GeneratePlaceHolderPlannedStmt(originalQuery);
+	PlannedStmt *result = GeneratePlaceHolderPlannedStmt(originalQuery);
 
 	return result;
 }
@@ -122,7 +120,6 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	PlannedStmt *result = makeNode(PlannedStmt);
 	SeqScan *seqScanNode = makeNode(SeqScan);
 	Plan *plan = &seqScanNode->plan;
-	Oid relationId = InvalidOid;
 
 	AssertArg(FastPathRouterQuery(parse));
 
@@ -143,7 +140,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	result->rtable = copyObject(parse->rtable);
 	result->planTree = (Plan *) plan;
 
-	relationId = ExtractFirstDistributedTableId(parse);
+	Oid relationId = ExtractFirstDistributedTableId(parse);
 	result->relationOids = list_make1_oid(relationId);
 
 	return result;
@@ -166,12 +163,8 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 bool
 FastPathRouterQuery(Query *query)
 {
-	RangeTblEntry *rangeTableEntry = NULL;
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
-	Oid distributedTableId = InvalidOid;
-	Var *distributionKey = NULL;
-	DistTableCacheEntry *cacheEntry = NULL;
 
 	if (!EnableFastPathRouterPlanner)
 	{
@@ -201,15 +194,15 @@ FastPathRouterQuery(Query *query)
 		return false;
 	}
 
-	rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(query->rtable);
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
 		return false;
 	}
 
 	/* we don't want to deal with append/range distributed tables */
-	distributedTableId = rangeTableEntry->relid;
-	cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = rangeTableEntry->relid;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
 		  cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE))
 	{
@@ -224,7 +217,7 @@ FastPathRouterQuery(Query *query)
 	}
 
 	/* if that's a reference table, we don't need to check anything further */
-	distributionKey = PartitionColumn(distributedTableId, 1);
+	Var *distributionKey = PartitionColumn(distributedTableId, 1);
 	if (!distributionKey)
 	{
 		return true;
@@ -269,11 +262,10 @@ static bool
 ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey)
 {
 	ListCell *varClauseCell = NULL;
-	List *varClauseList = NIL;
 	int partitionColumnReferenceCount = 0;
 
 	/* make sure partition column is used only once in the quals */
-	varClauseList = pull_var_clause_default(quals);
+	List *varClauseList = pull_var_clause_default(quals);
 	foreach(varClauseCell, varClauseList)
 	{
 		Var *column = (Var *) lfirst(varClauseCell);

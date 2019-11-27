@@ -99,7 +99,6 @@ bool
 PartitionTable(Oid relationId)
 {
 	Relation rel = try_relation_open(relationId, AccessShareLock);
-	bool partitionTable = false;
 
 	/* don't error out for tables that are dropped */
 	if (rel == NULL)
@@ -107,7 +106,7 @@ PartitionTable(Oid relationId)
 		return false;
 	}
 
-	partitionTable = rel->rd_rel->relispartition;
+	bool partitionTable = rel->rd_rel->relispartition;
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -125,7 +124,6 @@ bool
 PartitionTableNoLock(Oid relationId)
 {
 	Relation rel = try_relation_open_nolock(relationId);
-	bool partitionTable = false;
 
 	/* don't error out for tables that are dropped */
 	if (rel == NULL)
@@ -133,7 +131,7 @@ PartitionTableNoLock(Oid relationId)
 		return false;
 	}
 
-	partitionTable = rel->rd_rel->relispartition;
+	bool partitionTable = rel->rd_rel->relispartition;
 
 	/* keep the lock */
 	heap_close(rel, NoLock);
@@ -157,13 +155,12 @@ PartitionTableNoLock(Oid relationId)
 static Relation
 try_relation_open_nolock(Oid relationId)
 {
-	Relation relation = NULL;
 	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relationId)))
 	{
 		return NULL;
 	}
 
-	relation = RelationIdGetRelation(relationId);
+	Relation relation = RelationIdGetRelation(relationId);
 	if (!RelationIsValid(relation))
 	{
 		return NULL;
@@ -183,20 +180,18 @@ try_relation_open_nolock(Oid relationId)
 bool
 IsChildTable(Oid relationId)
 {
-	Relation pgInherits = NULL;
-	SysScanDesc scan = NULL;
 	ScanKeyData key[1];
 	HeapTuple inheritsTuple = NULL;
 	bool tableInherits = false;
 
-	pgInherits = heap_open(InheritsRelationId, AccessShareLock);
+	Relation pgInherits = heap_open(InheritsRelationId, AccessShareLock);
 
 	ScanKeyInit(&key[0], Anum_pg_inherits_inhrelid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(relationId));
 
-	scan = systable_beginscan(pgInherits, InvalidOid, false,
-							  NULL, 1, key);
+	SysScanDesc scan = systable_beginscan(pgInherits, InvalidOid, false,
+										  NULL, 1, key);
 
 	while ((inheritsTuple = systable_getnext(scan)) != NULL)
 	{
@@ -230,19 +225,17 @@ IsChildTable(Oid relationId)
 bool
 IsParentTable(Oid relationId)
 {
-	Relation pgInherits = NULL;
-	SysScanDesc scan = NULL;
 	ScanKeyData key[1];
 	bool tableInherited = false;
 
-	pgInherits = heap_open(InheritsRelationId, AccessShareLock);
+	Relation pgInherits = heap_open(InheritsRelationId, AccessShareLock);
 
 	ScanKeyInit(&key[0], Anum_pg_inherits_inhparent,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(relationId));
 
-	scan = systable_beginscan(pgInherits, InheritsParentIndexId, true,
-							  NULL, 1, key);
+	SysScanDesc scan = systable_beginscan(pgInherits, InheritsParentIndexId, true,
+										  NULL, 1, key);
 
 	if (systable_getnext(scan) != NULL)
 	{
@@ -270,9 +263,7 @@ IsParentTable(Oid relationId)
 Oid
 PartitionParentOid(Oid partitionOid)
 {
-	Oid partitionParentOid = InvalidOid;
-
-	partitionParentOid = get_partition_parent(partitionOid);
+	Oid partitionParentOid = get_partition_parent(partitionOid);
 
 	return partitionParentOid;
 }
@@ -288,8 +279,6 @@ PartitionList(Oid parentRelationId)
 	Relation rel = heap_open(parentRelationId, AccessShareLock);
 	List *partitionList = NIL;
 
-	int partitionIndex = 0;
-	int partitionCount = 0;
 
 	if (!PartitionedTable(parentRelationId))
 	{
@@ -300,8 +289,8 @@ PartitionList(Oid parentRelationId)
 
 	Assert(rel->rd_partdesc != NULL);
 
-	partitionCount = rel->rd_partdesc->nparts;
-	for (partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex)
+	int partitionCount = rel->rd_partdesc->nparts;
+	for (int partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex)
 	{
 		partitionList =
 			lappend_oid(partitionList, rel->rd_partdesc->oids[partitionIndex]);
@@ -322,9 +311,6 @@ char *
 GenerateDetachPartitionCommand(Oid partitionTableId)
 {
 	StringInfo detachPartitionCommand = makeStringInfo();
-	Oid parentId = InvalidOid;
-	char *tableQualifiedName = NULL;
-	char *parentTableQualifiedName = NULL;
 
 	if (!PartitionTable(partitionTableId))
 	{
@@ -333,9 +319,9 @@ GenerateDetachPartitionCommand(Oid partitionTableId)
 		ereport(ERROR, (errmsg("\"%s\" is not a partition", relationName)));
 	}
 
-	parentId = get_partition_parent(partitionTableId);
-	tableQualifiedName = generate_qualified_relation_name(partitionTableId);
-	parentTableQualifiedName = generate_qualified_relation_name(parentId);
+	Oid parentId = get_partition_parent(partitionTableId);
+	char *tableQualifiedName = generate_qualified_relation_name(partitionTableId);
+	char *parentTableQualifiedName = generate_qualified_relation_name(parentId);
 
 	appendStringInfo(detachPartitionCommand,
 					 "ALTER TABLE IF EXISTS %s DETACH PARTITION %s;",
@@ -353,7 +339,6 @@ char *
 GeneratePartitioningInformation(Oid parentTableId)
 {
 	char *partitionBoundCString = "";
-	Datum partitionBoundDatum = 0;
 
 	if (!PartitionedTable(parentTableId))
 	{
@@ -362,8 +347,8 @@ GeneratePartitioningInformation(Oid parentTableId)
 		ereport(ERROR, (errmsg("\"%s\" is not a parent table", relationName)));
 	}
 
-	partitionBoundDatum = DirectFunctionCall1(pg_get_partkeydef,
-											  ObjectIdGetDatum(parentTableId));
+	Datum partitionBoundDatum = DirectFunctionCall1(pg_get_partkeydef,
+													ObjectIdGetDatum(parentTableId));
 
 	partitionBoundCString = TextDatumGetCString(partitionBoundDatum);
 
@@ -386,10 +371,6 @@ GenerateAttachShardPartitionCommand(ShardInterval *shardInterval)
 	char *escapedCommand = quote_literal_cstr(command);
 	int shardIndex = ShardIndex(shardInterval);
 
-	Oid parentSchemaId = InvalidOid;
-	char *parentSchemaName = NULL;
-	char *escapedParentSchemaName = NULL;
-	uint64 parentShardId = INVALID_SHARD_ID;
 
 	StringInfo attachPartitionCommand = makeStringInfo();
 
@@ -401,10 +382,10 @@ GenerateAttachShardPartitionCommand(ShardInterval *shardInterval)
 						errdetail("Referenced relation cannot be found.")));
 	}
 
-	parentSchemaId = get_rel_namespace(parentRelationId);
-	parentSchemaName = get_namespace_name(parentSchemaId);
-	escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
-	parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
+	Oid parentSchemaId = get_rel_namespace(parentRelationId);
+	char *parentSchemaName = get_namespace_name(parentSchemaId);
+	char *escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
+	uint64 parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
 
 	appendStringInfo(attachPartitionCommand,
 					 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, parentShardId,
@@ -423,11 +404,7 @@ char *
 GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 {
 	StringInfo createPartitionCommand = makeStringInfo();
-	char *partitionBoundCString = NULL;
 
-	Oid parentId = InvalidOid;
-	char *tableQualifiedName = NULL;
-	char *parentTableQualifiedName = NULL;
 
 	if (!PartitionTable(partitionTableId))
 	{
@@ -436,11 +413,11 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 		ereport(ERROR, (errmsg("\"%s\" is not a partition", relationName)));
 	}
 
-	parentId = get_partition_parent(partitionTableId);
-	tableQualifiedName = generate_qualified_relation_name(partitionTableId);
-	parentTableQualifiedName = generate_qualified_relation_name(parentId);
+	Oid parentId = get_partition_parent(partitionTableId);
+	char *tableQualifiedName = generate_qualified_relation_name(partitionTableId);
+	char *parentTableQualifiedName = generate_qualified_relation_name(parentId);
 
-	partitionBoundCString = PartitionBound(partitionTableId);
+	char *partitionBoundCString = PartitionBound(partitionTableId);
 
 	appendStringInfo(createPartitionCommand, "ALTER TABLE %s ATTACH PARTITION %s %s;",
 					 parentTableQualifiedName, tableQualifiedName,
@@ -460,13 +437,9 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 static char *
 PartitionBound(Oid partitionId)
 {
-	char *partitionBoundString = NULL;
-	HeapTuple tuple = NULL;
-	Datum datum = 0;
 	bool isnull = false;
-	Datum partitionBoundDatum = 0;
 
-	tuple = SearchSysCache1(RELOID, partitionId);
+	HeapTuple tuple = SearchSysCache1(RELOID, partitionId);
 	if (!HeapTupleIsValid(tuple))
 	{
 		elog(ERROR, "cache lookup failed for relation %u", partitionId);
@@ -485,15 +458,15 @@ PartitionBound(Oid partitionId)
 		return "";
 	}
 
-	datum = SysCacheGetAttr(RELOID, tuple,
-							Anum_pg_class_relpartbound,
-							&isnull);
+	Datum datum = SysCacheGetAttr(RELOID, tuple,
+								  Anum_pg_class_relpartbound,
+								  &isnull);
 	Assert(!isnull);
 
-	partitionBoundDatum =
+	Datum partitionBoundDatum =
 		DirectFunctionCall2(pg_get_expr, datum, ObjectIdGetDatum(partitionId));
 
-	partitionBoundString = TextDatumGetCString(partitionBoundDatum);
+	char *partitionBoundString = TextDatumGetCString(partitionBoundDatum);
 
 	ReleaseSysCache(tuple);
 

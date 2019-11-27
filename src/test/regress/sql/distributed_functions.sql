@@ -73,7 +73,7 @@ CREATE FUNCTION add_without_param_names(integer, integer) RETURNS integer
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
-CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
+CREATE FUNCTION "add_mi'xed_param_names"(integer, "va'l1" integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
     IMMUTABLE
@@ -170,12 +170,12 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
-SELECT create_distributed_function('add_mixed_param_names(int, int)');
+SELECT create_distributed_function('"add_mi''xed_param_names"(int, int)');
 SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
-WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+WHERE objid = 'add_mi''xed_param_names(int, int)'::regprocedure;
 
 -- also show that we can use the function
-SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_names"(2,3);') ORDER BY 1,2;
 
 -- make sure that none of the active and primary nodes hasmetadata
 -- since the function doesn't have a parameter
@@ -223,6 +223,13 @@ ALTER FUNCTION add(int,int) SET client_min_messages TO debug;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) RESET client_min_messages;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET "citus.setting;'" TO 'hello '' world';
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) RESET "citus.setting;'";
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) SET search_path TO 'sch'';ma', public;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ALTER FUNCTION add(int,int) RESET search_path;
 
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
@@ -354,6 +361,8 @@ SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test');
 
+SELECT wait_until_metadata_sync();
+
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
@@ -422,32 +431,29 @@ SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 -- sync metadata to workers for consistent results when clearing objects
 SELECT wait_until_metadata_sync();
 
--- clear objects
-SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 
+-- clear objects
+SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 -- This is hacky, but we should clean-up the resources as below
 
 \c - - - :worker_1_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
-
+SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
-
 \c - - - :master_port
 
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser;$$);
+SELECT run_command_on_workers($$DROP USER functionuser$$);

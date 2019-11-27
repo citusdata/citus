@@ -196,9 +196,6 @@ TupleTableSlot *
 ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
-	TupleTableSlot *resultSlot = NULL;
-	EState *executorState = NULL;
-	ScanDirection scanDirection = NoMovementScanDirection;
 	bool forwardScanDirection = true;
 
 	if (tupleStore == NULL)
@@ -206,8 +203,8 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		return NULL;
 	}
 
-	executorState = ScanStateGetExecutorState(scanState);
-	scanDirection = executorState->es_direction;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ScanDirection scanDirection = executorState->es_direction;
 	Assert(ScanDirectionIsValid(scanDirection));
 
 	if (ScanDirectionIsBackward(scanDirection))
@@ -215,7 +212,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		forwardScanDirection = false;
 	}
 
-	resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
+	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
 
 	return resultSlot;
@@ -234,13 +231,12 @@ void
 LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
 	List *workerTaskList = workerJob->taskList;
-	TupleDesc tupleDescriptor = NULL;
 	ListCell *workerTaskCell = NULL;
 	bool randomAccess = true;
 	bool interTransactions = false;
 	char *copyFormat = "text";
 
-	tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
 
 	Assert(citusScanState->tuplestorestate == NULL);
 	citusScanState->tuplestorestate =
@@ -254,11 +250,9 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 	foreach(workerTaskCell, workerTaskList)
 	{
 		Task *workerTask = (Task *) lfirst(workerTaskCell);
-		StringInfo jobDirectoryName = NULL;
-		StringInfo taskFilename = NULL;
 
-		jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
-		taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
+		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
+		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
 		ReadFileIntoTupleStore(taskFilename->data, copyFormat, tupleDescriptor,
 							   citusScanState->tuplestorestate);
@@ -277,8 +271,6 @@ void
 ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescriptor,
 					   Tuplestorestate *tupstore)
 {
-	CopyState copyState = NULL;
-
 	/*
 	 * Trick BeginCopyFrom into using our tuple descriptor by pretending it belongs
 	 * to a relation.
@@ -293,26 +285,23 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
 	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
-	DefElem *copyOption = NULL;
 	List *copyOptions = NIL;
 
 	int location = -1; /* "unknown" token location */
-	copyOption = makeDefElem("format", (Node *) makeString(copyFormat), location);
+	DefElem *copyOption = makeDefElem("format", (Node *) makeString(copyFormat),
+									  location);
 	copyOptions = lappend(copyOptions, copyOption);
 
-	copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-							  NULL, copyOptions);
+	CopyState copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
+										NULL, copyOptions);
 
 	while (true)
 	{
-		MemoryContext oldContext = NULL;
-		bool nextRowFound = false;
-
 		ResetPerTupleExprContext(executorState);
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-										  columnValues, columnNulls);
+		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+											   columnValues, columnNulls);
 		if (!nextRowFound)
 		{
 			MemoryContextSwitchTo(oldContext);
@@ -355,7 +344,6 @@ SortTupleStore(CitusScanState *scanState)
 	ListCell *targetCell = NULL;
 	int sortKeyIndex = 0;
 
-	Tuplesortstate *tuplesortstate = NULL;
 
 	/*
 	 * Iterate on the returning target list and generate the necessary information
@@ -380,7 +368,7 @@ SortTupleStore(CitusScanState *scanState)
 		sortKeyIndex++;
 	}
 
-	tuplesortstate =
+	Tuplesortstate *tuplesortstate =
 		tuplesort_begin_heap(tupleDescriptor, numberOfSortKeys, sortColIdx, sortOperators,
 							 collations, nullsFirst, work_mem, NULL, false);
 
@@ -467,7 +455,6 @@ ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params
 Query *
 ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 {
-	Query *query = NULL;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	List *queryTreeList =
 		pg_analyze_and_rewrite(rawStmt, queryString, paramOids, numParams, NULL);
@@ -477,7 +464,7 @@ ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 		ereport(ERROR, (errmsg("can only execute a single query")));
 	}
 
-	query = (Query *) linitial(queryTreeList);
+	Query *query = (Query *) linitial(queryTreeList);
 
 	return query;
 }
@@ -490,13 +477,10 @@ ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 void
 ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 {
-	PlannedStmt *queryPlan = NULL;
-	int cursorOptions = 0;
-
-	cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
 	/* plan the subquery, this may be another distributed query */
-	queryPlan = pg_plan_query(query, cursorOptions, params);
+	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, params);
 
 	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
 }
@@ -510,12 +494,11 @@ void
 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 							DestReceiver *dest)
 {
-	Portal portal = NULL;
 	int eflags = 0;
 	long count = FETCH_ALL;
 
 	/* create a new portal for executing the query */
-	portal = CreateNewPortal();
+	Portal portal = CreateNewPortal();
 
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;

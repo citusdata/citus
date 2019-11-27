@@ -214,8 +214,8 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-cre
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-type" "s2-create-table-with-type" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
 
 # distributed function tests
-# isolation tests are not very simple psql, so trigger NOTIFY reliably for 
-# s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by 
+# isolation tests are not very simple psql, so trigger NOTIFY reliably for
+# s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by
 # "s2-commit", because "COMMIT"  syncs the messages
 
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects"

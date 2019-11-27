@@ -46,7 +46,7 @@ CREATE TABLE ex_on_non_part_col
 );
 SELECT create_distributed_table('ex_on_non_part_col', 'partition_col', 'hash');
 
--- now show that Citus can distribute unique and EXCLUDE constraints that 
+-- now show that Citus can distribute unique and EXCLUDE constraints that
 -- include the partition column for hash-partitioned tables.
 -- However, EXCLUDE constraints must include the partition column with
 -- an equality operator.
@@ -126,8 +126,8 @@ SELECT create_distributed_table('ex_overlaps', 'partition_col', 'hash');
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-01 00:00:00, 2016-02-01 00:00:00]');
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
 
--- now show that Citus can distribute unique and EXCLUDE constraints that 
--- include the partition column, for hash-partitioned tables. 
+-- now show that Citus can distribute unique and EXCLUDE constraints that
+-- include the partition column, for hash-partitioned tables.
 -- However, EXCLUDE constraints must include the partition column with
 -- an equality operator.
 -- These tests are for NAMED constraints.

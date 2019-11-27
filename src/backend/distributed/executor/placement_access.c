@@ -128,16 +128,16 @@ BuildPlacementAccessList(int32 groupId, List *relationShardList,
 	foreach(relationShardCell, relationShardList)
 	{
 		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
-		ShardPlacement *placement = NULL;
-		ShardPlacementAccess *placementAccess = NULL;
 
-		placement = FindShardPlacementOnGroup(groupId, relationShard->shardId);
+		ShardPlacement *placement = FindShardPlacementOnGroup(groupId,
+															  relationShard->shardId);
 		if (placement == NULL)
 		{
 			continue;
 		}
 
-		placementAccess = CreatePlacementAccess(placement, accessType);
+		ShardPlacementAccess *placementAccess = CreatePlacementAccess(placement,
+																	  accessType);
 		placementAccessList = lappend(placementAccessList, placementAccess);
 	}
 
@@ -152,9 +152,8 @@ BuildPlacementAccessList(int32 groupId, List *relationShardList,
 ShardPlacementAccess *
 CreatePlacementAccess(ShardPlacement *placement, ShardPlacementAccessType accessType)
 {
-	ShardPlacementAccess *placementAccess = NULL;
-
-	placementAccess = (ShardPlacementAccess *) palloc0(sizeof(ShardPlacementAccess));
+	ShardPlacementAccess *placementAccess = (ShardPlacementAccess *) palloc0(
+		sizeof(ShardPlacementAccess));
 	placementAccess->placement = placement;
 	placementAccess->accessType = accessType;
 

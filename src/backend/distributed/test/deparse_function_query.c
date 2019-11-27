@@ -31,15 +31,12 @@ Datum
 deparse_test(PG_FUNCTION_ARGS)
 {
 	text *queryStringText = PG_GETARG_TEXT_P(0);
-	char *queryStringChar = NULL;
-	Query *query = NULL;
-	const char *deparsedQuery = NULL;
 
-	queryStringChar = text_to_cstring(queryStringText);
-	query = ParseQueryString(queryStringChar, NULL, 0);
+	char *queryStringChar = text_to_cstring(queryStringText);
+	Query *query = ParseQueryString(queryStringChar, NULL, 0);
 
 	QualifyTreeNode(query->utilityStmt);
-	deparsedQuery = DeparseTreeNode(query->utilityStmt);
+	const char *deparsedQuery = DeparseTreeNode(query->utilityStmt);
 
 	PG_RETURN_TEXT_P(cstring_to_text(deparsedQuery));
 }

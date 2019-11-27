@@ -279,8 +279,6 @@ ReadShardInterval(READFUNC_ARGS)
 READFUNC_RET
 ReadMapMergeJob(READFUNC_ARGS)
 {
-	int arrayLength;
-	int i;
 
 	READ_LOCALS(MapMergeJob);
 
@@ -292,13 +290,13 @@ ReadMapMergeJob(READFUNC_ARGS)
 	READ_UINT_FIELD(partitionCount);
 	READ_INT_FIELD(sortedShardIntervalArrayLength);
 
-	arrayLength = local_node->sortedShardIntervalArrayLength;
+	int arrayLength = local_node->sortedShardIntervalArrayLength;
 
 	/* now build & read sortedShardIntervalArray */
 	local_node->sortedShardIntervalArray =
 			(ShardInterval**) palloc(arrayLength * sizeof(ShardInterval *));
 
-	for (i = 0; i < arrayLength; ++i)
+	for (int i = 0; i < arrayLength; ++i)
 	{
 		/* can't use READ_NODE_FIELD, no field names */
 		local_node->sortedShardIntervalArray[i] = nodeRead(NULL, 0);

@@ -90,7 +90,7 @@ typedef struct InsertValues
 
 
 /*
- * A ModifyRoute encapsulates the the information needed to route modifications
+ * A ModifyRoute encapsulates the information needed to route modifications
  * to the appropriate shard. For a single-shard modification, only one route
  * is needed, but in the case of e.g. a multi-row INSERT, lists of these values
  * will help divide the rows by their destination shards, permitting later
@@ -260,13 +260,11 @@ CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuer
 						   Query *query,
 						   PlannerRestrictionContext *plannerRestrictionContext)
 {
-	Job *job = NULL;
-
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
 	/* we cannot have multi shard update/delete query via this code path */
-	job = RouterJob(originalQuery, plannerRestrictionContext,
-					&distributedPlan->planningError);
+	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
+						 &distributedPlan->planningError);
 
 	if (distributedPlan->planningError != NULL)
 	{
@@ -302,7 +300,6 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 	Oid relationId = shardInterval->relationId;
 	char partitionMethod = PartitionMethod(shardInterval->relationId);
 	Var *partitionColumn = NULL;
-	Node *baseConstraint = NULL;
 
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
@@ -321,7 +318,7 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 	}
 
 	/* build the base expression for constraint */
-	baseConstraint = BuildBaseConstraint(partitionColumn);
+	Node *baseConstraint = BuildBaseConstraint(partitionColumn);
 
 	/* walk over shard list and check if shards can be pruned */
 	if (shardInterval->minValueExists && shardInterval->maxValueExists)
@@ -349,14 +346,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	List *targetList = subqery->targetList;
 	ListCell *targetEntryCell = NULL;
 	Var *targetPartitionColumnVar = NULL;
-	Oid integer4GEoperatorId = InvalidOid;
-	Oid integer4LEoperatorId = InvalidOid;
-	TypeCacheEntry *typeEntry = NULL;
-	FuncExpr *hashFunctionExpr = NULL;
-	OpExpr *greaterThanAndEqualsBoundExpr = NULL;
-	OpExpr *lessThanAndEqualsBoundExpr = NULL;
 	List *boundExpressionList = NIL;
-	Expr *andedBoundExpressions = NULL;
 
 	/* iterate through the target entries */
 	foreach(targetEntryCell, targetList)
@@ -374,20 +364,20 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	/* we should have found target partition column */
 	Assert(targetPartitionColumnVar != NULL);
 
-	integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTGreaterEqualStrategyNumber);
-	integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTLessEqualStrategyNumber);
+	Oid integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+												   INT4OID,
+												   BTGreaterEqualStrategyNumber);
+	Oid integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+												   INT4OID,
+												   BTLessEqualStrategyNumber);
 
 	/* ensure that we find the correct operators */
 	Assert(integer4GEoperatorId != InvalidOid);
 	Assert(integer4LEoperatorId != InvalidOid);
 
 	/* look up the type cache */
-	typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
-								  TYPECACHE_HASH_PROC_FINFO);
+	TypeCacheEntry *typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
+												  TYPECACHE_HASH_PROC_FINFO);
 
 	/* probable never possible given that the tables are already hash partitioned */
 	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
@@ -398,7 +388,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	}
 
 	/* generate hashfunc(partCol) expression */
-	hashFunctionExpr = makeNode(FuncExpr);
+	FuncExpr *hashFunctionExpr = makeNode(FuncExpr);
 	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
 	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
 
@@ -406,7 +396,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	hashFunctionExpr->funcresulttype = INT4OID;
 
 	/* generate hashfunc(partCol) >= shardMinValue OpExpr */
-	greaterThanAndEqualsBoundExpr =
+	OpExpr *greaterThanAndEqualsBoundExpr =
 		(OpExpr *) make_opclause(integer4GEoperatorId,
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
@@ -421,7 +411,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 		get_func_rettype(greaterThanAndEqualsBoundExpr->opfuncid);
 
 	/* generate hashfunc(partCol) <= shardMinValue OpExpr */
-	lessThanAndEqualsBoundExpr =
+	OpExpr *lessThanAndEqualsBoundExpr =
 		(OpExpr *) make_opclause(integer4LEoperatorId,
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
@@ -438,7 +428,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	boundExpressionList = lappend(boundExpressionList, greaterThanAndEqualsBoundExpr);
 	boundExpressionList = lappend(boundExpressionList, lessThanAndEqualsBoundExpr);
 
-	andedBoundExpressions = make_ands_explicit(boundExpressionList);
+	Expr *andedBoundExpressions = make_ands_explicit(boundExpressionList);
 
 	/* finally add the quals */
 	if (subqery->jointree->quals == NULL)
@@ -461,19 +451,15 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 RangeTblEntry *
 ExtractSelectRangeTableEntry(Query *query)
 {
-	List *fromList = NULL;
-	RangeTblRef *reference = NULL;
-	RangeTblEntry *subqueryRte = NULL;
-
 	Assert(InsertSelectIntoDistributedTable(query));
 
 	/*
 	 * Since we already asserted InsertSelectIntoDistributedTable() it is safe to access
 	 * both lists
 	 */
-	fromList = query->jointree->fromlist;
-	reference = linitial(fromList);
-	subqueryRte = rt_fetch(reference->rtindex, query->rtable);
+	List *fromList = query->jointree->fromlist;
+	RangeTblRef *reference = linitial(fromList);
+	RangeTblEntry *subqueryRte = rt_fetch(reference->rtindex, query->rtable);
 
 	return subqueryRte;
 }
@@ -490,8 +476,6 @@ ExtractSelectRangeTableEntry(Query *query)
 Oid
 ModifyQueryResultRelationId(Query *query)
 {
-	RangeTblEntry *resultRte = NULL;
-
 	/* only modify queries have result relations */
 	if (!IsModifyCommand(query))
 	{
@@ -499,7 +483,7 @@ ModifyQueryResultRelationId(Query *query)
 						errmsg("input query is not a modification query")));
 	}
 
-	resultRte = ExtractResultRelationRTE(query);
+	RangeTblEntry *resultRte = ExtractResultRelationRTE(query);
 	Assert(OidIsValid(resultRte->relid));
 
 	return resultRte->relid;
@@ -562,7 +546,6 @@ DeferredErrorMessage *
 ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery,
 					 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	DeferredErrorMessage *deferredError = NULL;
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
@@ -571,7 +554,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
 
-	deferredError = DeferErrorIfModifyView(queryTree);
+	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
@@ -624,7 +607,6 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		{
 			CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
 			Query *cteQuery = (Query *) cte->ctequery;
-			DeferredErrorMessage *cteError = NULL;
 
 			if (cteQuery->commandType != CMD_SELECT)
 			{
@@ -649,7 +631,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 									 NULL, NULL);
 			}
 
-			cteError = MultiRouterPlannableQuery(cteQuery);
+			DeferredErrorMessage *cteError = MultiRouterPlannableQuery(cteQuery);
 			if (cteError)
 			{
 				return cteError;
@@ -957,12 +939,7 @@ DeferErrorIfModifyView(Query *queryTree)
 DeferredErrorMessage *
 ErrorIfOnConflictNotSupported(Query *queryTree)
 {
-	Oid distributedTableId = InvalidOid;
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
-	List *onConflictSet = NIL;
-	Node *arbiterWhere = NULL;
-	Node *onConflictWhere = NULL;
 	ListCell *setTargetCell = NULL;
 	bool specifiesPartitionValue = false;
 
@@ -972,12 +949,12 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		return NULL;
 	}
 
-	distributedTableId = ExtractFirstDistributedTableId(queryTree);
-	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 
-	onConflictSet = queryTree->onConflict->onConflictSet;
-	arbiterWhere = queryTree->onConflict->arbiterWhere;
-	onConflictWhere = queryTree->onConflict->onConflictWhere;
+	List *onConflictSet = queryTree->onConflict->onConflictSet;
+	Node *arbiterWhere = queryTree->onConflict->arbiterWhere;
+	Node *onConflictWhere = queryTree->onConflict->onConflictWhere;
 
 	/*
 	 * onConflictSet is expanded via expand_targetlist() on the standard planner.
@@ -1207,11 +1184,10 @@ UpdateOrDeleteQuery(Query *query)
 static bool
 MasterIrreducibleExpression(Node *expression, bool *varArgument, bool *badCoalesce)
 {
-	bool result;
 	WalkerState data;
 	data.containsVar = data.varArgument = data.badCoalesce = false;
 
-	result = MasterIrreducibleExpressionWalker(expression, &data);
+	bool result = MasterIrreducibleExpressionWalker(expression, &data);
 
 	*varArgument |= data.varArgument;
 	*badCoalesce |= data.badCoalesce;
@@ -1379,14 +1355,13 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 		List *restrictClauseList = WhereClauseList(joinTree);
 		OpExpr *equalityExpr = MakeOpExpression(column, BTEqualStrategyNumber);
 		Const *rightConst = (Const *) get_rightop((Expr *) equalityExpr);
-		bool predicateIsImplied = false;
 
 		rightConst->constvalue = newValue->constvalue;
 		rightConst->constisnull = newValue->constisnull;
 		rightConst->constbyval = newValue->constbyval;
 
-		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
-												  restrictClauseList, false);
+		bool predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
+													   restrictClauseList, false);
 		if (predicateIsImplied)
 		{
 			/* target entry of the form SET col = <x> WHERE col = <x> AND ... */
@@ -1408,7 +1383,6 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
 	List *taskList = NIL;
-	Job *job = NULL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
 	Const *partitionKeyValue = NULL;
@@ -1459,7 +1433,7 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 		partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 	}
 
-	job = CreateJob(originalQuery);
+	Job *job = CreateJob(originalQuery);
 	job->taskList = taskList;
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
 	job->deferredPruning = deferredPruning;
@@ -1475,9 +1449,7 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 static Job *
 CreateJob(Query *query)
 {
-	Job *job = NULL;
-
-	job = CitusMakeNode(Job);
+	Job *job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
@@ -1498,8 +1470,6 @@ static bool
 CanShardPrune(Oid distributedTableId, Query *query)
 {
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
-	List *insertValuesList = NIL;
 	ListCell *insertValuesCell = NULL;
 
 	if (query->commandType != CMD_INSERT)
@@ -1508,7 +1478,7 @@ CanShardPrune(Oid distributedTableId, Query *query)
 		return true;
 	}
 
-	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	if (partitionColumn == NULL)
 	{
 		/* can always do shard pruning for reference tables */
@@ -1516,7 +1486,7 @@ CanShardPrune(Oid distributedTableId, Query *query)
 	}
 
 	/* get full list of partition values and ensure they are all Consts */
-	insertValuesList = ExtractInsertValuesList(query, partitionColumn);
+	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);
 	foreach(insertValuesCell, insertValuesList)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
@@ -1561,7 +1531,6 @@ List *
 RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 {
 	List *insertTaskList = NIL;
-	List *modifyRouteList = NIL;
 	ListCell *modifyRouteCell = NULL;
 
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
@@ -1571,7 +1540,7 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	modifyRouteList = BuildRoutesForInsert(query, planningError);
+	List *modifyRouteList = BuildRoutesForInsert(query, planningError);
 	if (*planningError != NULL)
 	{
 		return NIL;
@@ -1599,9 +1568,7 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 static Task *
 CreateTask(TaskType taskType)
 {
-	Task *task = NULL;
-
-	task = CitusMakeNode(Task);
+	Task *task = CitusMakeNode(Task);
 	task->taskType = taskType;
 	task->jobId = INVALID_JOB_ID;
 	task->taskId = INVALID_TASK_ID;
@@ -1666,22 +1633,18 @@ static Job *
 RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionContext,
 		  DeferredErrorMessage **planningError)
 {
-	Job *job = NULL;
 	uint64 shardId = INVALID_SHARD_ID;
 	List *placementList = NIL;
 	List *relationShardList = NIL;
 	List *prunedShardIntervalListList = NIL;
-	bool replacePrunedQueryWithDummy = false;
-	bool requiresMasterEvaluation = false;
-	RangeTblEntry *updateOrDeleteRTE = NULL;
 	bool isMultiShardModifyQuery = false;
 	Const *partitionKeyValue = NULL;
 
 	/* router planner should create task even if it doesn't hit a shard at all */
-	replacePrunedQueryWithDummy = true;
+	bool replacePrunedQueryWithDummy = true;
 
 	/* check if this query requires master evaluation */
-	requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
+	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
 									   &placementList, &shardId, &relationShardList,
@@ -1694,10 +1657,10 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		return NULL;
 	}
 
-	job = CreateJob(originalQuery);
+	Job *job = CreateJob(originalQuery);
 	job->partitionKeyValue = partitionKeyValue;
 
-	updateOrDeleteRTE = GetUpdateOrDeleteRTE(originalQuery);
+	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(originalQuery);
 
 	/*
 	 * If all of the shards are pruned, we replace the relation RTE into
@@ -1770,16 +1733,12 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 {
 	if (taskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
 	{
-		Task *task = NULL;
-		List *reorderedPlacementList = NIL;
-		ShardPlacement *primaryPlacement = NULL;
-
 		/*
 		 * We hit a single shard on router plans, and there should be only
 		 * one task in the task list
 		 */
 		Assert(list_length(job->taskList) == 1);
-		task = (Task *) linitial(job->taskList);
+		Task *task = (Task *) linitial(job->taskList);
 
 		/*
 		 * For round-robin SELECT queries, we don't want to include the coordinator
@@ -1796,10 +1755,11 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		placementList = RemoveCoordinatorPlacement(placementList);
 
 		/* reorder the placement list */
-		reorderedPlacementList = RoundRobinReorder(task, placementList);
+		List *reorderedPlacementList = RoundRobinReorder(task, placementList);
 		task->taskPlacementList = reorderedPlacementList;
 
-		primaryPlacement = (ShardPlacement *) linitial(reorderedPlacementList);
+		ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(
+			reorderedPlacementList);
 		ereport(DEBUG3, (errmsg("assigned task %u to node %s:%u", task->taskId,
 								primaryPlacement->nodeName,
 								primaryPlacement->nodePort)));
@@ -1916,16 +1876,14 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	StringInfo queryString = makeStringInfo();
-	DistTableCacheEntry *modificationTableCacheEntry = NULL;
-	char modificationPartitionMethod = 0;
 	List *rangeTableList = NIL;
-	RangeTblEntry *updateOrDeleteRTE = NULL;
 
 	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
-	updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
+	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
 
-	modificationTableCacheEntry = DistributedTableCacheEntry(updateOrDeleteRTE->relid);
-	modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
+	DistTableCacheEntry *modificationTableCacheEntry = DistributedTableCacheEntry(
+		updateOrDeleteRTE->relid);
+	char modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
 
 	if (modificationPartitionMethod == DISTRIBUTE_BY_NONE &&
 		SelectsFromDistributedTable(rangeTableList, query))
@@ -1983,14 +1941,14 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		DistTableCacheEntry *cacheEntry = NULL;
 
 		if (rangeTableEntry->relid == InvalidOid)
 		{
 			continue;
 		}
 
-		cacheEntry = DistributedTableCacheEntry(rangeTableEntry->relid);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+			rangeTableEntry->relid);
 		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
@@ -2242,7 +2200,6 @@ GetAnchorShardId(List *prunedShardIntervalListList)
 	foreach(prunedShardIntervalListCell, prunedShardIntervalListList)
 	{
 		List *prunedShardIntervalList = (List *) lfirst(prunedShardIntervalListCell);
-		ShardInterval *shardInterval = NULL;
 
 		/* no shard is present or all shards are pruned out case will be handled later */
 		if (prunedShardIntervalList == NIL)
@@ -2250,7 +2207,7 @@ GetAnchorShardId(List *prunedShardIntervalListList)
 			continue;
 		}
 
-		shardInterval = linitial(prunedShardIntervalList);
+		ShardInterval *shardInterval = linitial(prunedShardIntervalList);
 
 		if (ReferenceTableShardId(shardInterval->shardId))
 		{
@@ -2341,7 +2298,6 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		List *prunedShardIntervalList = NIL;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
-		bool whereFalseQuery = false;
 
 		relationRestriction->prunedShardIntervalList = NIL;
 
@@ -2351,7 +2307,7 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		 * inside relOptInfo->joininfo list. We treat such cases as if all
 		 * shards of the table are pruned out.
 		 */
-		whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
+		bool whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
 		if (!whereFalseQuery && shardCount > 0)
 		{
 			Const *restrictionPartitionValueConst = NULL;
@@ -2445,9 +2401,6 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 	foreach(prunedShardIntervalCell, prunedShardIntervalsList)
 	{
 		List *shardIntervalList = (List *) lfirst(prunedShardIntervalCell);
-		ShardInterval *shardInterval = NULL;
-		uint64 shardId = INVALID_SHARD_ID;
-		List *newPlacementList = NIL;
 
 		if (shardIntervalList == NIL)
 		{
@@ -2456,11 +2409,11 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 
 		Assert(list_length(shardIntervalList) == 1);
 
-		shardInterval = (ShardInterval *) linitial(shardIntervalList);
-		shardId = shardInterval->shardId;
+		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		uint64 shardId = shardInterval->shardId;
 
 		/* retrieve all active shard placements for this shard */
-		newPlacementList = FinalizedShardPlacementList(shardId);
+		List *newPlacementList = FinalizedShardPlacementList(shardId);
 
 		if (firstShard)
 		{
@@ -2476,7 +2429,7 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 
 		/*
 		 * Bail out if placement list becomes empty. This means there is no worker
-		 * containing all shards referecend by the query, hence we can not forward
+		 * containing all shards referenced by the query, hence we can not forward
 		 * this query directly to any worker.
 		 */
 		if (currentPlacementList == NIL)
@@ -2506,8 +2459,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
-	List *insertValuesList = NIL;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
@@ -2516,24 +2467,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	/* reference tables can only have one shard */
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		int shardCount = 0;
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
-		RangeTblEntry *valuesRTE = NULL;
-		ShardInterval *shardInterval = NULL;
-		ModifyRoute *modifyRoute = NULL;
 
-		shardCount = list_length(shardIntervalList);
+		int shardCount = list_length(shardIntervalList);
 		if (shardCount != 1)
 		{
 			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
 		}
 
-		shardInterval = linitial(shardIntervalList);
-		modifyRoute = palloc(sizeof(ModifyRoute));
+		ShardInterval *shardInterval = linitial(shardIntervalList);
+		ModifyRoute *modifyRoute = palloc(sizeof(ModifyRoute));
 
 		modifyRoute->shardId = shardInterval->shardId;
 
-		valuesRTE = ExtractDistributedInsertValuesRTE(query);
+		RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(query);
 		if (valuesRTE != NULL)
 		{
 			/* add the values list for a multi-row INSERT */
@@ -2549,18 +2496,15 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		return modifyRouteList;
 	}
 
-	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 
 	/* get full list of insert values and iterate over them to prune */
-	insertValuesList = ExtractInsertValuesList(query, partitionColumn);
+	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);
 
 	foreach(insertValuesCell, insertValuesList)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
-		Const *partitionValueConst = NULL;
 		List *prunedShardIntervalList = NIL;
-		int prunedShardIntervalCount = 0;
-		ShardInterval *targetShard = NULL;
 
 		if (!IsA(insertValues->partitionValueExpr, Const))
 		{
@@ -2568,7 +2512,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			return NIL;
 		}
 
-		partitionValueConst = (Const *) insertValues->partitionValueExpr;
+		Const *partitionValueConst = (Const *) insertValues->partitionValueExpr;
 		if (partitionValueConst->constisnull)
 		{
 			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
@@ -2580,10 +2524,9 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			DISTRIBUTE_BY_RANGE)
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
-			ShardInterval *shardInterval = NULL;
 
 			cacheEntry = DistributedTableCacheEntry(distributedTableId);
-			shardInterval = FindShardInterval(partitionValue, cacheEntry);
+			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
 			if (shardInterval != NULL)
 			{
 				prunedShardIntervalList = list_make1(shardInterval);
@@ -2591,7 +2534,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		}
 		else
 		{
-			List *restrictClauseList = NIL;
 			Index tableId = 1;
 			OpExpr *equalityExpr = MakeOpExpression(partitionColumn,
 													BTEqualStrategyNumber);
@@ -2604,13 +2546,13 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			rightConst->constisnull = partitionValueConst->constisnull;
 			rightConst->constbyval = partitionValueConst->constbyval;
 
-			restrictClauseList = list_make1(equalityExpr);
+			List *restrictClauseList = list_make1(equalityExpr);
 
 			prunedShardIntervalList = PruneShards(distributedTableId, tableId,
 												  restrictClauseList, NULL);
 		}
 
-		prunedShardIntervalCount = list_length(prunedShardIntervalList);
+		int prunedShardIntervalCount = list_length(prunedShardIntervalList);
 		if (prunedShardIntervalCount != 1)
 		{
 			char *partitionKeyString = cacheEntry->partitionKeyString;
@@ -2651,7 +2593,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			return NIL;
 		}
 
-		targetShard = (ShardInterval *) linitial(prunedShardIntervalList);
+		ShardInterval *targetShard = (ShardInterval *) linitial(prunedShardIntervalList);
 		insertValues->shardId = targetShard->shardId;
 	}
 
@@ -2768,19 +2710,15 @@ NormalizeMultiRowInsertTargetList(Query *query)
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
 		Node *targetExprNode = (Node *) targetEntry->expr;
-		Oid targetType = InvalidOid;
-		int32 targetTypmod = -1;
-		Oid targetColl = InvalidOid;
-		Var *syntheticVar = NULL;
 
 		/* RTE_VALUES comes 2nd, after destination table */
 		Index valuesVarno = 2;
 
 		targetEntryNo++;
 
-		targetType = exprType(targetExprNode);
-		targetTypmod = exprTypmod(targetExprNode);
-		targetColl = exprCollation(targetExprNode);
+		Oid targetType = exprType(targetExprNode);
+		int32 targetTypmod = exprTypmod(targetExprNode);
+		Oid targetColl = exprCollation(targetExprNode);
 
 		valuesRTE->coltypes = lappend_oid(valuesRTE->coltypes, targetType);
 		valuesRTE->coltypmods = lappend_int(valuesRTE->coltypmods, targetTypmod);
@@ -2794,8 +2732,8 @@ NormalizeMultiRowInsertTargetList(Query *query)
 		}
 
 		/* replace the original expression with a Var referencing values_lists */
-		syntheticVar = makeVar(valuesVarno, targetEntryNo, targetType, targetTypmod,
-							   targetColl, 0);
+		Var *syntheticVar = makeVar(valuesVarno, targetEntryNo, targetType, targetTypmod,
+									targetColl, 0);
 		targetEntry->expr = (Expr *) syntheticVar;
 	}
 }
@@ -2935,11 +2873,10 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 	if (IsA(targetEntry->expr, Var))
 	{
 		Var *partitionVar = (Var *) targetEntry->expr;
-		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
 		Index ivIndex = 0;
 
-		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
+		RangeTblEntry *referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
 		foreach(valuesListCell, referencedRTE->values_lists)
 		{
 			InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
@@ -2980,10 +2917,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
-	TargetEntry *targetEntry = NULL;
 	Const *singlePartitionValueConst = NULL;
-	Node *targetExpression = NULL;
 
 	char partitionMethod = PartitionMethod(distributedTableId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
@@ -2991,15 +2925,16 @@ ExtractInsertPartitionKeyValue(Query *query)
 		return NULL;
 	}
 
-	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-	targetEntry = get_tle_by_resno(query->targetList, partitionColumn->varattno);
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,
+												partitionColumn->varattno);
 	if (targetEntry == NULL)
 	{
 		/* partition column value not specified */
 		return NULL;
 	}
 
-	targetExpression = strip_implicit_coercions((Node *) targetEntry->expr);
+	Node *targetExpression = strip_implicit_coercions((Node *) targetEntry->expr);
 
 	/*
 	 * Multi-row INSERTs have a Var in the target list that points to
@@ -3008,10 +2943,9 @@ ExtractInsertPartitionKeyValue(Query *query)
 	if (IsA(targetExpression, Var))
 	{
 		Var *partitionVar = (Var *) targetExpression;
-		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
 
-		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
+		RangeTblEntry *referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
 
 		foreach(valuesListCell, referencedRTE->values_lists)
 		{
@@ -3019,7 +2953,6 @@ ExtractInsertPartitionKeyValue(Query *query)
 			Node *partitionValueNode = list_nth(rowValues, partitionVar->varattno - 1);
 			Expr *partitionValueExpr = (Expr *) strip_implicit_coercions(
 				partitionValueNode);
-			Const *partitionValueConst = NULL;
 
 			if (!IsA(partitionValueExpr, Const))
 			{
@@ -3028,7 +2961,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 				break;
 			}
 
-			partitionValueConst = (Const *) partitionValueExpr;
+			Const *partitionValueConst = (Const *) partitionValueExpr;
 
 			if (singlePartitionValueConst == NULL)
 			{
@@ -3098,7 +3031,6 @@ MultiRouterPlannableQuery(Query *query)
 		{
 			/* only hash partitioned tables are supported */
 			Oid distributedTableId = rte->relid;
-			char partitionMethod = 0;
 
 			if (!IsDistributedTable(distributedTableId))
 			{
@@ -3109,7 +3041,7 @@ MultiRouterPlannableQuery(Query *query)
 					NULL, NULL);
 			}
 
-			partitionMethod = PartitionMethod(distributedTableId);
+			char partitionMethod = PartitionMethod(distributedTableId);
 			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
 			{

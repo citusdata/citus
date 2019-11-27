@@ -71,8 +71,8 @@ INSERT INTO articles_single_shard_hash_mx VALUES (50, 10, 'anjanette', 19519);
 -- single-shard tests
 
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
 -- test simple select for a single row
@@ -119,8 +119,8 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash_mx
 
 -- query is a single shard query but can't do shard pruning,
 -- not router-plannable due to <= and IN
-SELECT * FROM articles_hash_mx WHERE author_id <= 1; 
-SELECT * FROM articles_hash_mx WHERE author_id IN (1, 3); 
+SELECT * FROM articles_hash_mx WHERE author_id <= 1;
+SELECT * FROM articles_hash_mx WHERE author_id IN (1, 3);
 
 -- queries with CTEs are supported
 WITH first_author AS ( SELECT id FROM articles_hash_mx WHERE author_id = 1)
@@ -160,7 +160,7 @@ INSERT INTO company_employees_mx values(3, 3, 1);
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees_mx
-		WHERE company_id = 1 and manager_id = 0 
+		WHERE company_id = 1 and manager_id = 0
 	UNION
 	SELECT ce.*, (h.level+1)
 		FROM hierarchy h JOIN company_employees_mx ce
@@ -174,7 +174,7 @@ SELECT * FROM hierarchy WHERE LEVEL <= 2;
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees_mx
-		WHERE company_id = 1 and manager_id = 0 
+		WHERE company_id = 1 and manager_id = 0
 	UNION
 	SELECT ce.*, (h.level+1)
 		FROM hierarchy h JOIN company_employees_mx ce
@@ -188,7 +188,7 @@ SELECT * FROM hierarchy WHERE LEVEL <= 2;
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees_mx
-		WHERE company_id = 3 and manager_id = 0 
+		WHERE company_id = 3 and manager_id = 0
 	UNION
 	SELECT ce.*, (h.level+1)
 		FROM hierarchy h JOIN company_employees_mx ce
@@ -228,7 +228,7 @@ ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5;
 
 
 SELECT articles_hash_mx.id,test.word_count
-FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test 
+FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test
 WHERE test.id = articles_hash_mx.id and articles_hash_mx.author_id = 1
 ORDER BY articles_hash_mx.id;
 
@@ -263,13 +263,13 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 
--- following join is router plannable since the same worker 
+-- following join is router plannable since the same worker
 -- has both shards
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash_mx a, articles_single_shard_hash_mx b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
-	
+
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
@@ -299,7 +299,7 @@ SELECT *
 	ORDER BY id desc
 	LIMIT 2
 	OFFSET 1;
-	
+
 -- single shard select with group by on non-partition column is router plannable
 SELECT id
 	FROM articles_hash_mx
@@ -331,7 +331,7 @@ SELECT max(word_count)
 	WHERE author_id = 1
 	GROUP BY author_id;
 
-	
+
 -- router plannable union queries are supported
 SELECT * FROM (
 	SELECT * FROM articles_hash_mx WHERE author_id = 1
@@ -397,7 +397,7 @@ SELECT *
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = 1 or id = 1;
-	
+
 -- router plannable
 SELECT *
 	FROM articles_hash_mx
@@ -417,7 +417,7 @@ SELECT *
 SELECT *
 	FROM articles_hash_mx
 	WHERE author_id = 1 or id = 1;
-	
+
 -- router plannable due to abs(-1) getting converted to 1 by postgresql
 SELECT *
 	FROM articles_hash_mx
@@ -474,11 +474,11 @@ SELECT *
 	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
 
 -- window functions are supported if query is router plannable
-SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash_mx
 	WHERE author_id = 5;
 
-SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash_mx
 	WHERE author_id = 5
 	ORDER BY word_count DESC;
@@ -491,8 +491,8 @@ SELECT id, word_count, AVG(word_count) over (order by word_count)
 	FROM articles_hash_mx
 	WHERE author_id = 1;
 
-SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
-	FROM articles_hash_mx 
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
+	FROM articles_hash_mx
 	WHERE author_id = 1;
 
 -- window functions are not supported for not router plannable queries
@@ -500,14 +500,14 @@ SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash_mx
 	WHERE author_id = 1 or author_id = 2;
 
-SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash_mx
 	WHERE author_id = 5 or author_id = 2;
 
--- complex query hitting a single shard 	
+-- complex query hitting a single shard
 SELECT
 	count(DISTINCT CASE
-			WHEN 
+			WHEN
 				word_count > 100
 			THEN
 				id
@@ -522,7 +522,7 @@ SELECT
 -- same query is not router plannable if hits multiple shards
 SELECT
 	count(DISTINCT CASE
-			WHEN 
+			WHEN
 				word_count > 100
 			THEN
 				id
@@ -545,7 +545,7 @@ END;
 
 -- cursor queries are router plannable
 BEGIN;
-DECLARE test_cursor CURSOR FOR 
+DECLARE test_cursor CURSOR FOR
 	SELECT *
 		FROM articles_hash_mx
 		WHERE author_id = 1
@@ -561,7 +561,7 @@ COPY (
 	FROM articles_hash_mx
 	WHERE author_id = 1
 	ORDER BY id) TO STDOUT;
-	
+
 -- table creation queries inside can be router plannable
 CREATE TEMP TABLE temp_articles_hash_mx as
 	SELECT *
@@ -635,7 +635,7 @@ SET client_min_messages to 'DEBUG2';
 
 CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
-	
+
 -- router planner/executor is disabled for task-tracker executor
 -- following query is router plannable, but router planner is disabled
 

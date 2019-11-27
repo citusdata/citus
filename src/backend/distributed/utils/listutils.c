@@ -97,14 +97,13 @@ PointerArrayFromList(List *pointerList)
 ArrayType *
 DatumArrayToArrayType(Datum *datumArray, int datumCount, Oid datumTypeId)
 {
-	ArrayType *arrayObject = NULL;
 	int16 typeLength = 0;
 	bool typeByValue = false;
 	char typeAlignment = 0;
 
 	get_typlenbyvalalign(datumTypeId, &typeLength, &typeByValue, &typeAlignment);
-	arrayObject = construct_array(datumArray, datumCount, datumTypeId,
-								  typeLength, typeByValue, typeAlignment);
+	ArrayType *arrayObject = construct_array(datumArray, datumCount, datumTypeId,
+											 typeLength, typeByValue, typeAlignment);
 
 	return arrayObject;
 }
@@ -125,7 +124,6 @@ HTAB *
 ListToHashSet(List *itemList, Size keySize, bool isStringList)
 {
 	HASHCTL info;
-	HTAB *itemSet = NULL;
 	ListCell *itemCell = NULL;
 	int flags = HASH_ELEM | HASH_CONTEXT;
 
@@ -143,7 +141,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 		flags |= HASH_BLOBS;
 	}
 
-	itemSet = hash_create("ListToHashSet", capacity, &info, flags);
+	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
 
 	foreach(itemCell, itemList)
 	{

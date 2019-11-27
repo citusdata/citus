@@ -21,7 +21,7 @@ SET client_min_messages TO DEBUG;
 -- we should be able to run set operations with generate series
 (SELECT x FROM test) INTERSECT (SELECT i FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 
--- we'd first recursively plan the query with "test", thus don't need to recursively 
+-- we'd first recursively plan the query with "test", thus don't need to recursively
 -- plan other query
 (SELECT x FROM test LIMIT 5) INTERSECT (SELECT i FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 
@@ -38,7 +38,7 @@ SET client_min_messages TO DEBUG;
 ((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT x FROM local_test) ORDER BY 1 DESC;
 
 -- use ctes inside unions along with local tables on the top level
-WITH 
+WITH
 cte_1 AS (SELECT user_id FROM users_table),
 cte_2 AS (SELECT user_id FROM events_table)
 ((SELECT * FROM cte_1) UNION (SELECT * FROM cte_2) UNION (SELECT x FROM local_test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)
@@ -50,7 +50,7 @@ SELECT
 	count(*)
 FROM
 	(
-		((WITH cte_1 AS (SELECT x FROM test) SELECT * FROM cte_1) UNION 
+		((WITH cte_1 AS (SELECT x FROM test) SELECT * FROM cte_1) UNION
 		(WITH cte_1 AS (SELECT a FROM ref) SELECT * FROM cte_1)) INTERSECT
 		(SELECT x FROM local_test)
 	) as foo,
@@ -63,7 +63,7 @@ SELECT
 	count(*)
 FROM
 	(
-		((WITH cte_1 AS (SELECT x FROM test) SELECT * FROM cte_1) UNION 
+		((WITH cte_1 AS (SELECT x FROM test) SELECT * FROM cte_1) UNION
 		(WITH cte_1 AS (SELECT a FROM ref) SELECT * FROM cte_1)) INTERSECT
 		(SELECT x FROM local_test)
 	) as foo,
@@ -79,10 +79,10 @@ SELECT * FROM test a WHERE x IN (WITH cte AS (SELECT x FROM test b UNION SELECT 
 -- not supported since local table is joined with a set operation
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN local_test USING (x) ORDER BY 1,2;
 
--- though we replace some queries including the local query, the intermediate result is on the outer part of an outer join 
+-- though we replace some queries including the local query, the intermediate result is on the outer part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 
--- we replace some queries including the local query, the intermediate result is on the inner part of an outer join 
+-- we replace some queries including the local query, the intermediate result is on the inner part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u RIGHT JOIN test USING (x) ORDER BY 1,2;
 
 -- recurively plan left part of the join, and run a final real-time query
@@ -94,7 +94,7 @@ SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_te
 SET citus.task_executor_type TO 'task-tracker';
 
 --  repartition is recursively planned before the set operation
-(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 2) INTERSECT (((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)) ORDER BY 1 DESC; 
+(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 2) INTERSECT (((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)) ORDER BY 1 DESC;
 
 SET citus.task_executor_type TO 'adaptive';
 

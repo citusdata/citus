@@ -115,9 +115,6 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 	 */
 	if (createIndexStatement->relation != NULL)
 	{
-		Relation relation = NULL;
-		Oid relationId = InvalidOid;
-		bool isDistributedRelation = false;
 		LOCKMODE lockmode = ShareLock;
 		MemoryContext relationContext = NULL;
 
@@ -137,10 +134,10 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 		 * checked permissions, and will only fail when executing the actual
 		 * index statements.
 		 */
-		relation = heap_openrv(createIndexStatement->relation, lockmode);
-		relationId = RelationGetRelid(relation);
+		Relation relation = heap_openrv(createIndexStatement->relation, lockmode);
+		Oid relationId = RelationGetRelid(relation);
 
-		isDistributedRelation = IsDistributedTable(relationId);
+		bool isDistributedRelation = IsDistributedTable(relationId);
 
 		if (createIndexStatement->relation->schemaname == NULL)
 		{
@@ -163,15 +160,13 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 
 		if (isDistributedRelation)
 		{
-			Oid namespaceId = InvalidOid;
-			Oid indexRelationId = InvalidOid;
 			char *indexName = createIndexStatement->idxname;
 			char *namespaceName = createIndexStatement->relation->schemaname;
 
 			ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
-			namespaceId = get_namespace_oid(namespaceName, false);
-			indexRelationId = get_relname_relid(indexName, namespaceId);
+			Oid namespaceId = get_namespace_oid(namespaceName, false);
+			Oid indexRelationId = get_relname_relid(indexName, namespaceId);
 
 			/* if index does not exist, send the command to workers */
 			if (!OidIsValid(indexRelationId))
@@ -319,9 +314,6 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 	/* check if any of the indexes being dropped belong to a distributed table */
 	foreach(dropObjectCell, dropIndexStatement->objects)
 	{
-		Oid indexId = InvalidOid;
-		Oid relationId = InvalidOid;
-		bool isDistributedRelation = false;
 		struct DropRelationCallbackState state;
 		uint32 rvrFlags = RVR_MISSING_OK;
 		LOCKMODE lockmode = AccessExclusiveLock;
@@ -349,9 +341,9 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		state.heapOid = InvalidOid;
 		state.concurrent = dropIndexStatement->concurrent;
 
-		indexId = RangeVarGetRelidExtended(rangeVar, lockmode, rvrFlags,
-										   RangeVarCallbackForDropIndex,
-										   (void *) &state);
+		Oid indexId = RangeVarGetRelidExtended(rangeVar, lockmode, rvrFlags,
+											   RangeVarCallbackForDropIndex,
+											   (void *) &state);
 
 		/*
 		 * If the index does not exist, we don't do anything here, and allow
@@ -362,8 +354,8 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 			continue;
 		}
 
-		relationId = IndexGetRelation(indexId, false);
-		isDistributedRelation = IsDistributedTable(relationId);
+		Oid relationId = IndexGetRelation(indexId, false);
+		bool isDistributedRelation = IsDistributedTable(relationId);
 		if (isDistributedRelation)
 		{
 			distributedIndexId = indexId;
@@ -400,13 +392,6 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 void
 PostProcessIndexStmt(IndexStmt *indexStmt)
 {
-	Relation relation = NULL;
-	Oid indexRelationId = InvalidOid;
-	Relation indexRelation = NULL;
-	Relation pg_index = NULL;
-	HeapTuple indexTuple = NULL;
-	Form_pg_index indexForm = NULL;
-
 	/* we are only processing CONCURRENT index statements */
 	if (!indexStmt->concurrent)
 	{
@@ -424,10 +409,10 @@ PostProcessIndexStmt(IndexStmt *indexStmt)
 	StartTransactionCommand();
 
 	/* get the affected relation and index */
-	relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
-	indexRelationId = get_relname_relid(indexStmt->idxname,
-										RelationGetNamespace(relation));
-	indexRelation = index_open(indexRelationId, RowExclusiveLock);
+	Relation relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
+	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
+											RelationGetNamespace(relation));
+	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
 	/* close relations but retain locks */
 	heap_close(relation, NoLock);
@@ -441,13 +426,14 @@ PostProcessIndexStmt(IndexStmt *indexStmt)
 	StartTransactionCommand();
 
 	/* now, update index's validity in a way that can roll back */
-	pg_index = heap_open(IndexRelationId, RowExclusiveLock);
+	Relation pg_index = heap_open(IndexRelationId, RowExclusiveLock);
 
-	indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(indexRelationId));
+	HeapTuple indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(
+												   indexRelationId));
 	Assert(HeapTupleIsValid(indexTuple)); /* better be present, we have lock! */
 
 	/* mark as valid, save, and update pg_index indexes */
-	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+	Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
 	indexForm->indisvalid = true;
 
 	CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
@@ -528,11 +514,10 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		Task *task = NULL;
 
 		deparse_shard_index_statement(indexStmt, relationId, shardId, &ddlString);
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
@@ -574,11 +559,10 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		Task *task = NULL;
 
 		deparse_shard_reindex_statement(reindexStmt, relationId, shardId, &ddlString);
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
@@ -612,13 +596,11 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 {
 	/* *INDENT-OFF* */
 	HeapTuple	tuple;
-	struct DropRelationCallbackState *state;
 	char		relkind;
 	char		expected_relkind;
-	Form_pg_class classform;
 	LOCKMODE	heap_lockmode;
 
-	state = (struct DropRelationCallbackState *) arg;
+	struct DropRelationCallbackState *state = (struct DropRelationCallbackState *) arg;
 	relkind = state->relkind;
 	heap_lockmode = state->concurrent ?
 	                ShareUpdateExclusiveLock : AccessExclusiveLock;
@@ -643,7 +625,7 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relOid));
 	if (!HeapTupleIsValid(tuple))
 		return;					/* concurrently dropped, so nothing to do */
-	classform = (Form_pg_class) GETSTRUCT(tuple);
+	Form_pg_class classform = (Form_pg_class) GETSTRUCT(tuple);
 
 	/*
 	 * PG 11 sends relkind as partitioned index for an index
@@ -805,7 +787,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
 		Var *partitionKey = DistPartitionKey(relationId);
 		char partitionMethod = PartitionMethod(relationId);
-		List *indexParameterList = NIL;
 		ListCell *indexParameterCell = NULL;
 		bool indexContainsPartitionColumn = false;
 
@@ -825,12 +806,11 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 								   "is currently unsupported")));
 		}
 
-		indexParameterList = createIndexStatement->indexParams;
+		List *indexParameterList = createIndexStatement->indexParams;
 		foreach(indexParameterCell, indexParameterList)
 		{
 			IndexElem *indexElement = (IndexElem *) lfirst(indexParameterCell);
 			char *columnName = indexElement->name;
-			AttrNumber attributeNumber = InvalidAttrNumber;
 
 			/* column name is null for index expressions, skip it */
 			if (columnName == NULL)
@@ -838,7 +818,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 				continue;
 			}
 
-			attributeNumber = get_attnum(relationId, columnName);
+			AttrNumber attributeNumber = get_attnum(relationId, columnName);
 			if (attributeNumber == partitionKey->varattno)
 			{
 				indexContainsPartitionColumn = true;
@@ -902,7 +882,6 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *shardIndexName = pstrdup(indexName);
-		Task *task = NULL;
 
 		AppendShardIdToName(&shardIndexName, shardId);
 
@@ -913,7 +892,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 						 quote_qualified_identifier(schemaName, shardIndexName),
 						 (dropStmt->behavior == DROP_RESTRICT ? "RESTRICT" : "CASCADE"));
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;

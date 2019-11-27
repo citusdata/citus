@@ -139,13 +139,12 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 		ObjectIdGetDatum(distAddress->objectId),
 		Int32GetDatum(distAddress->objectSubId)
 	};
-	int spiStatus = 0;
 
 	char *insertQuery = "INSERT INTO citus.pg_dist_object (classid, objid, objsubid) "
 						"VALUES ($1, $2, $3) ON CONFLICT DO NOTHING";
 
-	spiStatus = ExecuteCommandAsSuperuser(insertQuery, paramCount, paramTypes,
-										  paramValues);
+	int spiStatus = ExecuteCommandAsSuperuser(insertQuery, paramCount, paramTypes,
+											  paramValues);
 	if (spiStatus < 0)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
@@ -160,14 +159,12 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 bool
 CitusExtensionObject(const ObjectAddress *objectAddress)
 {
-	char *extensionName = false;
-
 	if (objectAddress->classId != ExtensionRelationId)
 	{
 		return false;
 	}
 
-	extensionName = get_extension_name(objectAddress->objectId);
+	char *extensionName = get_extension_name(objectAddress->objectId);
 	if (extensionName != NULL &&
 		strncasecmp(extensionName, "citus", NAMEDATALEN) == 0)
 	{
@@ -188,13 +185,10 @@ static int
 ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 						  Datum *paramValues)
 {
-	int spiConnected = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	int spiStatus = 0;
-	int spiFinished = 0;
 
-	spiConnected = SPI_connect();
+	int spiConnected = SPI_connect();
 	if (spiConnected != SPI_OK_CONNECT)
 	{
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
@@ -204,12 +198,12 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	spiStatus = SPI_execute_with_args(query, paramCount, paramTypes, paramValues,
-									  NULL, false, 0);
+	int spiStatus = SPI_execute_with_args(query, paramCount, paramTypes, paramValues,
+										  NULL, false, 0);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	spiFinished = SPI_finish();
+	int spiFinished = SPI_finish();
 	if (spiFinished != SPI_OK_FINISH)
 	{
 		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
@@ -237,13 +231,12 @@ UnmarkObjectDistributed(const ObjectAddress *address)
 		ObjectIdGetDatum(address->objectId),
 		Int32GetDatum(address->objectSubId)
 	};
-	int spiStatus = 0;
 
 	char *deleteQuery = "DELETE FROM citus.pg_dist_object WHERE classid = $1 AND "
 						"objid = $2 AND objsubid = $3";
 
-	spiStatus = ExecuteCommandAsSuperuser(deleteQuery, paramCount, paramTypes,
-										  paramValues);
+	int spiStatus = ExecuteCommandAsSuperuser(deleteQuery, paramCount, paramTypes,
+											  paramValues);
 	if (spiStatus < 0)
 	{
 		ereport(ERROR, (errmsg("failed to delete object from citus.pg_dist_object")));
@@ -258,13 +251,10 @@ UnmarkObjectDistributed(const ObjectAddress *address)
 bool
 IsObjectDistributed(const ObjectAddress *address)
 {
-	Relation pgDistObjectRel = NULL;
 	ScanKeyData key[3];
-	SysScanDesc pgDistObjectScan = NULL;
-	HeapTuple pgDistObjectTup = NULL;
 	bool result = false;
 
-	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
 
 	/* scan pg_dist_object for classid = $1 AND objid = $2 AND objsubid = $3 via index */
 	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -273,10 +263,11 @@ IsObjectDistributed(const ObjectAddress *address)
 				ObjectIdGetDatum(address->objectId));
 	ScanKeyInit(&key[2], Anum_pg_dist_object_objsubid, BTEqualStrategyNumber, F_INT4EQ,
 				Int32GetDatum(address->objectSubId));
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
-										  true, NULL, 3, key);
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+													  DistObjectPrimaryKeyIndexId(),
+													  true, NULL, 3, key);
 
-	pgDistObjectTup = systable_getnext(pgDistObjectScan);
+	HeapTuple pgDistObjectTup = systable_getnext(pgDistObjectScan);
 	if (HeapTupleIsValid(pgDistObjectTup))
 	{
 		result = true;
@@ -299,14 +290,13 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 {
 	bool foundDistributedFunction = false;
 
-	SysScanDesc pgDistObjectScan = NULL;
 	HeapTuple pgDistObjectTup = NULL;
 
 	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
 
-	pgDistObjectScan =
+	SysScanDesc pgDistObjectScan =
 		systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0, NULL);
 	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
 	{
@@ -315,8 +305,7 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 
 		if (pg_dist_object->classid == ProcedureRelationId)
 		{
-			bool distArgumentIsNull = false;
-			distArgumentIsNull =
+			bool distArgumentIsNull =
 				heap_attisnull(pgDistObjectTup,
 							   Anum_pg_dist_object_distribution_argument_index,
 							   tupleDescriptor);
@@ -345,14 +334,13 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 List *
 GetDistributedObjectAddressList(void)
 {
-	Relation pgDistObjectRel = NULL;
-	SysScanDesc pgDistObjectScan = NULL;
 	HeapTuple pgDistObjectTup = NULL;
 	List *objectAddressList = NIL;
 
-	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0,
-										  NULL);
+	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false,
+													  NULL, 0,
+													  NULL);
 	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
 	{
 		Form_pg_dist_object pg_dist_object =

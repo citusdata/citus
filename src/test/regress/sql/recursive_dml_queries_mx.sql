@@ -20,15 +20,15 @@ INSERT INTO reference_table SELECT i::text, 'user_' || i FROM generate_series (0
 SET client_min_messages TO DEBUG1;
 
 -- the subquery foo is recursively planned
-UPDATE 
-	reference_table 
-SET 
-	name = 'new_' || name 
-FROM 
+UPDATE
+	reference_table
+SET
+	name = 'new_' || name
+FROM
 (
-	SELECT 
+	SELECT
 		avg(second_distributed_table.tenant_id::int) as avg_tenant_id
-	FROM 
+	FROM
 		second_distributed_table
 ) as foo
 WHERE
@@ -36,27 +36,27 @@ WHERE
 
 -- the subquery foo is recursively planned
 -- but note that the subquery foo itself is pushdownable
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.max_dept * 2
-FROM 
+FROM
 (
-	SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) as max_dept FROM 
+	SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) as max_dept FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 	) foo_inner
 	GROUP BY
-		tenant_id 
+		tenant_id
 	ORDER BY 1 DESC
 ) as foo
 WHERE
-	foo.tenant_id != second_distributed_table.tenant_id 
+	foo.tenant_id != second_distributed_table.tenant_id
 	AND second_distributed_table.dept IN (2);
 
 -- run some queries from worker nodes
@@ -65,29 +65,29 @@ SET search_path TO recursive_dml_queries_mx, public;
 
 -- the subquery foo is recursively planned
 -- and foo itself is a non colocated subquery and recursively planned
-UPDATE 
-	second_distributed_table 
-SET 
+UPDATE
+	second_distributed_table
+SET
 	dept = foo.tenant_id::int / 4
-FROM 
+FROM
 (
-	SELECT DISTINCT foo_inner_1.tenant_id FROM 
+	SELECT DISTINCT foo_inner_1.tenant_id FROM
 	(
-		SELECT 
+		SELECT
 			second_distributed_table.dept, second_distributed_table.tenant_id
-		FROM 
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (3,4)
 	) foo_inner_1,
 	(
-		SELECT 
-			second_distributed_table.tenant_id 
-		FROM 
+		SELECT
+			second_distributed_table.tenant_id
+		FROM
 			second_distributed_table, distributed_table
-		WHERE 
+		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
 			second_distributed_table.dept IN (4,5)
@@ -95,7 +95,7 @@ FROM
 	WHERE foo_inner_1.tenant_id != foo_inner_2.tenant_id
 ) as foo
 WHERE
-	foo.tenant_id != second_distributed_table.tenant_id 
+	foo.tenant_id != second_distributed_table.tenant_id
 	AND second_distributed_table.dept IN (3);
 
 -- use the second worker
@@ -105,25 +105,25 @@ SET search_path TO recursive_dml_queries_mx, public;
 CREATE TABLE recursive_dml_queries_mx.local_table (id text, name text);
 INSERT INTO local_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 
-CREATE VIEW tenant_ids AS 
-	SELECT 
-		tenant_id, name 
-	FROM 
+CREATE VIEW tenant_ids AS
+	SELECT
+		tenant_id, name
+	FROM
 		distributed_table, reference_table
-	WHERE 
+	WHERE
 		distributed_table.dept::text = reference_table.id
 	ORDER BY 2 DESC, 1 DESC;
 
 -- we currently do not allow local tables in modification queries
-UPDATE 
-	distributed_table 
-SET 
+UPDATE
+	distributed_table
+SET
 	dept = avg_tenant_id::int
-FROM 
+FROM
 (
-	SELECT 
+	SELECT
 		avg(local_table.id::int) as avg_tenant_id
-	FROM 
+	FROM
 		local_table
 ) as foo
 WHERE
@@ -132,15 +132,15 @@ RETURNING
 	distributed_table.*;
 
 -- we currently do not allow views in modification queries
-UPDATE 
-	distributed_table 
-SET 
+UPDATE
+	distributed_table
+SET
 	dept = avg_tenant_id::int
-FROM 
+FROM
 (
-	SELECT 
+	SELECT
 		avg(tenant_id::int) as avg_tenant_id
-	FROM 
+	FROM
 		tenant_ids
 ) as foo
 WHERE

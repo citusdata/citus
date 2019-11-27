@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
@@ -58,6 +59,7 @@ static void AppendDefElemCost(StringInfo buf, DefElem *def);
 static void AppendDefElemRows(StringInfo buf, DefElem *def);
 static void AppendDefElemSet(StringInfo buf, DefElem *def);
 
+static void AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt);
 static void AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
@@ -257,7 +259,7 @@ AppendDefElemCost(StringInfo buf, DefElem *def)
 static void
 AppendDefElemRows(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " ROWS  %lf", defGetNumeric(def));
+	appendStringInfo(buf, " ROWS %lf", defGetNumeric(def));
 }
 
 
@@ -268,31 +270,31 @@ static void
 AppendDefElemSet(StringInfo buf, DefElem *def)
 {
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, def->arg);
-	char *setVariableArgs = ExtractSetVariableArgs(setStmt);
 
 	switch (setStmt->kind)
 	{
 		case VAR_SET_VALUE:
 		{
-			appendStringInfo(buf, " SET %s = %s", setStmt->name, setVariableArgs);
+			AppendVarSetValue(buf, setStmt);
 			break;
 		}
 
 		case VAR_SET_CURRENT:
 		{
-			appendStringInfo(buf, " SET %s FROM CURRENT", setStmt->name);
+			appendStringInfo(buf, " SET %s FROM CURRENT", quote_identifier(
+								 setStmt->name));
 			break;
 		}
 
 		case VAR_SET_DEFAULT:
 		{
-			appendStringInfo(buf, " SET %s TO DEFAULT", setStmt->name);
+			appendStringInfo(buf, " SET %s TO DEFAULT", quote_identifier(setStmt->name));
 			break;
 		}
 
 		case VAR_RESET:
 		{
-			appendStringInfo(buf, " RESET %s", setStmt->name);
+			appendStringInfo(buf, " RESET %s", quote_identifier(setStmt->name));
 			break;
 		}
 
@@ -308,6 +310,114 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 		{
 			ereport(ERROR, (errmsg("Unable to deparse SET statement")));
 			break;
+		}
+	}
+}
+
+
+/*
+ * AppendVarSetValue deparses a VariableSetStmt with VAR_SET_VALUE kind.
+ * It takes from flatten_set_variable_args in postgres's utils/misc/guc.c,
+ * however flatten_set_variable_args does not apply correct quoting.
+ */
+static void
+AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
+{
+	ListCell *varArgCell = NULL;
+	ListCell *firstCell = list_head(setStmt->args);
+
+	Assert(setStmt->kind == VAR_SET_VALUE);
+
+	foreach(varArgCell, setStmt->args)
+	{
+		Node *varArgNode = lfirst(varArgCell);
+		A_Const *varArgConst = NULL;
+		TypeName *typeName = NULL;
+
+		if (IsA(varArgNode, A_Const))
+		{
+			varArgConst = (A_Const *) varArgNode;
+		}
+		else if (IsA(varArgNode, TypeCast))
+		{
+			TypeCast *varArgTypeCast = (TypeCast *) varArgNode;
+
+			varArgConst = castNode(A_Const, varArgTypeCast->arg);
+			typeName = varArgTypeCast->typeName;
+		}
+		else
+		{
+			elog(ERROR, "unrecognized node type: %d", varArgNode->type);
+		}
+
+		/* don't know how to start SET until we inspect first arg */
+		if (varArgCell != firstCell)
+		{
+			appendStringInfoChar(buf, ',');
+		}
+		else if (typeName != NULL)
+		{
+			appendStringInfoString(buf, " SET TIME ZONE");
+		}
+		else
+		{
+			appendStringInfo(buf, " SET %s =", quote_identifier(setStmt->name));
+		}
+
+		Value value = varArgConst->val;
+		switch (value.type)
+		{
+			case T_Integer:
+			{
+				appendStringInfo(buf, " %d", intVal(&value));
+				break;
+			}
+
+			case T_Float:
+			{
+				appendStringInfo(buf, " %s", strVal(&value));
+				break;
+			}
+
+			case T_String:
+			{
+				if (typeName != NULL)
+				{
+					/*
+					 * Must be a ConstInterval argument for TIME ZONE. Coerce
+					 * to interval and back to normalize the value and account
+					 * for any typmod.
+					 */
+					Oid typoid = InvalidOid;
+					int32 typmod = -1;
+
+					typenameTypeIdAndMod(NULL, typeName, &typoid, &typmod);
+					Assert(typoid == INTERVALOID);
+
+					Datum interval =
+						DirectFunctionCall3(interval_in,
+											CStringGetDatum(strVal(&value)),
+											ObjectIdGetDatum(InvalidOid),
+											Int32GetDatum(typmod));
+
+					char *intervalout =
+						DatumGetCString(DirectFunctionCall1(interval_out,
+															interval));
+					appendStringInfo(buf, " INTERVAL '%s'", intervalout);
+				}
+				else
+				{
+					appendStringInfo(buf, " %s", quote_literal_cstr(strVal(
+																		&value)));
+				}
+				break;
+			}
+
+			default:
+			{
+				elog(ERROR, "Unexpected Value type in VAR_SET_VALUE arguments.");
+				break;
+			}
 		}
 	}
 }
@@ -488,14 +598,13 @@ AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 	foreach(objectCell, objects)
 	{
 		Node *object = lfirst(objectCell);
-		ObjectWithArgs *func = NULL;
 
 		if (objectCell != list_head(objects))
 		{
 			appendStringInfo(buf, ", ");
 		}
 
-		func = castNode(ObjectWithArgs, object);
+		ObjectWithArgs *func = castNode(ObjectWithArgs, object);
 
 		AppendFunctionName(buf, func, objtype);
 	}
@@ -508,14 +617,11 @@ AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 static void
 AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 {
-	Oid funcid = InvalidOid;
-	HeapTuple proctup;
 	char *functionName = NULL;
 	char *schemaName = NULL;
-	char *qualifiedFunctionName;
 
-	funcid = LookupFuncWithArgs(objtype, func, true);
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	Oid funcid = LookupFuncWithArgs(objtype, func, true);
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
 	if (!HeapTupleIsValid(proctup))
 	{
@@ -529,9 +635,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 	}
 	else
 	{
-		Form_pg_proc procform;
-
-		procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
 		functionName = NameStr(procform->proname);
 		functionName = pstrdup(functionName); /* we release the tuple before used */
 		schemaName = get_namespace_name(procform->pronamespace);
@@ -539,7 +643,7 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		ReleaseSysCache(proctup);
 	}
 
-	qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
+	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	appendStringInfoString(buf, qualifiedFunctionName);
 
 	if (OidIsValid(funcid))
@@ -548,28 +652,25 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		 * If the function exists we want to use pg_get_function_identity_arguments to
 		 * serialize its canonical arguments
 		 */
-		OverrideSearchPath *overridePath = NULL;
-		Datum sqlTextDatum = 0;
-		const char *args = NULL;
 
 		/*
 		 * Set search_path to NIL so that all objects outside of pg_catalog will be
 		 * schema-prefixed. pg_catalog will be added automatically when we call
 		 * PushOverrideSearchPath(), since we set addCatalog to true;
 		 */
-		overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+		OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
 		overridePath->schemas = NIL;
 		overridePath->addCatalog = true;
 
 		PushOverrideSearchPath(overridePath);
 
-		sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
-										   ObjectIdGetDatum(funcid));
+		Datum sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
+												 ObjectIdGetDatum(funcid));
 
 		/* revert back to original search_path */
 		PopOverrideSearchPath();
 
-		args = TextDatumGetCString(sqlTextDatum);
+		const char *args = TextDatumGetCString(sqlTextDatum);
 		appendStringInfo(buf, "(%s)", args);
 	}
 	else if (!func->args_unspecified)
@@ -580,9 +681,8 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		 * postgres' TypeNameListToString. For now the best we can do until we understand
 		 * the underlying cause better.
 		 */
-		const char *args = NULL;
 
-		args = TypeNameListToString(func->objargs);
+		const char *args = TypeNameListToString(func->objargs);
 		appendStringInfo(buf, "(%s)", args);
 	}
 

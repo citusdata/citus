@@ -65,7 +65,7 @@ typedef enum AdvisoryLocktagClass
 						 ADV_LOCKTAG_CLASS_CITUS_JOB)
 
 /* reuse advisory lock, but with different, unused field 4 (7)
- * Also it has the the database hardcoded to MyDatabaseId, to ensure the locks
+ * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
 #define SET_LOCKTAG_REBALANCE_COLOCATION(tag, colocationOrTableId) \
 	SET_LOCKTAG_ADVISORY(tag, \

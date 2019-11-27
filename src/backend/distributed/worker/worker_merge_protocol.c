@@ -70,10 +70,9 @@ worker_create_schema(PG_FUNCTION_ARGS)
 	uint64 jobId = PG_GETARG_INT64(0);
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-	bool schemaExists = false;
 	CheckCitusVersion(ERROR);
 
-	schemaExists = JobSchemaExists(jobSchemaName);
+	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
 		CreateJobSchema(jobSchemaName);
@@ -126,9 +125,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	StringInfo jobSchemaName = JobSchemaName(jobId);
 	StringInfo taskTableName = TaskTableName(taskId);
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
-	bool schemaExists = false;
-	List *columnNameList = NIL;
-	List *columnTypeList = NIL;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Oid userId = GetUserId();
@@ -149,7 +145,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	 * If the schema for the job isn't already created by the task tracker
 	 * protocol, we fall to using the default 'public' schema.
 	 */
-	schemaExists = JobSchemaExists(jobSchemaName);
+	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
 		/*
@@ -174,8 +170,8 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	}
 
 	/* create the task table and copy files into the table */
-	columnNameList = ArrayObjectToCStringList(columnNameObject);
-	columnTypeList = ArrayObjectToCStringList(columnTypeObject);
+	List *columnNameList = ArrayObjectToCStringList(columnNameObject);
+	List *columnTypeList = ArrayObjectToCStringList(columnTypeObject);
 
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
 
@@ -220,12 +216,6 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	StringInfo intermediateTableName = TaskTableName(taskId);
 	StringInfo mergeTableName = makeStringInfo();
 	StringInfo setSearchPathString = makeStringInfo();
-	bool schemaExists = false;
-	int connected = 0;
-	int setSearchPathResult = 0;
-	int createMergeTableResult = 0;
-	int createIntermediateTableResult = 0;
-	int finished = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Oid userId = GetUserId();
@@ -236,7 +226,7 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	 * If the schema for the job isn't already created by the task tracker
 	 * protocol, we fall to using the default 'public' schema.
 	 */
-	schemaExists = JobSchemaExists(jobSchemaName);
+	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
 		resetStringInfo(jobSchemaName);
@@ -254,20 +244,20 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	/* Add "public" to search path to access UDFs in public schema */
 	appendStringInfo(setSearchPathString, ",public");
 
-	connected = SPI_connect();
+	int connected = SPI_connect();
 	if (connected != SPI_OK_CONNECT)
 	{
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	setSearchPathResult = SPI_exec(setSearchPathString->data, 0);
+	int setSearchPathResult = SPI_exec(setSearchPathString->data, 0);
 	if (setSearchPathResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
 							   setSearchPathString->data)));
 	}
 
-	createMergeTableResult = SPI_exec(createMergeTableQuery, 0);
+	int createMergeTableResult = SPI_exec(createMergeTableQuery, 0);
 	if (createMergeTableResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
@@ -285,14 +275,14 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	createIntermediateTableResult = SPI_exec(createIntermediateTableQuery, 0);
+	int createIntermediateTableResult = SPI_exec(createIntermediateTableQuery, 0);
 	if (createIntermediateTableResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
 							   createIntermediateTableQuery)));
 	}
 
-	finished = SPI_finish();
+	int finished = SPI_finish();
 	if (finished != SPI_OK_FINISH)
 	{
 		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
@@ -389,8 +379,7 @@ ArrayObjectToCStringList(ArrayType *arrayObject)
 	Datum *datumArray = DeconstructArrayObject(arrayObject);
 	int32 arraySize = ArrayObjectCount(arrayObject);
 
-	int32 arrayIndex = 0;
-	for (arrayIndex = 0; arrayIndex < arraySize; arrayIndex++)
+	for (int32 arrayIndex = 0; arrayIndex < arraySize; arrayIndex++)
 	{
 		Datum datum = datumArray[arrayIndex];
 		char *cstring = TextDatumGetCString(datum);
@@ -419,10 +408,9 @@ void
 RemoveJobSchema(StringInfo schemaName)
 {
 	Datum schemaNameDatum = CStringGetDatum(schemaName->data);
-	Oid schemaId = InvalidOid;
 
-	schemaId = GetSysCacheOid1Compat(NAMESPACENAME, Anum_pg_namespace_oid,
-									 schemaNameDatum);
+	Oid schemaId = GetSysCacheOid1Compat(NAMESPACENAME, Anum_pg_namespace_oid,
+										 schemaNameDatum);
 	if (OidIsValid(schemaId))
 	{
 		ObjectAddress schemaObject = { 0, 0, 0 };
@@ -468,11 +456,7 @@ static void
 CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 				List *columnNameList, List *columnTypeList)
 {
-	CreateStmt *createStatement = NULL;
-	RangeVar *relation = NULL;
-	List *columnDefinitionList = NIL;
 	Oid relationId PG_USED_FOR_ASSERTS_ONLY = InvalidOid;
-	ObjectAddress relationObject;
 
 	Assert(schemaName != NULL);
 	Assert(relationName != NULL);
@@ -482,13 +466,14 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 	 * statements occur in the same transaction. Still, we want to make the
 	 * relation unlogged once we upgrade to PostgreSQL 9.1.
 	 */
-	relation = makeRangeVar(schemaName->data, relationName->data, -1);
-	columnDefinitionList = ColumnDefinitionList(columnNameList, columnTypeList);
+	RangeVar *relation = makeRangeVar(schemaName->data, relationName->data, -1);
+	List *columnDefinitionList = ColumnDefinitionList(columnNameList, columnTypeList);
 
-	createStatement = CreateStatement(relation, columnDefinitionList);
+	CreateStmt *createStatement = CreateStatement(relation, columnDefinitionList);
 
-	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL,
-									NULL);
+	ObjectAddress relationObject = DefineRelation(createStatement, RELKIND_RELATION,
+												  InvalidOid, NULL,
+												  NULL);
 	relationId = relationObject.objectId;
 
 	Assert(relationId != InvalidOid);
@@ -522,14 +507,12 @@ ColumnDefinitionList(List *columnNameList, List *columnTypeList)
 		Oid columnTypeId = InvalidOid;
 		int32 columnTypeMod = -1;
 		bool missingOK = false;
-		TypeName *typeName = NULL;
-		ColumnDef *columnDefinition = NULL;
 
 		parseTypeString(columnType, &columnTypeId, &columnTypeMod, missingOK);
-		typeName = makeTypeNameFromOid(columnTypeId, columnTypeMod);
+		TypeName *typeName = makeTypeNameFromOid(columnTypeId, columnTypeMod);
 
 		/* we then create the column definition */
-		columnDefinition = makeNode(ColumnDef);
+		ColumnDef *columnDefinition = makeNode(ColumnDef);
 		columnDefinition->colname = (char *) columnName;
 		columnDefinition->typeName = typeName;
 		columnDefinition->is_local = true;
@@ -581,7 +564,6 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 						   StringInfo sourceDirectoryName, Oid userId)
 {
 	const char *directoryName = sourceDirectoryName->data;
-	struct dirent *directoryEntry = NULL;
 	uint64 copiedRowTotal = 0;
 	StringInfo expectedFileSuffix = makeStringInfo();
 
@@ -594,14 +576,11 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 
 	appendStringInfo(expectedFileSuffix, ".%u", userId);
 
-	directoryEntry = ReadDir(directory, directoryName);
+	struct dirent *directoryEntry = ReadDir(directory, directoryName);
 	for (; directoryEntry != NULL; directoryEntry = ReadDir(directory, directoryName))
 	{
 		const char *baseFilename = directoryEntry->d_name;
 		const char *queryString = NULL;
-		StringInfo fullFilename = NULL;
-		RangeVar *relation = NULL;
-		CopyStmt *copyStatement = NULL;
 		uint64 copiedRowCount = 0;
 
 		/* if system file or lingering task file, skip it */
@@ -624,12 +603,12 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 			continue;
 		}
 
-		fullFilename = makeStringInfo();
+		StringInfo fullFilename = makeStringInfo();
 		appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
 
 		/* build relation object and copy statement */
-		relation = makeRangeVar(schemaName->data, relationName->data, -1);
-		copyStatement = CopyStatement(relation, fullFilename->data);
+		RangeVar *relation = makeRangeVar(schemaName->data, relationName->data, -1);
+		CopyStmt *copyStatement = CopyStatement(relation, fullFilename->data);
 		if (BinaryWorkerCopyFormat)
 		{
 			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"),

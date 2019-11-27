@@ -60,18 +60,14 @@ FormatCollateBEQualified(Oid collate_oid)
 char *
 FormatCollateExtended(Oid collid, bits16 flags)
 {
-	HeapTuple tuple = NULL;
-	Form_pg_collation collform = NULL;
-	char *buf = NULL;
 	char *nspname = NULL;
-	char *typname = NULL;
 
 	if (collid == InvalidOid && (flags & FORMAT_COLLATE_ALLOW_INVALID) != 0)
 	{
 		return pstrdup("-");
 	}
 
-	tuple = SearchSysCache1(COLLOID, ObjectIdGetDatum(collid));
+	HeapTuple tuple = SearchSysCache1(COLLOID, ObjectIdGetDatum(collid));
 	if (!HeapTupleIsValid(tuple))
 	{
 		if ((flags & FORMAT_COLLATE_ALLOW_INVALID) != 0)
@@ -83,7 +79,7 @@ FormatCollateExtended(Oid collid, bits16 flags)
 			elog(ERROR, "cache lookup failed for collate %u", collid);
 		}
 	}
-	collform = (Form_pg_collation) GETSTRUCT(tuple);
+	Form_pg_collation collform = (Form_pg_collation) GETSTRUCT(tuple);
 
 	if ((flags & FORMAT_COLLATE_FORCE_QUALIFY) == 0 && CollationIsVisible(collid))
 	{
@@ -94,9 +90,9 @@ FormatCollateExtended(Oid collid, bits16 flags)
 		nspname = get_namespace_name_or_temp(collform->collnamespace);
 	}
 
-	typname = NameStr(collform->collname);
+	char *typname = NameStr(collform->collname);
 
-	buf = quote_qualified_identifier(nspname, typname);
+	char *buf = quote_qualified_identifier(nspname, typname);
 
 	ReleaseSysCache(tuple);
 

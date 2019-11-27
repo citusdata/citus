@@ -4,15 +4,15 @@ SET citus.enable_repartition_joins TO on;
 
 -- CTE in WHERE basic
 WITH events AS (
-  SELECT 
-    event_type 
-  FROM 
-    events_table 
+  SELECT
+    event_type
+  FROM
+    events_table
   WHERE
-    user_id < 5 
+    user_id < 5
   GROUP BY
     event_type
-  ORDER BY 
+  ORDER BY
     event_type
   LIMIT 10
 )
@@ -35,12 +35,12 @@ WITH users AS (
       events_table, users_table
     WHERE
       events_table.user_id = users_table.user_id
-    GROUP BY 
+    GROUP BY
       1
     ORDER BY
       1
     LIMIT 10
-) 
+)
 SELECT
   count(*)
 FROM
@@ -62,12 +62,12 @@ WITH users AS (
       events_table, users_table
     WHERE
       events_table.user_id = users_table.user_id
-    GROUP BY 
+    GROUP BY
       1
     ORDER BY
       1
     LIMIT 10
-) 
+)
 SELECT
   count(*)
 FROM
@@ -90,12 +90,12 @@ WITH users AS (
       events_table, users_table
     WHERE
       events_table.value_2 = users_table.value_2
-    GROUP BY 
+    GROUP BY
       1
     ORDER BY
       1
     LIMIT 10
-) 
+)
 SELECT
   count(*)
 FROM
@@ -122,14 +122,14 @@ WHERE
   event_type
 IN
   (WITH events AS (
-    SELECT 
-      event_type 
-    FROM 
-      events_table 
-    WHERE user_id < 5 
-    GROUP BY 
-      1 
-    ORDER BY 
+    SELECT
+      event_type
+    FROM
+      events_table
+    WHERE user_id < 5
+    GROUP BY
+      1
+    ORDER BY
       1)
     SELECT * FROM events LIMIT 10
   );
@@ -152,7 +152,7 @@ WHERE
           events_table, users_table
         WHERE
           events_table.value_2 = users_table.value_2
-        GROUP BY 
+        GROUP BY
           1
         ORDER BY
           1

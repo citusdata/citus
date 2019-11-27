@@ -48,7 +48,7 @@ FROM
   (SELECT max(user_id), max(value_2) AS value_2 FROM cte_from GROUP BY value_1) f
 WHERE
   value_2 IN (SELECT * FROM cte_where)
-ORDER BY 
+ORDER BY
   1, 2
 LIMIT
   5;
@@ -360,9 +360,9 @@ WITH cte AS (
 SELECT * FROM (
 	SELECT * FROM cte UNION (SELECT * FROM events_table)
 	) a
-ORDER BY 
+ORDER BY
 	1,2,3,4,5,6
-LIMIT 
+LIMIT
 	10;
 
 SELECT * FROM (
@@ -371,9 +371,9 @@ SELECT * FROM (
 		)
 		SELECT * FROM cte
 	)b UNION (SELECT * FROM events_table)) a
-ORDER BY 
+ORDER BY
 1,2,3,4,5,6
-LIMIT 
+LIMIT
 10;
 
 -- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
@@ -384,14 +384,14 @@ SELECT
   *
 FROM
   (SELECT * FROM cte UNION (SELECT * FROM cte)) a
-ORDER BY 
+ORDER BY
   1,2,3,4,5,6
-LIMIT 
+LIMIT
   5;
 
 WITH cte AS (
 	SELECT * FROM users_table WHERE user_id IN (1, 2) ORDER BY 1,2,3 LIMIT 5
-), 
+),
 cte_2 AS (
 	SELECT * FROM users_table WHERE user_id  IN (3, 4) ORDER BY 1,2,3 LIMIT 5
 )
@@ -479,7 +479,7 @@ WITH regular_cte AS (
 SELECT * FROM regular_cte;
 
 -- CTEs should work with VIEWs as well
-CREATE VIEW basic_view AS 
+CREATE VIEW basic_view AS
 SELECT * FROM users_table;
 
 
@@ -498,7 +498,7 @@ SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
 SELECT * FROM cte_view ORDER BY 1, 2 LIMIT 5;
 
 
-WITH cte_user_with_view AS 
+WITH cte_user_with_view AS
 (
 	SELECT * FROM cte_view WHERE user_id < 3
 )

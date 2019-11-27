@@ -41,17 +41,14 @@ master_metadata_snapshot(PG_FUNCTION_ARGS)
 	List *createSnapshotCommands = MetadataCreateCommands();
 	List *snapshotCommandList = NIL;
 	ListCell *snapshotCommandCell = NULL;
-	int snapshotCommandCount = 0;
-	Datum *snapshotCommandDatumArray = NULL;
-	ArrayType *snapshotCommandArrayType = NULL;
 	int snapshotCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
 	snapshotCommandList = list_concat(snapshotCommandList, dropSnapshotCommands);
 	snapshotCommandList = list_concat(snapshotCommandList, createSnapshotCommands);
 
-	snapshotCommandCount = list_length(snapshotCommandList);
-	snapshotCommandDatumArray = palloc0(snapshotCommandCount * sizeof(Datum));
+	int snapshotCommandCount = list_length(snapshotCommandList);
+	Datum *snapshotCommandDatumArray = palloc0(snapshotCommandCount * sizeof(Datum));
 
 	foreach(snapshotCommandCell, snapshotCommandList)
 	{
@@ -62,9 +59,9 @@ master_metadata_snapshot(PG_FUNCTION_ARGS)
 		snapshotCommandIndex++;
 	}
 
-	snapshotCommandArrayType = DatumArrayToArrayType(snapshotCommandDatumArray,
-													 snapshotCommandCount,
-													 ddlCommandTypeId);
+	ArrayType *snapshotCommandArrayType = DatumArrayToArrayType(snapshotCommandDatumArray,
+																snapshotCommandCount,
+																ddlCommandTypeId);
 
 	PG_RETURN_ARRAYTYPE_P(snapshotCommandArrayType);
 }
@@ -78,13 +75,10 @@ Datum
 wait_until_metadata_sync(PG_FUNCTION_ARGS)
 {
 	uint32 timeout = PG_GETARG_UINT32(0);
-	int waitResult = 0;
 
 	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerCell = NULL;
 	bool waitNotifications = false;
-	MultiConnection *connection = NULL;
-	int waitFlags = 0;
 
 	foreach(workerCell, workerList)
 	{
@@ -109,13 +103,13 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	connection = GetNodeConnection(FORCE_NEW_CONNECTION,
-								   "localhost", PostPortNumber);
+	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
+													"localhost", PostPortNumber);
 	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
-	waitFlags = WL_SOCKET_READABLE | WL_TIMEOUT | WL_POSTMASTER_DEATH;
-	waitResult = WaitLatchOrSocket(NULL, waitFlags, PQsocket(connection->pgConn),
-								   timeout, 0);
+	int waitFlags = WL_SOCKET_READABLE | WL_TIMEOUT | WL_POSTMASTER_DEATH;
+	int waitResult = WaitLatchOrSocket(NULL, waitFlags, PQsocket(connection->pgConn),
+									   timeout, 0);
 	if (waitResult & WL_POSTMASTER_DEATH)
 	{
 		ereport(ERROR, (errmsg("postmaster was shut down, exiting")));

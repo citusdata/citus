@@ -14,7 +14,7 @@ setup
             RETURNS void
             LANGUAGE C STRICT VOLATILE
             AS 'citus', $$stop_session_level_connection_to_node$$;
-	
+
 
 	SELECT citus_internal.replace_isolation_tester_func();
   	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
@@ -31,7 +31,7 @@ setup
 
 	SET citus.replication_model to streaming;
 	SET citus.shard_replication_factor TO 1;
-	
+
 	CREATE TABLE ref_table(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table');
 
@@ -57,7 +57,7 @@ step "s1-start-session-level-connection"
 
 step "s1-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s1-delete"
@@ -94,7 +94,7 @@ step "s2-start-session-level-connection"
 
 step "s2-begin-on-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN'); 
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
 step "s2-insert"

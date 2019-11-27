@@ -98,9 +98,6 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 {
 	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
 	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-	Datum *shardIdArrayDatum = NULL;
-	int shardIdCount = 0;
-	int shardIdIndex = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -112,10 +109,10 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 	/* we don't want random users to block writes */
 	EnsureSuperUser();
 
-	shardIdCount = ArrayObjectCount(shardIdArrayObject);
-	shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
+	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
+	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
-	for (shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
+	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
@@ -138,9 +135,6 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 {
 	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
 	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-	Datum *shardIdArrayDatum = NULL;
-	int shardIdCount = 0;
-	int shardIdIndex = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -152,10 +146,10 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	/* we don't want random users to block writes */
 	EnsureSuperUser();
 
-	shardIdCount = ArrayObjectCount(shardIdArrayObject);
-	shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
+	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
+	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
-	for (shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
+	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
@@ -183,7 +177,6 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	int connectionFlags = 0;
 	const char *superuser = CitusExtensionOwnerName();
-	MultiConnection *firstWorkerConnection = NULL;
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
@@ -210,10 +203,14 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	 * Use the superuser connection to make sure we are allowed to lock.
 	 * This also helps ensure we only use one connection.
 	 */
-	firstWorkerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-														  firstWorkerNode->workerName,
-														  firstWorkerNode->workerPort,
-														  superuser, NULL);
+	MultiConnection *firstWorkerConnection = GetNodeUserDatabaseConnection(
+		connectionFlags,
+		firstWorkerNode
+		->workerName,
+		firstWorkerNode
+		->workerPort,
+		superuser,
+		NULL);
 
 	/* the SELECT .. FOR UPDATE breaks if we lose the connection */
 	MarkRemoteTransactionCritical(firstWorkerConnection);
@@ -234,7 +231,6 @@ static bool
 IsFirstWorkerNode()
 {
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
-	WorkerNode *firstWorkerNode = NULL;
 
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
@@ -243,7 +239,7 @@ IsFirstWorkerNode()
 		return false;
 	}
 
-	firstWorkerNode = (WorkerNode *) linitial(workerNodeList);
+	WorkerNode *firstWorkerNode = (WorkerNode *) linitial(workerNodeList);
 
 	if (firstWorkerNode->groupId == GetLocalGroupId())
 	{
@@ -290,7 +286,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "])");
 
-	SendCommandToWorkers(WORKERS_WITH_METADATA, lockCommand->data);
+	SendCommandToWorkersWithMetadata(lockCommand->data);
 }
 
 
@@ -433,14 +429,13 @@ GetSortedReferenceShardIntervals(List *relationList)
 	foreach(relationCell, relationList)
 	{
 		Oid relationId = lfirst_oid(relationCell);
-		List *currentShardIntervalList = NIL;
 
 		if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
 		{
 			continue;
 		}
 
-		currentShardIntervalList = LoadShardIntervalList(relationId);
+		List *currentShardIntervalList = LoadShardIntervalList(relationId);
 		shardIntervalList = lappend(shardIntervalList, linitial(
 										currentShardIntervalList));
 	}
@@ -463,11 +458,10 @@ TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = true;
-	bool lockAcquired = false;
 
 	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
 
-	lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
+	bool lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
 
 	return lockAcquired;
 }
@@ -704,8 +698,7 @@ LockModeTextToLockMode(const char *lockModeName)
 {
 	LOCKMODE lockMode = -1;
 
-	int lockIndex = 0;
-	for (lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
+	for (int lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
 	{
 		const struct LockModeToStringType *lockMap = lockmode_to_string_map + lockIndex;
 		if (pg_strncasecmp(lockMap->name, lockModeName, NAMEDATALEN) == 0)
@@ -738,8 +731,7 @@ LockModeToLockModeText(LOCKMODE lockMode)
 {
 	const char *lockModeText = NULL;
 
-	int lockIndex = 0;
-	for (lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
+	for (int lockIndex = 0; lockIndex < lock_mode_to_string_map_count; lockIndex++)
 	{
 		const struct LockModeToStringType *lockMap = lockmode_to_string_map + lockIndex;
 		if (lockMode == lockMap->lockMode)
@@ -777,28 +769,23 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 {
 	text *relationName = PG_GETARG_TEXT_P(0);
 	text *lockModeText = PG_GETARG_TEXT_P(1);
-	Oid relationId = InvalidOid;
 	char *lockModeCString = text_to_cstring(lockModeText);
-	List *relationNameList = NIL;
-	RangeVar *relation = NULL;
-	LOCKMODE lockMode = NoLock;
-	bool relationExists = false;
 
 	/* ensure that we're in a transaction block */
 	RequireTransactionBlock(true, "lock_relation_if_exists");
 
 	/* get the lock mode */
-	lockMode = LockModeTextToLockMode(lockModeCString);
+	LOCKMODE lockMode = LockModeTextToLockMode(lockModeCString);
 
 	/* resolve relationId from passed in schema and relation name */
-	relationNameList = textToQualifiedNameList(relationName);
-	relation = makeRangeVarFromNameList(relationNameList);
+	List *relationNameList = textToQualifiedNameList(relationName);
+	RangeVar *relation = makeRangeVarFromNameList(relationNameList);
 
 	/* lock the relation with the lock mode */
-	relationId = RangeVarGetRelidExtended(relation, lockMode, RVR_MISSING_OK,
-										  CitusRangeVarCallbackForLockTable,
-										  (void *) &lockMode);
-	relationExists = OidIsValid(relationId);
+	Oid relationId = RangeVarGetRelidExtended(relation, lockMode, RVR_MISSING_OK,
+											  CitusRangeVarCallbackForLockTable,
+											  (void *) &lockMode);
+	bool relationExists = OidIsValid(relationId);
 
 	PG_RETURN_BOOL(relationExists);
 }
@@ -816,7 +803,6 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 								  Oid oldRelationId, void *arg)
 {
 	LOCKMODE lockmode = *(LOCKMODE *) arg;
-	AclResult aclResult;
 
 	if (!OidIsValid(relationId))
 	{
@@ -832,7 +818,7 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 	}
 
 	/* check permissions */
-	aclResult = CitusLockTableAclCheck(relationId, lockmode, GetUserId());
+	AclResult aclResult = CitusLockTableAclCheck(relationId, lockmode, GetUserId());
 	if (aclResult != ACLCHECK_OK)
 	{
 		aclcheck_error(aclResult, get_relkind_objtype(get_rel_relkind(relationId)),
@@ -851,7 +837,6 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 static AclResult
 CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 {
-	AclResult aclResult;
 	AclMode aclMask;
 
 	/* verify adequate privilege */
@@ -868,7 +853,7 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 		aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
 	}
 
-	aclResult = pg_class_aclcheck(relationId, userId, aclMask);
+	AclResult aclResult = pg_class_aclcheck(relationId, userId, aclMask);
 
 	return aclResult;
 }

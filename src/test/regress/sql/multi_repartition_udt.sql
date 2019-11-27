@@ -61,7 +61,7 @@ CREATE TABLE repartition_udt_other (
 	txtcol text
 );
 
--- Connect directly to a worker, create and drop the type, then 
+-- Connect directly to a worker, create and drop the type, then
 -- proceed with type creation as above; thus the OIDs will be different.
 -- so that the OID is off.
 
@@ -182,7 +182,7 @@ SET client_min_messages = LOG;
 
 -- This query was intended to test "Query that should result in a repartition
 -- join on int column, and be empty." In order to remove broadcast logic, we
--- manually make the query router plannable. 
+-- manually make the query router plannable.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk
 	WHERE repartition_udt.pk = 1;

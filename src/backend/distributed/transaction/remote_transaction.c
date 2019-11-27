@@ -59,10 +59,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
-	DistributedTransactionId *distributedTransactionId = NULL;
 	ListCell *subIdCell = NULL;
-	List *activeSubXacts = NIL;
-	const char *timestamp = NULL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_INVALID);
 
@@ -84,8 +81,9 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 * and send both in one step. The reason is purely performance, we don't want
 	 * seperate roundtrips for these two statements.
 	 */
-	distributedTransactionId = GetCurrentDistributedTransactionId();
-	timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
+	DistributedTransactionId *distributedTransactionId =
+		GetCurrentDistributedTransactionId();
+	const char *timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
 	appendStringInfo(beginAndSetDistributedTransactionId,
 					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
 					 ", '%s');",
@@ -94,7 +92,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 					 timestamp);
 
 	/* append context for in-progress SAVEPOINTs for this transaction */
-	activeSubXacts = ActiveSubXactContexts();
+	List *activeSubXacts = ActiveSubXactContexts();
 	transaction->lastSuccessfulSubXact = TopSubTransactionId;
 	transaction->lastQueuedSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
@@ -139,12 +137,11 @@ void
 FinishRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	bool clearSuccessful = true;
 	bool raiseErrors = true;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_STARTING);
 
-	clearSuccessful = ClearResults(connection, raiseErrors);
+	bool clearSuccessful = ClearResults(connection, raiseErrors);
 	if (clearSuccessful)
 	{
 		transaction->transactionState = REMOTE_TRANS_STARTED;
@@ -258,7 +255,7 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 			/*
 			 * For a moment there I thought we were in trouble.
 			 *
-			 * Failing in this state means that we don't know whether the the
+			 * Failing in this state means that we don't know whether the
 			 * commit has succeeded.
 			 */
 			HandleRemoteTransactionConnectionError(connection, raiseErrors);
@@ -276,7 +273,6 @@ void
 FinishRemoteTransactionCommit(MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	PGresult *result = NULL;
 	const bool raiseErrors = false;
 	const bool isCommit = true;
 
@@ -284,7 +280,7 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 		   transaction->transactionState == REMOTE_TRANS_1PC_COMMITTING ||
 		   transaction->transactionState == REMOTE_TRANS_2PC_COMMITTING);
 
-	result = GetRemoteCommandResult(connection, raiseErrors);
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
 
 	if (!IsResponseOK(result))
 	{
@@ -292,7 +288,7 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 
 		/*
 		 * Failing in this state means that we will often not know whether
-		 * the the commit has succeeded (particularly in case of network
+		 * the commit has succeeded (particularly in case of network
 		 * troubles).
 		 *
 		 * XXX: It might be worthwhile to discern cases where we got a
@@ -476,7 +472,6 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	StringInfoData command;
 	const bool raiseErrors = true;
-	WorkerNode *workerNode = NULL;
 
 	/* can't prepare a nonexistant transaction */
 	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
@@ -490,7 +485,7 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	Assign2PCIdentifier(connection);
 
 	/* log transactions to workers in pg_dist_transaction */
-	workerNode = FindWorkerNode(connection->hostname, connection->port);
+	WorkerNode *workerNode = FindWorkerNode(connection->hostname, connection->port);
 	if (workerNode != NULL)
 	{
 		LogTransactionRecord(workerNode->groupId, transaction->preparedName);
@@ -520,12 +515,11 @@ void
 FinishRemoteTransactionPrepare(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	PGresult *result = NULL;
 	const bool raiseErrors = true;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_PREPARING);
 
-	result = GetRemoteCommandResult(connection, raiseErrors);
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
 
 	if (!IsResponseOK(result))
 	{
@@ -596,7 +590,6 @@ void
 RemoteTransactionsBeginIfNecessary(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
-	bool raiseInterrupts = true;
 
 	/*
 	 * Don't do anything if not in a coordinated transaction. That allows the
@@ -630,7 +623,7 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 		StartRemoteTransactionBegin(connection);
 	}
 
-	raiseInterrupts = true;
+	bool raiseInterrupts = true;
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* get result of all the BEGINs */
@@ -798,7 +791,6 @@ void
 CoordinatedRemoteTransactionsPrepare(void)
 {
 	dlist_iter iter;
-	bool raiseInterrupts = false;
 	List *connectionList = NIL;
 
 	/* issue PREPARE TRANSACTION; to all relevant remote nodes */
@@ -822,7 +814,7 @@ CoordinatedRemoteTransactionsPrepare(void)
 		connectionList = lappend(connectionList, connection);
 	}
 
-	raiseInterrupts = true;
+	bool raiseInterrupts = true;
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* Wait for result */
@@ -857,7 +849,6 @@ CoordinatedRemoteTransactionsCommit(void)
 {
 	dlist_iter iter;
 	List *connectionList = NIL;
-	bool raiseInterrupts = false;
 
 	/*
 	 * Issue appropriate transaction commands to remote nodes. If everything
@@ -885,7 +876,7 @@ CoordinatedRemoteTransactionsCommit(void)
 		connectionList = lappend(connectionList, connection);
 	}
 
-	raiseInterrupts = false;
+	bool raiseInterrupts = false;
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* wait for the replies to the commands to come in */
@@ -921,7 +912,6 @@ CoordinatedRemoteTransactionsAbort(void)
 {
 	dlist_iter iter;
 	List *connectionList = NIL;
-	bool raiseInterrupts = false;
 
 	/* asynchronously send ROLLBACK [PREPARED] */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -942,7 +932,7 @@ CoordinatedRemoteTransactionsAbort(void)
 		connectionList = lappend(connectionList, connection);
 	}
 
-	raiseInterrupts = false;
+	bool raiseInterrupts = false;
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* and wait for the results */

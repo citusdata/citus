@@ -73,7 +73,6 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 {
 	text *sqlStatementText = PG_GETARG_TEXT_P(0);
 	const char *sqlStatement = text_to_cstring(sqlStatementText);
-	const ObjectAddress *address = NULL;
 	Node *parseTree = ParseTreeNode(sqlStatement);
 
 	/*
@@ -81,12 +80,9 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 	 * if the type actually exists instead of adding the IF EXISTS keyword to the
 	 * statement.
 	 */
-	address = GetObjectAddressFromParseTree(parseTree, true);
+	const ObjectAddress *address = GetObjectAddressFromParseTree(parseTree, true);
 	if (ObjectExists(address))
 	{
-		char *newName = NULL;
-		const char *sqlRenameStmt = NULL;
-		RenameStmt *renameStmt = NULL;
 		const char *localSqlStatement = CreateStmtByObjectAddress(address);
 
 		if (strcmp(sqlStatement, localSqlStatement) == 0)
@@ -107,10 +103,10 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(false);
 		}
 
-		newName = GenerateBackupNameForCollision(address);
+		char *newName = GenerateBackupNameForCollision(address);
 
-		renameStmt = CreateRenameStatement(address, newName);
-		sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
+		RenameStmt *renameStmt = CreateRenameStatement(address, newName);
+		const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
 		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt,
 							PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);

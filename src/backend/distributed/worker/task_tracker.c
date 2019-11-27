@@ -130,7 +130,6 @@ TaskTrackerRegister(void)
 void
 TaskTrackerMain(Datum main_arg)
 {
-	MemoryContext TaskTrackerContext = NULL;
 	sigjmp_buf local_sigjmp_buf;
 	static bool processStartUp = true;
 
@@ -146,10 +145,11 @@ TaskTrackerMain(Datum main_arg)
 	 * that we can reset the context during error recovery and thereby avoid
 	 * possible memory leaks.
 	 */
-	TaskTrackerContext = AllocSetContextCreateExtended(TopMemoryContext, "Task Tracker",
-													   ALLOCSET_DEFAULT_MINSIZE,
-													   ALLOCSET_DEFAULT_INITSIZE,
-													   ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext TaskTrackerContext = AllocSetContextCreateExtended(TopMemoryContext,
+																	 "Task Tracker",
+																	 ALLOCSET_DEFAULT_MINSIZE,
+																	 ALLOCSET_DEFAULT_INITSIZE,
+																	 ALLOCSET_DEFAULT_MAXSIZE);
 	MemoryContextSwitchTo(TaskTrackerContext);
 
 	/*
@@ -281,17 +281,15 @@ TaskTrackerMain(Datum main_arg)
 WorkerTask *
 WorkerTasksHashEnter(uint64 jobId, uint32 taskId)
 {
-	WorkerTask *workerTask = NULL;
-	void *hashKey = NULL;
 	bool handleFound = false;
 
 	WorkerTask searchTask;
 	searchTask.jobId = jobId;
 	searchTask.taskId = taskId;
 
-	hashKey = (void *) &searchTask;
-	workerTask = (WorkerTask *) hash_search(TaskTrackerTaskHash, hashKey,
-											HASH_ENTER_NULL, &handleFound);
+	void *hashKey = (void *) &searchTask;
+	WorkerTask *workerTask = (WorkerTask *) hash_search(TaskTrackerTaskHash, hashKey,
+														HASH_ENTER_NULL, &handleFound);
 	if (workerTask == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
@@ -319,16 +317,13 @@ WorkerTasksHashEnter(uint64 jobId, uint32 taskId)
 WorkerTask *
 WorkerTasksHashFind(uint64 jobId, uint32 taskId)
 {
-	WorkerTask *workerTask = NULL;
-	void *hashKey = NULL;
-
 	WorkerTask searchTask;
 	searchTask.jobId = jobId;
 	searchTask.taskId = taskId;
 
-	hashKey = (void *) &searchTask;
-	workerTask = (WorkerTask *) hash_search(TaskTrackerTaskHash, hashKey,
-											HASH_FIND, NULL);
+	void *hashKey = (void *) &searchTask;
+	WorkerTask *workerTask = (WorkerTask *) hash_search(TaskTrackerTaskHash, hashKey,
+														HASH_FIND, NULL);
 
 	return workerTask;
 }
@@ -382,7 +377,6 @@ TrackerCleanupJobSchemas(void)
 	foreach(databaseNameCell, databaseNameList)
 	{
 		char *databaseName = (char *) lfirst(databaseNameCell);
-		WorkerTask *cleanupTask = NULL;
 
 		/* template0 database does not accept connections */
 		int skipDatabaseName = strncmp(databaseName, TEMPLATE0_NAME, NAMEDATALEN);
@@ -396,7 +390,7 @@ TrackerCleanupJobSchemas(void)
 		 * tracker process. We also assign high priorities to these tasks so
 		 * that they get scheduled before everyone else.
 		 */
-		cleanupTask = WorkerTasksHashEnter(jobId, taskIndex);
+		WorkerTask *cleanupTask = WorkerTasksHashEnter(jobId, taskIndex);
 		cleanupTask->assignedAt = HIGH_PRIORITY_TASK_TIME;
 		cleanupTask->taskStatus = TASK_ASSIGNED;
 
@@ -428,11 +422,10 @@ static void
 TrackerCleanupConnections(HTAB *WorkerTasksHash)
 {
 	HASH_SEQ_STATUS status;
-	WorkerTask *currentTask = NULL;
 
 	hash_seq_init(&status, WorkerTasksHash);
 
-	currentTask = (WorkerTask *) hash_seq_search(&status);
+	WorkerTask *currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
 		if (currentTask->connectionId != INVALID_CONNECTION_ID)
@@ -456,11 +449,10 @@ TrackerRegisterShutDown(HTAB *WorkerTasksHash)
 {
 	uint64 jobId = RESERVED_JOB_ID;
 	uint32 taskId = SHUTDOWN_MARKER_TASK_ID;
-	WorkerTask *shutdownMarkerTask = NULL;
 
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
-	shutdownMarkerTask = WorkerTasksHashEnter(jobId, taskId);
+	WorkerTask *shutdownMarkerTask = WorkerTasksHashEnter(jobId, taskId);
 	shutdownMarkerTask->taskStatus = TASK_SUCCEEDED;
 	shutdownMarkerTask->connectionId = INVALID_CONNECTION_ID;
 
@@ -538,11 +530,10 @@ static Size
 TaskTrackerShmemSize(void)
 {
 	Size size = 0;
-	Size hashSize = 0;
 
 	size = add_size(size, sizeof(WorkerTasksSharedStateData));
 
-	hashSize = hash_estimate_size(MaxTrackedTasksPerNode, WORKER_TASK_SIZE);
+	Size hashSize = hash_estimate_size(MaxTrackedTasksPerNode, WORKER_TASK_SIZE);
 	size = add_size(size, hashSize);
 
 	return size;
@@ -555,12 +546,9 @@ TaskTrackerShmemInit(void)
 {
 	bool alreadyInitialized = false;
 	HASHCTL info;
-	int hashFlags = 0;
-	long maxTableSize = 0;
-	long initTableSize = 0;
 
-	maxTableSize = (long) MaxTrackedTasksPerNode;
-	initTableSize = maxTableSize / 8;
+	long maxTableSize = (long) MaxTrackedTasksPerNode;
+	long initTableSize = maxTableSize / 8;
 
 	/*
 	 * Allocate the control structure for the hash table that maps unique task
@@ -571,7 +559,7 @@ TaskTrackerShmemInit(void)
 	info.keysize = sizeof(uint64) + sizeof(uint32);
 	info.entrysize = WORKER_TASK_SIZE;
 	info.hash = tag_hash;
-	hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	int hashFlags = (HASH_ELEM | HASH_FUNCTION);
 
 	/*
 	 * Currently the lock isn't required because allocation only happens at
@@ -631,34 +619,30 @@ static List *
 SchedulableTaskList(HTAB *WorkerTasksHash)
 {
 	List *schedulableTaskList = NIL;
-	WorkerTask *schedulableTaskQueue = NULL;
-	uint32 runningTaskCount = 0;
-	uint32 schedulableTaskCount = 0;
-	uint32 tasksToScheduleCount = 0;
-	uint32 queueIndex = 0;
 
-	runningTaskCount = CountTasksMatchingCriteria(WorkerTasksHash, &RunningTask);
+	uint32 runningTaskCount = CountTasksMatchingCriteria(WorkerTasksHash, &RunningTask);
 	if (runningTaskCount >= MaxRunningTasksPerNode)
 	{
 		return NIL;  /* we already have enough tasks running */
 	}
 
-	schedulableTaskCount = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask);
+	uint32 schedulableTaskCount = CountTasksMatchingCriteria(WorkerTasksHash,
+															 &SchedulableTask);
 	if (schedulableTaskCount == 0)
 	{
 		return NIL;  /* we do not have any new tasks to schedule */
 	}
 
-	tasksToScheduleCount = MaxRunningTasksPerNode - runningTaskCount;
+	uint32 tasksToScheduleCount = MaxRunningTasksPerNode - runningTaskCount;
 	if (tasksToScheduleCount > schedulableTaskCount)
 	{
 		tasksToScheduleCount = schedulableTaskCount;
 	}
 
 	/* get all schedulable tasks ordered according to a priority criteria */
-	schedulableTaskQueue = SchedulableTaskPriorityQueue(WorkerTasksHash);
+	WorkerTask *schedulableTaskQueue = SchedulableTaskPriorityQueue(WorkerTasksHash);
 
-	for (queueIndex = 0; queueIndex < tasksToScheduleCount; queueIndex++)
+	for (uint32 queueIndex = 0; queueIndex < tasksToScheduleCount; queueIndex++)
 	{
 		WorkerTask *schedulableTask = (WorkerTask *) palloc0(WORKER_TASK_SIZE);
 		WorkerTask *queuedTask = WORKER_TASK_AT(schedulableTaskQueue, queueIndex);
@@ -684,25 +668,22 @@ static WorkerTask *
 SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 {
 	HASH_SEQ_STATUS status;
-	WorkerTask *currentTask = NULL;
-	WorkerTask *priorityQueue = NULL;
-	uint32 queueSize = 0;
 	uint32 queueIndex = 0;
 
 	/* our priority queue size equals to the number of schedulable tasks */
-	queueSize = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask);
+	uint32 queueSize = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask);
 	if (queueSize == 0)
 	{
 		return NULL;
 	}
 
 	/* allocate an array of tasks for our priority queue */
-	priorityQueue = (WorkerTask *) palloc0(WORKER_TASK_SIZE * queueSize);
+	WorkerTask *priorityQueue = (WorkerTask *) palloc0(WORKER_TASK_SIZE * queueSize);
 
 	/* copy tasks in the shared hash to the priority queue */
 	hash_seq_init(&status, WorkerTasksHash);
 
-	currentTask = (WorkerTask *) hash_seq_search(&status);
+	WorkerTask *currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
 		if (SchedulableTask(currentTask))
@@ -733,12 +714,11 @@ CountTasksMatchingCriteria(HTAB *WorkerTasksHash,
 						   bool (*CriteriaFunction)(WorkerTask *))
 {
 	HASH_SEQ_STATUS status;
-	WorkerTask *currentTask = NULL;
 	uint32 taskCount = 0;
 
 	hash_seq_init(&status, WorkerTasksHash);
 
-	currentTask = (WorkerTask *) hash_seq_search(&status);
+	WorkerTask *currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
 		bool matchesCriteria = (*CriteriaFunction)(currentTask);
@@ -808,11 +788,10 @@ ScheduleWorkerTasks(HTAB *WorkerTasksHash, List *schedulableTaskList)
 	foreach(schedulableTaskCell, schedulableTaskList)
 	{
 		WorkerTask *schedulableTask = (WorkerTask *) lfirst(schedulableTaskCell);
-		WorkerTask *taskToSchedule = NULL;
 		void *hashKey = (void *) schedulableTask;
 
-		taskToSchedule = (WorkerTask *) hash_search(WorkerTasksHash, hashKey,
-													HASH_FIND, NULL);
+		WorkerTask *taskToSchedule = (WorkerTask *) hash_search(WorkerTasksHash, hashKey,
+																HASH_FIND, NULL);
 
 		/* if task is null, the shared hash is in an incosistent state */
 		if (taskToSchedule == NULL)
@@ -849,12 +828,10 @@ static void
 ManageWorkerTasksHash(HTAB *WorkerTasksHash)
 {
 	HASH_SEQ_STATUS status;
-	List *schedulableTaskList = NIL;
-	WorkerTask *currentTask = NULL;
 
 	/* ask the scheduler if we have new tasks to schedule */
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
-	schedulableTaskList = SchedulableTaskList(WorkerTasksHash);
+	List *schedulableTaskList = SchedulableTaskList(WorkerTasksHash);
 	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
@@ -874,7 +851,7 @@ ManageWorkerTasksHash(HTAB *WorkerTasksHash)
 	/* now iterate over all tasks, and manage them */
 	hash_seq_init(&status, WorkerTasksHash);
 
-	currentTask = (WorkerTask *) hash_seq_search(&status);
+	WorkerTask *currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
 		ManageWorkerTask(currentTask, WorkerTasksHash);

@@ -432,7 +432,7 @@ UPDATE small_view SET id = 1;
 DELETE FROM small_view;
 INSERT INTO small_view VALUES(8, 5) ON CONFLICT(tenant_id) DO UPDATE SET tenant_id=99;
 
--- using views in modify statements' FROM / WHERE clauses is still valid 
+-- using views in modify statements' FROM / WHERE clauses is still valid
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
 
@@ -440,15 +440,15 @@ SELECT * FROM large order by 1, 2;
 INSERT INTO large VALUES(14, 14);
 INSERT INTO small VALUES(14, 14);
 
--- using views in subqueries within modify statements is still valid 
+-- using views in subqueries within modify statements is still valid
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
 INSERT INTO large VALUES(14, 14);
 
--- using views in modify statements' FROM / WHERE clauses is still valid 
-UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
@@ -585,7 +585,7 @@ CREATE VIEW small_view AS SELECT id, tenant_id FROM (SELECT *, id*2 FROM small W
 6,5
 \.
 
--- using views in modify statements' FROM / WHERE clauses is still valid 
+-- using views in modify statements' FROM / WHERE clauses is still valid
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
 
@@ -593,15 +593,15 @@ SELECT * FROM large order by 1, 2;
 INSERT INTO large VALUES(14, 14);
 INSERT INTO small VALUES(14, 14);
 
--- using views in subqueries within modify statements is still valid 
+-- using views in subqueries within modify statements is still valid
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
 INSERT INTO large VALUES(14, 14);
 
--- using views in modify statements' FROM / WHERE clauses is still valid 
-UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table

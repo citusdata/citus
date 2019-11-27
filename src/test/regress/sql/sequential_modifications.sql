@@ -1,8 +1,8 @@
--- 
+--
 -- Tests sequential and parallel DDL command execution
 -- in combination with 1PC and 2PC
 -- Note: this test should not be executed in parallel with
--- other tests since we're relying on disabling 2PC recovery 
+-- other tests since we're relying on disabling 2PC recovery
 --
 -- We're also setting force_max_query_parallelization throughout
 -- the tests because the test file has the assumption that
@@ -34,7 +34,7 @@ LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- this function simply checks the equality of the number of transactions in the
 -- pg_dist_transaction and number of shard placements for a distributed table
--- The function is useful to ensure that a single connection is opened per 
+-- The function is useful to ensure that a single connection is opened per
 -- shard placement in a distributed transaction
 CREATE OR REPLACE FUNCTION distributed_2PCs_are_equal_to_placement_count()
     RETURNS bool AS
@@ -123,12 +123,12 @@ SELECT recover_prepared_transactions();
 CREATE INDEX ref_test_seq_index_2 ON ref_test(a);
 SELECT distributed_2PCs_are_equal_to_worker_count();
 
--- tables with replication factor > 1 should also obey 
+-- tables with replication factor > 1 should also obey
 -- both multi_shard_commit_protocol and multi_shard_modify_mode
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table_rep_2 (a int);
 SELECT create_distributed_table('test_table_rep_2', 'a');
- 
+
 -- 1PC should never use 2PC with rep > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 

@@ -2,7 +2,7 @@
 -- MULTI_SIZE_QUERIES
 --
 -- Test checks whether size of distributed tables can be obtained with citus_table_size.
--- To find the relation size and total relation size citus_relation_size and 
+-- To find the relation size and total relation size citus_relation_size and
 -- citus_total_relation_size are also tested.
 
 SET citus.next_shard_id TO 1390000;

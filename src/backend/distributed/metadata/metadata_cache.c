@@ -278,9 +278,7 @@ EnsureModificationsCanRun(void)
 bool
 IsDistributedTable(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = NULL;
-
-	cacheEntry = LookupDistTableCacheEntry(relationId);
+	DistTableCacheEntry *cacheEntry = LookupDistTableCacheEntry(relationId);
 
 	/*
 	 * If extension hasn't been created, or has the wrong version and the
@@ -310,8 +308,6 @@ IsDistributedTable(Oid relationId)
 static bool
 IsDistributedTableViaCatalog(Oid relationId)
 {
-	HeapTuple partitionTuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
@@ -321,11 +317,11 @@ IsDistributedTableViaCatalog(Oid relationId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
 
-	scanDescriptor = systable_beginscan(pgDistPartition,
-										DistPartitionLogicalRelidIndexId(),
-										indexOK, NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK, NULL, scanKeyCount, scanKey);
 
-	partitionTuple = systable_getnext(scanDescriptor);
+	HeapTuple partitionTuple = systable_getnext(scanDescriptor);
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistPartition, AccessShareLock);
 
@@ -340,21 +336,19 @@ IsDistributedTableViaCatalog(Oid relationId)
 List *
 DistributedTableList(void)
 {
-	List *distTableOidList = NIL;
 	List *distributedTableList = NIL;
 	ListCell *distTableOidCell = NULL;
 
 	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
 
 	/* first, we need to iterate over pg_dist_partition */
-	distTableOidList = DistTableOidList();
+	List *distTableOidList = DistTableOidList();
 
 	foreach(distTableOidCell, distTableOidList)
 	{
-		DistTableCacheEntry *cacheEntry = NULL;
 		Oid relationId = lfirst_oid(distTableOidCell);
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		distributedTableList = lappend(distributedTableList, cacheEntry);
 	}
@@ -372,24 +366,20 @@ DistributedTableList(void)
 ShardInterval *
 LoadShardInterval(uint64 shardId)
 {
-	ShardInterval *shardInterval = NULL;
-	ShardInterval *sourceShardInterval = NULL;
-	ShardCacheEntry *shardEntry = NULL;
-	DistTableCacheEntry *tableEntry = NULL;
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
 
-	shardEntry = LookupShardCacheEntry(shardId);
-
-	tableEntry = shardEntry->tableEntry;
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
 	Assert(tableEntry->isDistributedTable);
 
 	/* the offset better be in a valid range */
 	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
 
-	sourceShardInterval = tableEntry->sortedShardIntervalArray[shardEntry->shardIndex];
+	ShardInterval *sourceShardInterval =
+		tableEntry->sortedShardIntervalArray[shardEntry->shardIndex];
 
 	/* copy value to return */
-	shardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
+	ShardInterval *shardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
 	CopyShardInterval(sourceShardInterval, shardInterval);
 
 	return shardInterval;
@@ -403,12 +393,9 @@ LoadShardInterval(uint64 shardId)
 Oid
 RelationIdForShard(uint64 shardId)
 {
-	ShardCacheEntry *shardEntry = NULL;
-	DistTableCacheEntry *tableEntry = NULL;
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
 
-	shardEntry = LookupShardCacheEntry(shardId);
-
-	tableEntry = shardEntry->tableEntry;
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
 	Assert(tableEntry->isDistributedTable);
 
@@ -439,24 +426,18 @@ ReferenceTableShardId(uint64 shardId)
 GroupShardPlacement *
 LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 {
-	ShardCacheEntry *shardEntry = NULL;
-	DistTableCacheEntry *tableEntry = NULL;
-
-	GroupShardPlacement *placementArray = NULL;
-	int numberOfPlacements = 0;
-
-	int i = 0;
-
-	shardEntry = LookupShardCacheEntry(shardId);
-	tableEntry = shardEntry->tableEntry;
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
 	/* the offset better be in a valid range */
 	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
 
-	placementArray = tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
-	numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
+	GroupShardPlacement *placementArray =
+		tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
+	int numberOfPlacements =
+		tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
 
-	for (i = 0; i < numberOfPlacements; i++)
+	for (int i = 0; i < numberOfPlacements; i++)
 	{
 		if (placementArray[i].placementId == placementId)
 		{
@@ -479,13 +460,10 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 ShardPlacement *
 LoadShardPlacement(uint64 shardId, uint64 placementId)
 {
-	ShardCacheEntry *shardEntry = NULL;
-	GroupShardPlacement *groupPlacement = NULL;
-	ShardPlacement *nodePlacement = NULL;
-
-	shardEntry = LookupShardCacheEntry(shardId);
-	groupPlacement = LoadGroupShardPlacement(shardId, placementId);
-	nodePlacement = ResolveGroupShardPlacement(groupPlacement, shardEntry);
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
+	GroupShardPlacement *groupPlacement = LoadGroupShardPlacement(shardId, placementId);
+	ShardPlacement *nodePlacement = ResolveGroupShardPlacement(groupPlacement,
+															   shardEntry);
 
 	return nodePlacement;
 }
@@ -499,19 +477,16 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 ShardPlacement *
 FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 {
-	ShardCacheEntry *shardEntry = NULL;
-	DistTableCacheEntry *tableEntry = NULL;
-	GroupShardPlacement *placementArray = NULL;
-	int numberOfPlacements = 0;
 	ShardPlacement *placementOnNode = NULL;
-	int placementIndex = 0;
 
-	shardEntry = LookupShardCacheEntry(shardId);
-	tableEntry = shardEntry->tableEntry;
-	placementArray = tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
-	numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
+	GroupShardPlacement *placementArray =
+		tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
+	int numberOfPlacements =
+		tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
 
-	for (placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
+	for (int placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
 	{
 		GroupShardPlacement *placement = &placementArray[placementIndex];
 
@@ -583,11 +558,9 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 WorkerNode *
 LookupNodeByNodeId(uint32 nodeId)
 {
-	int workerNodeIndex = 0;
-
 	PrepareWorkerNodeCache();
 
-	for (workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
+	for (int workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
 	{
 		WorkerNode *workerNode = WorkerNodeArray[workerNodeIndex];
 		if (workerNode->nodeId == nodeId)
@@ -613,11 +586,10 @@ WorkerNode *
 LookupNodeForGroup(int32 groupId)
 {
 	bool foundAnyNodes = false;
-	int workerNodeIndex = 0;
 
 	PrepareWorkerNodeCache();
 
-	for (workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
+	for (int workerNodeIndex = 0; workerNodeIndex < WorkerNodeCount; workerNodeIndex++)
 	{
 		WorkerNode *workerNode = WorkerNodeArray[workerNodeIndex];
 		int32 workerNodeGroupId = workerNode->groupId;
@@ -675,23 +647,20 @@ LookupNodeForGroup(int32 groupId)
 List *
 ShardPlacementList(uint64 shardId)
 {
-	ShardCacheEntry *shardEntry = NULL;
-	DistTableCacheEntry *tableEntry = NULL;
-	GroupShardPlacement *placementArray = NULL;
-	int numberOfPlacements = 0;
 	List *placementList = NIL;
-	int i = 0;
 
-	shardEntry = LookupShardCacheEntry(shardId);
-	tableEntry = shardEntry->tableEntry;
+	ShardCacheEntry *shardEntry = LookupShardCacheEntry(shardId);
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
 	/* the offset better be in a valid range */
 	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
 
-	placementArray = tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
-	numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
+	GroupShardPlacement *placementArray =
+		tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
+	int numberOfPlacements =
+		tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
 
-	for (i = 0; i < numberOfPlacements; i++)
+	for (int i = 0; i < numberOfPlacements; i++)
 	{
 		GroupShardPlacement *groupShardPlacement = &placementArray[i];
 		ShardPlacement *shardPlacement = ResolveGroupShardPlacement(groupShardPlacement,
@@ -718,7 +687,6 @@ ShardPlacementList(uint64 shardId)
 static ShardCacheEntry *
 LookupShardCacheEntry(int64 shardId)
 {
-	ShardCacheEntry *shardEntry = NULL;
 	bool foundInCache = false;
 	bool recheck = false;
 
@@ -727,7 +695,8 @@ LookupShardCacheEntry(int64 shardId)
 	InitializeCaches();
 
 	/* lookup cache entry */
-	shardEntry = hash_search(DistShardCacheHash, &shardId, HASH_FIND, &foundInCache);
+	ShardCacheEntry *shardEntry = hash_search(DistShardCacheHash, &shardId, HASH_FIND,
+											  &foundInCache);
 
 	if (!foundInCache)
 	{
@@ -822,7 +791,6 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 static DistTableCacheEntry *
 LookupDistTableCacheEntry(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = NULL;
 	bool foundInCache = false;
 	void *hashKey = (void *) &relationId;
 
@@ -865,7 +833,8 @@ LookupDistTableCacheEntry(Oid relationId)
 		}
 	}
 
-	cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER, &foundInCache);
+	DistTableCacheEntry *cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER,
+												  &foundInCache);
 
 	/* return valid matches */
 	if (foundInCache)
@@ -916,14 +885,9 @@ LookupDistTableCacheEntry(Oid relationId)
 DistObjectCacheEntry *
 LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 {
-	DistObjectCacheEntry *cacheEntry = NULL;
 	bool foundInCache = false;
 	DistObjectCacheEntryKey hashKey;
-	Relation pgDistObjectRel = NULL;
-	TupleDesc pgDistObjectTupleDesc = NULL;
 	ScanKeyData pgDistObjectKey[3];
-	SysScanDesc pgDistObjectScan = NULL;
-	HeapTuple pgDistObjectTup = NULL;
 
 	memset(&hashKey, 0, sizeof(DistObjectCacheEntryKey));
 	hashKey.classid = classid;
@@ -942,7 +906,8 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 
 	InitializeCaches();
 
-	cacheEntry = hash_search(DistObjectCacheHash, &hashKey, HASH_ENTER, &foundInCache);
+	DistObjectCacheEntry *cacheEntry = hash_search(DistObjectCacheHash, &hashKey,
+												   HASH_ENTER, &foundInCache);
 
 	/* return valid matches */
 	if (foundInCache)
@@ -970,8 +935,8 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 	cacheEntry->key.objid = objid;
 	cacheEntry->key.objsubid = objsubid;
 
-	pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
-	pgDistObjectTupleDesc = RelationGetDescr(pgDistObjectRel);
+	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	TupleDesc pgDistObjectTupleDesc = RelationGetDescr(pgDistObjectRel);
 
 	ScanKeyInit(&pgDistObjectKey[0], Anum_pg_dist_object_classid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(classid));
@@ -980,9 +945,10 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 	ScanKeyInit(&pgDistObjectKey[2], Anum_pg_dist_object_objsubid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(objsubid));
 
-	pgDistObjectScan = systable_beginscan(pgDistObjectRel, DistObjectPrimaryKeyIndexId(),
-										  true, NULL, 3, pgDistObjectKey);
-	pgDistObjectTup = systable_getnext(pgDistObjectScan);
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+													  DistObjectPrimaryKeyIndexId(),
+													  true, NULL, 3, pgDistObjectKey);
+	HeapTuple pgDistObjectTup = systable_getnext(pgDistObjectScan);
 
 	if (HeapTupleIsValid(pgDistObjectTup))
 	{
@@ -1021,18 +987,12 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 static void
 BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 {
-	HeapTuple distPartitionTuple = NULL;
-	Relation pgDistPartition = NULL;
-	Datum partitionKeyDatum = 0;
-	Datum replicationModelDatum = 0;
 	MemoryContext oldContext = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	bool partitionKeyIsNull = false;
 	Datum datumArray[Natts_pg_dist_partition];
 	bool isNullArray[Natts_pg_dist_partition];
 
-	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
-	distPartitionTuple =
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	HeapTuple distPartitionTuple =
 		LookupDistPartitionTuple(pgDistPartition, cacheEntry->relationId);
 
 	/* not a distributed table, done */
@@ -1045,25 +1005,23 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 
 	cacheEntry->isDistributedTable = true;
 
-	tupleDescriptor = RelationGetDescr(pgDistPartition);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);
 
 	cacheEntry->partitionMethod = datumArray[Anum_pg_dist_partition_partmethod - 1];
-	partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
-	partitionKeyIsNull = isNullArray[Anum_pg_dist_partition_partkey - 1];
+	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+	bool partitionKeyIsNull = isNullArray[Anum_pg_dist_partition_partkey - 1];
 
 	/* note that for reference tables partitionKeyisNull is true */
 	if (!partitionKeyIsNull)
 	{
-		Node *partitionNode = NULL;
-
 		oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
 		/* get the string representation of the partition column Var */
 		cacheEntry->partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 
 		/* convert the string to a Node and ensure it is a Var */
-		partitionNode = stringToNode(cacheEntry->partitionKeyString);
+		Node *partitionNode = stringToNode(cacheEntry->partitionKeyString);
 		Assert(IsA(partitionNode, Var));
 
 		cacheEntry->partitionColumn = (Var *) partitionNode;
@@ -1081,7 +1039,7 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		cacheEntry->colocationId = INVALID_COLOCATION_ID;
 	}
 
-	replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
+	Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 	if (isNullArray[Anum_pg_dist_partition_repmodel - 1])
 	{
 		/*
@@ -1102,15 +1060,13 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	/* we only need hash functions for hash distributed tables */
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
 	{
-		TypeCacheEntry *typeEntry = NULL;
-		FmgrInfo *hashFunction = NULL;
 		Var *partitionColumn = cacheEntry->partitionColumn;
 
-		typeEntry = lookup_type_cache(partitionColumn->vartype,
-									  TYPECACHE_HASH_PROC_FINFO);
+		TypeCacheEntry *typeEntry = lookup_type_cache(partitionColumn->vartype,
+													  TYPECACHE_HASH_PROC_FINFO);
 
-		hashFunction = MemoryContextAllocZero(MetadataCacheMemoryContext,
-											  sizeof(FmgrInfo));
+		FmgrInfo *hashFunction = MemoryContextAllocZero(MetadataCacheMemoryContext,
+														sizeof(FmgrInfo));
 
 		fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo),
 					   MetadataCacheMemoryContext);
@@ -1151,9 +1107,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	ShardInterval **sortedShardIntervalArray = NULL;
 	FmgrInfo *shardIntervalCompareFunction = NULL;
 	FmgrInfo *shardColumnCompareFunction = NULL;
-	List *distShardTupleList = NIL;
-	int shardIntervalArrayLength = 0;
-	int shardIndex = 0;
 	Oid columnTypeId = InvalidOid;
 	int32 columnTypeMod = -1;
 	Oid intervalTypeId = InvalidOid;
@@ -1166,8 +1119,8 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 							  &intervalTypeId,
 							  &intervalTypeMod);
 
-	distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
-	shardIntervalArrayLength = list_length(distShardTupleList);
+	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
+	int shardIntervalArrayLength = list_length(distShardTupleList);
 	if (shardIntervalArrayLength > 0)
 	{
 		Relation distShardRelation = heap_open(DistShardRelationId(), AccessShareLock);
@@ -1195,10 +1148,10 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 																distShardTupleDesc,
 																intervalTypeId,
 																intervalTypeMod);
-			ShardInterval *newShardInterval = NULL;
 			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
-			newShardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
+			ShardInterval *newShardInterval = (ShardInterval *) palloc0(
+				sizeof(ShardInterval));
 			CopyShardInterval(shardInterval, newShardInterval);
 			shardIntervalArray[arrayIndex] = newShardInterval;
 
@@ -1315,20 +1268,16 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	cacheEntry->shardIntervalArrayLength = 0;
 
 	/* maintain shardId->(table,ShardInterval) cache */
-	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
+	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
-		ShardCacheEntry *shardEntry = NULL;
 		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		bool foundInCache = false;
-		List *placementList = NIL;
-		MemoryContext oldContext = NULL;
 		ListCell *placementCell = NULL;
-		GroupShardPlacement *placementArray = NULL;
 		int placementOffset = 0;
-		int numberOfPlacements = 0;
 
-		shardEntry = hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_ENTER,
-								 &foundInCache);
+		ShardCacheEntry *shardEntry = hash_search(DistShardCacheHash,
+												  &shardInterval->shardId, HASH_ENTER,
+												  &foundInCache);
 		if (foundInCache)
 		{
 			ereport(ERROR, (errmsg("cached metadata for shard " UINT64_FORMAT
@@ -1348,12 +1297,13 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		shardEntry->tableEntry = cacheEntry;
 
 		/* build list of shard placements */
-		placementList = BuildShardPlacementList(shardInterval);
-		numberOfPlacements = list_length(placementList);
+		List *placementList = BuildShardPlacementList(shardInterval);
+		int numberOfPlacements = list_length(placementList);
 
 		/* and copy that list into the cache entry */
-		oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
-		placementArray = palloc0(numberOfPlacements * sizeof(GroupShardPlacement));
+		MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
+		GroupShardPlacement *placementArray = palloc0(numberOfPlacements *
+													  sizeof(GroupShardPlacement));
 		foreach(placementCell, placementList)
 		{
 			GroupShardPlacement *srcPlacement =
@@ -1408,9 +1358,6 @@ bool
 HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 						   int shardIntervalArrayLength)
 {
-	uint64 hashTokenIncrement = 0;
-	int shardIndex = 0;
-
 	/* if there are no shards, there is no uniform distribution */
 	if (shardIntervalArrayLength == 0)
 	{
@@ -1418,9 +1365,9 @@ HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 	}
 
 	/* calculate the hash token increment */
-	hashTokenIncrement = HASH_TOKEN_COUNT / shardIntervalArrayLength;
+	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardIntervalArrayLength;
 
-	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
+	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
 		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
 		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
@@ -1452,7 +1399,6 @@ static bool
 HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shardCount)
 {
 	bool hasUninitializedShardInterval = false;
-	ShardInterval *lastShardInterval = NULL;
 
 	if (shardCount == 0)
 	{
@@ -1465,7 +1411,7 @@ HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shar
 	 * Since the shard interval array is sorted, and uninitialized ones stored
 	 * in the end of the array, checking the last element is enough.
 	 */
-	lastShardInterval = sortedShardIntervalArray[shardCount - 1];
+	ShardInterval *lastShardInterval = sortedShardIntervalArray[shardCount - 1];
 	if (!lastShardInterval->minValueExists || !lastShardInterval->maxValueExists)
 	{
 		hasUninitializedShardInterval = true;
@@ -1484,8 +1430,6 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 							int shardIntervalArrayLength,
 							FmgrInfo *shardIntervalSortCompareFunction)
 {
-	int shardIndex = 0;
-	ShardInterval *lastShardInterval = NULL;
 	Datum comparisonDatum = 0;
 	int comparisonResult = 0;
 
@@ -1495,8 +1439,8 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 		return false;
 	}
 
-	lastShardInterval = shardIntervalArray[0];
-	for (shardIndex = 1; shardIndex < shardIntervalArrayLength; shardIndex++)
+	ShardInterval *lastShardInterval = shardIntervalArray[0];
+	for (int shardIndex = 1; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
 		ShardInterval *curShardInterval = shardIntervalArray[shardIndex];
 
@@ -1586,15 +1530,13 @@ CitusHasBeenLoaded(void)
 static bool
 CitusHasBeenLoadedInternal(void)
 {
-	Oid citusExtensionOid = InvalidOid;
-
 	if (IsBinaryUpgrade)
 	{
 		/* never use Citus logic during pg_upgrade */
 		return false;
 	}
 
-	citusExtensionOid = get_extension_oid("citus", true);
+	Oid citusExtensionOid = get_extension_oid("citus", true);
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
@@ -1654,14 +1596,12 @@ CheckCitusVersion(int elevel)
 bool
 CheckAvailableVersion(int elevel)
 {
-	char *availableVersion = NULL;
-
 	if (!EnableVersionChecks)
 	{
 		return true;
 	}
 
-	availableVersion = AvailableExtensionVersion();
+	char *availableVersion = AvailableExtensionVersion();
 
 	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
 	{
@@ -1680,7 +1620,7 @@ CheckAvailableVersion(int elevel)
 
 
 /*
- * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the the
+ * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the
  * extension's current version from the pg_extemsion catalog table. If they
  * are not compatible, this function logs an error with the specified elevel,
  * otherwise it returns true.
@@ -1688,12 +1628,10 @@ CheckAvailableVersion(int elevel)
 static bool
 CheckInstalledVersion(int elevel)
 {
-	char *installedVersion = NULL;
-
 	Assert(CitusHasBeenLoaded());
 	Assert(EnableVersionChecks);
 
-	installedVersion = InstalledExtensionVersion();
+	char *installedVersion = InstalledExtensionVersion();
 
 	if (!MajorVersionsCompatible(installedVersion, CITUS_EXTENSIONVERSION))
 	{
@@ -1761,21 +1699,17 @@ MajorVersionsCompatible(char *leftVersion, char *rightVersion)
 static char *
 AvailableExtensionVersion(void)
 {
-	ReturnSetInfo *extensionsResultSet = NULL;
-	TupleTableSlot *tupleTableSlot = NULL;
 	LOCAL_FCINFO(fcinfo, 0);
 	FmgrInfo flinfo;
-	EState *estate = NULL;
 
-	bool hasTuple = false;
 	bool goForward = true;
 	bool doCopy = false;
 	char *availableExtensionVersion;
 
 	InitializeCaches();
 
-	estate = CreateExecutorState();
-	extensionsResultSet = makeNode(ReturnSetInfo);
+	EState *estate = CreateExecutorState();
+	ReturnSetInfo *extensionsResultSet = makeNode(ReturnSetInfo);
 	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
 	extensionsResultSet->allowedModes = SFRM_Materialize;
 
@@ -1786,25 +1720,25 @@ AvailableExtensionVersion(void)
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(extensionsResultSet->setDesc,
-													&TTSOpsMinimalTuple);
-	hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward, doCopy,
-									   tupleTableSlot);
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+		extensionsResultSet->setDesc,
+		&TTSOpsMinimalTuple);
+	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
+											doCopy,
+											tupleTableSlot);
 	while (hasTuple)
 	{
-		Datum extensionNameDatum = 0;
-		char *extensionName = NULL;
 		bool isNull = false;
 
-		extensionNameDatum = slot_getattr(tupleTableSlot, 1, &isNull);
-		extensionName = NameStr(*DatumGetName(extensionNameDatum));
+		Datum extensionNameDatum = slot_getattr(tupleTableSlot, 1, &isNull);
+		char *extensionName = NameStr(*DatumGetName(extensionNameDatum));
 		if (strcmp(extensionName, "citus") == 0)
 		{
-			MemoryContext oldMemoryContext = NULL;
 			Datum availableVersion = slot_getattr(tupleTableSlot, 2, &isNull);
 
 			/* we will cache the result of citus version to prevent catalog access */
-			oldMemoryContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
+			MemoryContext oldMemoryContext = MemoryContextSwitchTo(
+				MetadataCacheMemoryContext);
 
 			availableExtensionVersion = text_to_cstring(DatumGetTextPP(availableVersion));
 
@@ -1836,28 +1770,24 @@ AvailableExtensionVersion(void)
 static char *
 InstalledExtensionVersion(void)
 {
-	Relation relation = NULL;
-	SysScanDesc scandesc;
 	ScanKeyData entry[1];
-	HeapTuple extensionTuple = NULL;
 	char *installedExtensionVersion = NULL;
 
 	InitializeCaches();
 
-	relation = heap_open(ExtensionRelationId, AccessShareLock);
+	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0], Anum_pg_extension_extname, BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum("citus"));
 
-	scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
-								  NULL, 1, entry);
+	SysScanDesc scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
+											  NULL, 1, entry);
 
-	extensionTuple = systable_getnext(scandesc);
+	HeapTuple extensionTuple = systable_getnext(scandesc);
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(extensionTuple))
 	{
-		MemoryContext oldMemoryContext = NULL;
 		int extensionIndex = Anum_pg_extension_extversion;
 		TupleDesc tupleDescriptor = RelationGetDescr(relation);
 		bool isNull = false;
@@ -1872,7 +1802,8 @@ InstalledExtensionVersion(void)
 		}
 
 		/* we will cache the result of citus version to prevent catalog access */
-		oldMemoryContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
+		MemoryContext oldMemoryContext = MemoryContextSwitchTo(
+			MetadataCacheMemoryContext);
 
 		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
 
@@ -2340,10 +2271,7 @@ CurrentDatabaseName(void)
 extern Oid
 CitusExtensionOwner(void)
 {
-	Relation relation = NULL;
-	SysScanDesc scandesc;
 	ScanKeyData entry[1];
-	HeapTuple extensionTuple = NULL;
 	Form_pg_extension extensionForm = NULL;
 
 	if (MetadataCache.extensionOwner != InvalidOid)
@@ -2351,17 +2279,17 @@ CitusExtensionOwner(void)
 		return MetadataCache.extensionOwner;
 	}
 
-	relation = heap_open(ExtensionRelationId, AccessShareLock);
+	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				Anum_pg_extension_extname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum("citus"));
 
-	scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
-								  NULL, 1, entry);
+	SysScanDesc scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
+											  NULL, 1, entry);
 
-	extensionTuple = systable_getnext(scandesc);
+	HeapTuple extensionTuple = systable_getnext(scandesc);
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(extensionTuple))
@@ -2540,8 +2468,6 @@ Datum
 master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
-	HeapTuple newTuple = NULL;
-	HeapTuple oldTuple = NULL;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
 
@@ -2553,8 +2479,8 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	newTuple = triggerData->tg_newtuple;
-	oldTuple = triggerData->tg_trigtuple;
+	HeapTuple newTuple = triggerData->tg_newtuple;
+	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
 	/* collect logicalrelid for OLD and NEW tuple */
 	if (oldTuple != NULL)
@@ -2603,8 +2529,6 @@ Datum
 master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
-	HeapTuple newTuple = NULL;
-	HeapTuple oldTuple = NULL;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
 
@@ -2616,8 +2540,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	newTuple = triggerData->tg_newtuple;
-	oldTuple = triggerData->tg_trigtuple;
+	HeapTuple newTuple = triggerData->tg_newtuple;
+	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
 	/* collect logicalrelid for OLD and NEW tuple */
 	if (oldTuple != NULL)
@@ -2666,8 +2590,6 @@ Datum
 master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
-	HeapTuple newTuple = NULL;
-	HeapTuple oldTuple = NULL;
 	Oid oldShardId = InvalidOid;
 	Oid newShardId = InvalidOid;
 
@@ -2679,8 +2601,8 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	newTuple = triggerData->tg_newtuple;
-	oldTuple = triggerData->tg_trigtuple;
+	HeapTuple newTuple = triggerData->tg_newtuple;
+	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
 	/* collect shardid for OLD and NEW tuple */
 	if (oldTuple != NULL)
@@ -3030,15 +2952,10 @@ PrepareWorkerNodeCache(void)
 static void
 InitializeWorkerNodeCache(void)
 {
-	HTAB *newWorkerNodeHash = NULL;
-	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
 	HASHCTL info;
-	int hashFlags = 0;
 	long maxTableSize = (long) MaxWorkerNodesTracked;
 	bool includeNodesFromOtherClusters = false;
-	int newWorkerNodeCount = 0;
-	WorkerNode **newWorkerNodeArray = NULL;
 	int workerNodeIndex = 0;
 
 	InitializeCaches();
@@ -3054,29 +2971,29 @@ InitializeWorkerNodeCache(void)
 	info.hcxt = MetadataCacheMemoryContext;
 	info.hash = WorkerNodeHashCode;
 	info.match = WorkerNodeCompare;
-	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE;
+	int hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE;
 
-	newWorkerNodeHash = hash_create("Worker Node Hash", maxTableSize, &info, hashFlags);
+	HTAB *newWorkerNodeHash = hash_create("Worker Node Hash", maxTableSize, &info,
+										  hashFlags);
 
 	/* read the list from pg_dist_node */
-	workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
+	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
-	newWorkerNodeCount = list_length(workerNodeList);
-	newWorkerNodeArray = MemoryContextAlloc(MetadataCacheMemoryContext,
-											sizeof(WorkerNode *) * newWorkerNodeCount);
+	int newWorkerNodeCount = list_length(workerNodeList);
+	WorkerNode **newWorkerNodeArray = MemoryContextAlloc(MetadataCacheMemoryContext,
+														 sizeof(WorkerNode *) *
+														 newWorkerNodeCount);
 
 	/* iterate over the worker node list */
 	foreach(workerNodeCell, workerNodeList)
 	{
-		WorkerNode *workerNode = NULL;
 		WorkerNode *currentNode = lfirst(workerNodeCell);
-		void *hashKey = NULL;
 		bool handleFound = false;
 
 		/* search for the worker node in the hash, and then insert the values */
-		hashKey = (void *) currentNode;
-		workerNode = (WorkerNode *) hash_search(newWorkerNodeHash, hashKey,
-												HASH_ENTER, &handleFound);
+		void *hashKey = (void *) currentNode;
+		WorkerNode *workerNode = (WorkerNode *) hash_search(newWorkerNodeHash, hashKey,
+															HASH_ENTER, &handleFound);
 
 		/* fill the newly allocated workerNode in the cache */
 		strlcpy(workerNode->workerName, currentNode->workerName, WORKER_LENGTH);
@@ -3153,14 +3070,9 @@ RegisterWorkerNodeCacheCallbacks(void)
 int32
 GetLocalGroupId(void)
 {
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
-	TupleDesc tupleDescriptor = NULL;
 	int32 groupId = 0;
-	Relation pgDistLocalGroupId = NULL;
-	Oid localGroupTableOid = InvalidOid;
 
 	InitializeCaches();
 
@@ -3172,21 +3084,22 @@ GetLocalGroupId(void)
 		return LocalGroupId;
 	}
 
-	localGroupTableOid = get_relname_relid("pg_dist_local_group", PG_CATALOG_NAMESPACE);
+	Oid localGroupTableOid = get_relname_relid("pg_dist_local_group",
+											   PG_CATALOG_NAMESPACE);
 	if (localGroupTableOid == InvalidOid)
 	{
 		return 0;
 	}
 
-	pgDistLocalGroupId = heap_open(localGroupTableOid, AccessShareLock);
+	Relation pgDistLocalGroupId = heap_open(localGroupTableOid, AccessShareLock);
 
-	scanDescriptor = systable_beginscan(pgDistLocalGroupId,
-										InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistLocalGroupId,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	tupleDescriptor = RelationGetDescr(pgDistLocalGroupId);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistLocalGroupId);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 
 	if (HeapTupleIsValid(heapTuple))
 	{
@@ -3258,8 +3171,6 @@ WorkerNodeHashCode(const void *key, Size keySize)
 static void
 ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 {
-	int shardIndex = 0;
-
 	if (cacheEntry->partitionKeyString != NULL)
 	{
 		pfree(cacheEntry->partitionKeyString);
@@ -3289,7 +3200,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		return;
 	}
 
-	for (shardIndex = 0; shardIndex < cacheEntry->shardIntervalArrayLength;
+	for (int shardIndex = 0; shardIndex < cacheEntry->shardIntervalArrayLength;
 		 shardIndex++)
 	{
 		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
@@ -3555,30 +3466,26 @@ InvalidateMetadataSystemCache(void)
 List *
 DistTableOidList(void)
 {
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
 	List *distTableOidList = NIL;
-	TupleDesc tupleDescriptor = NULL;
 
 	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
 
-	scanDescriptor = systable_beginscan(pgDistPartition,
-										InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
 
-	tupleDescriptor = RelationGetDescr(pgDistPartition);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		Oid relationId = InvalidOid;
 		Datum relationIdDatum = heap_getattr(heapTuple,
 											 Anum_pg_dist_partition_logicalrelid,
 											 tupleDescriptor, &isNull);
-		relationId = DatumGetObjectId(relationIdDatum);
+		Oid relationId = DatumGetObjectId(relationIdDatum);
 		distTableOidList = lappend_oid(distTableOidList, relationId);
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -3630,8 +3537,6 @@ static HeapTuple
 LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 {
 	HeapTuple distPartitionTuple = NULL;
-	HeapTuple currentPartitionTuple = NULL;
-	SysScanDesc scanDescriptor;
 	ScanKeyData scanKey[1];
 
 	/* copy scankey to local copy, it will be modified during the scan */
@@ -3640,11 +3545,11 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
 
-	scanDescriptor = systable_beginscan(pgDistPartition,
-										DistPartitionLogicalRelidIndexId(),
-										true, NULL, 1, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													true, NULL, 1, scanKey);
 
-	currentPartitionTuple = systable_getnext(scanDescriptor);
+	HeapTuple currentPartitionTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(currentPartitionTuple))
 	{
 		distPartitionTuple = heap_copytuple(currentPartitionTuple);
@@ -3663,13 +3568,10 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 static List *
 LookupDistShardTuples(Oid relationId)
 {
-	Relation pgDistShard = NULL;
 	List *distShardTupleList = NIL;
-	HeapTuple currentShardTuple = NULL;
-	SysScanDesc scanDescriptor;
 	ScanKeyData scanKey[1];
 
-	pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
+	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
 
 	/* copy scankey to local copy, it will be modified during the scan */
 	memcpy(scanKey, DistShardScanKey, sizeof(DistShardScanKey));
@@ -3677,11 +3579,11 @@ LookupDistShardTuples(Oid relationId)
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
 
-	scanDescriptor = systable_beginscan(pgDistShard,
-										DistShardLogicalRelidIndexId(), true,
-										NULL, 1, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardLogicalRelidIndexId(), true,
+													NULL, 1, scanKey);
 
-	currentShardTuple = systable_getnext(scanDescriptor);
+	HeapTuple currentShardTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(currentShardTuple))
 	{
 		HeapTuple shardTupleCopy = heap_copytuple(currentShardTuple);
@@ -3706,10 +3608,8 @@ LookupDistShardTuples(Oid relationId)
 Oid
 LookupShardRelation(int64 shardId, bool missingOk)
 {
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 	Form_pg_dist_shard shardForm = NULL;
 	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
 	Oid relationId = InvalidOid;
@@ -3717,11 +3617,11 @@ LookupShardRelation(int64 shardId, bool missingOk)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
 
-	scanDescriptor = systable_beginscan(pgDistShard,
-										DistShardShardidIndexId(), true,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), true,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple) && !missingOk)
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for shard "
@@ -3811,18 +3711,10 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 					 intervalTypeId,
 					 int32 intervalTypeMod)
 {
-	ShardInterval *shardInterval = NULL;
-	bool minValueNull = false;
-	bool maxValueNull = false;
 	Oid inputFunctionId = InvalidOid;
 	Oid typeIoParam = InvalidOid;
 	Datum datumArray[Natts_pg_dist_shard];
 	bool isNullArray[Natts_pg_dist_shard];
-	Datum minValueTextDatum = 0;
-	Datum maxValueTextDatum = 0;
-	Oid relationId = InvalidOid;
-	int64 shardId = InvalidOid;
-	char storageType = InvalidOid;
 	Datum minValue = 0;
 	Datum maxValue = 0;
 	bool minValueExists = false;
@@ -3838,15 +3730,15 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 	 */
 	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-	relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid -
-											 1]);
-	shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
-	storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
-	minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
-	maxValueTextDatum = datumArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+	Oid relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid -
+												 1]);
+	int64 shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
+	char storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
+	Datum minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
+	Datum maxValueTextDatum = datumArray[Anum_pg_dist_shard_shardmaxvalue - 1];
 
-	minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
-	maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+	bool minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
+	bool maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
 
 	if (!minValueNull && !maxValueNull)
 	{
@@ -3869,7 +3761,7 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 		maxValueExists = true;
 	}
 
-	shardInterval = CitusMakeNode(ShardInterval);
+	ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
 	shardInterval->relationId = relationId;
 	shardInterval->storageType = storageType;
 	shardInterval->valueTypeId = intervalTypeId;
@@ -3970,10 +3862,8 @@ CitusInvalidateRelcacheByRelid(Oid relationId)
 void
 CitusInvalidateRelcacheByShardId(int64 shardId)
 {
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 	Form_pg_dist_shard shardForm = NULL;
 	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
 
@@ -3987,11 +3877,11 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
 
-	scanDescriptor = systable_beginscan(pgDistShard,
-										DistShardShardidIndexId(), true,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), true,
+													NULL, scanKeyCount, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		shardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
@@ -4033,28 +3923,23 @@ Datum
 DistNodeMetadata(void)
 {
 	Datum metadata = 0;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
-	Oid metadataTableOid = InvalidOid;
-	Relation pgDistNodeMetadata = NULL;
-	TupleDesc tupleDescriptor = NULL;
 
-	metadataTableOid = get_relname_relid("pg_dist_node_metadata",
-										 PG_CATALOG_NAMESPACE);
+	Oid metadataTableOid = get_relname_relid("pg_dist_node_metadata",
+											 PG_CATALOG_NAMESPACE);
 	if (metadataTableOid == InvalidOid)
 	{
 		ereport(ERROR, (errmsg("pg_dist_node_metadata was not found")));
 	}
 
-	pgDistNodeMetadata = heap_open(metadataTableOid, AccessShareLock);
-	scanDescriptor = systable_beginscan(pgDistNodeMetadata,
-										InvalidOid, false,
-										NULL, scanKeyCount, scanKey);
-	tupleDescriptor = RelationGetDescr(pgDistNodeMetadata);
+	Relation pgDistNodeMetadata = heap_open(metadataTableOid, AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNodeMetadata,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNodeMetadata);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;

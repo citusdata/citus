@@ -343,9 +343,8 @@ ExplainTaskList(List *taskList, ExplainState *es)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		RemoteExplainPlan *remoteExplain = NULL;
 
-		remoteExplain = RemoteExplain(task, es);
+		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
 
 		if (!ExplainAllTasks)
@@ -367,21 +366,19 @@ ExplainTaskList(List *taskList, ExplainState *es)
 
 
 /*
- * RemoteExplain fetches the the remote EXPLAIN output for a single
+ * RemoteExplain fetches the remote EXPLAIN output for a single
  * task. It tries each shard placement until one succeeds or all
  * failed.
  */
 static RemoteExplainPlan *
 RemoteExplain(Task *task, ExplainState *es)
 {
-	StringInfo explainQuery = NULL;
 	List *taskPlacementList = task->taskPlacementList;
 	int placementCount = list_length(taskPlacementList);
-	int placementIndex = 0;
-	RemoteExplainPlan *remotePlan = NULL;
 
-	remotePlan = (RemoteExplainPlan *) palloc0(sizeof(RemoteExplainPlan));
-	explainQuery = BuildRemoteExplainQuery(task->queryString, es);
+	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
+		sizeof(RemoteExplainPlan));
+	StringInfo explainQuery = BuildRemoteExplainQuery(task->queryString, es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
@@ -389,17 +386,16 @@ RemoteExplain(Task *task, ExplainState *es)
 	 */
 	BeginOrContinueCoordinatedTransaction();
 
-	for (placementIndex = 0; placementIndex < placementCount; placementIndex++)
+	for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
-		MultiConnection *connection = NULL;
 		PGresult *queryResult = NULL;
 		int connectionFlags = 0;
-		int executeResult = 0;
 
 		remotePlan->placementIndex = placementIndex;
 
-		connection = GetPlacementConnection(connectionFlags, taskPlacement, NULL);
+		MultiConnection *connection = GetPlacementConnection(connectionFlags,
+															 taskPlacement, NULL);
 
 		/* try other placements if we fail to connect this one */
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
@@ -417,8 +413,8 @@ RemoteExplain(Task *task, ExplainState *es)
 		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
 
 		/* run explain query */
-		executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
-													 &queryResult);
+		int executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
+														 &queryResult);
 		if (executeResult != 0)
 		{
 			PQclear(queryResult);
@@ -517,11 +513,9 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 	foreach(explainOutputCell, explainOutputList)
 	{
 		StringInfo rowString = (StringInfo) lfirst(explainOutputCell);
-		int rowLength = 0;
-		char *lineStart = NULL;
 
-		rowLength = strlen(rowString->data);
-		lineStart = rowString->data;
+		int rowLength = strlen(rowString->data);
+		char *lineStart = rowString->data;
 
 		/* parse the lines in the remote EXPLAIN for proper indentation */
 		while (lineStart < rowString->data + rowLength)
@@ -646,14 +640,13 @@ ExplainOneQuery(Query *query, int cursorOptions,
 	}
 	else
 	{
-		PlannedStmt *plan;
 		instr_time	planstart,
 					planduration;
 
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-		plan = pg_plan_query(query, cursorOptions, params);
+		PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);

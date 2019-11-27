@@ -170,9 +170,7 @@ recurse_pg_depend(const ObjectAddress *target,
 				  void (*apply)(ObjectAddressCollector *collector, Form_pg_depend row),
 				  ObjectAddressCollector *collector)
 {
-	Relation depRel = NULL;
 	ScanKeyData key[2];
-	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
 	List *pgDependEntries = NIL;
 	ListCell *pgDependCell = NULL;
@@ -188,14 +186,15 @@ recurse_pg_depend(const ObjectAddress *target,
 	/*
 	 * iterate the actual pg_depend catalog
 	 */
-	depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = heap_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(target->classId));
 	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(target->objectId));
-	depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2, key);
+	SysScanDesc depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2,
+											 key);
 
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{
@@ -215,9 +214,7 @@ recurse_pg_depend(const ObjectAddress *target,
 	 */
 	if (expand != NULL)
 	{
-		List *expandedEntries = NIL;
-
-		expandedEntries = expand(collector, target);
+		List *expandedEntries = expand(collector, target);
 		pgDependEntries = list_concat(pgDependEntries, expandedEntries);
 	}
 
@@ -262,14 +259,13 @@ recurse_pg_depend(const ObjectAddress *target,
 static void
 InitObjectAddressCollector(ObjectAddressCollector *collector)
 {
-	int hashFlags = 0;
 	HASHCTL info;
 
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(ObjectAddress);
 	info.entrysize = sizeof(ObjectAddress);
 	info.hcxt = CurrentMemoryContext;
-	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
 	collector->dependencyList = NULL;
@@ -301,12 +297,12 @@ TargetObjectVisited(ObjectAddressCollector *collector, const ObjectAddress *targ
 static void
 MarkObjectVisited(ObjectAddressCollector *collector, const ObjectAddress *target)
 {
-	ObjectAddress *address = NULL;
 	bool found = false;
 
 	/* add to set */
-	address = (ObjectAddress *) hash_search(collector->visitedObjects, target,
-											HASH_ENTER, &found);
+	ObjectAddress *address = (ObjectAddress *) hash_search(collector->visitedObjects,
+														   target,
+														   HASH_ENTER, &found);
 
 	if (!found)
 	{
@@ -322,12 +318,12 @@ MarkObjectVisited(ObjectAddressCollector *collector, const ObjectAddress *target
 static void
 CollectObjectAddress(ObjectAddressCollector *collector, const ObjectAddress *collect)
 {
-	ObjectAddress *address = NULL;
 	bool found = false;
 
 	/* add to set */
-	address = (ObjectAddress *) hash_search(collector->dependencySet, collect,
-											HASH_ENTER, &found);
+	ObjectAddress *address = (ObjectAddress *) hash_search(collector->dependencySet,
+														   collect,
+														   HASH_ENTER, &found);
 
 	if (!found)
 	{
@@ -475,20 +471,19 @@ bool
 IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 								ObjectAddress *extensionAddress)
 {
-	Relation depRel = NULL;
 	ScanKeyData key[2];
-	SysScanDesc depScan = NULL;
 	HeapTuple depTup = NULL;
 	bool result = false;
 
-	depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = heap_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(target->classId));
 	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(target->objectId));
-	depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2, key);
+	SysScanDesc depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2,
+											 key);
 
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{

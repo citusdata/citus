@@ -2,7 +2,7 @@
 -- MULTI_MX_TPCH_QUERY3
 --
 
--- Query #3 from the TPC-H decision support benchmark. 
+-- Query #3 from the TPC-H decision support benchmark.
 
 
 -- connect to the coordinator

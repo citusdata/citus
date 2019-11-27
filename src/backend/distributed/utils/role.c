@@ -32,14 +32,13 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 	const char *rolename = text_to_cstring(rolenameText);
 	text *utilityQueryText = PG_GETARG_TEXT_P(1);
 	const char *utilityQuery = text_to_cstring(utilityQueryText);
-	Node *parseTree = NULL;
 
 	if (get_role_oid(rolename, true) == InvalidOid)
 	{
 		PG_RETURN_BOOL(false);
 	}
 
-	parseTree = ParseTreeNode(utilityQuery);
+	Node *parseTree = ParseTreeNode(utilityQuery);
 
 	CitusProcessUtility(parseTree, utilityQuery, PROCESS_UTILITY_TOPLEVEL, NULL,
 						None_Receiver, NULL);

@@ -9,18 +9,18 @@ SELECT run_command_on_workers($$CREATE ROLE alter_role_1 WITH LOGIN;$$);
 ALTER ROLE alter_role_1 WITH SUPERUSER NOSUPERUSER;
 
 -- make sure that we propagate all options accurately
-ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05'; 
+ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 
 -- make sure that we propagate all options accurately
-ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05'; 
+ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 
 -- make sure that non-existent users are handled properly
 ALTER ROLE alter_role_2 WITH SUPERUSER NOSUPERUSER;
-ALTER ROLE alter_role_2 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05'; 
+ALTER ROLE alter_role_2 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05';
 
 -- make sure that CURRENT_USER just works fine
 ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 123;
@@ -66,11 +66,11 @@ SELECT run_command_on_workers($$SELECT rolcreaterole FROM pg_authid WHERE rolnam
 
 
 -- add node
-ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05' PASSWORD 'test3'; 
+ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05' PASSWORD 'test3';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 SELECT master_remove_node('localhost', :worker_1_port);
-ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05' PASSWORD 'test4'; 
+ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05' PASSWORD 'test4';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);

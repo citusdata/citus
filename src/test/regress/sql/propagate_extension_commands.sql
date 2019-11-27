@@ -30,7 +30,7 @@ BEGIN;
   -- this should not succeed as we do not distribute extension commands within transaction blocks
 	CREATE TABLE dist_table (key int, value public.issn);
 	SELECT create_distributed_table('dist_table', 'key');
-	
+
 	-- we can even run queries (sequentially) over the distributed table
 	SELECT * FROM dist_table;
 	INSERT INTO dist_table VALUES (1, public.issn('1436-4522'));
@@ -59,7 +59,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 -- now, update to a newer version
 ALTER EXTENSION isn UPDATE TO '1.2';
 
--- show that ALTER EXTENSION is propagated 
+-- show that ALTER EXTENSION is propagated
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
 
 -- before changing the schema, ensure the current schmea
@@ -85,8 +85,8 @@ DROP EXTENSION isn CASCADE;
 RESET client_min_messages;
 
 -- now make sure that the reference tables depending on an extension can be succesfully created.
--- we should also ensure that we replicate this reference table (and hence the extension) 
--- to new nodes after calling master_activate_node. 
+-- we should also ensure that we replicate this reference table (and hence the extension)
+-- to new nodes after calling master_activate_node.
 
 -- now, first drop seg and existing objects before next test
 SET client_min_messages TO WARNING;
@@ -111,14 +111,14 @@ CREATE TABLE ref_table_2 (x seg);
 SELECT create_reference_table('ref_table_2');
 
 -- and add the other node
-SELECT 1 from master_add_node('localhost', 57638);
+SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
 
 -- and similarly check for the reference table
-select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass; 
+select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='ref_table_2'::regclass;
 DROP TABLE ref_table_2;
 -- now test create extension in another transaction block but rollback this time
@@ -134,7 +134,7 @@ SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_exte
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
 
 -- give a notice for the following commands saying that it is not
--- propagated to the workers. the user should run it manually on the workers 
+-- propagated to the workers. the user should run it manually on the workers
 CREATE TABLE t1 (A int);
 CREATE VIEW v1 AS select * from t1;
 
@@ -210,13 +210,13 @@ BEGIN;
 	SET citus.shard_replication_factor TO 1;
 	CREATE EXTENSION seg;
 	CREATE EXTENSION isn;
-	CREATE TYPE test_type AS (a int, b seg); 
-	CREATE TYPE test_type_2 AS (a int, b test_type); 
+	CREATE TYPE test_type AS (a int, b seg);
+	CREATE TYPE test_type_2 AS (a int, b test_type);
 
 	CREATE TABLE t2 (a int, b test_type_2, c issn);
 	SELECT create_distributed_table('t2', 'a');
-	
-	CREATE TYPE test_type_3 AS (a int, b test_type, c issn); 
+
+	CREATE TYPE test_type_3 AS (a int, b test_type, c issn);
 	CREATE TABLE t3 (a int, b test_type_3);
 	SELECT create_reference_table('t3');
 
@@ -228,6 +228,34 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 -- make sure that both extensions are created on both nodes
 SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
+
+-- test if citus can escape the extension name
+CREATE EXTENSION "uuid-ossp";
+
+-- show that the extension is created on both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION "uuid-ossp";
+RESET client_min_messages;
+
+-- show that the extension is dropped from both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+-- show that extension recreation on new nodes works also fine with extension names that require escaping
+SELECT 1 from master_remove_node('localhost', :worker_2_port);
+
+CREATE EXTENSION "uuid-ossp";
+
+-- and add the other node
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+
+-- show that the extension exists on both nodes
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
+
+SET client_min_messages TO WARNING;
+DROP EXTENSION "uuid-ossp";
+RESET client_min_messages;
 
 -- drop the schema and all the objects
 SET client_min_messages TO WARNING;

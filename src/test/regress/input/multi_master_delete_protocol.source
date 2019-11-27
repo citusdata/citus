@@ -28,7 +28,7 @@ SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_acctbal > 0.0');
 -- Check that we delete a shard if and only if all rows in the shard satisfy the condition.
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol 
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_custkey > 6500');
 SELECT count(*) from customer_delete_protocol;
 

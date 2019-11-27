@@ -48,11 +48,11 @@ static bool CallFuncExprRemotely(CallStmt *callStmt,
 bool
 CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 {
-	DistObjectCacheEntry *procedure = NULL;
 	FuncExpr *funcExpr = callStmt->funcexpr;
 	Oid functionId = funcExpr->funcid;
 
-	procedure = LookupDistObjectCacheEntry(ProcedureRelationId, functionId, 0);
+	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
+																 functionId, 0);
 	if (procedure == NULL || !procedure->isDistributed)
 	{
 		return false;
@@ -69,25 +69,13 @@ static bool
 CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 					 FuncExpr *funcExpr, DestReceiver *dest)
 {
-	Oid colocatedRelationId = InvalidOid;
-	Node *partitionValueNode = NULL;
-	Const *partitionValue = NULL;
-	Datum partitionValueDatum = 0;
-	ShardInterval *shardInterval = NULL;
-	List *placementList = NIL;
-	DistTableCacheEntry *distTable = NULL;
-	Var *partitionColumn = NULL;
-	ShardPlacement *placement = NULL;
-	WorkerNode *workerNode = NULL;
-	StringInfo callCommand = NULL;
-
 	if (IsMultiStatementTransaction())
 	{
 		ereport(DEBUG1, (errmsg("cannot push down CALL in multi-statement transaction")));
 		return false;
 	}
 
-	colocatedRelationId = ColocatedTableId(procedure->colocationId);
+	Oid colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
 		ereport(DEBUG1, (errmsg("stored procedure does not have co-located tables")));
@@ -108,8 +96,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	distTable = DistributedTableCacheEntry(colocatedRelationId);
-	partitionColumn = distTable->partitionColumn;
+	DistTableCacheEntry *distTable = DistributedTableCacheEntry(colocatedRelationId);
+	Var *partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
@@ -118,17 +106,17 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	partitionValueNode = (Node *) list_nth(funcExpr->args,
-										   procedure->distributionArgIndex);
+	Node *partitionValueNode = (Node *) list_nth(funcExpr->args,
+												 procedure->distributionArgIndex);
 	partitionValueNode = strip_implicit_coercions(partitionValueNode);
 	if (!IsA(partitionValueNode, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
 		return false;
 	}
-	partitionValue = (Const *) partitionValueNode;
+	Const *partitionValue = (Const *) partitionValueNode;
 
-	partitionValueDatum = partitionValue->constvalue;
+	Datum partitionValueDatum = partitionValue->constvalue;
 	if (partitionValue->consttype != partitionColumn->vartype)
 	{
 		CopyCoercionData coercionData;
@@ -139,14 +127,14 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
 	}
 
-	shardInterval = FindShardInterval(partitionValueDatum, distTable);
+	ShardInterval *shardInterval = FindShardInterval(partitionValueDatum, distTable);
 	if (shardInterval == NULL)
 	{
 		ereport(DEBUG1, (errmsg("cannot push down call, failed to find shard interval")));
 		return false;
 	}
 
-	placementList = FinalizedShardPlacementList(shardInterval->shardId);
+	List *placementList = FinalizedShardPlacementList(shardInterval->shardId);
 	if (list_length(placementList) != 1)
 	{
 		/* punt on this for now */
@@ -155,8 +143,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	placement = (ShardPlacement *) linitial(placementList);
-	workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
+	ShardPlacement *placement = (ShardPlacement *) linitial(placementList);
+	WorkerNode *workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
 	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
 		ereport(DEBUG1, (errmsg("there is no worker node with metadata")));
@@ -166,7 +154,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
 	/* build remote command with fully qualified names */
-	callCommand = makeStringInfo();
+	StringInfo callCommand = makeStringInfo();
 	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) funcExpr));
 
 	{

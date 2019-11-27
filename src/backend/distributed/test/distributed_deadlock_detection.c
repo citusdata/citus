@@ -40,10 +40,7 @@ Datum
 get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 {
 	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
 
-	WaitGraph *waitGraph = NULL;
-	HTAB *adjacencyList = NULL;
 	HASH_SEQ_STATUS status;
 	TransactionNode *transactionNode = NULL;
 
@@ -52,9 +49,9 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	waitGraph = BuildGlobalWaitGraph();
-	adjacencyList = BuildAdjacencyListsForWaitGraph(waitGraph);
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+	HTAB *adjacencyList = BuildAdjacencyListsForWaitGraph(waitGraph);
 
 	/* iterate on all nodes */
 	hash_seq_init(&status, adjacencyList);

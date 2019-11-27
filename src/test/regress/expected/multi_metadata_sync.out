@@ -1497,13 +1497,86 @@ select shouldhaveshards from pg_dist_node where nodeport = 8888;
  t
 (1 row)
 
--- Cleanup
 \c - - - :master_port
-DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
-NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
-DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
-DROP TABLE mx_testing_schema.mx_test_table;
-DROP TABLE mx_ref;
+--
+-- Check that metadata commands error out if any nodes are out-of-sync
+--
+-- increase metadata_sync intervals to avoid metadata sync while we test
+ALTER SYSTEM SET citus.metadata_sync_interval TO 300000;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 300000;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE dist_table_1(a int);
+SELECT create_distributed_table('dist_table_1', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+UPDATE pg_dist_node SET metadatasynced=false WHERE nodeport=:worker_1_port;
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport=:worker_1_port;
+ hasmetadata | metadatasynced 
+-------------+----------------
+ t           | f
+(1 row)
+
+CREATE TABLE dist_table_2(a int);
+SELECT create_distributed_table('dist_table_2', 'a');
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+SELECT create_reference_table('dist_table_2');
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+ALTER TABLE dist_table_1 ADD COLUMN b int;
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+SELECT master_add_node('localhost', :master_port, groupid => 0);
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+SELECT master_disable_node('localhost', :worker_1_port);
+ERROR:  Disabling localhost:57637 failed
+DETAIL:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
+SELECT master_disable_node('localhost', :worker_2_port);
+ERROR:  Disabling localhost:57638 failed
+DETAIL:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
+SELECT master_remove_node('localhost', :worker_1_port);
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+SELECT master_remove_node('localhost', :worker_2_port);
+ERROR:  localhost:57637 is a metadata node, but is out of sync
+HINT:  If the node is up, wait until metadata gets synced to it and try again.
+-- master_update_node should succeed
+SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT master_update_node(:worker_2_nodeid, 'localhost', 4444);
+ master_update_node 
+--------------------
+ 
+(1 row)
+
+SELECT master_update_node(:worker_2_nodeid, 'localhost', :worker_2_port);
+ master_update_node 
+--------------------
+ 
+(1 row)
+
+ALTER SYSTEM SET citus.metadata_sync_interval TO DEFAULT;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO DEFAULT;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
+-- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
 ----------------------------
@@ -1516,6 +1589,12 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
+DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
+NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
+DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
+DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
+DROP TABLE dist_table_1, dist_table_2;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.replication_model;

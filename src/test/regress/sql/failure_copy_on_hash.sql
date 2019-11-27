@@ -16,12 +16,12 @@ SET citus.max_cached_conns_per_worker to 0;
 CREATE TABLE test_table(id int, value_1 int);
 SELECT create_distributed_table('test_table','id');
 
-CREATE VIEW unhealthy_shard_count AS 
-	SELECT count(*) 
-	FROM pg_dist_shard_placement pdsp 
-	JOIN 
-	pg_dist_shard pds 
-	ON pdsp.shardid=pds.shardid 
+CREATE VIEW unhealthy_shard_count AS
+	SELECT count(*)
+	FROM pg_dist_shard_placement pdsp
+	JOIN
+	pg_dist_shard pds
+	ON pdsp.shardid=pds.shardid
 	WHERE logicalrelid='copy_distributed_table.test_table'::regclass AND shardstate != 1;
 
 -- Just kill the connection after sending the first query to the worker.
@@ -164,7 +164,7 @@ DROP TABLE test_table_2;
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT create_distributed_table('test_table_2','id');
 
--- Kill the connection when we try to start the COPY 
+-- Kill the connection when we try to start the COPY
 -- The query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
 

@@ -56,7 +56,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 {
 	Oid sequenceId = RangeVarGetRelid(alterSeqStmt->sequence, AccessShareLock,
 									  alterSeqStmt->missing_ok);
-	bool sequenceOwned = false;
 	Oid ownedByTableId = InvalidOid;
 	Oid newOwnedByTableId = InvalidOid;
 	int32 ownedByColumnId = 0;
@@ -68,8 +67,8 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 		return;
 	}
 
-	sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
-									&ownedByColumnId);
+	bool sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
+										 &ownedByColumnId);
 	if (!sequenceOwned)
 	{
 		sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_INTERNAL, &ownedByTableId,

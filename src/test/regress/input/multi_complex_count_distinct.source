@@ -25,7 +25,7 @@ CREATE TABLE lineitem_hash (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-	
+
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
 \copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
@@ -36,7 +36,7 @@ ANALYZE lineitem_hash;
 SET citus.task_executor_type to "task-tracker";
 
 -- count(distinct) is supported on top level query if there
--- is a grouping on the partition key	
+-- is a grouping on the partition key
 SELECT
 	l_orderkey, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -436,7 +436,7 @@ SELECT *
 -- distinct on non-var (type cast/field select) columns are also
 -- supported if grouped on distribution column
 -- random is added to prevent flattening by postgresql
-SELECT 
+SELECT
 	l_orderkey, count(a::int), count(distinct a::int)
 	FROM (
 		SELECT l_orderkey, l_orderkey * 1.5 a, random() b

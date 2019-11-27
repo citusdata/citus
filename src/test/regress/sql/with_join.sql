@@ -8,9 +8,9 @@ INSERT INTO reference_table VALUES (6), (7);
 
 SET citus.enable_repartition_joins TO on;
 
--- Two colocated CTE under a non-colocated join 
+-- Two colocated CTE under a non-colocated join
 WITH colocated_1 AS (
-  SELECT 
+  SELECT
     users_table.user_id, events_table.value_2
   FROM
     users_table, events_table
@@ -18,14 +18,14 @@ WITH colocated_1 AS (
     users_table.user_id = events_table.user_id AND event_type IN (1, 2, 3)
 ),
 colocated_2 AS (
-  SELECT 
+  SELECT
     users_table.user_id, events_table.value_2
   FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id AND event_type IN (4, 5, 6)
 )
-SELECT colocated_1.user_id, count(*) 
+SELECT colocated_1.user_id, count(*)
 FROM
   colocated_1, colocated_2
 WHERE
@@ -35,9 +35,9 @@ GROUP BY
 ORDER BY
   2 DESC, 1;
 
--- Two non-colocated CTE under a co-located join 
+-- Two non-colocated CTE under a co-located join
 WITH non_colocated_1 AS (
-  SELECT 
+  SELECT
     users_table.user_id
   FROM
     users_table, events_table
@@ -45,7 +45,7 @@ WITH non_colocated_1 AS (
     users_table.user_id = events_table.value_2 AND event_type IN (1, 2, 3)
 ),
 non_colocated_2 AS (
-  SELECT 
+  SELECT
     users_table.user_id
   FROM
     users_table, events_table
@@ -53,7 +53,7 @@ non_colocated_2 AS (
     users_table.user_id = events_table.value_2 AND event_type IN (4, 5, 6)
 )
 
-SELECT non_colocated_1.user_id, count(*) 
+SELECT non_colocated_1.user_id, count(*)
 FROM
   non_colocated_1, non_colocated_2
 WHERE
@@ -62,7 +62,7 @@ GROUP BY
   1
 ORDER BY
   2 DESC, 1;
-  
+
 
 -- Subqueries in WHERE and FROM are mixed
 -- In this query, only subquery in WHERE is not a colocated join
@@ -103,12 +103,12 @@ WITH users_events AS (
         event_type
       FROM
         events_table
-      WHERE 
-        user_id < 100 
-      GROUP BY 
-        1 
-      ORDER BY 
-        1 
+      WHERE
+        user_id < 100
+      GROUP BY
+        1
+      ORDER BY
+        1
       LIMIT 10
     )
     SELECT
@@ -121,9 +121,9 @@ SELECT
   DISTINCT uid
 FROM
   users_events
-ORDER BY 
+ORDER BY
   1 DESC
-LIMIT 
+LIMIT
   5;
 
 -- cte LEFT JOIN distributed_table should error out
@@ -136,9 +136,9 @@ FROM
   cte
 LEFT JOIN
   events_table ON cte.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   1,2,3
-LIMIT 
+LIMIT
   5;
 
 -- cte RIGHT JOIN distributed_table should work
@@ -151,9 +151,9 @@ FROM
   cte
 RIGHT JOIN
   events_table ON cte.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   1,2,3
-LIMIT 
+LIMIT
   5;
 
 -- distributed_table LEFT JOIN cte should work
@@ -163,12 +163,12 @@ WITH cte AS (
 SELECT
   cte.user_id, cte.time, events_table.event_type
 FROM
-  events_table 
+  events_table
 LEFT JOIN
   cte ON cte.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   1,2,3
-LIMIT 
+LIMIT
   5;
 
 -- distributed_table RIGHT JOIN cte should error out
@@ -178,12 +178,12 @@ WITH cte AS (
 SELECT
   cte.user_id, cte.time, events_table.event_type
 FROM
-  events_table 
+  events_table
 RIGHT JOIN
   cte ON cte.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   1,2,3
-LIMIT 
+LIMIT
   5;
 
 -- cte FULL JOIN distributed_table should error out
@@ -193,12 +193,12 @@ WITH cte AS (
 SELECT
   cte.user_id, cte.time, events_table.event_type
 FROM
-  events_table 
+  events_table
 FULL JOIN
   cte ON cte.user_id = events_table.user_id
-ORDER BY 
+ORDER BY
   1,2,3
-LIMIT 
+LIMIT
   5;
 
 -- Joins with reference tables are planned as router queries

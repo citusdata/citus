@@ -274,10 +274,9 @@ static void
 ResizeStackToMaximumDepth(void)
 {
 #ifndef WIN32
-	volatile char *stack_resizer = NULL;
 	long max_stack_depth_bytes = max_stack_depth * 1024L;
 
-	stack_resizer = alloca(max_stack_depth_bytes);
+	volatile char *stack_resizer = alloca(max_stack_depth_bytes);
 
 	/*
 	 * Different architectures might have different directions while
@@ -346,14 +345,13 @@ StartupCitusBackend(void)
 static void
 CreateRequiredDirectories(void)
 {
-	int dirNo = 0;
 	const char *subdirs[] = {
 		"pg_foreign_file",
 		"pg_foreign_file/cached",
 		"base/" PG_JOB_CACHE_DIR
 	};
 
-	for (dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
+	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
 	{
 		int ret = mkdir(subdirs[dirNo], S_IRWXU);
 
@@ -1381,15 +1379,12 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 static void
 NodeConninfoGucAssignHook(const char *newval, void *extra)
 {
-	PQconninfoOption *optionArray = NULL;
-	PQconninfoOption *option = NULL;
-
 	if (newval == NULL)
 	{
 		newval = "";
 	}
 
-	optionArray = PQconninfoParse(newval, NULL);
+	PQconninfoOption *optionArray = PQconninfoParse(newval, NULL);
 	if (optionArray == NULL)
 	{
 		ereport(FATAL, (errmsg("cannot parse node_conninfo value"),
@@ -1399,7 +1394,7 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 
 	ResetConnParams();
 
-	for (option = optionArray; option->keyword != NULL; option++)
+	for (PQconninfoOption *option = optionArray; option->keyword != NULL; option++)
 	{
 		if (option->val == NULL || option->val[0] == '\0')
 		{

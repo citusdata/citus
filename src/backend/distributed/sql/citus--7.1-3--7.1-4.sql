@@ -1,4 +1,4 @@
---  citus--7.1-3--7.1-4 
+--  citus--7.1-3--7.1-4
 
 CREATE TYPE citus.shard_transfer_mode AS ENUM (
    'auto',

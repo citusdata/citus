@@ -52,11 +52,11 @@ build_ext() {
   if test -f "${base}/install-citus${citus_version}.tar"; then
     return
   fi
-  
+
   mkdir -p "${basedir}"
   cd "${basedir}"
   citus_dir=${basedir}/citus_$citus_version
-  git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"  
+  git clone --branch "$citus_version" https://github.com/citusdata/citus.git --depth 1 citus_"$citus_version"
   builddir="${basedir}/build"
 
   install_citus_and_tar

@@ -39,11 +39,6 @@ ProgressMonitorData *
 CreateProgressMonitor(uint64 progressTypeMagicNumber, int stepCount, Size stepSize,
 					  Oid relationId)
 {
-	dsm_segment *dsmSegment = NULL;
-	dsm_handle dsmHandle = 0;
-	ProgressMonitorData *monitor = NULL;
-	Size monitorSize = 0;
-
 	if (stepSize <= 0 || stepCount <= 0)
 	{
 		ereport(ERROR,
@@ -51,8 +46,8 @@ CreateProgressMonitor(uint64 progressTypeMagicNumber, int stepCount, Size stepSi
 						"positive values")));
 	}
 
-	monitorSize = sizeof(ProgressMonitorData) + stepSize * stepCount;
-	dsmSegment = dsm_create(monitorSize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
+	Size monitorSize = sizeof(ProgressMonitorData) + stepSize * stepCount;
+	dsm_segment *dsmSegment = dsm_create(monitorSize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
 
 	if (dsmSegment == NULL)
 	{
@@ -62,9 +57,9 @@ CreateProgressMonitor(uint64 progressTypeMagicNumber, int stepCount, Size stepSi
 		return NULL;
 	}
 
-	dsmHandle = dsm_segment_handle(dsmSegment);
+	dsm_handle dsmHandle = dsm_segment_handle(dsmSegment);
 
-	monitor = MonitorDataFromDSMHandle(dsmHandle, &dsmSegment);
+	ProgressMonitorData *monitor = MonitorDataFromDSMHandle(dsmHandle, &dsmSegment);
 
 	monitor->stepCount = stepCount;
 	monitor->processId = MyProcPid;
@@ -143,42 +138,38 @@ ProgressMonitorList(uint64 commandTypeMagicNumber, List **attachedDSMSegments)
 	 */
 	text *commandTypeText = cstring_to_text("VACUUM");
 	Datum commandTypeDatum = PointerGetDatum(commandTypeText);
-	Oid getProgressInfoFunctionOid = InvalidOid;
-	TupleTableSlot *tupleTableSlot = NULL;
-	ReturnSetInfo *progressResultSet = NULL;
 	List *monitorList = NIL;
 
-	getProgressInfoFunctionOid = FunctionOid("pg_catalog",
-											 "pg_stat_get_progress_info",
-											 1);
+	Oid getProgressInfoFunctionOid = FunctionOid("pg_catalog",
+												 "pg_stat_get_progress_info",
+												 1);
 
-	progressResultSet = FunctionCallGetTupleStore1(pg_stat_get_progress_info,
-												   getProgressInfoFunctionOid,
-												   commandTypeDatum);
+	ReturnSetInfo *progressResultSet = FunctionCallGetTupleStore1(
+		pg_stat_get_progress_info,
+		getProgressInfoFunctionOid,
+		commandTypeDatum);
 
-	tupleTableSlot = MakeSingleTupleTableSlotCompat(progressResultSet->setDesc,
-													&TTSOpsMinimalTuple);
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+		progressResultSet->setDesc,
+		&TTSOpsMinimalTuple);
 
 	/* iterate over tuples in tuple store, and send them to destination */
 	for (;;)
 	{
-		bool nextTuple = false;
 		bool isNull = false;
-		Datum magicNumberDatum = 0;
-		uint64 magicNumber = 0;
 
-		nextTuple = tuplestore_gettupleslot(progressResultSet->setResult,
-											true,
-											false,
-											tupleTableSlot);
+		bool nextTuple = tuplestore_gettupleslot(progressResultSet->setResult,
+												 true,
+												 false,
+												 tupleTableSlot);
 
 		if (!nextTuple)
 		{
 			break;
 		}
 
-		magicNumberDatum = slot_getattr(tupleTableSlot, magicNumberIndex, &isNull);
-		magicNumber = DatumGetUInt64(magicNumberDatum);
+		Datum magicNumberDatum = slot_getattr(tupleTableSlot, magicNumberIndex, &isNull);
+		uint64 magicNumber = DatumGetUInt64(magicNumberDatum);
 
 		if (!isNull && magicNumber == commandTypeMagicNumber)
 		{

@@ -1,4 +1,4 @@
---  citus--7.0-11--7.0-12.sql 
+--  citus--7.0-11--7.0-12.sql
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_create_restore_point(text)
 RETURNS pg_lsn

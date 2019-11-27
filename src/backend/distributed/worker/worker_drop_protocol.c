@@ -51,8 +51,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	Oid relationId = ResolveRelationId(relationName, true);
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
-	Relation distributedRelation = NULL;
-	List *shardList = NULL;
 	ListCell *shardCell = NULL;
 	char relationKind = '\0';
 
@@ -66,10 +64,10 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	shardList = LoadShardList(relationId);
+	List *shardList = LoadShardList(relationId);
 
 	/* first check the relation type */
-	distributedRelation = relation_open(relationId, AccessShareLock);
+	Relation distributedRelation = relation_open(relationId, AccessShareLock);
 	relationKind = distributedRelation->rd_rel->relkind;
 	EnsureRelationKindSupported(relationId);
 
@@ -112,12 +110,11 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	/* iterate over shardList to delete the corresponding rows */
 	foreach(shardCell, shardList)
 	{
-		List *shardPlacementList = NIL;
 		ListCell *shardPlacementCell = NULL;
 		uint64 *shardIdPointer = (uint64 *) lfirst(shardCell);
 		uint64 shardId = (*shardIdPointer);
 
-		shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
 			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);

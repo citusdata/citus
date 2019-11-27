@@ -114,9 +114,6 @@ static bool ShouldPropagateTypeCreate(void);
 List *
 PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 {
-	const char *compositeTypeStmtSql = NULL;
-	List *commands = NIL;
-
 	if (!ShouldPropagateTypeCreate())
 	{
 		return NIL;
@@ -149,7 +146,7 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 * type previously has been attempted to be created in a transaction which did not
 	 * commit on the coordinator.
 	 */
-	compositeTypeStmtSql = DeparseCompositeTypeStmt(stmt);
+	const char *compositeTypeStmtSql = DeparseCompositeTypeStmt(stmt);
 	compositeTypeStmtSql = WrapCreateOrReplace(compositeTypeStmtSql);
 
 	/*
@@ -158,9 +155,9 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 */
 	EnsureSequentialModeForTypeDDL();
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) compositeTypeStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) compositeTypeStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -174,8 +171,6 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 void
 ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *typeAddress = NULL;
-
 	/* same check we perform during planning of the statement */
 	if (!ShouldPropagateTypeCreate())
 	{
@@ -186,7 +181,8 @@ ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 * find object address of the just created object, because the type has been created
 	 * locally it can't be missing
 	 */
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
 	MarkObjectDistributed(typeAddress);
@@ -202,13 +198,10 @@ ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 List *
 PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 {
-	const char *alterTypeStmtSql = NULL;
-	const ObjectAddress *typeAddress = NULL;
-	List *commands = NIL;
-
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -218,7 +211,7 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 
 	/* reconstruct alter statement in a portable fashion */
 	QualifyTreeNode((Node *) stmt);
-	alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
+	const char *alterTypeStmtSql = DeparseTreeNode((Node *) stmt);
 
 	/*
 	 * all types that are distributed will need their alter statements propagated
@@ -227,9 +220,9 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 	 */
 	EnsureSequentialModeForTypeDDL();
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) alterTypeStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterTypeStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -248,9 +241,6 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 List *
 PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
-	const char *createEnumStmtSql = NULL;
-	List *commands = NIL;
-
 	if (!ShouldPropagateTypeCreate())
 	{
 		return NIL;
@@ -266,7 +256,7 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 
 	/* reconstruct creation statement in a portable fashion */
-	createEnumStmtSql = DeparseCreateEnumStmt(stmt);
+	const char *createEnumStmtSql = DeparseCreateEnumStmt(stmt);
 	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
 
 	/*
@@ -276,9 +266,9 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 	EnsureSequentialModeForTypeDDL();
 
 	/* to prevent recursion with mx we disable ddl propagation */
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) createEnumStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) createEnumStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -295,15 +285,14 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 void
 ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *typeAddress = NULL;
-
 	if (!ShouldPropagateTypeCreate())
 	{
 		return;
 	}
 
 	/* lookup type address of just created type */
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	EnsureDependenciesExistsOnAllNodes(typeAddress);
 
 	/*
@@ -326,11 +315,10 @@ ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 List *
 PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
-	const char *alterEnumStmtSql = NULL;
-	const ObjectAddress *typeAddress = NULL;
 	List *commands = NIL;
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -351,7 +339,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
-	alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
+	const char *alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
 
 	/*
 	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Instead of
@@ -380,7 +368,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 /*
  * ProcessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
  *
- * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower then 12
+ * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower than 12
  * to distribute the call. Before pg12 these statements could not be called in a
  * transaction. If we would plan the distirbution of these statements the same as we do
  * with the other statements they would get executed in a transaction to perform 2PC, that
@@ -396,9 +384,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 void
 ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *typeAddress = NULL;
-
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return;
@@ -422,25 +409,21 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		 * might already be added to some nodes, but not all.
 		 */
 
-		int result = 0;
-		List *commands = NIL;
-		const char *alterEnumStmtSql = NULL;
 
 		/* qualification of the stmt happened during planning */
-		alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
+		const char *alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
 
-		commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
+		List *commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 
-		result = SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands, NULL);
+		int result = SendBareOptionalCommandListToAllWorkersAsUser(commands, NULL);
 
 		if (result != RESPONSE_OKAY)
 		{
-			const char *alterEnumStmtIfNotExistsSql = NULL;
 			bool oldSkipIfNewValueExists = stmt->skipIfNewValExists;
 
 			/* deparse the query with IF NOT EXISTS */
 			stmt->skipIfNewValExists = true;
-			alterEnumStmtIfNotExistsSql = DeparseTreeNode((Node *) stmt);
+			const char *alterEnumStmtIfNotExistsSql = DeparseTreeNode((Node *) stmt);
 			stmt->skipIfNewValExists = oldSkipIfNewValueExists;
 
 			ereport(WARNING, (errmsg("not all workers applied change to enum"),
@@ -466,18 +449,15 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	 * the old list to put back
 	 */
 	List *oldTypes = stmt->objects;
-	List *distributedTypes = NIL;
-	const char *dropStmtSql = NULL;
 	ListCell *addressCell = NULL;
-	List *distributedTypeAddresses = NIL;
-	List *commands = NIL;
 
 	if (!ShouldPropagate())
 	{
 		return NIL;
 	}
 
-	distributedTypes = FilterNameListForDistributedTypes(oldTypes, stmt->missing_ok);
+	List *distributedTypes = FilterNameListForDistributedTypes(oldTypes,
+															   stmt->missing_ok);
 	if (list_length(distributedTypes) <= 0)
 	{
 		/* no distributed types to drop */
@@ -494,7 +474,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	/*
 	 * remove the entries for the distributed objects on dropping
 	 */
-	distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
+	List *distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
 	foreach(addressCell, distributedTypeAddresses)
 	{
 		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
@@ -506,15 +486,15 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	 * deparse to an executable sql statement for the workers
 	 */
 	stmt->objects = distributedTypes;
-	dropStmtSql = DeparseTreeNode((Node *) stmt);
+	const char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) dropStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -531,11 +511,8 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 List *
 PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 {
-	const char *renameStmtSql = NULL;
-	const ObjectAddress *typeAddress = NULL;
-	List *commands = NIL;
-
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -545,14 +522,14 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 	QualifyTreeNode((Node *) stmt);
 
 	/* deparse sql*/
-	renameStmtSql = DeparseTreeNode((Node *) stmt);
+	const char *renameStmtSql = DeparseTreeNode((Node *) stmt);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) renameStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) renameStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -568,14 +545,11 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 List *
 PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
-	const ObjectAddress *typeAddress = NULL;
-	List *commands = NIL;
-
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -583,12 +557,12 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 
 	QualifyTreeNode((Node *) stmt);
 
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialModeForTypeDDL();
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -603,13 +577,10 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 List *
 PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	const char *sql = NULL;
-	const ObjectAddress *typeAddress = NULL;
-	List *commands = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -618,13 +589,13 @@ PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialModeForTypeDDL();
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -638,11 +609,10 @@ PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 void
 ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *typeAddress = NULL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return;
@@ -663,13 +633,10 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 List *
 PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 {
-	const ObjectAddress *typeAddress = NULL;
-	const char *sql = NULL;
-	List *commands = NULL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
+																	 false);
 	if (!ShouldPropagateObject(typeAddress))
 	{
 		return NIL;
@@ -678,12 +645,12 @@ PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 	EnsureCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
-	sql = DeparseTreeNode((Node *) stmt);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	EnsureSequentialModeForTypeDDL();
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) sql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -726,13 +693,10 @@ CreateTypeStmtByObjectAddress(const ObjectAddress *address)
 static CompositeTypeStmt *
 RecreateCompositeTypeStmt(Oid typeOid)
 {
-	CompositeTypeStmt *stmt = NULL;
-	List *names = NIL;
-
 	Assert(get_typtype(typeOid) == TYPTYPE_COMPOSITE);
 
-	stmt = makeNode(CompositeTypeStmt);
-	names = stringToQualifiedNameList(format_type_be_qualified(typeOid));
+	CompositeTypeStmt *stmt = makeNode(CompositeTypeStmt);
+	List *names = stringToQualifiedNameList(format_type_be_qualified(typeOid));
 	stmt->typevar = makeRangeVarFromNameList(names);
 	stmt->coldeflist = CompositeTypeColumnDefList(typeOid);
 
@@ -763,17 +727,14 @@ attributeFormToColumnDef(Form_pg_attribute attributeForm)
 static List *
 CompositeTypeColumnDefList(Oid typeOid)
 {
-	Relation relation = NULL;
-	Oid relationId = InvalidOid;
-	TupleDesc tupleDescriptor = NULL;
-	int attributeIndex = 0;
 	List *columnDefs = NIL;
 
-	relationId = typeidTypeRelid(typeOid);
-	relation = relation_open(relationId, AccessShareLock);
+	Oid relationId = typeidTypeRelid(typeOid);
+	Relation relation = relation_open(relationId, AccessShareLock);
 
-	tupleDescriptor = RelationGetDescr(relation);
-	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+		 attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
@@ -799,11 +760,9 @@ CompositeTypeColumnDefList(Oid typeOid)
 static CreateEnumStmt *
 RecreateEnumStmt(Oid typeOid)
 {
-	CreateEnumStmt *stmt = NULL;
-
 	Assert(get_typtype(typeOid) == TYPTYPE_ENUM);
 
-	stmt = makeNode(CreateEnumStmt);
+	CreateEnumStmt *stmt = makeNode(CreateEnumStmt);
 	stmt->typeName = stringToQualifiedNameList(format_type_be_qualified(typeOid));
 	stmt->vals = EnumValsList(typeOid);
 
@@ -818,8 +777,6 @@ RecreateEnumStmt(Oid typeOid)
 static List *
 EnumValsList(Oid typeOid)
 {
-	Relation enum_rel = NULL;
-	SysScanDesc enum_scan = NULL;
 	HeapTuple enum_tuple = NULL;
 	ScanKeyData skey = { 0 };
 
@@ -831,11 +788,11 @@ EnumValsList(Oid typeOid)
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(typeOid));
 
-	enum_rel = heap_open(EnumRelationId, AccessShareLock);
-	enum_scan = systable_beginscan(enum_rel,
-								   EnumTypIdSortOrderIndexId,
-								   true, NULL,
-								   1, &skey);
+	Relation enum_rel = heap_open(EnumRelationId, AccessShareLock);
+	SysScanDesc enum_scan = systable_beginscan(enum_rel,
+											   EnumTypIdSortOrderIndexId,
+											   true, NULL,
+											   1, &skey);
 
 	/* collect all value names in CREATE TYPE ... AS ENUM stmt */
 	while (HeapTupleIsValid(enum_tuple = systable_getnext(enum_scan)))
@@ -861,13 +818,9 @@ EnumValsList(Oid typeOid)
 ObjectAddress *
 CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
-	typeName = MakeTypeNameFromRangeVar(stmt->typevar);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->typevar);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -885,13 +838,9 @@ CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
 ObjectAddress *
 CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
-	typeName = makeTypeNameFromNameList(stmt->typeName);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -909,15 +858,11 @@ CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
 ObjectAddress *
 AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	typeName = MakeTypeNameFromRangeVar(stmt->relation);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -931,13 +876,9 @@ AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
 ObjectAddress *
 AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
-	typeName = makeTypeNameFromNameList(stmt->typeName);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -951,15 +892,11 @@ AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
 ObjectAddress *
 RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
 	Assert(stmt->renameType == OBJECT_TYPE);
 
-	typeName = makeTypeNameFromNameList((List *) stmt->object);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -978,21 +915,16 @@ RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 ObjectAddress *
 AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 {
-	ObjectAddress *address = NULL;
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	List *names = NIL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	names = (List *) stmt->object;
+	List *names = (List *) stmt->object;
 
 	/*
 	 * we hardcode missing_ok here during LookupTypeNameOid because if we can't find it it
 	 * might have already been moved in this transaction.
 	 */
-	typeName = makeTypeNameFromNameList(names);
-	typeOid = LookupTypeNameOid(NULL, typeName, true);
+	TypeName *typeName = makeTypeNameFromNameList(names);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, true);
 
 	if (typeOid == InvalidOid)
 	{
@@ -1024,7 +956,7 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		}
 	}
 
-	address = palloc0(sizeof(ObjectAddress));
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -1042,16 +974,12 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 ObjectAddress *
 RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	typeName = MakeTypeNameFromRangeVar(stmt->relation);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -1065,15 +993,11 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 ObjectAddress *
 AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
-	TypeName *typeName = NULL;
-	Oid typeOid = InvalidOid;
-	ObjectAddress *address = NULL;
-
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	typeName = makeTypeNameFromNameList((List *) stmt->object);
-	typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	address = palloc0(sizeof(ObjectAddress));
+	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
+	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
 	return address;
@@ -1088,10 +1012,7 @@ List *
 CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 {
 	List *ddlCommands = NIL;
-	const char *ddlCommand = NULL;
-	Node *stmt = NULL;
 	StringInfoData buf = { 0 };
-	const char *username = NULL;
 
 	Assert(typeAddress->classId == TypeRelationId);
 
@@ -1106,15 +1027,15 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 		return NIL;
 	}
 
-	stmt = CreateTypeStmtByObjectAddress(typeAddress);
+	Node *stmt = CreateTypeStmtByObjectAddress(typeAddress);
 
 	/* capture ddl command for recreation and wrap in create if not exists construct */
-	ddlCommand = DeparseTreeNode(stmt);
+	const char *ddlCommand = DeparseTreeNode(stmt);
 	ddlCommand = WrapCreateOrReplace(ddlCommand);
 	ddlCommands = lappend(ddlCommands, (void *) ddlCommand);
 
 	/* add owner ship change so the creation command can be run as a different user */
-	username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
+	const char *username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
 	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
 					 quote_identifier(username));
@@ -1145,8 +1066,6 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 	{
 		int suffixLength = snprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
 									count);
-		TypeName *newTypeName = NULL;
-		Oid typeOid = InvalidOid;
 
 		/* trim the base name at the end to leave space for the suffix and trailing \0 */
 		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
@@ -1157,9 +1076,9 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 		strncpy(newName + baseLength, suffix, suffixLength);
 
 		rel->relname = newName;
-		newTypeName = makeTypeNameFromNameList(MakeNameListFromRangeVar(rel));
+		TypeName *newTypeName = makeTypeNameFromNameList(MakeNameListFromRangeVar(rel));
 
-		typeOid = LookupTypeNameOid(NULL, newTypeName, true);
+		Oid typeOid = LookupTypeNameOid(NULL, newTypeName, true);
 		if (typeOid == InvalidOid)
 		{
 			return newName;
@@ -1235,9 +1154,8 @@ static Oid
 GetTypeOwner(Oid typeOid)
 {
 	Oid result = InvalidOid;
-	HeapTuple tp = NULL;
 
-	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
+	HeapTuple tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
 	if (HeapTupleIsValid(tp))
 	{
 		Form_pg_type typtup = (Form_pg_type) GETSTRUCT(tp);

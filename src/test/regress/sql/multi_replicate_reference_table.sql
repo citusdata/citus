@@ -297,7 +297,7 @@ FROM
     pg_dist_partition
 WHERE
     logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
-ORDER BY 
+ORDER BY
 	logicalrelid;
 
 DROP TABLE replicate_reference_table_reference_one;
@@ -480,11 +480,11 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    shardid IN (SELECT 
-                    shardid 
-                FROM 
-                    pg_dist_shard 
-                WHERE 
+    shardid IN (SELECT
+                    shardid
+                FROM
+                    pg_dist_shard
+                WHERE
                     logicalrelid = 'initially_not_replicated_reference_table'::regclass)
     AND nodeport != :master_port
 ORDER BY 1,4,5;
@@ -497,11 +497,11 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    shardid IN (SELECT 
-                    shardid 
-                FROM 
-                    pg_dist_shard 
-                WHERE 
+    shardid IN (SELECT
+                    shardid
+                FROM
+                    pg_dist_shard
+                WHERE
                     logicalrelid = 'initially_not_replicated_reference_table'::regclass)
     AND nodeport != :master_port
 ORDER BY 1,4,5;

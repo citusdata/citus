@@ -103,23 +103,10 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 {
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
-	char *relationName = NULL;
-	char *schemaName = NULL;
-	Oid relationId = InvalidOid;
-	List *shardIntervalList = NIL;
 	List *deletableShardIntervalList = NIL;
-	List *queryTreeList = NIL;
-	Query *deleteQuery = NULL;
-	Node *whereClause = NULL;
-	Node *deleteCriteria = NULL;
-	Node *queryTreeNode = NULL;
-	DeleteStmt *deleteStatement = NULL;
-	int droppedShardCount = 0;
-	LOCKMODE lockMode = 0;
-	char partitionMethod = 0;
 	bool failOK = false;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-	queryTreeNode = rawStmt->stmt;
+	Node *queryTreeNode = rawStmt->stmt;
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
@@ -130,19 +117,19 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 							   ApplyLogRedaction(queryString))));
 	}
 
-	deleteStatement = (DeleteStmt *) queryTreeNode;
+	DeleteStmt *deleteStatement = (DeleteStmt *) queryTreeNode;
 
-	schemaName = deleteStatement->relation->schemaname;
-	relationName = deleteStatement->relation->relname;
+	char *schemaName = deleteStatement->relation->schemaname;
+	char *relationName = deleteStatement->relation->relname;
 
 	/*
 	 * We take an exclusive lock while dropping shards to prevent concurrent
 	 * writes. We don't want to block SELECTs, which means queries might fail
 	 * if they access a shard that has just been dropped.
 	 */
-	lockMode = ExclusiveLock;
+	LOCKMODE lockMode = ExclusiveLock;
 
-	relationId = RangeVarGetRelid(deleteStatement->relation, lockMode, failOK);
+	Oid relationId = RangeVarGetRelid(deleteStatement->relation, lockMode, failOK);
 
 	/* schema-prefix if it is not specified already */
 	if (schemaName == NULL)
@@ -154,15 +141,15 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	CheckDistributedTable(relationId);
 	EnsureTablePermissions(relationId, ACL_DELETE);
 
-	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-	deleteQuery = (Query *) linitial(queryTreeList);
+	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+	Query *deleteQuery = (Query *) linitial(queryTreeList);
 	CheckTableCount(deleteQuery);
 
 	/* get where clause and flatten it */
-	whereClause = (Node *) deleteQuery->jointree->quals;
-	deleteCriteria = eval_const_expressions(NULL, whereClause);
+	Node *whereClause = (Node *) deleteQuery->jointree->quals;
+	Node *deleteCriteria = eval_const_expressions(NULL, whereClause);
 
-	partitionMethod = PartitionMethod(relationId);
+	char partitionMethod = PartitionMethod(relationId);
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -184,7 +171,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	CheckDeleteCriteria(deleteCriteria);
 	CheckPartitionColumn(relationId, deleteCriteria);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
 
 	/* drop all shards if where clause is not present */
 	if (deleteCriteria == NULL)
@@ -199,8 +186,8 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 																  deleteCriteria);
 	}
 
-	droppedShardCount = DropShards(relationId, schemaName, relationName,
-								   deletableShardIntervalList);
+	int droppedShardCount = DropShards(relationId, schemaName, relationName,
+									   deletableShardIntervalList);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -218,8 +205,6 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *relationNameText = PG_GETARG_TEXT_P(2);
 
-	List *shardIntervalList = NIL;
-	int droppedShardCount = 0;
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
@@ -246,9 +231,9 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	 */
 	LockRelationOid(relationId, AccessExclusiveLock);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
-	droppedShardCount = DropShards(relationId, schemaName, relationName,
-								   shardIntervalList);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	int droppedShardCount = DropShards(relationId, schemaName, relationName,
+									   shardIntervalList);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -265,7 +250,6 @@ Datum
 master_drop_sequences(PG_FUNCTION_ARGS)
 {
 	ArrayType *sequenceNamesArray = PG_GETARG_ARRAYTYPE_P(0);
-	ArrayIterator sequenceIterator = NULL;
 	Datum sequenceNameDatum = 0;
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
@@ -291,20 +275,17 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	}
 
 	/* iterate over sequence names to build single command to DROP them all */
-	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
+	ArrayIterator sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
 	while (array_iterate(sequenceIterator, &sequenceNameDatum, &isNull))
 	{
-		text *sequenceNameText = NULL;
-		Oid sequenceOid = InvalidOid;
-
 		if (isNull)
 		{
 			ereport(ERROR, (errmsg("unexpected NULL sequence name"),
 							errcode(ERRCODE_INVALID_PARAMETER_VALUE)));
 		}
 
-		sequenceNameText = DatumGetTextP(sequenceNameDatum);
-		sequenceOid = ResolveRelationId(sequenceNameText, true);
+		text *sequenceNameText = DatumGetTextP(sequenceNameDatum);
+		Oid sequenceOid = ResolveRelationId(sequenceNameText, true);
 		if (OidIsValid(sequenceOid))
 		{
 			/*
@@ -335,8 +316,8 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	{
 		appendStringInfoString(dropSeqCommand, " CASCADE");
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, dropSeqCommand->data);
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkersWithMetadata(dropSeqCommand->data);
 	}
 
 	PG_RETURN_VOID();
@@ -379,7 +360,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		   List *deletableShardIntervalList)
 {
 	ListCell *shardIntervalCell = NULL;
-	int droppedShardCount = 0;
 
 	BeginOrContinueCoordinatedTransaction();
 
@@ -391,20 +371,18 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 	foreach(shardIntervalCell, deletableShardIntervalList)
 	{
-		List *shardPlacementList = NIL;
 		ListCell *shardPlacementCell = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		char *quotedShardName = NULL;
 		char *shardRelationName = pstrdup(relationName);
 
 		Assert(shardInterval->relationId == relationId);
 
 		/* Build shard relation name. */
 		AppendShardIdToName(&shardRelationName, shardId);
-		quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
+		char *quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
 
-		shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
 			ShardPlacement *shardPlacement =
@@ -412,7 +390,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 			char *workerName = shardPlacement->nodeName;
 			uint32 workerPort = shardPlacement->nodePort;
 			StringInfo workerDropQuery = makeStringInfo();
-			MultiConnection *connection = NULL;
 			uint32 connectionFlags = FOR_DDL;
 
 			char storageType = shardInterval->storageType;
@@ -441,8 +418,9 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 				continue;
 			}
 
-			connection = GetPlacementConnection(connectionFlags, shardPlacement,
-												NULL);
+			MultiConnection *connection = GetPlacementConnection(connectionFlags,
+																 shardPlacement,
+																 NULL);
 
 			RemoteTransactionBeginIfNecessary(connection);
 
@@ -471,7 +449,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		DeleteShardRow(shardId);
 	}
 
-	droppedShardCount = list_length(deletableShardIntervalList);
+	int droppedShardCount = list_length(deletableShardIntervalList);
 
 	return droppedShardCount;
 }
@@ -573,7 +551,6 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 							 Node *deleteCriteria)
 {
 	List *dropShardIntervalList = NIL;
-	List *deleteCriteriaList = NIL;
 	ListCell *shardIntervalCell = NULL;
 
 	/* build the base expression for constraint */
@@ -582,7 +559,7 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 	Node *baseConstraint = BuildBaseConstraint(partitionColumn);
 
 	Assert(deleteCriteria != NULL);
-	deleteCriteriaList = list_make1(deleteCriteria);
+	List *deleteCriteriaList = list_make1(deleteCriteria);
 
 	/* walk over shard list and check if shards can be dropped */
 	foreach(shardIntervalCell, shardIntervalList)
@@ -591,27 +568,23 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 		if (shardInterval->minValueExists && shardInterval->maxValueExists)
 		{
 			List *restrictInfoList = NIL;
-			bool dropShard = false;
-			BoolExpr *andExpr = NULL;
-			Expr *lessThanExpr = NULL;
-			Expr *greaterThanExpr = NULL;
-			RestrictInfo *lessThanRestrictInfo = NULL;
-			RestrictInfo *greaterThanRestrictInfo = NULL;
 
 			/* set the min/max values in the base constraint */
 			UpdateConstraint(baseConstraint, shardInterval);
 
-			andExpr = (BoolExpr *) baseConstraint;
-			lessThanExpr = (Expr *) linitial(andExpr->args);
-			greaterThanExpr = (Expr *) lsecond(andExpr->args);
+			BoolExpr *andExpr = (BoolExpr *) baseConstraint;
+			Expr *lessThanExpr = (Expr *) linitial(andExpr->args);
+			Expr *greaterThanExpr = (Expr *) lsecond(andExpr->args);
 
-			lessThanRestrictInfo = make_simple_restrictinfo(lessThanExpr);
-			greaterThanRestrictInfo = make_simple_restrictinfo(greaterThanExpr);
+			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo(lessThanExpr);
+			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo(
+				greaterThanExpr);
 
 			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
 			restrictInfoList = lappend(restrictInfoList, greaterThanRestrictInfo);
 
-			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList, false);
+			bool dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList,
+												  false);
 			if (dropShard)
 			{
 				dropShardIntervalList = lappend(dropShardIntervalList, shardInterval);

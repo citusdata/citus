@@ -180,8 +180,6 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
-		DistTableCacheEntry *cacheEntry = NULL;
-		List *referencingTableList = NIL;
 		Oid referencingRelationId = InvalidOid;
 
 		if (!IsDistributedTable(relationId))
@@ -196,10 +194,10 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 		distributedRelationList = lappend_oid(distributedRelationList, relationId);
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 		Assert(cacheEntry != NULL);
 
-		referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
 			distributedRelationList = list_append_unique_oid(distributedRelationList,

@@ -82,8 +82,6 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parseTree)
 static char *
 ExtractNewExtensionVersion(Node *parseTree)
 {
-	Value *newVersionValue = NULL;
-
 	List *optionsList = NIL;
 
 	if (IsA(parseTree, CreateExtensionStmt))
@@ -100,7 +98,7 @@ ExtractNewExtensionVersion(Node *parseTree)
 		Assert(false);
 	}
 
-	newVersionValue = GetExtensionOption(optionsList, "new_version");
+	Value *newVersionValue = GetExtensionOption(optionsList, "new_version");
 
 	/* return target string safely */
 	if (newVersionValue)
@@ -126,9 +124,6 @@ ExtractNewExtensionVersion(Node *parseTree)
 List *
 PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *queryString)
 {
-	List *commands = NIL;
-	const char *createExtensionStmtSql = NULL;
-
 	if (!ShouldPropagateExtensionCommand((Node *) createExtensionStmt))
 	{
 		return NIL;
@@ -168,15 +163,15 @@ PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *qu
 	 */
 	AddSchemaFieldIfMissing(createExtensionStmt);
 
-	createExtensionStmtSql = DeparseTreeNode((Node *) createExtensionStmt);
+	const char *createExtensionStmtSql = DeparseTreeNode((Node *) createExtensionStmt);
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
 	 * propagation before sending the command to workers.
 	 */
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) createExtensionStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) createExtensionStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -229,8 +224,6 @@ void
 ProcessCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const
 						   char *queryString)
 {
-	const ObjectAddress *extensionAddress = NULL;
-
 	if (!ShouldPropagateExtensionCommand((Node *) createExtensionStmt))
 	{
 		return;
@@ -246,7 +239,8 @@ ProcessCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const
 		return;
 	}
 
-	extensionAddress = GetObjectAddressFromParseTree((Node *) createExtensionStmt, false);
+	const ObjectAddress *extensionAddress = GetObjectAddressFromParseTree(
+		(Node *) createExtensionStmt, false);
 
 	EnsureDependenciesExistsOnAllNodes(extensionAddress);
 
@@ -267,11 +261,6 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 {
 	List *allDroppedExtensions = dropStmt->objects;
 
-	List *distributedExtensions = NIL;
-	List *distributedExtensionAddresses = NIL;
-
-	List *commands = NIL;
-	const char *deparsedStmt = NULL;
 
 	ListCell *addressCell = NULL;
 
@@ -281,7 +270,7 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 	}
 
 	/* get distributed extensions to be dropped in worker nodes as well */
-	distributedExtensions = FilterDistributedExtensions(allDroppedExtensions);
+	List *distributedExtensions = FilterDistributedExtensions(allDroppedExtensions);
 
 	if (list_length(distributedExtensions) <= 0)
 	{
@@ -308,7 +297,7 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 	 */
 	EnsureSequentialModeForExtensionDDL();
 
-	distributedExtensionAddresses = ExtensionNameListToObjectAddressList(
+	List *distributedExtensionAddresses = ExtensionNameListToObjectAddressList(
 		distributedExtensions);
 
 	/* unmark each distributed extension */
@@ -326,7 +315,7 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 	 * its execution.
 	 */
 	dropStmt->objects = distributedExtensions;
-	deparsedStmt = DeparseTreeNode((Node *) dropStmt);
+	const char *deparsedStmt = DeparseTreeNode((Node *) dropStmt);
 
 	dropStmt->objects = allDroppedExtensions;
 
@@ -334,9 +323,9 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 	 * To prevent recursive propagation in mx architecture, we disable ddl
 	 * propagation before sending the command to workers.
 	 */
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) deparsedStmt,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) deparsedStmt,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -425,9 +414,6 @@ List *
 PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
 							 char *queryString)
 {
-	const char *alterExtensionStmtSql = NULL;
-	List *commands = NIL;
-
 	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
 	{
 		return NIL;
@@ -451,15 +437,15 @@ PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
 	 */
 	EnsureSequentialModeForExtensionDDL();
 
-	alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
+	const char *alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
 	 * propagation before sending the command to workers.
 	 */
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) alterExtensionStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterExtensionStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -474,9 +460,8 @@ void
 ProcessAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
 								char *queryString)
 {
-	const ObjectAddress *extensionAddress = NULL;
-
-	extensionAddress = GetObjectAddressFromParseTree((Node *) alterExtensionStmt, false);
+	const ObjectAddress *extensionAddress = GetObjectAddressFromParseTree(
+		(Node *) alterExtensionStmt, false);
 
 	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
 	{
@@ -495,9 +480,6 @@ List *
 PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
 							 char *queryString)
 {
-	const char *alterExtensionStmtSql = NULL;
-	List *commands = NIL;
-
 	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
 	{
 		return NIL;
@@ -522,15 +504,15 @@ PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
 	 */
 	EnsureSequentialModeForExtensionDDL();
 
-	alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
+	const char *alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
 	 * propagation before sending the command to workers.
 	 */
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) alterExtensionStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterExtensionStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -540,7 +522,7 @@ PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
  * EnsureSequentialModeForExtensionDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginnig.
+ * sequential mode set from the beginning.
  *
  * As extensions are node scoped objects there exists only 1 instance of the
  * extension used by potentially multiple shards. To make sure all shards in
@@ -711,18 +693,13 @@ IsAlterExtensionSetSchemaCitus(Node *parseTree)
 List *
 CreateExtensionDDLCommand(const ObjectAddress *extensionAddress)
 {
-	List *ddlCommands = NIL;
-	const char *ddlCommand = NULL;
-
-	Node *stmt = NULL;
-
 	/* generate a statement for creation of the extension in "if not exists" construct */
-	stmt = RecreateExtensionStmt(extensionAddress->objectId);
+	Node *stmt = RecreateExtensionStmt(extensionAddress->objectId);
 
 	/* capture ddl command for the create statement */
-	ddlCommand = DeparseTreeNode(stmt);
+	const char *ddlCommand = DeparseTreeNode(stmt);
 
-	ddlCommands = list_make1((void *) ddlCommand);
+	List *ddlCommands = list_make1((void *) ddlCommand);
 
 	return ddlCommands;
 }
@@ -747,26 +724,22 @@ RecreateExtensionStmt(Oid extensionOid)
 	}
 
 	/* schema DefElement related variables */
-	Oid extensionSchemaOid = InvalidOid;
-	char *extensionSchemaName = NULL;
-	Node *schemaNameArg = NULL;
 
 	/* set location to -1 as it is unknown */
 	int location = -1;
-	DefElem *schemaDefElement = NULL;
 
 	/* set extension name and if_not_exists fields */
 	createExtensionStmt->extname = extensionName;
 	createExtensionStmt->if_not_exists = true;
 
 	/* get schema name that extension was created on */
-	extensionSchemaOid = get_extension_schema(extensionOid);
-	extensionSchemaName = get_namespace_name(extensionSchemaOid);
+	Oid extensionSchemaOid = get_extension_schema(extensionOid);
+	char *extensionSchemaName = get_namespace_name(extensionSchemaOid);
 
 	/* make DefEleme for extensionSchemaName */
-	schemaNameArg = (Node *) makeString(extensionSchemaName);
+	Node *schemaNameArg = (Node *) makeString(extensionSchemaName);
 
-	schemaDefElement = makeDefElem("schema", schemaNameArg, location);
+	DefElem *schemaDefElement = makeDefElem("schema", schemaNameArg, location);
 
 	/* append the schema name DefElem finally */
 	createExtensionStmt->options = lappend(createExtensionStmt->options,
@@ -784,15 +757,11 @@ ObjectAddress *
 AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchemaStmt,
 									  bool missing_ok)
 {
-	ObjectAddress *extensionAddress = NULL;
-	Oid extensionOid = InvalidOid;
-	const char *extensionName = NULL;
-
 	Assert(alterExtensionSchemaStmt->objectType == OBJECT_EXTENSION);
 
-	extensionName = strVal(alterExtensionSchemaStmt->object);
+	const char *extensionName = strVal(alterExtensionSchemaStmt->object);
 
-	extensionOid = get_extension_oid(extensionName, missing_ok);
+	Oid extensionOid = get_extension_oid(extensionName, missing_ok);
 
 	if (extensionOid == InvalidOid)
 	{
@@ -801,7 +770,7 @@ AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchem
 							   extensionName)));
 	}
 
-	extensionAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*extensionAddress, ExtensionRelationId, extensionOid);
 
 	return extensionAddress;
@@ -816,13 +785,9 @@ ObjectAddress *
 AlterExtensionUpdateStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt,
 									  bool missing_ok)
 {
-	ObjectAddress *extensionAddress = NULL;
-	Oid extensionOid = InvalidOid;
-	const char *extensionName = NULL;
+	const char *extensionName = alterExtensionStmt->extname;
 
-	extensionName = alterExtensionStmt->extname;
-
-	extensionOid = get_extension_oid(extensionName, missing_ok);
+	Oid extensionOid = get_extension_oid(extensionName, missing_ok);
 
 	if (extensionOid == InvalidOid)
 	{
@@ -831,7 +796,7 @@ AlterExtensionUpdateStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt,
 							   extensionName)));
 	}
 
-	extensionAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*extensionAddress, ExtensionRelationId, extensionOid);
 
 	return extensionAddress;

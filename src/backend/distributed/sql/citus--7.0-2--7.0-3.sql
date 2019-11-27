@@ -1,4 +1,4 @@
---  citus--7.0-2--7.0-3.sql 
+--  citus--7.0-2--7.0-3.sql
 
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq
   RENAME TO pg_dist_placement_placementid_seq;

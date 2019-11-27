@@ -37,16 +37,10 @@ extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const
 									   const char *command);
 extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
-extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, const char *command);
-extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
-										 List *commandList);
-extern int SendBareOptionalCommandListToWorkersAsUser(TargetWorkerSet targetWorkerSet,
-													  List *commandList,
-													  const char *user);
-extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet,
-									   const char *command, const char *user,
-									   int parameterCount, const Oid *parameterTypes,
-									   const char *const *parameterValues);
+extern void SendCommandToWorkersWithMetadata(const char *command);
+extern void SendBareCommandListToMetadataWorkers(List *commandList);
+extern int SendBareOptionalCommandListToAllWorkersAsUser(List *commandList,
+														 const char *user);
 extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 													   int32 nodePort,

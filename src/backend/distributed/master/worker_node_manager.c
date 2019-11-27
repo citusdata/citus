@@ -45,7 +45,6 @@ static WorkerNode * FindRandomNodeFromList(List *candidateWorkerNodeList);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
 static bool NodeIsPrimaryWorker(WorkerNode *node);
-static bool NodeCanHaveDistTablePlacements(WorkerNode *node);
 static bool NodeIsReadableWorker(WorkerNode *node);
 
 
@@ -67,7 +66,6 @@ WorkerGetRandomCandidateNode(List *currentNodeList)
 	WorkerNode *workerNode = NULL;
 	bool wantSameRack = false;
 	uint32 tryCount = WORKER_RACK_TRIES;
-	uint32 tryIndex = 0;
 
 	uint32 currentNodeCount = list_length(currentNodeList);
 	List *candidateWorkerNodeList = PrimaryNodesNotInList(currentNodeList);
@@ -104,17 +102,15 @@ WorkerGetRandomCandidateNode(List *currentNodeList)
 	 * If after a predefined number of tries, we still cannot find such a node,
 	 * we simply give up and return the last worker node we found.
 	 */
-	for (tryIndex = 0; tryIndex < tryCount; tryIndex++)
+	for (uint32 tryIndex = 0; tryIndex < tryCount; tryIndex++)
 	{
 		WorkerNode *firstNode = (WorkerNode *) linitial(currentNodeList);
 		char *firstRack = firstNode->workerRack;
-		char *workerRack = NULL;
-		bool sameRack = false;
 
 		workerNode = FindRandomNodeFromList(candidateWorkerNodeList);
-		workerRack = workerNode->workerRack;
+		char *workerRack = workerNode->workerRack;
 
-		sameRack = (strncmp(workerRack, firstRack, WORKER_LENGTH) == 0);
+		bool sameRack = (strncmp(workerRack, firstRack, WORKER_LENGTH) == 0);
 		if ((sameRack && wantSameRack) || (!sameRack && !wantSameRack))
 		{
 			break;
@@ -171,7 +167,6 @@ WorkerGetLocalFirstCandidateNode(List *currentNodeList)
 	if (currentNodeCount == 0)
 	{
 		StringInfo clientHostStringInfo = makeStringInfo();
-		char *clientHost = NULL;
 		char *errorMessage = ClientHostAddress(clientHostStringInfo);
 
 		if (errorMessage != NULL)
@@ -184,7 +179,7 @@ WorkerGetLocalFirstCandidateNode(List *currentNodeList)
 		}
 
 		/* if hostname is localhost.localdomain, change it to localhost */
-		clientHost = clientHostStringInfo->data;
+		char *clientHost = clientHostStringInfo->data;
 		if (strncmp(clientHost, "localhost.localdomain", WORKER_LENGTH) == 0)
 		{
 			clientHost = pstrdup("localhost");
@@ -343,7 +338,6 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = NULL;
 	HASH_SEQ_STATUS status;
 
 	Assert(checkFunction != NULL);
@@ -353,7 +347,7 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 		LockRelationOid(DistNodeRelationId(), lockMode);
 	}
 
-	workerNodeHash = GetWorkerNodeHash();
+	HTAB *workerNodeHash = GetWorkerNodeHash();
 	hash_seq_init(&status, workerNodeHash);
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
@@ -435,7 +429,7 @@ DistributedTablePlacementNodeList(LOCKMODE lockMode)
  * NodeCanHaveDistTablePlacements returns true if the given node can have
  * shards of a distributed table.
  */
-static bool
+bool
 NodeCanHaveDistTablePlacements(WorkerNode *node)
 {
 	if (!NodeIsPrimary(node))
@@ -568,10 +562,9 @@ CompareWorkerNodes(const void *leftElement, const void *rightElement)
 {
 	const void *leftWorker = *((const void **) leftElement);
 	const void *rightWorker = *((const void **) rightElement);
-	int compare = 0;
 	Size ignoredKeySize = 0;
 
-	compare = WorkerNodeCompare(leftWorker, rightWorker, ignoredKeySize);
+	int compare = WorkerNodeCompare(leftWorker, rightWorker, ignoredKeySize);
 
 	return compare;
 }
@@ -588,16 +581,15 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 	const WorkerNode *workerLhs = (const WorkerNode *) lhsKey;
 	const WorkerNode *workerRhs = (const WorkerNode *) rhsKey;
 
-	int nameCompare = 0;
-	int portCompare = 0;
 
-	nameCompare = strncmp(workerLhs->workerName, workerRhs->workerName, WORKER_LENGTH);
+	int nameCompare = strncmp(workerLhs->workerName, workerRhs->workerName,
+							  WORKER_LENGTH);
 	if (nameCompare != 0)
 	{
 		return nameCompare;
 	}
 
-	portCompare = workerLhs->workerPort - workerRhs->workerPort;
+	int portCompare = workerLhs->workerPort - workerRhs->workerPort;
 	return portCompare;
 }
 
