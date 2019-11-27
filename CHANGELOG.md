@@ -4,6 +4,8 @@
 
 * Adds support for ALTER ROLE propagation
 
+* Adds support for CREATE AGGREGATE propagation
+
 * Adds support for expressions in reference joins
 
 * Adds support for RECORD in multi-shard queries
@@ -11,6 +13,8 @@
 * Adds support for simple in queries on unique columns with repartition joins
 
 * Adds support for subqueries in HAVING clauses
+
+* Automatically distributes unary aggregegates with a combinefunc and a non-internal stype
 
 * Disallows distributed function creation when replication_model is 'statement'
 
@@ -33,8 +37,6 @@
 * Fixes queries with repartition joins and group by unique column
 
 * Improves CTE/Subquery performance by pruning intermediate result broadcasting
-
-* Introduces distributing aggregate definitions to workers
 
 * Removes `citus.worker_list_file` GUC
 
