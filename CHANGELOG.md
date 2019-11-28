@@ -4,19 +4,19 @@
 
 * Adds support for ALTER ROLE propagation
 
-* Adds support for CREATE AGGREGATE propagation
+* Adds support for aggregates in create_distributed_function
 
 * Adds support for expressions in reference joins
 
-* Adds support for RECORD in multi-shard queries
+* Adds support for returning RECORD in multi-shard queries
 
-* Adds support for simple in queries on unique columns with repartition joins
+* Adds support for simple IN subqueries on unique columns in queries with repartition joins
 
 * Adds support for subqueries in HAVING clauses
 
-* Automatically distributes unary aggregegates with a combinefunc and a non-internal stype
+* Automatically distributes unary aggs w/ combinefunc and non-internal stype
 
-* Disallows distributed function creation when replication_model is 'statement'
+* Disallows distributed func creation when replication_model is 'statement'
 
 * Drops support for deprecated real-time and router executors
 
@@ -36,7 +36,7 @@
 
 * Fixes queries with repartition joins and group by unique column
 
-* Improves CTE/Subquery performance by pruning intermediate result broadcasting
+* Improves CTE/Subquery performance by pruning intermediate rslt broadcasting
 
 * Removes `citus.worker_list_file` GUC
 
@@ -87,6 +87,10 @@
 * Fixes a bug that leads to various issues when a connection is lost
 
 * Fixes a schema leak on `CREATE INDEX` statement
+
+* Fixes underflow initialization of default values in worker extended operator node creation
+
+* Fixes potential segfault in standard_planner inlining functions
 
 * Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
 
