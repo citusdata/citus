@@ -150,7 +150,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/adaptive_executor.h"
-#include "distributed/repartition_logic.h"
+#include "distributed/repartition.h"
 #include "lib/ilist.h"
 #include "commands/schemacmds.h"
 #include "storage/fd.h"
@@ -609,12 +609,10 @@ static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
-static bool HasDependedJobs(Job *mainJob);
+static bool HasDependentJobs(Job *mainJob);
 static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
-static void LogSessionId(uint64 sessionId);
-
 
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
@@ -633,7 +631,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	static bool hasDependedJobsInAllTree = false;
+	static bool hasDependentJobsInAllTree = false;
 
 
 	Job *job = distributedPlan->workerJob;
@@ -651,11 +649,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	ExecuteSubPlans(distributedPlan);
 
-	bool hasDependedJobs = HasDependedJobs(job);
-	hasDependedJobsInAllTree |= hasDependedJobs;
-	if (hasDependedJobs)
+	bool hasDependentJobs = HasDependentJobs(job);
+	hasDependentJobsInAllTree |= hasDependentJobs;
+	if (hasDependentJobs)
 	{
-		ExecuteDependedTasks(taskList);
+		ExecuteDependentTasks(taskList, job);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -673,7 +671,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		hasReturning, paramListInfo,
 		tupleDescriptor,
 		scanState->
-		tuplestorestate, targetPoolSize, hasDependedJobs);
+		tuplestorestate, targetPoolSize, hasDependentJobs);
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -721,10 +719,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependedJobsInAllTree && SubPlanLevel == 0)
+	if (hasDependentJobsInAllTree && SubPlanLevel == 0)
 	{
 		CleanUpSchemas();
-		hasDependedJobsInAllTree = false;
+		hasDependentJobsInAllTree = false;
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -737,7 +735,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 
 static bool
-HasDependedJobs(Job *mainJob)
+HasDependentJobs(Job *mainJob)
 {
 	return list_length(mainJob->dependedJobList) > 0;
 }
@@ -3061,7 +3059,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
 
-	LogSessionId(session->sessionId);
 	if (paramListInfo != NULL)
 	{
 		int parameterCount = paramListInfo->numParams;
@@ -3095,13 +3092,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	}
 
 	return true;
-}
-
-
-static void
-LogSessionId(uint64 sessionId)
-{
-	ereport(DEBUG4, (errmsg("Command will be sent on session id: %ld", sessionId)));
 }
 
 

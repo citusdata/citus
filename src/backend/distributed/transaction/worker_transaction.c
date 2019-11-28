@@ -118,6 +118,17 @@ SendCommandToWorkersWithMetadata(const char *command)
 
 
 /*
+ * SendCommandToAllWorkers sends the given command to
+ * all workers.
+ */
+void
+SendCommandToAllWorkers(char *command)
+{
+	SendCommandListToAllWorkers(list_make1(command));
+}
+
+
+/*
  * SendCommandListToAllWorkers sends the given command to all workers in
  * a single transaction.
  */

@@ -29,4 +29,34 @@ INSERT INTO ab values(1, 2);
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
 ROLLBACK;
 
+SET citus.enable_single_hash_repartition_joins TO ON;
+
+CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
+CREATE TABLE single_hash_repartition_second (id int, sum int, avg float);
+CREATE TABLE ref_table (id int, sum int, avg float);
+
+
+SELECT create_distributed_table('single_hash_repartition_first', 'id');
+SELECT create_distributed_table('single_hash_repartition_second', 'id');
+SELECT create_reference_table('ref_table');
+
+
+-- single hash repartition after bcast joins
+EXPLAIN SELECT
+	count(*)
+FROM
+	ref_table r1, single_hash_repartition_second t1, single_hash_repartition_first t2
+WHERE
+	r1.id = t1.id AND t2.sum = t1.id;
+
+-- a more complicated join order, first colocated join, later single hash repartition join
+EXPLAIN SELECT
+	count(*)
+FROM
+	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
+WHERE
+	t1.id = t2.id AND t1.sum = t3.id;
+
+SET citus.enable_single_hash_repartition_joins TO OFF;
+
 DROP SCHEMA adaptive_executor CASCADE;

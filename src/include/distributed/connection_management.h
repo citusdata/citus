@@ -73,6 +73,9 @@ typedef struct MultiConnection
 	/* underlying libpq connection */
 	struct pg_conn *pgConn;
 
+	/* connection id */
+	uint64 connectionId;
+
 	/* state of the connection */
 	MultiConnectionState connectionState;
 

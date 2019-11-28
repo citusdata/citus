@@ -11,7 +11,7 @@
 #include "access/hash.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acylic_graph_execution_logic.h"
+#include "distributed/directed_acylic_graph_execution.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"

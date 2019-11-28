@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  *
- * repartition_logic.c
+ * repartition.c
  *
  * This file contains repartition specific logic.
- * ExecuteDependedTasks takes a list of top level tasks. Its logic is as follows:
+ * ExecuteDependentTasks takes a list of top level tasks. Its logic is as follows:
  * - It generates all the tasks by descending in the tasks tree. Note that each task
  *  has a dependedTaskList.
  * - It generates FetchTask queryStrings with the MapTask queries. It uses the first replicate to
@@ -27,12 +27,12 @@
 #include "access/hash.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acylic_graph_execution_logic.h"
+#include "distributed/directed_acylic_graph_execution.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/repartition_logic.h"
+#include "distributed/repartition.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/worker_manager.h"
 #include "distributed/transaction_management.h"
@@ -43,10 +43,9 @@
 #include "distributed/transmit.h"
 
 
-static List * ExtractMergeTasks(List *allTasks);
-static List * CreateTemporarySchemasForMergeTasks(List *mergeTasks);
-static List * ExtractJobIdsFromTasks(List *mergeTasks);
-static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
+static List * CreateTemporarySchemasForMergeTasks(Job *topLevelJob);
+static List * ExtractJobsInJobTree(Job *job);
+static void TraverseJobTree(Job *curJob, List **jobs);
 static char * GenerateCreateSchemasCommand(List *jobIds);
 static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
@@ -54,20 +53,18 @@ static void RemoveTempJobDirs(List *jobIds);
 
 
 /*
- * ExecuteDependedTasks executes all tasks except the top level tasks
+ * ExecuteDependentTasks executes all tasks except the top level tasks
  * in order from the task tree. At a time, it can execute different tasks from
  * different jobs.
  */
 void
-ExecuteDependedTasks(List *topLevelTasks)
+ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	EnsureNoModificationsHaveBeenDone();
 
 	List *allTasks = TaskAndExecutionList(topLevelTasks);
 
-	List *mergeTasks = ExtractMergeTasks(allTasks);
-
-	List *jobIds = CreateTemporarySchemasForMergeTasks(mergeTasks);
+	List *jobIds = CreateTemporarySchemasForMergeTasks(topLevelJob);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
 
@@ -76,69 +73,47 @@ ExecuteDependedTasks(List *topLevelTasks)
 
 
 /*
- * ExtractMergeTasks iterates all tasks and creates a group for mergeTasks.
- */
-static List *
-ExtractMergeTasks(List *allTasks)
-{
-	ListCell *taskCell = NULL;
-	List *mergeTasks = NIL;
-
-	foreach(taskCell, allTasks)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-
-		if (task->taskType == MERGE_TASK)
-		{
-			mergeTasks = lappend(mergeTasks, task);
-		}
-	}
-	return mergeTasks;
-}
-
-
-/*
  * CreateTemporarySchemasForMergeTasks creates the necessary schemas that will be used
  * later in each worker. Single transaction is used to create the schemas.
  */
 static List *
-CreateTemporarySchemasForMergeTasks(List *mergeTasks)
+CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
 {
-	List *jobIds = ExtractJobIdsFromTasks(mergeTasks);
+	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
-	CreateSchemasOnAllWorkers(createSchemasCommand);
+	SendCommandToAllWorkers(createSchemasCommand);
 	return jobIds;
 }
 
 
 /*
- * ExtractJobIdsFromTasks returns a list of unique job ids that will be used
- * in mergeTasks.
+ * ExtractJobsInJobTree returns all job ids in the job tree
+ * where the given job is root.
  */
 static List *
-ExtractJobIdsFromTasks(List *mergeTasks)
+ExtractJobsInJobTree(Job *job)
 {
-	ListCell *taskCell = NULL;
 	List *jobIds = NIL;
-
-	foreach(taskCell, mergeTasks)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-		jobIds = ListAppendUniqueUint64(jobIds, task->jobId);
-	}
+	TraverseJobTree(job, &jobIds);
 	return jobIds;
 }
 
 
 /*
- * CreateSchemasOnAllWorkers creates schemas in all workers.
+ * TraverseJobTree does a dfs in the current job and adds
+ * all of its job ids.
  */
 static void
-CreateSchemasOnAllWorkers(char *createSchemasCommand)
+TraverseJobTree(Job *curJob, List **jobIds)
 {
-	List *commandList = list_make1(createSchemasCommand);
+	ListCell *jobCell = NULL;
+	*jobIds = lappend(*jobIds, (void *) curJob->jobId);
 
-	SendCommandListToAllWorkers(commandList);
+	foreach(jobCell, curJob->dependedJobList)
+	{
+		Job *childJob = (Job *) lfirst(jobCell);
+		TraverseJobTree(childJob, jobIds);
+	}
 }
 
 
@@ -193,8 +168,7 @@ CleanUpSchemas()
 static void
 RemoveTempJobDirs(List *jobIds)
 {
-	List *commandList = list_make1(GenerateDeleteJobsCommand(jobIds));
-	SendCommandListToAllWorkers(commandList);
+	SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));
 }
 
 

@@ -934,6 +934,7 @@ static MultiConnection *
 StartConnectionEstablishment(ConnectionHashKey *key)
 {
 	bool found = false;
+	static uint64 connectionId = 1;
 
 	/* search our cache for precomputed connection settings */
 	ConnParamsHashEntry *entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
@@ -965,6 +966,7 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 											  (const char **) entry->values,
 											  false);
 	connection->connectionStart = GetCurrentTimestamp();
+	connection->connectionId = connectionId++;
 
 	/*
 	 * To avoid issues with interrupts not getting caught all our connections

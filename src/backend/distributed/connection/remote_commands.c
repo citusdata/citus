@@ -352,8 +352,9 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 	}
 
 	ereport(LOG, (errmsg("issuing %s", ApplyLogRedaction(command)),
-				  errdetail("on server %s@%s:%d", connection->user, connection->hostname,
-							connection->port)));
+				  errdetail("on server %s@%s:%d connectionId: %ld", connection->user,
+							connection->hostname,
+							connection->port, connection->connectionId)));
 }
 
 
