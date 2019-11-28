@@ -88,6 +88,10 @@
 
 * Fixes a schema leak on `CREATE INDEX` statement
 
+* Fixes underflow initialization of default values in worker extended operator node creation
+
+* Fixes potential segfault in standard_planner inlining functions
+
 * Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
 
 * Makes `master_update_node` MX compatible
