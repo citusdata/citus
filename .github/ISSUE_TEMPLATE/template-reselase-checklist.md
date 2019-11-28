@@ -1,5 +1,5 @@
 ---
-name: Template reselase checklist
+name: Template release checklist
 about: ''
 title: Release Checklist x.y[.z]
 labels: ''
