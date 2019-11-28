@@ -4,17 +4,17 @@
 
 * Adds support for ALTER ROLE propagation
 
-* Adds support for CREATE AGGREGATE propagation
+* Adds support for aggregates in create_distributed_function
 
 * Adds support for expressions in reference joins
 
-* Adds support for RECORD in multi-shard queries
+* Adds support for returning RECORD in multi-shard queries
 
 * Adds support for simple IN subqueries on unique columns in queries with repartition joins
 
 * Adds support for subqueries in HAVING clauses
 
-* Automatically distributes unary aggregegates with a combinefunc and a non-internal stype
+* Adds support for automatically distributing unary aggregegates with a combinefunc and a non-internal stype
 
 * Disallows distributed function creation when replication_model is 'statement'
 
