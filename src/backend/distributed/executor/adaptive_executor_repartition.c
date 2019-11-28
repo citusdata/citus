@@ -51,9 +51,7 @@ typedef struct TaskHashEntry
 	Task *task;
 }TaskHashEntry;
 
-static void FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks);
-static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
-static void PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks);
+static void FillTaskGroups(List **allTasks, List **mergeTasks);
 static List * CreateTemporarySchemas(List *mergeTasks);
 static List * CreateJobIds(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
@@ -83,7 +81,6 @@ static void RemoveTempJobDirs(List *jobIds);
 void
 ExecuteDependedTasks(List *topLevelTasks)
 {
-	List *mapOutputFetchTasks = NIL;
 	List *mergeTasks = NIL;
 
 
@@ -91,8 +88,7 @@ ExecuteDependedTasks(List *topLevelTasks)
 
 	List *allTasks = TaskAndExecutionList(topLevelTasks);
 
-	FillTaskGroups(&allTasks, &mapOutputFetchTasks, &mergeTasks);
-	PutMapOutputFetchQueryStrings(&mapOutputFetchTasks);
+	FillTaskGroups(&allTasks, &mergeTasks);
 
 	List *jobIds = CreateTemporarySchemas(mergeTasks);
 
@@ -103,11 +99,10 @@ ExecuteDependedTasks(List *topLevelTasks)
 
 
 /*
- * FillTaskGroups iterates all tasks and creates a group for outputFetchTasks
- * and mergeTasks.
+ * FillTaskGroups iterates all tasks and creates a group for mergeTasks.
  */
 static void
-FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks)
+FillTaskGroups(List **allTasks, List **mergeTasks)
 {
 	ListCell *taskCell = NULL;
 
@@ -115,67 +110,11 @@ FillTaskGroups(List **allTasks, List **outputFetchTasks, List **mergeTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		if (task->taskType == MAP_OUTPUT_FETCH_TASK)
-		{
-			*outputFetchTasks = lappend(*outputFetchTasks, task);
-		}
 		if (task->taskType == MERGE_TASK)
 		{
 			*mergeTasks = lappend(*mergeTasks, task);
 		}
 	}
-}
-
-
-/*
- * PutMapOutputFetchQueryStrings adds the queryStrings for fetchTasks from their mapTasks.
- * Note that it is not created during the planner, but it is probably safe
- * to create the queryStrings for fetchTasks in the planner phase too.
- */
-static void
-PutMapOutputFetchQueryStrings(List **mapOutputFetchTasks)
-{
-	ListCell *taskCell = NULL;
-	foreach(taskCell, *mapOutputFetchTasks)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-		Task *mapTask = (Task *) linitial(task->dependedTaskList);
-
-		StringInfo mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
-		task->queryString = mapFetchTaskQueryString->data;
-	}
-}
-
-
-/*
- * MapFetchTaskQueryString constructs the map fetch query string from the given
- * map output fetch task and its downstream map task dependency. The constructed
- * query string allows fetching the map task's partitioned output file from the
- * worker node it's created to the worker node that will execute the merge task.
- */
-static StringInfo
-MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask)
-{
-	uint32 partitionFileId = mapFetchTask->partitionId;
-	uint32 mergeTaskId = mapFetchTask->upstreamTaskId;
-
-	/* find the node name/port for map task's execution */
-	List *mapTaskPlacementList = mapTask->taskPlacementList;
-
-	ShardPlacement *mapTaskPlacement = linitial(mapTaskPlacementList);
-	char *mapTaskNodeName = mapTaskPlacement->nodeName;
-	uint32 mapTaskNodePort = mapTaskPlacement->nodePort;
-
-	Assert(mapFetchTask->taskType == MAP_OUTPUT_FETCH_TASK);
-	Assert(mapTask->taskType == MAP_TASK);
-
-	StringInfo mapFetchQueryString = makeStringInfo();
-	appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,
-					 mapTask->jobId, mapTask->taskId, partitionFileId,
-					 mergeTaskId, /* fetch results to merge task */
-					 mapTaskNodeName, mapTaskNodePort);
-
-	return mapFetchQueryString;
 }
 
 

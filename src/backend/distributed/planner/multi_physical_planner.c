@@ -4462,11 +4462,22 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 		{
 			Task *mapTask = (Task *) lfirst(mapTaskCell);
 
-			/* we need node names for the query, and we'll resolve them later */
-			char *undefinedQueryString = NULL;
+			/* find the node name/port for map task's execution */
+			List *mapTaskPlacementList = mapTask->taskPlacementList;
+
+			ShardPlacement *mapTaskPlacement = linitial(mapTaskPlacementList);
+			char *mapTaskNodeName = mapTaskPlacement->nodeName;
+			uint32 mapTaskNodePort = mapTaskPlacement->nodePort;
+
+			StringInfo mapFetchQueryString = makeStringInfo();
+			appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,
+							 mapTask->jobId, mapTask->taskId, partitionId,
+							 mergeTaskId, /* fetch results to merge task */
+							 mapTaskNodeName, mapTaskNodePort);
+
 			Task *mapOutputFetchTask = CreateBasicTask(jobId, taskIdIndex,
 													   MAP_OUTPUT_FETCH_TASK,
-													   undefinedQueryString);
+													   mapFetchQueryString->data);
 			mapOutputFetchTask->partitionId = partitionId;
 			mapOutputFetchTask->upstreamTaskId = mergeTaskId;
 			mapOutputFetchTask->dependedTaskList = list_make1(mapTask);
