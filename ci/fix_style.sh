@@ -11,4 +11,4 @@ cd ${cidir}/..
 ci/editorconfig.sh
 ci/remove_useless_declarations.sh
 
-citus_indent .
+citus_indent . --quiet
