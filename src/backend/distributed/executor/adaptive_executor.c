@@ -150,6 +150,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/repartition_logic.h"
 #include "lib/ilist.h"
 #include "commands/schemacmds.h"
 #include "storage/fd.h"
@@ -158,7 +159,6 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
-#include "distributed/adaptive_executor_repartitioning.h"
 
 
 /*
