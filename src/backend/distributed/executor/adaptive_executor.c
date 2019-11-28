@@ -282,6 +282,11 @@ typedef struct DistributedExecution
 	AttInMetadata *attributeInputMetadata;
 	char **columnArray;
 
+	/*
+	 * isOutsideTransaction is used to determine if we should begin a transaction
+	 * or not. For example, we do not begin a transaction for repartition specific
+	 * transactions.
+	 */
 	bool isOutsideTransaction;
 } DistributedExecution;
 
@@ -604,7 +609,7 @@ static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
-static bool DoesHaveDependedJobs(Job *mainJob);
+static bool HasDependedJobs(Job *mainJob);
 static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
@@ -646,7 +651,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	ExecuteSubPlans(distributedPlan);
 
-	bool hasDependedJobs = DoesHaveDependedJobs(job);
+	bool hasDependedJobs = HasDependedJobs(job);
 	hasDependedJobsInAllTree |= hasDependedJobs;
 	if (hasDependedJobs)
 	{
@@ -732,7 +737,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 
 static bool
-DoesHaveDependedJobs(Job *mainJob)
+HasDependedJobs(Job *mainJob)
 {
 	return list_length(mainJob->dependedJobList) > 0;
 }

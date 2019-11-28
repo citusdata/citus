@@ -37,18 +37,18 @@
 #include "distributed/worker_manager.h"
 #include "distributed/transaction_management.h"
 #include "distributed/multi_task_tracker_executor.h"
+#include "distributed/worker_transaction.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/listutils.h"
 #include "distributed/transmit.h"
 
 
-static void FillTaskGroups(List **allTasks, List **mergeTasks);
-static List * CreateTemporarySchemas(List *mergeTasks);
-static List * CreateJobIds(List *mergeTasks);
+static List * ExtractMergeTasks(List *allTasks);
+static List * CreateTemporarySchemasForMergeTasks(List *mergeTasks);
+static List * ExtractJobIdsFromTasks(List *mergeTasks);
 static void CreateSchemasOnAllWorkers(char *createSchemasCommand);
 static char * GenerateCreateSchemasCommand(List *jobIds);
-static char * GenerateCommand(List *jobIds, char *templateCommand);
-static bool DoesJobIDExist(List *jobIds, uint64 jobId);
-static void SendCommandToAllWorkers(List *commandList);
+static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
 static void RemoveTempJobDirs(List *jobIds);
 
@@ -61,16 +61,13 @@ static void RemoveTempJobDirs(List *jobIds);
 void
 ExecuteDependedTasks(List *topLevelTasks)
 {
-	List *mergeTasks = NIL;
-
-
 	EnsureNoModificationsHaveBeenDone();
 
 	List *allTasks = TaskAndExecutionList(topLevelTasks);
 
-	FillTaskGroups(&allTasks, &mergeTasks);
+	List *mergeTasks = ExtractMergeTasks(allTasks);
 
-	List *jobIds = CreateTemporarySchemas(mergeTasks);
+	List *jobIds = CreateTemporarySchemasForMergeTasks(mergeTasks);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
 
@@ -79,33 +76,35 @@ ExecuteDependedTasks(List *topLevelTasks)
 
 
 /*
- * FillTaskGroups iterates all tasks and creates a group for mergeTasks.
+ * ExtractMergeTasks iterates all tasks and creates a group for mergeTasks.
  */
-static void
-FillTaskGroups(List **allTasks, List **mergeTasks)
+static List *
+ExtractMergeTasks(List *allTasks)
 {
 	ListCell *taskCell = NULL;
+	List *mergeTasks = NIL;
 
-	foreach(taskCell, *allTasks)
+	foreach(taskCell, allTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
 		if (task->taskType == MERGE_TASK)
 		{
-			*mergeTasks = lappend(*mergeTasks, task);
+			mergeTasks = lappend(mergeTasks, task);
 		}
 	}
+	return mergeTasks;
 }
 
 
 /*
- * CreateTemporarySchemas creates the necessary schemas that will be used
+ * CreateTemporarySchemasForMergeTasks creates the necessary schemas that will be used
  * later in each worker. Single transaction is used to create the schemas.
  */
 static List *
-CreateTemporarySchemas(List *mergeTasks)
+CreateTemporarySchemasForMergeTasks(List *mergeTasks)
 {
-	List *jobIds = CreateJobIds(mergeTasks);
+	List *jobIds = ExtractJobIdsFromTasks(mergeTasks);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
 	CreateSchemasOnAllWorkers(createSchemasCommand);
 	return jobIds;
@@ -113,11 +112,11 @@ CreateTemporarySchemas(List *mergeTasks)
 
 
 /*
- * CreateJobIds returns a list of unique job ids that will be used
+ * ExtractJobIdsFromTasks returns a list of unique job ids that will be used
  * in mergeTasks.
  */
 static List *
-CreateJobIds(List *mergeTasks)
+ExtractJobIdsFromTasks(List *mergeTasks)
 {
 	ListCell *taskCell = NULL;
 	List *jobIds = NIL;
@@ -125,10 +124,7 @@ CreateJobIds(List *mergeTasks)
 	foreach(taskCell, mergeTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		if (!DoesJobIDExist(jobIds, task->jobId))
-		{
-			jobIds = lappend(jobIds, (void *) task->jobId);
-		}
+		jobIds = ListAppendUniqueUint64(jobIds, task->jobId);
 	}
 	return jobIds;
 }
@@ -142,28 +138,7 @@ CreateSchemasOnAllWorkers(char *createSchemasCommand)
 {
 	List *commandList = list_make1(createSchemasCommand);
 
-	SendCommandToAllWorkers(commandList);
-}
-
-
-/*
- * SendCommandToAllWorkers sends the given command to all workers in
- * a single transaction.
- */
-static void
-SendCommandToAllWorkers(List *commandList)
-{
-	ListCell *workerNodeCell = NULL;
-	char *extensionOwner = CitusExtensionOwnerName();
-	List *workerNodeList = ActiveReadableNodeList();
-
-	foreach(workerNodeCell, workerNodeList)
-	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-												   workerNode->workerPort, extensionOwner,
-												   commandList);
-	}
+	SendCommandListToAllWorkers(commandList);
 }
 
 
@@ -173,19 +148,19 @@ SendCommandToAllWorkers(List *commandList)
 static char *
 GenerateCreateSchemasCommand(List *jobIds)
 {
-	return GenerateCommand(jobIds, WORKER_CREATE_SCHEMA_QUERY);
+	return GenerateJobCommands(jobIds, WORKER_CREATE_SCHEMA_QUERY);
 }
 
 
 /*
- * GenerateCommand returns concatenated commands with the given template
+ * GenerateJobCommands returns concatenated commands with the given template
  * command for each job id from the given job ids. The returned command is
  * exactly list_length(jobIds) subcommands.
  *  E.g create_schema(jobId1); create_schema(jobId2); ...
  * This way we can send the command in just one latency to a worker.
  */
 static char *
-GenerateCommand(List *jobIds, char *templateCommand)
+GenerateJobCommands(List *jobIds, char *templateCommand)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
 	ListCell *jobIdCell = NULL;
@@ -200,25 +175,6 @@ GenerateCommand(List *jobIds, char *templateCommand)
 
 
 /*
- * DoesJobIDExist returns true if the given job id exists in the given list.
- */
-static bool
-DoesJobIDExist(List *jobIds, uint64 jobId)
-{
-	ListCell *jobIdCell = NULL;
-	foreach(jobIdCell, jobIds)
-	{
-		uint64 curJobId = (uint64) lfirst(jobIdCell);
-		if (curJobId == jobId)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-
-/*
  * CleanUpSchemas removes all the schemas that start with pg_
  * in every worker.
  */
@@ -226,7 +182,7 @@ void
 CleanUpSchemas()
 {
 	List *commandList = list_make1(JOB_SCHEMA_CLEANUP);
-	SendCommandToAllWorkers(commandList);
+	SendCommandListToAllWorkers(commandList);
 }
 
 
@@ -238,7 +194,7 @@ static void
 RemoveTempJobDirs(List *jobIds)
 {
 	List *commandList = list_make1(GenerateDeleteJobsCommand(jobIds));
-	SendCommandToAllWorkers(commandList);
+	SendCommandListToAllWorkers(commandList);
 }
 
 
@@ -248,5 +204,5 @@ RemoveTempJobDirs(List *jobIds)
 static char *
 GenerateDeleteJobsCommand(List *jobIds)
 {
-	return GenerateCommand(jobIds, WORKER_DELETE_JOBDIR_QUERY);
+	return GenerateJobCommands(jobIds, WORKER_DELETE_JOBDIR_QUERY);
 }

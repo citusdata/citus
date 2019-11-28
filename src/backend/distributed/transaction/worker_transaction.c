@@ -118,6 +118,27 @@ SendCommandToWorkersWithMetadata(const char *command)
 
 
 /*
+ * SendCommandListToAllWorkers sends the given command to all workers in
+ * a single transaction.
+ */
+void
+SendCommandListToAllWorkers(List *commandList)
+{
+	ListCell *workerNodeCell = NULL;
+	char *extensionOwner = CitusExtensionOwnerName();
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+												   workerNode->workerPort, extensionOwner,
+												   commandList);
+	}
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */

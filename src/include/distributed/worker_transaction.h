@@ -42,6 +42,7 @@ extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern int SendBareOptionalCommandListToAllWorkersAsUser(List *commandList,
 														 const char *user);
 extern void EnsureNoModificationsHaveBeenDone(void);
+extern void SendCommandListToAllWorkers(List *commandList);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 													   int32 nodePort,
 													   const char *nodeUser,

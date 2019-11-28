@@ -37,7 +37,6 @@ typedef struct TaskHashEntry
 
 static HASHCTL InitHashTableInfo(void);
 static HTAB * CreateTaskHashTable(void);
-static void FillTaskKey(TaskHashKey *taskKey, Task *task);
 static bool IsAllDependencyCompleted(Task *task, HTAB *completedTasks);
 static void AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks);
 static List * FindExecutableTasks(List *allTasks, HTAB *completedTasks);
@@ -85,12 +84,11 @@ FindExecutableTasks(List *allTasks, HTAB *completedTasks)
 {
 	List *curTasks = NIL;
 	ListCell *taskCell = NULL;
-	TaskHashKey taskKey;
+
 
 	foreach(taskCell, allTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		FillTaskKey(&taskKey, task);
 
 		if (IsAllDependencyCompleted(task, completedTasks) &&
 			!IsTaskAlreadyCompleted(task, completedTasks))
@@ -110,13 +108,13 @@ static void
 AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 {
 	ListCell *taskCell = NULL;
-	TaskHashKey taskKey;
+
 	bool found;
 
 	foreach(taskCell, curCompletedTasks)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		FillTaskKey(&taskKey, task);
+		TaskHashKey taskKey = { task->jobId, task->taskId };
 		hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
 	}
 }
@@ -142,10 +140,9 @@ CreateTaskHashTable()
 static bool
 IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks)
 {
-	TaskHashKey taskKey;
 	bool found;
 
-	FillTaskKey(&taskKey, task);
+	TaskHashKey taskKey = { task->jobId, task->taskId };
 	hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
 	return found;
 }
@@ -160,12 +157,12 @@ IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 {
 	ListCell *taskCell = NULL;
 	bool found = false;
-	TaskHashKey taskKey;
+
 
 	foreach(taskCell, targetTask->dependedTaskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		FillTaskKey(&taskKey, task);
+		TaskHashKey taskKey = { task->jobId, task->taskId };
 
 		hash_search(completedTasks, &taskKey, HASH_FIND, &found);
 		if (!found)
@@ -174,14 +171,6 @@ IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 		}
 	}
 	return true;
-}
-
-
-static void
-FillTaskKey(TaskHashKey *taskKey, Task *task)
-{
-	taskKey->jobId = task->jobId;
-	taskKey->taskId = task->taskId;
 }
 
 
@@ -212,7 +201,8 @@ TaskHash(const void *key, Size keysize)
 	TaskHashKey *taskKey = (TaskHashKey *) key;
 	uint32 hash = 0;
 
-	hash = hash_combine(hash, hash_uint32((uint32) taskKey->jobId));
+	hash = hash_combine(hash, hash_any((unsigned char *) &taskKey->jobId,
+									   sizeof(int64)));
 	hash = hash_combine(hash, hash_uint32(taskKey->taskId));
 
 	return hash;
