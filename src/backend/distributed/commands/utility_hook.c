@@ -1227,7 +1227,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->taskType = DDL_TASK;
 		task->queryString = applyCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
-		task->dependedTaskList = NULL;
+		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 

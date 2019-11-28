@@ -132,7 +132,7 @@ typedef struct Job
 	uint64 jobId;
 	Query *jobQuery;
 	List *taskList;
-	List *dependedJobList;
+	List *dependentJobList;
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
@@ -185,7 +185,7 @@ typedef struct Task
 	char *queryString;
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
-	List *dependedTaskList;     /* only applies to compute tasks */
+	List *dependentTaskList;     /* only applies to compute tasks */
 
 	uint32 partitionId;
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */

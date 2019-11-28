@@ -94,8 +94,8 @@ static Job * BuildJobTree(MultiTreeRoot *multiTree);
 static MultiNode * LeftMostNode(MultiTreeRoot *multiTree);
 static Oid RangePartitionJoinBaseRelationId(MultiJoin *joinNode);
 static MultiTable * FindTableNode(MultiNode *multiNode, int rangeTableId);
-static Query * BuildJobQuery(MultiNode *multiNode, List *dependedJobList);
-static Query * BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependedJobList);
+static Query * BuildJobQuery(MultiNode *multiNode, List *dependentJobList);
+static Query * BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList);
 static List * BaseRangeTableList(MultiNode *multiNode);
 static List * QueryTargetList(MultiNode *multiNode);
 static List * TargetEntryList(List *expressionList);
@@ -103,29 +103,29 @@ static List * QueryGroupClauseList(MultiNode *multiNode);
 static List * QuerySelectClauseList(MultiNode *multiNode);
 static List * QueryJoinClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
-static Node * QueryJoinTree(MultiNode *multiNode, List *dependedJobList,
+static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
-static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependedJobList,
+static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
 static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
-						   List *dependedJobList, List **columnNames, List **columnVars);
+						   List *dependentJobList, List **columnNames, List **columnVars);
 static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
 											  List *tableIdList);
 static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
 static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
-									  List *dependedJobList);
+									  List *dependentJobList);
 static void UpdateColumnAttributes(Var *column, List *rangeTableList,
-								   List *dependedJobList);
+								   List *dependentJobList);
 static Index NewTableId(Index originalTableId, List *rangeTableList);
 static AttrNumber NewColumnId(Index originalTableId, AttrNumber originalColumnId,
-							  RangeTblEntry *newRangeTableEntry, List *dependedJobList);
+							  RangeTblEntry *newRangeTableEntry, List *dependentJobList);
 static Job * JobForRangeTable(List *jobList, RangeTblEntry *rangeTableEntry);
 static Job * JobForTableIdList(List *jobList, List *searchedTableIdList);
 static List * ChildNodeList(MultiNode *multiNode);
-static Job * BuildJob(Query *jobQuery, List *dependedJobList);
-static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
+static Job * BuildJob(Query *jobQuery, List *dependentJobList);
+static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependentJobList,
 									  Var *partitionKey, PartitionType partitionType,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
@@ -153,15 +153,16 @@ static List * BaseRangeTableIdList(List *rangeTableList);
 static List * AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList);
 static void AdjustColumnOldAttributes(List *expressionList);
 static List * RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
-									  List *dependedJobList);
+									  List *dependentJobList);
 static OperatorCacheEntry * LookupOperatorByType(Oid typeId, Oid accessMethodId,
 												 int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static List * FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
-									  List *dependedJobList);
+									  List *dependentJobList);
 static JoinSequenceNode * JoinSequenceArray(List *rangeTableFragmentsList,
-											Query *jobQuery, List *dependedJobList);
-static bool PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList);
+											Query *jobQuery, List *dependentJobList);
+static bool PartitionedOnColumn(Var *column, List *rangeTableList,
+								List *dependentJobList);
 static void CheckJoinBetweenColumns(OpExpr *joinClause);
 static List * FindRangeTableFragmentsList(List *rangeTableFragmentsList, int taskId);
 static bool JoinPrunable(RangeTableFragment *leftFragment,
@@ -224,8 +225,8 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	workerJob = BuildJobTreeTaskList(workerJob, plannerRestrictionContext);
 
 	/* build the final merge query to execute on the master */
-	List *masterDependedJobList = list_make1(workerJob);
-	Query *masterQuery = BuildJobQuery((MultiNode *) multiTree, masterDependedJobList);
+	List *masterDependentJobList = list_make1(workerJob);
+	Query *masterQuery = BuildJobQuery((MultiNode *) multiTree, masterDependentJobList);
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = workerJob;
@@ -252,7 +253,7 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	Job *job = distributedPlan->workerJob;
 	List *workerTaskList = job->taskList;
 	int taskCount = list_length(workerTaskList);
-	int dependedJobCount = list_length(job->dependedJobList);
+	int dependentJobCount = list_length(job->dependentJobList);
 
 	if (!EnableRouterExecution)
 	{
@@ -266,7 +267,7 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	}
 
 	/* router executor cannot execute repartition jobs */
-	if (dependedJobCount > 0)
+	if (dependentJobCount > 0)
 	{
 		return false;
 	}
@@ -309,7 +310,7 @@ BuildJobTree(MultiTreeRoot *multiTree)
 	MultiNode *leftMostNode = LeftMostNode(multiTree);
 	MultiNode *currentNode = leftMostNode;
 	MultiNode *parentNode = ParentNode(currentNode);
-	List *loopDependedJobList = NIL;
+	List *loopDependentJobList = NIL;
 	Job *topLevelJob = NULL;
 
 	while (parentNode != NULL)
@@ -375,17 +376,17 @@ BuildJobTree(MultiTreeRoot *multiTree)
 				Var *partitionKey = partitionNode->partitionColumn;
 
 				/* build query and partition job */
-				List *dependedJobList = list_copy(loopDependedJobList);
-				Query *jobQuery = BuildJobQuery(queryNode, dependedJobList);
+				List *dependentJobList = list_copy(loopDependentJobList);
+				Query *jobQuery = BuildJobQuery(queryNode, dependentJobList);
 
-				MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependedJobList,
+				MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependentJobList,
 															partitionKey, partitionType,
 															baseRelationId,
 															JOIN_MAP_MERGE_JOB);
 
 				/* reset depended job list */
-				loopDependedJobList = NIL;
-				loopDependedJobList = list_make1(mapMergeJob);
+				loopDependentJobList = NIL;
+				loopDependentJobList = list_make1(mapMergeJob);
 			}
 
 			if (CitusIsA(rightChildNode, MultiPartition))
@@ -405,7 +406,7 @@ BuildJobTree(MultiTreeRoot *multiTree)
 															JOIN_MAP_MERGE_JOB);
 
 				/* append to the depended job list for on-going dependencies */
-				loopDependedJobList = lappend(loopDependedJobList, mapMergeJob);
+				loopDependentJobList = lappend(loopDependentJobList, mapMergeJob);
 			}
 		}
 		else if (boundaryNodeJobType == SUBQUERY_MAP_MERGE_JOB)
@@ -415,10 +416,10 @@ BuildJobTree(MultiTreeRoot *multiTree)
 			Var *partitionKey = partitionNode->partitionColumn;
 
 			/* build query and partition job */
-			List *dependedJobList = list_copy(loopDependedJobList);
-			Query *jobQuery = BuildJobQuery(queryNode, dependedJobList);
+			List *dependentJobList = list_copy(loopDependentJobList);
+			Query *jobQuery = BuildJobQuery(queryNode, dependentJobList);
 
-			MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependedJobList,
+			MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependentJobList,
 														partitionKey,
 														DUAL_HASH_PARTITION_TYPE,
 														InvalidOid,
@@ -429,13 +430,13 @@ BuildJobTree(MultiTreeRoot *multiTree)
 			mapMergeJob->reduceQuery = reduceQuery;
 
 			/* reset depended job list */
-			loopDependedJobList = NIL;
-			loopDependedJobList = list_make1(mapMergeJob);
+			loopDependentJobList = NIL;
+			loopDependentJobList = list_make1(mapMergeJob);
 		}
 		else if (boundaryNodeJobType == TOP_LEVEL_WORKER_JOB)
 		{
 			MultiNode *childNode = ChildNode((MultiUnaryNode *) currentNode);
-			List *dependedJobList = list_copy(loopDependedJobList);
+			List *dependentJobList = list_copy(loopDependentJobList);
 			bool subqueryPushdown = false;
 
 			List *subqueryMultiTableList = SubqueryMultiTableList(childNode);
@@ -456,14 +457,14 @@ BuildJobTree(MultiTreeRoot *multiTree)
 			{
 				Query *topLevelQuery = BuildSubqueryJobQuery(childNode);
 
-				topLevelJob = BuildJob(topLevelQuery, dependedJobList);
+				topLevelJob = BuildJob(topLevelQuery, dependentJobList);
 				topLevelJob->subqueryPushdown = true;
 			}
 			else
 			{
-				Query *topLevelQuery = BuildJobQuery(childNode, dependedJobList);
+				Query *topLevelQuery = BuildJobQuery(childNode, dependentJobList);
 
-				topLevelJob = BuildJob(topLevelQuery, dependedJobList);
+				topLevelJob = BuildJob(topLevelQuery, dependentJobList);
 			}
 		}
 
@@ -569,7 +570,7 @@ FindTableNode(MultiNode *multiNode, int rangeTableId)
  * have already been built, as their output is needed to build the query.
  */
 static Query *
-BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
+BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 {
 	bool updateColumnAttributes = false;
 	List *targetList = NIL;
@@ -604,9 +605,9 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	 * If we are building this query on a repartitioned subquery job then we
 	 * don't need to update column attributes.
 	 */
-	if (dependedJobList != NIL)
+	if (dependentJobList != NIL)
 	{
-		Job *job = (Job *) linitial(dependedJobList);
+		Job *job = (Job *) linitial(dependentJobList);
 		if (CitusIsA(job, MapMergeJob))
 		{
 			MapMergeJob *mapMergeJob = (MapMergeJob *) job;
@@ -638,12 +639,12 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 
 	/* build the join tree and the range table list */
 	List *rangeTableList = BaseRangeTableList(multiNode);
-	Node *joinRoot = QueryJoinTree(multiNode, dependedJobList, &rangeTableList);
+	Node *joinRoot = QueryJoinTree(multiNode, dependentJobList, &rangeTableList);
 
 	/* update the column attributes for target entries */
 	if (updateColumnAttributes)
 	{
-		UpdateAllColumnAttributes((Node *) targetList, rangeTableList, dependedJobList);
+		UpdateAllColumnAttributes((Node *) targetList, rangeTableList, dependentJobList);
 	}
 
 	/* extract limit count/offset and sort clauses */
@@ -668,8 +669,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	if (updateColumnAttributes)
 	{
 		UpdateAllColumnAttributes((Node *) selectClauseList, rangeTableList,
-								  dependedJobList);
-		UpdateAllColumnAttributes(havingQual, rangeTableList, dependedJobList);
+								  dependentJobList);
+		UpdateAllColumnAttributes(havingQual, rangeTableList, dependentJobList);
 	}
 
 	/*
@@ -726,7 +727,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
  * have already been built, as their output is needed to build the query.
  */
 static Query *
-BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependedJobList)
+BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
 {
 	MultiNode *multiNode = (MultiNode *) extendedOpNode;
 	List *derivedRangeTableList = NIL;
@@ -734,8 +735,8 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependedJobList)
 	ListCell *columnCell = NULL;
 	List *columnNameList = NIL;
 
-	Job *dependedJob = linitial(dependedJobList);
-	List *dependedTargetList = dependedJob->jobQuery->targetList;
+	Job *dependentJob = linitial(dependentJobList);
+	List *dependedTargetList = dependentJob->jobQuery->targetList;
 	uint32 columnCount = (uint32) list_length(dependedTargetList);
 
 	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -1121,7 +1122,7 @@ QueryJoinClauseList(MultiNode *multiNode)
  * the entries at the same time as the tree to know the appropriate rtindex.
  */
 static Node *
-QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList)
+QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableList)
 {
 	CitusNodeTag nodeType = CitusNodeTag(multiNode);
 
@@ -1135,9 +1136,9 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			JoinExpr *joinExpr = makeNode(JoinExpr);
 			joinExpr->jointype = joinNode->joinType;
 			joinExpr->isNatural = false;
-			joinExpr->larg = QueryJoinTree(binaryNode->leftChildNode, dependedJobList,
+			joinExpr->larg = QueryJoinTree(binaryNode->leftChildNode, dependentJobList,
 										   rangeTableList);
-			joinExpr->rarg = QueryJoinTree(binaryNode->rightChildNode, dependedJobList,
+			joinExpr->rarg = QueryJoinTree(binaryNode->rightChildNode, dependentJobList,
 										   rangeTableList);
 			joinExpr->usingClause = NIL;
 			joinExpr->alias = NULL;
@@ -1161,7 +1162,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			}
 
 			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
-																 dependedJobList,
+																 dependentJobList,
 																 *rangeTableList);
 			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
 
@@ -1170,7 +1171,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			foreach(columnCell, columnList)
 			{
 				Var *column = (Var *) lfirst(columnCell);
-				UpdateColumnAttributes(column, *rangeTableList, dependedJobList);
+				UpdateColumnAttributes(column, *rangeTableList, dependentJobList);
 
 				/* adjust our column old attributes for partition pruning to work */
 				column->varnoold = column->varno;
@@ -1191,7 +1192,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			if (unaryNode->childNode != NULL)
 			{
 				/* MultiTable is actually a subquery, return the query tree below */
-				Node *childNode = QueryJoinTree(unaryNode->childNode, dependedJobList,
+				Node *childNode = QueryJoinTree(unaryNode->childNode, dependentJobList,
 												rangeTableList);
 
 				return childNode;
@@ -1209,12 +1210,13 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 		case T_MultiCollect:
 		{
 			List *tableIdList = OutputTableIdList(multiNode);
-			Job *dependedJob = JobForTableIdList(dependedJobList, tableIdList);
-			List *dependedTargetList = dependedJob->jobQuery->targetList;
+			Job *dependentJob = JobForTableIdList(dependentJobList, tableIdList);
+			List *dependedTargetList = dependentJob->jobQuery->targetList;
 
 			/* compute column names for the derived table */
 			uint32 columnCount = (uint32) list_length(dependedTargetList);
-			List *columnNameList = DerivedColumnNameList(columnCount, dependedJob->jobId);
+			List *columnNameList = DerivedColumnNameList(columnCount,
+														 dependentJob->jobId);
 
 			RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode,
 																	columnNameList,
@@ -1234,9 +1236,9 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			JoinExpr *joinExpr = makeNode(JoinExpr);
 			joinExpr->jointype = JOIN_INNER;
 			joinExpr->isNatural = false;
-			joinExpr->larg = QueryJoinTree(binaryNode->leftChildNode, dependedJobList,
+			joinExpr->larg = QueryJoinTree(binaryNode->leftChildNode, dependentJobList,
 										   rangeTableList);
-			joinExpr->rarg = QueryJoinTree(binaryNode->rightChildNode, dependedJobList,
+			joinExpr->rarg = QueryJoinTree(binaryNode->rightChildNode, dependentJobList,
 										   rangeTableList);
 			joinExpr->usingClause = NIL;
 			joinExpr->alias = NULL;
@@ -1244,7 +1246,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			joinExpr->rtindex = list_length(*rangeTableList) + 1;
 
 			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
-																 dependedJobList,
+																 dependentJobList,
 																 *rangeTableList);
 			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
 
@@ -1261,7 +1263,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 
 			Assert(UnaryOperator(multiNode));
 
-			Node *childNode = QueryJoinTree(unaryNode->childNode, dependedJobList,
+			Node *childNode = QueryJoinTree(unaryNode->childNode, dependentJobList,
 											rangeTableList);
 
 			return childNode;
@@ -1281,7 +1283,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
  * transformFromClauseItem.
  */
 static RangeTblEntry *
-JoinRangeTableEntry(JoinExpr *joinExpr, List *dependedJobList, List *rangeTableList)
+JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTableList)
 {
 	RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
 	List *joinedColumnNames = NIL;
@@ -1303,9 +1305,9 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependedJobList, List *rangeTableL
 	rangeTableEntry->subquery = NULL;
 	rangeTableEntry->eref = makeAlias("unnamed_join", NIL);
 
-	ExtractColumns(leftRTE, leftRangeTableId, dependedJobList,
+	ExtractColumns(leftRTE, leftRangeTableId, dependentJobList,
 				   &leftColumnNames, &leftColumnVars);
-	ExtractColumns(rightRTE, rightRangeTableId, dependedJobList,
+	ExtractColumns(rightRTE, rightRangeTableId, dependentJobList,
 				   &rightColumnNames, &rightColumnVars);
 
 	joinedColumnNames = list_concat(joinedColumnNames, leftColumnNames);
@@ -1353,7 +1355,7 @@ ExtractRangeTableId(Node *node)
  * to a form that expandRTE can handle.
  */
 static void
-ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependedJobList,
+ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependentJobList,
 			   List **columnNames, List **columnVars)
 {
 	RangeTblEntry *callingRTE = NULL;
@@ -1380,8 +1382,8 @@ ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependedJ
 	}
 	else if (rangeTableKind == CITUS_RTE_REMOTE_QUERY)
 	{
-		Job *dependedJob = JobForRangeTable(dependedJobList, rangeTableEntry);
-		Query *jobQuery = dependedJob->jobQuery;
+		Job *dependentJob = JobForRangeTable(dependentJobList, rangeTableEntry);
+		Query *jobQuery = dependentJob->jobQuery;
 
 		/*
 		 * For re-partition jobs, we construct a subquery RTE to call expandRTE,
@@ -1564,14 +1566,14 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
  */
 static void
 UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
-						  List *dependedJobList)
+						  List *dependentJobList)
 {
 	ListCell *columnCell = NULL;
 	List *columnList = pull_var_clause_default(columnContainer);
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
-		UpdateColumnAttributes(column, rangeTableList, dependedJobList);
+		UpdateColumnAttributes(column, rangeTableList, dependentJobList);
 	}
 }
 
@@ -1582,7 +1584,7 @@ UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
  * newly built range table list to update the given column's attributes.
  */
 static void
-UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependedJobList)
+UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependentJobList)
 {
 	Index originalTableId = column->varnoold;
 	AttrNumber originalColumnId = column->varoattno;
@@ -1596,7 +1598,7 @@ UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependedJobList)
 	if (GetRangeTblKind(newRangeTableEntry) == CITUS_RTE_REMOTE_QUERY)
 	{
 		newColumnId = NewColumnId(originalTableId, originalColumnId,
-								  newRangeTableEntry, dependedJobList);
+								  newRangeTableEntry, dependentJobList);
 	}
 
 	column->varno = newTableId;
@@ -1648,13 +1650,13 @@ NewTableId(Index originalTableId, List *rangeTableList)
  */
 static AttrNumber
 NewColumnId(Index originalTableId, AttrNumber originalColumnId,
-			RangeTblEntry *newRangeTableEntry, List *dependedJobList)
+			RangeTblEntry *newRangeTableEntry, List *dependentJobList)
 {
 	AttrNumber newColumnId = 1;
 	AttrNumber columnIndex = 1;
 
-	Job *dependedJob = JobForRangeTable(dependedJobList, newRangeTableEntry);
-	List *targetEntryList = dependedJob->jobQuery->targetList;
+	Job *dependentJob = JobForRangeTable(dependentJobList, newRangeTableEntry);
+	List *targetEntryList = dependentJob->jobQuery->targetList;
 
 	ListCell *targetEntryCell = NULL;
 	foreach(targetEntryCell, targetEntryList)
@@ -1852,12 +1854,12 @@ UniqueJobId(void)
 
 /* Builds a job from the given job query and depended job list. */
 static Job *
-BuildJob(Query *jobQuery, List *dependedJobList)
+BuildJob(Query *jobQuery, List *dependentJobList)
 {
 	Job *job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();
 	job->jobQuery = jobQuery;
-	job->dependedJobList = dependedJobList;
+	job->dependentJobList = dependentJobList;
 	job->requiresMasterEvaluation = false;
 
 	return job;
@@ -1871,7 +1873,7 @@ BuildJob(Query *jobQuery, List *dependedJobList)
  * method to apply.
  */
 static MapMergeJob *
-BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
+BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 				 PartitionType partitionType, Oid baseRelationId,
 				 BoundaryNodeJobType boundaryNodeJobType)
 {
@@ -1881,13 +1883,13 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 	/* update the logical partition key's table and column identifiers */
 	if (boundaryNodeJobType != SUBQUERY_MAP_MERGE_JOB)
 	{
-		UpdateColumnAttributes(partitionColumn, rangeTableList, dependedJobList);
+		UpdateColumnAttributes(partitionColumn, rangeTableList, dependentJobList);
 	}
 
 	MapMergeJob *mapMergeJob = CitusMakeNode(MapMergeJob);
 	mapMergeJob->job.jobId = UniqueJobId();
 	mapMergeJob->job.jobQuery = jobQuery;
-	mapMergeJob->job.dependedJobList = dependedJobList;
+	mapMergeJob->job.dependentJobList = dependentJobList;
 	mapMergeJob->partitionColumn = partitionColumn;
 	mapMergeJob->sortedShardIntervalArrayLength = 0;
 
@@ -2015,7 +2017,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 
 		/* pop top element and push its children to the stack */
 		jobStack = list_delete_ptr(jobStack, job);
-		jobStack = list_union_ptr(jobStack, job->dependedJobList);
+		jobStack = list_union_ptr(jobStack, job->dependentJobList);
 	}
 
 	/*
@@ -2447,7 +2449,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		subqueryTask->queryString = queryString->data;
 	}
 
-	subqueryTask->dependedTaskList = NULL;
+	subqueryTask->dependentTaskList = NULL;
 	subqueryTask->anchorShardId = anchorShardId;
 	subqueryTask->taskPlacementList = selectPlacementList;
 	subqueryTask->relationShardList = relationShardList;
@@ -2631,7 +2633,7 @@ SqlTaskList(Job *job)
 	Query *jobQuery = job->jobQuery;
 	List *rangeTableList = jobQuery->rtable;
 	List *whereClauseList = (List *) jobQuery->jointree->quals;
-	List *dependedJobList = job->dependedJobList;
+	List *dependentJobList = job->dependentJobList;
 
 	/*
 	 * If we don't depend on a hash partition, then we determine the largest
@@ -2668,7 +2670,7 @@ SqlTaskList(Job *job)
 	 */
 	List *rangeTableFragmentsList = RangeTableFragmentsList(rangeTableList,
 															whereClauseList,
-															dependedJobList);
+															dependentJobList);
 	if (rangeTableFragmentsList == NIL)
 	{
 		return NIL;
@@ -2680,7 +2682,7 @@ SqlTaskList(Job *job)
 	 * represents one SQL task's dependencies.
 	 */
 	List *fragmentCombinationList = FragmentCombinationList(rangeTableFragmentsList,
-															jobQuery, dependedJobList);
+															jobQuery, dependentJobList);
 
 	ListCell *fragmentCombinationCell = NULL;
 	foreach(fragmentCombinationCell, fragmentCombinationList)
@@ -2704,7 +2706,7 @@ SqlTaskList(Job *job)
 
 		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, SQL_TASK,
 										sqlQueryString->data);
-		sqlTask->dependedTaskList = dataFetchTaskList;
+		sqlTask->dependentTaskList = dataFetchTaskList;
 		sqlTask->relationShardList = BuildRelationShardList(fragmentRangeTableList,
 															fragmentCombination);
 
@@ -2736,15 +2738,15 @@ static bool
 DependsOnHashPartitionJob(Job *job)
 {
 	bool dependsOnHashPartitionJob = false;
-	List *dependedJobList = job->dependedJobList;
+	List *dependentJobList = job->dependentJobList;
 
-	uint32 dependedJobCount = (uint32) list_length(dependedJobList);
-	if (dependedJobCount > 0)
+	uint32 dependentJobCount = (uint32) list_length(dependentJobList);
+	if (dependentJobCount > 0)
 	{
-		Job *dependedJob = (Job *) linitial(dependedJobList);
-		if (CitusIsA(dependedJob, MapMergeJob))
+		Job *dependentJob = (Job *) linitial(dependentJobList);
+		if (CitusIsA(dependentJob, MapMergeJob))
 		{
-			MapMergeJob *mapMergeJob = (MapMergeJob *) dependedJob;
+			MapMergeJob *mapMergeJob = (MapMergeJob *) dependentJob;
 			if (mapMergeJob->partitionType == DUAL_HASH_PARTITION_TYPE)
 			{
 				dependsOnHashPartitionJob = true;
@@ -2923,7 +2925,7 @@ AdjustColumnOldAttributes(List *expressionList)
  */
 static List *
 RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
-						List *dependedJobList)
+						List *dependentJobList)
 {
 	List *rangeTableFragmentsList = NIL;
 	uint32 rangeTableIndex = 0;
@@ -2975,10 +2977,10 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 			List *mergeTaskFragmentList = NIL;
 			ListCell *mergeTaskCell = NULL;
 
-			Job *dependedJob = JobForRangeTable(dependedJobList, rangeTableEntry);
-			Assert(CitusIsA(dependedJob, MapMergeJob));
+			Job *dependentJob = JobForRangeTable(dependentJobList, rangeTableEntry);
+			Assert(CitusIsA(dependentJob, MapMergeJob));
 
-			MapMergeJob *dependedMapMergeJob = (MapMergeJob *) dependedJob;
+			MapMergeJob *dependedMapMergeJob = (MapMergeJob *) dependentJob;
 			List *mergeTaskList = dependedMapMergeJob->mergeTaskList;
 
 			/* if there are no tasks for the depended job, just return NIL */
@@ -3328,7 +3330,7 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
  */
 static List *
 FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
-						List *dependedJobList)
+						List *dependentJobList)
 {
 	List *fragmentCombinationList = NIL;
 	List *fragmentCombinationQueue = NIL;
@@ -3337,7 +3339,7 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 	/* find a sequence that joins the range tables in the list */
 	JoinSequenceNode *joinSequenceArray = JoinSequenceArray(rangeTableFragmentsList,
 															jobQuery,
-															dependedJobList);
+															dependentJobList);
 
 	/*
 	 * We use breadth-first search with pruning to create fragment combinations.
@@ -3432,7 +3434,7 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
  * range table list and the id of a preceding table with which it is joined, if any.
  */
 static JoinSequenceNode *
-JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependedJobList)
+JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependentJobList)
 {
 	List *rangeTableList = jobQuery->rtable;
 	uint32 rangeTableCount = (uint32) list_length(rangeTableList);
@@ -3530,9 +3532,9 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 			}
 
 			bool leftPartitioned = PartitionedOnColumn(leftColumn, rangeTableList,
-													   dependedJobList);
+													   dependentJobList);
 			bool rightPartitioned = PartitionedOnColumn(rightColumn, rangeTableList,
-														dependedJobList);
+														dependentJobList);
 			if (leftPartitioned && rightPartitioned)
 			{
 				/* make sure this join clause references only simple columns */
@@ -3570,7 +3572,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
  * relation is a reference table.
  */
 static bool
-PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
+PartitionedOnColumn(Var *column, List *rangeTableList, List *dependentJobList)
 {
 	bool partitionedOnColumn = false;
 	Index rangeTableId = column->varno;
@@ -3598,7 +3600,7 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 	}
 	else if (rangeTableType == CITUS_RTE_REMOTE_QUERY)
 	{
-		Job *job = JobForRangeTable(dependedJobList, rangeTableEntry);
+		Job *job = JobForRangeTable(dependentJobList, rangeTableEntry);
 		MapMergeJob *mapMergeJob = (MapMergeJob *) job;
 
 		/*
@@ -3857,7 +3859,7 @@ DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
 			/* create merge fetch task and have it depend on the merge task */
 			Task *mergeFetchTask = CreateBasicTask(jobId, taskIdIndex, MERGE_FETCH_TASK,
 												   undefinedQueryString);
-			mergeFetchTask->dependedTaskList = list_make1(mergeTask);
+			mergeFetchTask->dependentTaskList = list_make1(mergeTask);
 
 			dataFetchTaskList = lappend(dataFetchTaskList, mergeFetchTask);
 			taskIdIndex++;
@@ -4089,13 +4091,13 @@ PruneSqlTaskDependencies(List *sqlTaskList)
 	foreach(sqlTaskCell, sqlTaskList)
 	{
 		Task *sqlTask = (Task *) lfirst(sqlTaskCell);
-		List *dependedTaskList = sqlTask->dependedTaskList;
-		List *prunedDependedTaskList = NIL;
+		List *dependentTaskList = sqlTask->dependentTaskList;
+		List *prunedDependendTaskList = NIL;
 
-		ListCell *dependedTaskCell = NULL;
-		foreach(dependedTaskCell, dependedTaskList)
+		ListCell *dependentTaskCell = NULL;
+		foreach(dependentTaskCell, dependentTaskList)
 		{
-			Task *dataFetchTask = (Task *) lfirst(dependedTaskCell);
+			Task *dataFetchTask = (Task *) lfirst(dependentTaskCell);
 
 			/*
 			 * If we have a merge fetch task, our task assignment algorithm makes
@@ -4104,12 +4106,12 @@ PruneSqlTaskDependencies(List *sqlTaskList)
 			 */
 			if (dataFetchTask->taskType == MERGE_FETCH_TASK)
 			{
-				List *mergeFetchDependencyList = dataFetchTask->dependedTaskList;
+				List *mergeFetchDependencyList = dataFetchTask->dependentTaskList;
 				Assert(list_length(mergeFetchDependencyList) == 1);
 
 				Task *mergeTaskReference = (Task *) linitial(mergeFetchDependencyList);
-				prunedDependedTaskList = lappend(prunedDependedTaskList,
-												 mergeTaskReference);
+				prunedDependendTaskList = lappend(prunedDependendTaskList,
+												  mergeTaskReference);
 
 				ereport(DEBUG2, (errmsg("pruning merge fetch taskId %d",
 										dataFetchTask->taskId),
@@ -4118,7 +4120,7 @@ PruneSqlTaskDependencies(List *sqlTaskList)
 			}
 		}
 
-		sqlTask->dependedTaskList = prunedDependedTaskList;
+		sqlTask->dependentTaskList = prunedDependendTaskList;
 	}
 
 	return sqlTaskList;
@@ -4469,14 +4471,14 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 													   undefinedQueryString);
 			mapOutputFetchTask->partitionId = partitionId;
 			mapOutputFetchTask->upstreamTaskId = mergeTaskId;
-			mapOutputFetchTask->dependedTaskList = list_make1(mapTask);
+			mapOutputFetchTask->dependentTaskList = list_make1(mapTask);
 			taskIdIndex++;
 
 			mapOutputFetchTaskList = lappend(mapOutputFetchTaskList, mapOutputFetchTask);
 		}
 
 		/* merge task depends on completion of fetch tasks */
-		mergeTask->dependedTaskList = mapOutputFetchTaskList;
+		mergeTask->dependentTaskList = mapOutputFetchTaskList;
 
 		/* if single repartitioned, each merge task represents an interval */
 		if (mapMergeJob->partitionType == RANGE_PARTITION_TYPE)
@@ -4710,13 +4712,13 @@ HasMergeTaskDependencies(List *sqlTaskList)
 {
 	bool hasMergeTaskDependencies = false;
 	Task *sqlTask = (Task *) linitial(sqlTaskList);
-	List *dependedTaskList = sqlTask->dependedTaskList;
+	List *dependentTaskList = sqlTask->dependentTaskList;
 
-	ListCell *dependedTaskCell = NULL;
-	foreach(dependedTaskCell, dependedTaskList)
+	ListCell *dependentTaskCell = NULL;
+	foreach(dependentTaskCell, dependentTaskList)
 	{
-		Task *dependedTask = (Task *) lfirst(dependedTaskCell);
-		if (dependedTask->taskType == MERGE_TASK)
+		Task *dependentTask = (Task *) lfirst(dependentTaskCell);
+		if (dependentTask->taskType == MERGE_TASK)
 		{
 			hasMergeTaskDependencies = true;
 			break;
@@ -5291,15 +5293,15 @@ static List *
 FindDependedMergeTaskList(Task *sqlTask)
 {
 	List *dependedMergeTaskList = NIL;
-	List *dependedTaskList = sqlTask->dependedTaskList;
+	List *dependentTaskList = sqlTask->dependentTaskList;
 
-	ListCell *dependedTaskCell = NULL;
-	foreach(dependedTaskCell, dependedTaskList)
+	ListCell *dependentTaskCell = NULL;
+	foreach(dependentTaskCell, dependentTaskList)
 	{
-		Task *dependedTask = (Task *) lfirst(dependedTaskCell);
-		if (dependedTask->taskType == MERGE_TASK)
+		Task *dependentTask = (Task *) lfirst(dependentTaskCell);
+		if (dependentTask->taskType == MERGE_TASK)
 		{
-			dependedMergeTaskList = lappend(dependedMergeTaskList, dependedTask);
+			dependedMergeTaskList = lappend(dependedMergeTaskList, dependentTask);
 		}
 	}
 
@@ -5398,18 +5400,18 @@ AssignDataFetchDependencies(List *taskList)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		List *dependedTaskList = task->dependedTaskList;
-		ListCell *dependedTaskCell = NULL;
+		List *dependentTaskList = task->dependentTaskList;
+		ListCell *dependentTaskCell = NULL;
 
 		Assert(task->taskPlacementList != NIL);
 		Assert(task->taskType == SQL_TASK || task->taskType == MERGE_TASK);
 
-		foreach(dependedTaskCell, dependedTaskList)
+		foreach(dependentTaskCell, dependentTaskList)
 		{
-			Task *dependedTask = (Task *) lfirst(dependedTaskCell);
-			if (dependedTask->taskType == MAP_OUTPUT_FETCH_TASK)
+			Task *dependentTask = (Task *) lfirst(dependentTaskCell);
+			if (dependentTask->taskType == MAP_OUTPUT_FETCH_TASK)
 			{
-				dependedTask->taskPlacementList = task->taskPlacementList;
+				dependentTask->taskPlacementList = task->taskPlacementList;
 			}
 		}
 	}
