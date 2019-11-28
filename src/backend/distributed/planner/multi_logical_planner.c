@@ -859,25 +859,10 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 					"clause containing the distribution column";
 	}
 
-	if (queryTree->setOperations)
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with UNION, INTERSECT, or "
-					   "EXCEPT";
-		errorHint = filterHint;
-	}
-
 	if (queryTree->hasRecursive)
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with RECURSIVE";
-		errorHint = filterHint;
-	}
-
-	if (queryTree->cteList)
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with common table expressions";
 		errorHint = filterHint;
 	}
 
