@@ -1161,10 +1161,10 @@ TaskListRequires2PC(List *taskList)
 bool
 ReadOnlyTask(TaskType taskType)
 {
-	if (taskType == ROUTER_TASK || taskType == SQL_TASK)
+	if (taskType == SELECT_TASK)
 	{
 		/*
-		 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+		 * TODO: We currently do not execute modifying CTEs via SELECT_TASK.
 		 * When we implement it, we should either not use the mentioned task types for
 		 * modifying CTEs detect them here.
 		 */
@@ -1606,8 +1606,7 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 {
 	switch (task->taskType)
 	{
-		case SQL_TASK:
-		case ROUTER_TASK:
+		case SELECT_TASK:
 		{
 			return EXECUTION_ORDER_ANY;
 		}

@@ -1807,7 +1807,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList,
 						  uint64 shardId)
 {
-	Task *task = CreateTask(ROUTER_TASK);
+	Task *task = CreateTask(SELECT_TASK);
 	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
