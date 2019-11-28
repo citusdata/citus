@@ -10,7 +10,7 @@
 
 * Adds support for RECORD in multi-shard queries
 
-* Adds support for simple in queries on unique columns with repartition joins
+* Adds support for simple IN subqueries on unique columns in queries with repartition joins
 
 * Adds support for subqueries in HAVING clauses
 
