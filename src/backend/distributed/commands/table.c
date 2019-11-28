@@ -1292,7 +1292,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
 		task->queryString = applyCommand->data;
-		task->dependedTaskList = NULL;
+		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
 		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);

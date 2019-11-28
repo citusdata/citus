@@ -184,7 +184,7 @@ readJobInfo(Job *local_node)
 	READ_UINT64_FIELD(jobId);
 	READ_NODE_FIELD(jobQuery);
 	READ_NODE_FIELD(taskList);
-	READ_NODE_FIELD(dependedJobList);
+	READ_NODE_FIELD(dependentJobList);
 	READ_BOOL_FIELD(subqueryPushdown);
 	READ_BOOL_FIELD(requiresMasterEvaluation);
 	READ_BOOL_FIELD(deferredPruning);
@@ -381,7 +381,7 @@ ReadTask(READFUNC_ARGS)
 	READ_STRING_FIELD(queryString);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);
-	READ_NODE_FIELD(dependedTaskList);
+	READ_NODE_FIELD(dependentTaskList);
 	READ_UINT_FIELD(partitionId);
 	READ_UINT_FIELD(upstreamTaskId);
 	READ_NODE_FIELD(shardInterval);

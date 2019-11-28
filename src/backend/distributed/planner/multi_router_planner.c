@@ -1453,7 +1453,7 @@ CreateJob(Query *query)
 	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
-	job->dependedJobList = NIL;
+	job->dependentJobList = NIL;
 	job->subqueryPushdown = false;
 	job->requiresMasterEvaluation = false;
 	job->deferredPruning = false;
@@ -1575,7 +1575,7 @@ CreateTask(TaskType taskType)
 	task->queryString = NULL;
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
-	task->dependedTaskList = NIL;
+	task->dependentTaskList = NIL;
 
 	task->partitionId = 0;
 	task->upstreamTaskId = INVALID_TASK_ID;

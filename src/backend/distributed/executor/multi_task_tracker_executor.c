@@ -273,7 +273,7 @@ MultiTaskTrackerExecute(Job *job)
 			else if (taskExecutionStatus == EXEC_SOURCE_TASK_TRACKER_FAILED)
 			{
 				/* first resolve the map task this map fetch task depends on */
-				Task *mapTask = (Task *) linitial(task->dependedTaskList);
+				Task *mapTask = (Task *) linitial(task->dependentTaskList);
 				Assert(task->taskType == MAP_OUTPUT_FETCH_TASK);
 
 				List *mapFetchTaskList = UpstreamDependencyList(taskAndExecutionList,
@@ -469,7 +469,7 @@ TaskAndExecutionList(List *jobTaskList)
 	List *taskQueue = list_copy(jobTaskList);
 	while (taskQueue != NIL)
 	{
-		ListCell *dependedTaskCell = NULL;
+		ListCell *dependentTaskCell = NULL;
 
 		/* pop first element from the task queue */
 		Task *task = (Task *) linitial(taskQueue);
@@ -481,7 +481,7 @@ TaskAndExecutionList(List *jobTaskList)
 
 		taskAndExecutionList = lappend(taskAndExecutionList, task);
 
-		List *dependendTaskList = task->dependedTaskList;
+		List *dependendTaskList = task->dependentTaskList;
 
 		/*
 		 * Push task node's children into the task queue, if and only if
@@ -499,9 +499,9 @@ TaskAndExecutionList(List *jobTaskList)
 		 * taskHash is used to reduce the complexity of keeping track of
 		 * the tasks that are already encountered.
 		 */
-		foreach(dependedTaskCell, dependendTaskList)
+		foreach(dependentTaskCell, dependendTaskList)
 		{
-			Task *dependendTask = lfirst(dependedTaskCell);
+			Task *dependendTask = lfirst(dependentTaskCell);
 			Task *dependendTaskInHash = TaskHashLookup(taskHash,
 													   dependendTask->taskType,
 													   dependendTask->jobId,
@@ -519,8 +519,8 @@ TaskAndExecutionList(List *jobTaskList)
 				taskQueue = lappend(taskQueue, dependendTaskInHash);
 			}
 
-			/* update dependedTaskList element to the one which is in the hash */
-			lfirst(dependedTaskCell) = dependendTaskInHash;
+			/* update dependentTaskList element to the one which is in the hash */
+			lfirst(dependentTaskCell) = dependendTaskInHash;
 		}
 	}
 
@@ -966,8 +966,8 @@ ResolveMapTaskTracker(HTAB *trackerHash, Task *task, TaskExecution *taskExecutio
 		return NULL;
 	}
 
-	Assert(task->dependedTaskList != NIL);
-	Task *mapTask = (Task *) linitial(task->dependedTaskList);
+	Assert(task->dependentTaskList != NIL);
+	Task *mapTask = (Task *) linitial(task->dependentTaskList);
 	TaskExecution *mapTaskExecution = mapTask->taskExecution;
 
 	TaskTracker *mapTaskTracker = ResolveTaskTracker(trackerHash, mapTask,
@@ -1043,7 +1043,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 			 * if these dependencies' executions have completed.
 			 */
 			bool taskExecutionsCompleted = TaskExecutionsCompleted(
-				task->dependedTaskList);
+				task->dependentTaskList);
 			if (!taskExecutionsCompleted)
 			{
 				nextExecutionStatus = EXEC_TASK_UNASSIGNED;
@@ -1054,7 +1054,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 			TaskType taskType = task->taskType;
 			if (taskType == MAP_OUTPUT_FETCH_TASK)
 			{
-				Task *mapTask = (Task *) linitial(task->dependedTaskList);
+				Task *mapTask = (Task *) linitial(task->dependentTaskList);
 				TaskExecution *mapTaskExecution = mapTask->taskExecution;
 
 				StringInfo mapFetchTaskQueryString = MapFetchTaskQueryString(task,
@@ -1162,7 +1162,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 
 		case EXEC_SOURCE_TASK_TRACKER_RETRY:
 		{
-			Task *mapTask = (Task *) linitial(task->dependedTaskList);
+			Task *mapTask = (Task *) linitial(task->dependentTaskList);
 			TaskExecution *mapTaskExecution = mapTask->taskExecution;
 			uint32 sourceNodeIndex = mapTaskExecution->currentNodeIndex;
 
@@ -1807,10 +1807,11 @@ ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 	foreach(mergeTaskCell, mergeTaskList)
 	{
 		Task *mergeTask = (Task *) lfirst(mergeTaskCell);
-		List *dependedTaskList = mergeTask->dependedTaskList;
+		List *dependentTaskList = mergeTask->dependentTaskList;
 
 		constrainedTaskList = lappend(constrainedTaskList, mergeTask);
-		constrainedTaskList = TaskListConcatUnique(constrainedTaskList, dependedTaskList);
+		constrainedTaskList = TaskListConcatUnique(constrainedTaskList,
+												   dependentTaskList);
 	}
 
 	/*
@@ -1829,14 +1830,15 @@ ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 	foreach(upstreamTaskCell, upstreamTaskList)
 	{
 		Task *upstreamTask = (Task *) lfirst(upstreamTaskCell);
-		List *dependedTaskList = upstreamTask->dependedTaskList;
+		List *dependentTaskList = upstreamTask->dependentTaskList;
 
 		/*
 		 * We already added merge tasks to our constrained list. We therefore use
 		 * concat unique to ensure they don't get appended for a second time.
 		 */
 		constrainedTaskList = TaskListAppendUnique(constrainedTaskList, upstreamTask);
-		constrainedTaskList = TaskListConcatUnique(constrainedTaskList, dependedTaskList);
+		constrainedTaskList = TaskListConcatUnique(constrainedTaskList,
+												   dependentTaskList);
 	}
 
 	return constrainedTaskList;
@@ -1852,18 +1854,18 @@ static List *
 ConstrainedNonMergeTaskList(List *taskAndExecutionList, Task *task)
 {
 	Task *upstreamTask = NULL;
-	List *dependedTaskList = NIL;
+	List *dependentTaskList = NIL;
 
 	TaskType taskType = task->taskType;
 	if (taskType == SQL_TASK || taskType == MAP_TASK)
 	{
 		upstreamTask = task;
-		dependedTaskList = upstreamTask->dependedTaskList;
+		dependentTaskList = upstreamTask->dependentTaskList;
 	}
 	Assert(upstreamTask != NULL);
 
 	List *constrainedTaskList = list_make1(upstreamTask);
-	constrainedTaskList = list_concat(constrainedTaskList, dependedTaskList);
+	constrainedTaskList = list_concat(constrainedTaskList, dependentTaskList);
 
 	return constrainedTaskList;
 }
@@ -1884,8 +1886,8 @@ UpstreamDependencyList(List *taskAndExecutionList, Task *searchedTask)
 	foreach(taskAndExecutionCell, taskAndExecutionList)
 	{
 		Task *upstreamTask = (Task *) lfirst(taskAndExecutionCell);
-		List *dependedTaskList = upstreamTask->dependedTaskList;
-		ListCell *dependedTaskCell = NULL;
+		List *dependentTaskList = upstreamTask->dependentTaskList;
+		ListCell *dependentTaskCell = NULL;
 
 		/*
 		 * The given task and its upstream dependency cannot be of the same type.
@@ -1901,10 +1903,10 @@ UpstreamDependencyList(List *taskAndExecutionList, Task *searchedTask)
 		 * We walk over the upstream task's dependency list, and check if any of
 		 * them is the task we are looking for.
 		 */
-		foreach(dependedTaskCell, dependedTaskList)
+		foreach(dependentTaskCell, dependentTaskList)
 		{
-			Task *dependedTask = (Task *) lfirst(dependedTaskCell);
-			if (TasksEqual(dependedTask, searchedTask))
+			Task *dependentTask = (Task *) lfirst(dependentTaskCell);
+			if (TasksEqual(dependentTask, searchedTask))
 			{
 				upstreamTaskList = lappend(upstreamTaskList, upstreamTask);
 			}
@@ -1935,7 +1937,7 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 	 */
 	if (taskType == SQL_TASK || taskType == MAP_TASK)
 	{
-		constrainedMergeTaskList = MergeTaskList(task->dependedTaskList);
+		constrainedMergeTaskList = MergeTaskList(task->dependentTaskList);
 	}
 	else if (taskType == MAP_OUTPUT_FETCH_TASK)
 	{
@@ -1949,7 +1951,7 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 		List *upstreamTaskList = UpstreamDependencyList(taskAndExecutionList, mergeTask);
 		Task *upstreamTask = (Task *) linitial(upstreamTaskList);
 
-		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependedTaskList);
+		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependentTaskList);
 	}
 	else if (taskType == MERGE_TASK)
 	{
@@ -1963,7 +1965,7 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 		Assert(upstreamTaskList != NIL);
 		Task *upstreamTask = (Task *) linitial(upstreamTaskList);
 
-		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependedTaskList);
+		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependentTaskList);
 	}
 
 	return constrainedMergeTaskList;
@@ -2593,8 +2595,8 @@ JobIdList(Job *job)
 		(*jobIdPointer) = currJob->jobId;
 		jobIdList = lappend(jobIdList, jobIdPointer);
 
-		/* prevent dependedJobList being modified on list_concat() call */
-		List *jobChildrenList = list_copy(currJob->dependedJobList);
+		/* prevent dependentJobList being modified on list_concat() call */
+		List *jobChildrenList = list_copy(currJob->dependentJobList);
 		if (jobChildrenList != NIL)
 		{
 			jobQueue = list_concat(jobQueue, jobChildrenList);
