@@ -17,6 +17,16 @@ postgres_abs_builddir:=@POSTGRES_BUILDDIR@
 PG_CONFIG:=@PG_CONFIG@
 PGXS:=$(shell $(PG_CONFIG) --pgxs)
 
+# if both, git is installed and there is a .git directory in the working dir we set the
+# GIT_VERSION to a human readable gitref that resembles the version from which citus is
+# built. During releases it will show the tagname which by convention is the verion of the
+# release
+ifneq (@GIT_BIN@,)
+ifneq (@HAS_DOTGIT@,)
+	GIT_VERSION := "$(shell @GIT_BIN@ describe --dirty --always --tags)"
+endif
+endif
+
 # Support for VPATH builds (i.e. builds from outside the source tree)
 vpath_build=@vpath_build@
 ifeq ($(vpath_build),yes)
@@ -69,6 +79,9 @@ endif
 
 # Add options passed to configure or computed therein, to CFLAGS/CPPFLAGS/...
 override CFLAGS += @CFLAGS@ @CITUS_CFLAGS@
+ifneq ($(GIT_VERSION),)
+    override CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
+endif
 override CPPFLAGS := @CPPFLAGS@ @CITUS_CPPFLAGS@ -I '${citus_abs_top_srcdir}/src/include' -I'${citus_top_builddir}/src/include' $(CPPFLAGS)
 override LDFLAGS += @LDFLAGS@ @CITUS_LDFLAGS@
 
