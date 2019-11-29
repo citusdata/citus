@@ -622,11 +622,13 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+HAS_DOTGIT
 POSTGRES_BUILDDIR
 POSTGRES_SRCDIR
 CITUS_LDFLAGS
 CITUS_CPPFLAGS
 CITUS_CFLAGS
+GIT_BIN
 EGREP
 GREP
 CPP
@@ -4478,6 +4480,69 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
+# Check if git is installed, when installed the gitref of the checkout will be baked in the application
+# Extract the first word of "git", so it can be a program name with args.
+set dummy git; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_GIT_BIN+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $GIT_BIN in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_GIT_BIN="$GIT_BIN" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_GIT_BIN="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+GIT_BIN=$ac_cv_path_GIT_BIN
+if test -n "$GIT_BIN"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $GIT_BIN" >&5
+$as_echo "$GIT_BIN" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for .git" >&5
+$as_echo_n "checking for .git... " >&6; }
+if ${ac_cv_file__git+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  test "$cross_compiling" = yes &&
+  as_fn_error $? "cannot check for file existence when cross compiling" "$LINENO" 5
+if test -r ".git"; then
+  ac_cv_file__git=yes
+else
+  ac_cv_file__git=no
+fi
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_file__git" >&5
+$as_echo "$ac_cv_file__git" >&6; }
+if test "x$ac_cv_file__git" = xyes; then :
+  HAS_DOTGIT=yes
+else
+  HAS_DOTGIT=
+fi
+
+
 CITUS_CFLAGS="$CITUS_CFLAGS"
 
 CITUS_CPPFLAGS="$CITUS_CPPFLAGS"
@@ -4487,6 +4552,8 @@ CITUS_LDFLAGS="$LIBS $CITUS_LDFLAGS"
 POSTGRES_SRCDIR="$POSTGRES_SRCDIR"
 
 POSTGRES_BUILDDIR="$POSTGRES_BUILDDIR"
+
+HAS_DOTGIT="$HAS_DOTGIT"
 
 
 ac_config_files="$ac_config_files Makefile.global"
