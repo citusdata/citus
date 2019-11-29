@@ -370,7 +370,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	pg_get_query_def(query, queryString);
 
 	task = CitusMakeNode(Task);
-	task->taskType = SQL_TASK;
+	task->taskType = SELECT_TASK;
 	task->queryString = queryString->data;
 	task->taskPlacementList = placementList;
 	task->anchorShardId = shardInterval->shardId;
