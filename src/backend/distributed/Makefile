@@ -19,12 +19,6 @@ SUBDIRS = . commands connection ddl deparser executor master metadata planner pr
 OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
-# make sure citus_version.o is always recompiled to reflect the correct gitref for every build
-# idea came from https://stackoverflow.com/a/3304967
-utils/citus_version.o: FORCE
-FORCE:
-.PHONY: FORCE
-
 # be explicit about the default target
 all:
 
@@ -33,6 +27,15 @@ NO_PGXS = 1
 SHLIB_LINK = $(libpq)
 
 include $(citus_top_builddir)/Makefile.global
+
+# make sure citus_version.o is recompiled whenever any change is made to the binary or any
+# other artifact being installed to reflect the correct gitref for every build
+CITUS_VERSION_INVALIDATE := $(filter-out utils/citus_version.o,$(OBJS))
+CITUS_VERSION_INVALIDATE += $(generated_sql_files)
+ifneq ($(wildcard $(citus_top_builddir)/.git/.*),)
+        CITUS_VERSION_INVALIDATE += $(citus_top_builddir)/.git/index
+endif
+utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
 
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
