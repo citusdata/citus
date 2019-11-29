@@ -111,11 +111,12 @@ ALTER EXTENSION citus UPDATE TO '8.3-1';
 ALTER EXTENSION citus UPDATE TO '9.0-1';
 ALTER EXTENSION citus UPDATE TO '9.0-2';
 ALTER EXTENSION citus UPDATE TO '9.1-1';
+ALTER EXTENSION citus UPDATE TO '9.2-1';
 -- show running version
 SHOW citus.version;
  citus.version 
 ---------------
- 9.1devel
+ 9.2devel
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -137,7 +138,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '7.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 9.1, but 7.0-1 was specified.
+DETAIL:  Loaded library requires 9.2, but 7.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -180,7 +181,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 9.1, but the installed extension version is 7.1-1.
+DETAIL:  Loaded library requires 9.2, but the installed extension version is 7.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()
