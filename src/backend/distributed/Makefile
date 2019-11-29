@@ -19,6 +19,12 @@ SUBDIRS = . commands connection ddl deparser executor master metadata planner pr
 OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
+# make sure citus_version.o is always recompiled to reflect the correct gitref for every build
+# idea came from https://stackoverflow.com/a/3304967
+utils/citus_version.o: FORCE
+FORCE:
+.PHONY: FORCE
+
 # be explicit about the default target
 all:
 
