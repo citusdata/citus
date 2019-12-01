@@ -5090,6 +5090,11 @@ ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(Task *, List 
 	ListCell *placementListCell = NULL;
 	uint32 unAssignedTaskCount = 0;
 
+	if (taskList == NIL)
+	{
+		return NIL;
+	}
+
 	/*
 	 * We first sort tasks by their anchor shard id. We then sort placements for
 	 * each anchor shard by the placement's insertion time. Note that we sort

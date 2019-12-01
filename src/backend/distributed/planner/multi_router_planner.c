@@ -1705,6 +1705,11 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 												 MODIFY_TASK,
 												 requiresMasterEvaluation);
 	}
+	else if (shardId == INVALID_SHARD_ID)
+	{
+		/* modification that prunes to 0 shards */
+		job->taskList = NIL;
+	}
 	else
 	{
 		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
@@ -2058,7 +2063,6 @@ PlanRouterQuery(Query *originalQuery,
 		}
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
-
 		planningError = ModifyQuerySupported(originalQuery, originalQuery,
 											 isMultiShardQuery,
 											 plannerRestrictionContext);
