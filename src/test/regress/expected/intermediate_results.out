@@ -252,6 +252,13 @@ SELECT * FROM squares ORDER BY x;
 -- empty shard interval array should raise error
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[0]);
 ERROR:  invalid distribution column value
+-- cannot use DDL commands
+select broadcast_intermediate_result('a', 'create table foo(int serial)');
+ERROR:  cannot execute utility commands
+select broadcast_intermediate_result('a', 'prepare foo as select 1');
+ERROR:  cannot execute utility commands
+select create_intermediate_result('a', 'create table foo(int serial)');
+ERROR:  cannot execute utility commands
 DROP SCHEMA intermediate_results CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table interesting_squares

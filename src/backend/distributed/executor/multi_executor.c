@@ -479,6 +479,12 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
 {
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
+	if (query->commandType == CMD_UTILITY)
+	{
+		/* can only execute DML/SELECT via this path */
+		ereport(ERROR, (errmsg("cannot execute utility commands")));
+	}
+
 	/* plan the subquery, this may be another distributed query */
 	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, params);
 
