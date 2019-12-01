@@ -715,7 +715,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 				DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
 					distributedTableId);
 				char *partitionKeyString = cacheEntry->partitionKeyString;
-				char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+				char *partitionColumnName = ColumnToColumnName(distributedTableId,
 															   partitionKeyString);
 
 				appendStringInfo(errorHint, "Consider using an equality filter on "
@@ -2556,7 +2556,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		if (prunedShardIntervalCount != 1)
 		{
 			char *partitionKeyString = cacheEntry->partitionKeyString;
-			char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+			char *partitionColumnName = ColumnToColumnName(distributedTableId,
 														   partitionKeyString);
 			StringInfo errorMessage = makeStringInfo();
 			StringInfo errorHint = makeStringInfo();
