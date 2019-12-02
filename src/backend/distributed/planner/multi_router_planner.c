@@ -640,7 +640,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	}
 
 	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
