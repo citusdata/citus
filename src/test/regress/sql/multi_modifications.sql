@@ -867,6 +867,19 @@ INSERT INTO summary_table (id) VALUES (5), ((SELECT id FROM summary_table));
 INSERT INTO reference_summary_table (id) VALUES ((SELECT id FROM summary_table));
 INSERT INTO summary_table (id) VALUES ((SELECT id FROM reference_summary_table));
 
+-- subqueries that would be eliminated by = null clauses
+DELETE FROM summary_table WHERE (
+    SELECT 1 FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+DELETE FROM summary_table WHERE (
+    SELECT (select action_statement from information_schema.triggers)
+    FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+
+DELETE FROM summary_table WHERE id < (
+    SELECT 0 FROM pg_dist_node
+);
+
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;

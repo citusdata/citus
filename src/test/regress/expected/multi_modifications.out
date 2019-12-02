@@ -1292,6 +1292,18 @@ HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 INSERT INTO summary_table (id) VALUES ((SELECT id FROM reference_summary_table));
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+-- subqueries that would be eliminated by = null clauses
+DELETE FROM summary_table WHERE (
+    SELECT 1 FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+DELETE FROM summary_table WHERE (
+    SELECT (select action_statement from information_schema.triggers)
+    FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+ERROR:  relation pg_namespace is not distributed
+DELETE FROM summary_table WHERE id < (
+    SELECT 0 FROM pg_dist_node
+);
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
