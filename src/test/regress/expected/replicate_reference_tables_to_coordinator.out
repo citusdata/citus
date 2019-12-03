@@ -113,11 +113,70 @@ SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1
  20 | 20
 (1 row)
 
+-- test non equijoin
+SELECT lt.a, sq.a, sq.b
+FROM local_table lt
+JOIN squares sq ON sq.a > lt.a and sq.b > 90
+ORDER BY 1,2,3;
+ a | a  |  b  
+---+----+-----
+ 2 | 10 | 100
+ 4 | 10 | 100
+ 7 | 10 | 100
+(3 rows)
+
 -- error if in transaction block
 BEGIN;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 ERROR:  cannot join local tables and reference tables in a transaction block
 ROLLBACK;
+-- error if in a DO block
+DO $$
+BEGIN
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+END;
+$$;
+ERROR:  cannot join local tables and reference tables in a transaction block
+CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers"
+PL/pgSQL function inline_code_block line 3 at PERFORM
+-- test plpgsql function
+CREATE FUNCTION test_reference_local_join_plpgsql_func()
+RETURNS void AS $$
+BEGIN
+	INSERT INTO local_table VALUES (21);
+	INSERT INTO numbers VALUES (4);
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+	RAISE EXCEPTION '';
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT test_reference_local_join_plpgsql_func();
+LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
+CONTEXT:  SQL statement "INSERT INTO numbers VALUES (4)"
+PL/pgSQL function test_reference_local_join_plpgsql_func() line 4 at SQL statement
+ERROR:  cannot join local tables and reference tables in a transaction block
+CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1"
+PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
+SELECT sum(a) FROM local_table;
+ sum 
+-----
+  33
+(1 row)
+
+SELECT sum(a) FROM numbers;
+LOG:  executing the command locally: SELECT sum(a) AS sum FROM replicate_ref_to_coordinator.numbers_8000001 numbers
+ sum 
+-----
+  41
+(1 row)
+
+-- error if in procedure's subtransaction
+CREATE PROCEDURE test_reference_local_join_proc() AS $$
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+$$ LANGUAGE sql;
+CALL test_reference_local_join_proc();
+ERROR:  cannot join local tables and reference tables in a transaction block
+CONTEXT:  SQL function "test_reference_local_join_proc" statement 1
 -- error if in a transaction block even if reference table is not in search path
 CREATE SCHEMA s1;
 CREATE TABLE s1.ref(a int);
@@ -136,14 +195,17 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table s1.ref
 drop cascades to table s1.ref_8000002
 -- shouldn't plan locally if modifications happen in CTEs, ...
-WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *) SELECT * FROM numbers, local_table;
+WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
+SELECT * FROM numbers, local_table;
 ERROR:  relation local_table is not distributed
-WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 ERROR:  relation local_table is not distributed
 -- but this should be fine
-WITH t AS (SELECT *, random() x FROM numbers) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+WITH t AS (SELECT *, random() x FROM numbers)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
  a | a 
 ---+---
 (0 rows)
@@ -156,21 +218,31 @@ SELECT create_distributed_table('dist', 'a');
  
 (1 row)
 
-WITH t AS (SELECT *, random() x FROM dist) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+INSERT INTO dist VALUES (20),(30);
+WITH t AS (SELECT *, random() x FROM dist)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 ERROR:  relation local_table is not distributed
+-- test CTE being reference/local join for distributed query
+WITH t as (SELECT n.a, random() x FROM numbers n NATURAL JOIN local_table l)
+SELECT a FROM t NATURAL JOIN dist;
+ a  
+----
+ 20
+(1 row)
+
  -- error if FOR UPDATE/FOR SHARE
- SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
- SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 -- Make sure the shard was dropped
- SELECT 'numbers_8000001'::regclass::oid;
+SELECT 'numbers_8000001'::regclass::oid;
 ERROR:  relation "numbers_8000001" does not exist
 LINE 1: SELECT 'numbers_8000001'::regclass::oid;
                ^

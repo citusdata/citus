@@ -71,23 +71,6 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
 
-	if (CitusHasBeenLoaded())
-	{
-		if (IsLocalReferenceTableJoinPlan(plannedStmt) &&
-			IsMultiStatementTransaction())
-		{
-			/*
-			 * Currently we don't support this to avoid problems with tuple
-			 * visibility, locking, etc. For example, change to the reference
-			 * table can go through a MultiConnection, which won't be visible
-			 * to the locally planned queries.
-			 */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot join local tables and reference tables in "
-								   "a transaction block")));
-		}
-	}
-
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
 	 * declared with PGDLLIMPORT.
@@ -141,6 +124,23 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		 * We reset this counter to 0 in the abort handler.
 		 */
 		FunctionCallLevel++;
+	}
+
+	if (CitusHasBeenLoaded())
+	{
+		if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
+			IsMultiStatementTransaction())
+		{
+			/*
+			 * Currently we don't support this to avoid problems with tuple
+			 * visibility, locking, etc. For example, change to the reference
+			 * table can go through a MultiConnection, which won't be visible
+			 * to the locally planned queries.
+			 */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot join local tables and reference tables in "
+								   "a transaction block")));
+		}
 	}
 
 	/*

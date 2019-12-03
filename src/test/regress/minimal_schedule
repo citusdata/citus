@@ -1,2 +1,3 @@
 test: multi_cluster_management
 test: multi_test_helpers
+test: multi_test_catalog_views

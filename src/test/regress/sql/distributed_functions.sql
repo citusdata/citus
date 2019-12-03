@@ -9,16 +9,6 @@ CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
 
--- set sync intervals to less than 15s so wait_until_metadata_sync never times out
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
-
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-
 -- Create and distribute a simple function
 CREATE FUNCTION add(integer, integer) RETURNS integer
     AS 'select $1 + $2;'
@@ -361,7 +351,7 @@ SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test');
 
-SELECT wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync();
 
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
@@ -429,7 +419,7 @@ SET citus.shard_count TO 55;
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 
 -- sync metadata to workers for consistent results when clearing objects
-SELECT wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync();
 
 
 SET client_min_messages TO error; -- suppress cascading objects dropping

@@ -4,6 +4,7 @@ test: failure_test_helpers
 # this should only be run by pg_regress_multi, you don't need it
 test: failure_setup
 test: multi_test_helpers
+test: multi_test_catalog_views
 test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently

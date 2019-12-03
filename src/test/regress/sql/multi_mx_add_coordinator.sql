@@ -7,6 +7,11 @@ SET citus.next_placement_id TO 7000000;
 SET citus.replication_model TO streaming;
 SET client_min_messages TO WARNING;
 
+CREATE USER reprefuser WITH LOGIN;
+SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');
+SET citus.enable_alter_role_propagation TO ON;
+ALTER ROLE reprefuser WITH CREATEDB;
+
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
 -- test that coordinator pg_dist_node entry is synced to the workers
@@ -17,6 +22,18 @@ SELECT verify_metadata('localhost', :worker_1_port),
 
 CREATE TABLE ref(a int);
 SELECT create_reference_table('ref');
+
+-- alter role from mx worker isn't propagated
+\c - - - :worker_1_port
+SET citus.enable_alter_role_propagation TO ON;
+ALTER ROLE reprefuser WITH CREATEROLE;
+select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
+\c - - - :worker_2_port
+select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
+\c - - - :master_port
+SET search_path TO mx_add_coordinator,public;
+SET client_min_messages TO WARNING;
+select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
 
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG;
@@ -44,6 +61,13 @@ SET search_path TO mx_add_coordinator,public;
 INSERT INTO ref VALUES (1), (2), (3);
 UPDATE ref SET a = a + 1;
 DELETE FROM ref WHERE a > 3;
+
+-- Test we don't allow reference/local joins on mx workers
+CREATE TABLE local_table (a int);
+INSERT INTO local_table VALUES (2), (4);
+
+SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
+
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
