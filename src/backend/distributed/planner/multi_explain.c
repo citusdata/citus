@@ -254,9 +254,9 @@ ExplainJob(Job *job, ExplainState *es)
 	}
 	else
 	{
-		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainOpenGroup("Dependent Jobs", "Dependent Jobs", false, es);
 
-		/* show explain output for depended jobs, if any */
+		/* show explain output for dependent jobs, if any */
 		foreach(dependentJobCell, dependentJobList)
 		{
 			Job *dependentJob = (Job *) lfirst(dependentJobCell);
@@ -267,7 +267,7 @@ ExplainJob(Job *job, ExplainState *es)
 			}
 		}
 
-		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainCloseGroup("Dependent Jobs", "Dependent Jobs", false, es);
 	}
 
 	ExplainCloseGroup("Job", "Job", true, es);
@@ -302,7 +302,7 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 
 	if (dependentJobCount > 0)
 	{
-		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainOpenGroup("Dependent Jobs", "Dependent Jobs", false, es);
 
 		foreach(dependentJobCell, dependentJobList)
 		{
@@ -314,7 +314,7 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 			}
 		}
 
-		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainCloseGroup("Dependent Jobs", "Dependent Jobs", false, es);
 	}
 
 	ExplainCloseGroup("MapMergeJob", NULL, true, es);

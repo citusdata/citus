@@ -174,7 +174,7 @@ test: multi_outer_join
 # functionality related to metadata, shard creation, shard pruning and
 # "hacky" copy script for hash partitioned tables.
 # Note that the order of the following tests are important. multi_complex_count_distinct
-# is independed from the rest of the group, it is added to increase parallelism.
+# is independent from the rest of the group, it is added to increase parallelism.
 # ---
 test: multi_create_fdw
 test: multi_complex_count_distinct multi_select_distinct

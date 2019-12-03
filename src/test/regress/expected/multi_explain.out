@@ -995,11 +995,11 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             "Job": {
               "Task Count": 1,
               "Tasks Shown": "None, not supported for re-partition queries",
-              "Depended Jobs": [
+              "Dependent Jobs": [
                 {
                   "Map Task Count": 1,
                   "Merge Task Count": 1,
-                  "Depended Jobs": [
+                  "Dependent Jobs": [
                     {
                       "Map Task Count": 2,
                       "Merge Task Count": 1
@@ -1044,18 +1044,18 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Job>
               <Task-Count>1</Task-Count>
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
-              <Depended-Jobs>
+              <Dependent-Jobs>
                 <MapMergeJob>
                   <Map-Task-Count>1</Map-Task-Count>
                   <Merge-Task-Count>1</Merge-Task-Count>
-                  <Depended-Jobs>
+                  <Dependent-Jobs>
                     <MapMergeJob>
                       <Map-Task-Count>2</Map-Task-Count>
                       <Merge-Task-Count>1</Merge-Task-Count>
                     </MapMergeJob>
-                  </Depended-Jobs>
+                  </Dependent-Jobs>
                 </MapMergeJob>
-              </Depended-Jobs>
+              </Dependent-Jobs>
             </Job>
           </Distributed-Query>
         </Plan>
@@ -1103,7 +1103,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
           Job: 
             Task Count: 1
             Tasks Shown: "None, not supported for re-partition queries"
-            Depended Jobs: 
+            Dependent Jobs: 
               - Map Task Count: 2
                 Merge Task Count: 1
 -- test parallel aggregates
