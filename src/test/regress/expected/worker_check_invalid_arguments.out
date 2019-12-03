@@ -67,7 +67,7 @@ ERROR:  column name array size: 2 and type array size: 3 do not match
 SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'integer']);
-ERROR:  invalid input syntax for type integer: "\x0b50"
+ERROR:  invalid input syntax for integer: "\x0b50"
 CONTEXT:  COPY task_101108, line 1, column binarycolumn: "\x0b50"
 -- Check that we fail to merge when ids are wrong
 SELECT worker_merge_files_into_table(-1, :TaskId,
@@ -97,3 +97,6 @@ SELECT worker_merge_files_into_table(:JobId, :TaskId,
  
 (1 row)
 
+-- worker_execute_sql_task should only accept queries
+select worker_execute_sql_task(0,0,'create table foo(a serial)',false);
+ERROR:  cannot execute utility commands

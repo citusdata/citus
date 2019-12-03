@@ -143,4 +143,9 @@ SELECT * FROM squares ORDER BY x;
 -- empty shard interval array should raise error
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[0]);
 
+-- cannot use DDL commands
+select broadcast_intermediate_result('a', 'create table foo(int serial)');
+select broadcast_intermediate_result('a', 'prepare foo as select 1');
+select create_intermediate_result('a', 'create table foo(int serial)');
+
 DROP SCHEMA intermediate_results CASCADE;
