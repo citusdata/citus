@@ -105,7 +105,7 @@ column_to_column_name(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	char *columnName = ColumnNameToColumn(relationId, columnNodeString);
+	char *columnName = ColumnToColumnName(relationId, columnNodeString);
 
 	text *columnText = cstring_to_text(columnName);
 
@@ -167,17 +167,22 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 
 
 /*
- * ColumnNameToColumn returns the human-readable name of a column given a
+ * ColumnToColumnName returns the human-readable name of a column given a
  * relation identifier and the column's internal textual (Var) representation.
  * This function will raise an ERROR if no such column can be found or if the
  * provided Var refers to a system column.
  */
 char *
-ColumnNameToColumn(Oid relationId, char *columnNodeString)
+ColumnToColumnName(Oid relationId, char *columnNodeString)
 {
 	Node *columnNode = stringToNode(columnNodeString);
 
-	Assert(IsA(columnNode, Var));
+	if (columnNode == NULL || !IsA(columnNode, Var))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("not a valid column")));
+	}
+
 	Var *column = (Var *) columnNode;
 
 	AttrNumber columnNumber = column->varattno;

@@ -643,7 +643,7 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	}
 	else
 	{
-		char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		char *partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
 		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 quote_literal_cstr(partitionKeyColumnName));
