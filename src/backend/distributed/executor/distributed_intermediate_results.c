@@ -242,7 +242,7 @@ WrapTasksForPredistribution(List *taskList, char *resultPrefix, int
 
 		appendStringInfo(wrappedQuery,
 						 "SELECT %d, " UINT64_FORMAT
-						 ", partition_index, bytes_written, rows_written "
+						 ", partition_index, rows_written "
 						 "FROM worker_predistribute_query_result"
 						 "(%s,%s,%d,%s)",
 						 shardPlacement->nodeId,
@@ -326,9 +326,7 @@ ExecutePredistributionTasks(List *taskList, DistributionScheme *targetDistributi
 					   INT8OID, -1, 0);
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 3, "partition_index",
 					   INT4OID, -1, 0);
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 4, "bytes_written",
-					   INT8OID, -1, 0);
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 5, "rows_written",
+	TupleDescInitEntry(resultDescriptor, (AttrNumber) 4, "rows_written",
 					   INT8OID, -1, 0);
 
 	resultStore = ExecuteTasksIntoTupleStore(taskList, resultDescriptor);
@@ -359,7 +357,6 @@ TupleStoreToPredistributionStats(Tuplestorestate *tupleStore, TupleDesc resultDe
 		int sourceNodeId = DatumGetInt32(slot_getattr(slot, 1, &isNull));
 		int64 sourceShardId = DatumGetInt64(slot_getattr(slot, 2, &isNull));
 		int targetShardIndex = DatumGetInt32(slot_getattr(slot, 3, &isNull));
-		int64 byteCount = DatumGetInt64(slot_getattr(slot, 4, &isNull));
 		int64 rowCount = DatumGetInt64(slot_getattr(slot, 5, &isNull));
 
 		/* protect against garbage results */
@@ -373,7 +370,6 @@ TupleStoreToPredistributionStats(Tuplestorestate *tupleStore, TupleDesc resultDe
 		shardFragmentStats->sourceNodeId = sourceNodeId;
 		shardFragmentStats->sourceShardId = sourceShardId;
 		shardFragmentStats->targetShardIndex = targetShardIndex;
-		shardFragmentStats->byteCount = byteCount;
 		shardFragmentStats->rowCount = rowCount;
 
 		TargetShardFragments *fragmentSet =

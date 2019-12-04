@@ -15,8 +15,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.worker_predistribute_query_result(
     partition_column_index int,
     hash_ranges int[],
     OUT partition_index int,
-    OUT rows_written bigint,
-    OUT bytes_written bigint)
+    OUT rows_written bigint)
 RETURNS SETOF record
 LANGUAGE C STRICT VOLATILE
 AS 'MODULE_PATHNAME', $$worker_predistribute_query_result$$;

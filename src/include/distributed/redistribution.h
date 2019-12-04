@@ -25,7 +25,6 @@ typedef struct TargetShardFragmentStats
 	int sourceNodeId;
 	uint64 sourceShardId;
 	int targetShardIndex;
-	long byteCount;
 	long rowCount;
 } TargetShardFragmentStats;
 

@@ -221,17 +221,15 @@ worker_predistribute_query_result(PG_FUNCTION_ARGS)
 	for (partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++)
 	{
 		FileOutputStream *partitionFile = &resultDest->partitionFiles[partitionIndex];
-		int64 bytesWritten = partitionFile->bytesWritten;
 		int64 recordsWritten = partitionFile->recordsWritten;
-		Datum values[3];
-		bool nulls[3];
+		Datum values[2];
+		bool nulls[2];
 
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
 
 		values[0] = Int32GetDatum(partitionIndex);
 		values[1] = UInt64GetDatum(recordsWritten);
-		values[2] = UInt64GetDatum(bytesWritten);
 
 		tuplestore_putvalues(tupleStore, returnTupleDesc, values, nulls);
 	}
