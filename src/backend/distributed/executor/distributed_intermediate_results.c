@@ -100,13 +100,6 @@ typedef struct PredistributionStats
 } PredistributionStats;
 
 
-static RedistributedQueryResult * RedistributeDistributedQueryResult(char *distResultId,
-																	 Query *query,
-																	 int
-																	 distributionColumnIndex,
-																	 DistributionScheme *
-																	 targetDistribution,
-																	 bool isForWrites);
 static RedistributedQueryResult * RedistributeTaskListResult(char *distResultId,
 															 List *taskList,
 															 int distributionColumnIndex,
@@ -144,99 +137,6 @@ static char * TargetShardFragmentName(char *resultPrefix,
 static void ExecuteFetchTasks(List *fetchTaskList);
 static Tuplestorestate * ExecuteTasksIntoTupleStore(List *taskList, TupleDesc
 													resultDescriptor);
-
-
-/* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(partition_distributed_query_result);
-
-
-/*
- * partition_distributed_query_result executes a query and writes the results
- * into a set of local files according to the partition scheme and the partition
- * column.
- */
-Datum
-partition_distributed_query_result(PG_FUNCTION_ARGS)
-{
-	text *distResultIdText = PG_GETARG_TEXT_P(0);
-	char *distResultIdString = text_to_cstring(distResultIdText);
-	text *queryText = PG_GETARG_TEXT_P(1);
-	char *queryString = text_to_cstring(queryText);
-	int distributionColumnIndex = PG_GETARG_INT32(2);
-	int colocationId = PG_GETARG_INT32(3);
-
-	TupleDesc tupleDescriptor = NULL;
-	int shardIndex = 0;
-
-	CheckCitusVersion(ERROR);
-	SetupTuplestore(fcinfo, &tupleDescriptor);
-
-	DistributionScheme *targetDistribution = GetDistributionSchemeForColocationId(
-		colocationId);
-
-	/* parse the query */
-	Query *query = ParseQueryString(queryString, NULL, 0);
-
-	RedistributedQueryResult *result = RedistributeDistributedQueryResult(
-		distResultIdString, query,
-		distributionColumnIndex,
-		targetDistribution,
-		true);
-
-	int shardCount = targetDistribution->partitioning.partitionCount;
-
-	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
-	{
-		ReassembledFragmentSet *fragmentSet =
-			&(result->reassembledFragmentSets[shardIndex]);
-		StringInfo deparsedQuery = makeStringInfo();
-
-		Query *fragmentSetQuery = ReadReassembledFragmentSetQuery(distResultIdString,
-																  query->targetList,
-																  fragmentSet);
-
-		pg_get_query_def(fragmentSetQuery, deparsedQuery);
-
-		elog(NOTICE, "on node %d: %s", fragmentSet->nodeId, deparsedQuery->data);
-	}
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * RedistributeDistributedQueryResult executes the given query, which must
- * be a distributed query without a merge step, and redistributes the result
- * according to the target distribution.
- */
-static RedistributedQueryResult *
-RedistributeDistributedQueryResult(char *distResultId, Query *query,
-								   int distributionColumnIndex,
-								   DistributionScheme *targetDistribution,
-								   bool isForWrites)
-{
-	int cursorOptions = 0;
-	ParamListInfo paramListInfo = NULL;
-
-	/* plan the query */
-	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, paramListInfo);
-	if (!IsA(queryPlan->planTree, CustomScan))
-	{
-		/* TODO: fall back to partitioned pull-push */
-		ereport(ERROR, (errmsg("query is not a simple distributed query")));
-	}
-
-	DistributedPlan *distributedPlan = GetDistributedPlan(
-		(CustomScan *) queryPlan->planTree);
-
-	RedistributedQueryResult *result = RedistributeDistributedPlanResult(distResultId,
-																		 distributedPlan,
-																		 distributionColumnIndex,
-																		 targetDistribution,
-																		 isForWrites);
-
-	return result;
-}
 
 
 RedistributedQueryResult *

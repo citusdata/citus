@@ -41,18 +41,3 @@ LANGUAGE C STRICT VOLATILE PARALLEL SAFE
 AS 'MODULE_PATHNAME', $$read_intermediate_result_array$$;
 COMMENT ON FUNCTION pg_catalog.read_intermediate_result(text[],pg_catalog.citus_copy_format)
 IS 'read a set files and return them as a set of records';
-
-CREATE OR REPLACE FUNCTION pg_catalog.partition_distributed_query_result(
-    dist_result_id text,
-    query text,
-    partition_column_index int,
-    colocation_id int,
-    OUT shard_id bigint,
-    OUT partition_index int,
-    OUT bytes_written bigint,
-    OUT rows_written bigint)
-RETURNS SETOF record
-LANGUAGE C STRICT VOLATILE
-AS 'MODULE_PATHNAME', $$partition_distributed_query_result$$;
-COMMENT ON FUNCTION pg_catalog.partition_distributed_query_result(text, text, int, int)
-IS 'execute a query and partitions its results in set of local result files';
