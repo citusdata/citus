@@ -16,6 +16,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include "access/htup_details.h"
 #include "catalog/pg_enum.h"
 #include "commands/copy.h"
 #include "distributed/commands/multi_copy.h"
@@ -124,7 +125,6 @@ write_intermediate_result_sfunc(PG_FUNCTION_ARGS)
 	if (state == NULL)
 	{
 		MemoryContext agg_context;
-		MemoryContext old_context;
 
 		text *resultId = PG_GETARG_TEXT_P(1);
 		char *resultIdString = text_to_cstring(resultId);
@@ -134,7 +134,7 @@ write_intermediate_result_sfunc(PG_FUNCTION_ARGS)
 			elog(ERROR, "aggregate function called in non-aggregate context");
 		}
 
-		old_context = MemoryContextSwitchTo(agg_context);
+		MemoryContext old_context = MemoryContextSwitchTo(agg_context);
 		state = palloc0(sizeof(WriteIntermediateResultsState));
 
 		Oid tupType = HeapTupleHeaderGetTypeId(rec);
