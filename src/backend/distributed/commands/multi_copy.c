@@ -1632,8 +1632,12 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	uint32 totalColumnCount = (uint32) rowDescriptor->natts;
 	uint32 availableColumnCount = AvailableColumnCount(rowDescriptor);
 	uint32 appendedColumnCount = 0;
+	MemoryContext oldContext = NULL;
 
-	MemoryContext oldContext = MemoryContextSwitchTo(rowOutputState->rowcontext);
+	if (rowOutputState->rowcontext)
+	{
+		oldContext = MemoryContextSwitchTo(rowOutputState->rowcontext);
+	}
 
 	if (rowOutputState->binary)
 	{
@@ -1709,7 +1713,10 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 #endif
 	}
 
-	MemoryContextSwitchTo(oldContext);
+	if (rowOutputState->rowcontext)
+	{
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 

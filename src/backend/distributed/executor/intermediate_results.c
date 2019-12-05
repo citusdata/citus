@@ -126,8 +126,8 @@ write_intermediate_result_sfunc(PG_FUNCTION_ARGS)
 	{
 		MemoryContext agg_context;
 
-		text *resultId = PG_GETARG_TEXT_P(1);
-		char *resultIdString = text_to_cstring(resultId);
+		text *filePath = PG_GETARG_TEXT_P(1);
+		char *filePathString = text_to_cstring(filePath);
 
 		if (!AggCheckCallContext(fcinfo, &agg_context))
 		{
@@ -154,22 +154,27 @@ write_intermediate_result_sfunc(PG_FUNCTION_ARGS)
 		copyOutState->null_print_client = (char *) nullPrintCharacter;
 		copyOutState->binary = false;/*CanUseBinaryCopyFormat(state->tupleDescriptor); */
 		copyOutState->fe_msgbuf = makeStringInfo();
-		copyOutState->rowcontext =
-			AllocSetContextCreate(agg_context, "COPY TO", ALLOCSET_DEFAULT_SIZES);
+		copyOutState->rowcontext = NULL;
 
 		state->copyOutState = copyOutState;
 
 		/* make sure the directory exists */
 		CreateIntermediateResultsDirectory();
 
-		const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
+		const int fileFlags = (O_APPEND | O_CREAT | O_WRONLY | O_TRUNC | PG_BINARY);
 		const int fileMode = (S_IRUSR | S_IWUSR);
-		char *filePath = QueryResultFileName(resultIdString);
+		/* char *filePath = QueryResultFileName(resultIdString); */
 		state->fileCompat =
-			FileCompatFromFileStart(FileOpenForTransmit(filePath, fileFlags, fileMode));
+			FileCompatFromFileStart(FileOpenForTransmit(filePathString, fileFlags,
+														fileMode));
 
 		state->columnOutputFunctions = ColumnOutputFunctions(state->tupleDescriptor,
 															 copyOutState->binary);
+
+
+		StringInfo copyData = state->copyOutState->fe_msgbuf;
+		enlargeStringInfo(copyData, 128 * 1024);
+
 
 		MemoryContextSwitchTo(old_context);
 	}
@@ -190,7 +195,8 @@ write_intermediate_result_sfunc(PG_FUNCTION_ARGS)
 					  state->columnOutputFunctions, NULL);
 
 	StringInfo copyData = state->copyOutState->fe_msgbuf;
-	if (copyData->len >= 1024 * 1024)
+
+	if (copyData->len >= 128 * 1024)
 	{
 		FileWriteCompat(&state->fileCompat, copyData->data,
 						copyData->len, PG_WAIT_IO);
