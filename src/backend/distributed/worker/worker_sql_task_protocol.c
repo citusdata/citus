@@ -21,6 +21,8 @@
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 
+/* necessary to get S_IRUSR, S_IWUSR definitions on illumos */
+#include <sys/stat.h>
 
 /* TaskFileDestReceiver can be used to stream results into a file */
 typedef struct TaskFileDestReceiver
