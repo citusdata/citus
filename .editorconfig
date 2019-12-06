@@ -23,7 +23,7 @@ trim_trailing_whitespace = unset
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 
-[*.sql,*.sh]
+[*.{sql,sh}]
 indent_style = space
 indent_size = 4
 tab_width = 4
