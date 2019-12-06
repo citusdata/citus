@@ -546,13 +546,22 @@ DeferredErrorMessage *
 ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery,
 					 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
+
+	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
+	if (!IsDistributedTable(distributedTableId))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications of local tables involving "
+							 "distributed tables",
+							 NULL, NULL);
+	}
+
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 
 	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
