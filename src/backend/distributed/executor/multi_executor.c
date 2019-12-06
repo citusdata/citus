@@ -56,6 +56,13 @@ bool WritableStandbyCoordinator = false;
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
 
+/*
+ * How many nested executors have we started? This can happen for SQL
+ * UDF calls. The outer query starts an executor, then postgres opens
+ * another executor to run the SQL UDF.
+ */
+int ExecutorLevel = 0;
+
 
 /* local function forward declarations */
 static Relation StubRelation(TupleDesc tupleDescriptor);
@@ -114,18 +121,9 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
-	int originalLevel = FunctionCallLevel;
+	int originalLevel = ExecutorLevel;
 
-	if (dest->mydest == DestSPI)
-	{
-		/*
-		 * If the query runs via SPI, we assume we're in a function call
-		 * and we should treat statements as part of a bigger transaction.
-		 * We reset this counter to 0 in the abort handler.
-		 */
-		FunctionCallLevel++;
-	}
-
+	ExecutorLevel++;
 	if (CitusHasBeenLoaded())
 	{
 		if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
@@ -139,7 +137,8 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			 */
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot join local tables and reference tables in "
-								   "a transaction block")));
+								   "a transaction block, udf block, or distributed "
+								   "CTE subquery")));
 		}
 	}
 
@@ -175,15 +174,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
 	}
 
-	if (dest->mydest == DestSPI)
-	{
-		/*
-		 * Restore the original value. It is not sufficient to decrease
-		 * the value because exceptions might cause us to go back a few
-		 * levels at once.
-		 */
-		FunctionCallLevel = originalLevel;
-	}
+	/*
+	 * Restore the original value. It is not sufficient to decrease the value
+	 * because exceptions might cause us to go back a few levels at once.
+	 */
+	ExecutorLevel = originalLevel;
 }
 
 

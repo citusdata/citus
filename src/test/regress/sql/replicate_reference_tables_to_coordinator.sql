@@ -98,6 +98,16 @@ ROLLBACK;
 
 DROP SCHEMA s1 CASCADE;
 
+-- error if inside a SQL UDF call
+CREATE or replace FUNCTION test_reference_local_join_func()
+RETURNS SETOF RECORD AS $$
+SET LOCAL citus.enable_local_execution to false;
+INSERT INTO numbers VALUES (2);
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+$$ LANGUAGE sql;
+
+SELECT test_reference_local_join_func();
+
 -- shouldn't plan locally if modifications happen in CTEs, ...
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;

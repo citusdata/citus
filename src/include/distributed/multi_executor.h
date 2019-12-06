@@ -32,6 +32,7 @@ extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 extern bool SortReturning;
+extern int ExecutorLevel;
 
 
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
