@@ -378,6 +378,13 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 	{
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
+		
+		if (flags & OUTSIDE_TRANSACTION) {
+			/* dont returns connections that are used in transactions */
+			if (connection->remoteTransaction.transactionState != REMOTE_TRANS_INVALID) {
+				continue;
+			}
+		}
 
 		/* don't return claimed connections */
 		if (connection->claimedExclusively)

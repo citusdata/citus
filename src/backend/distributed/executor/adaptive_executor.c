@@ -1376,7 +1376,7 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 	{
-		CloseConnections(execution->sessionList);
+		// CloseConnections(execution->sessionList);
 	}
 
 	if (DistributedExecutionModifiesDatabase(execution))
@@ -1401,7 +1401,6 @@ CloseConnections(List *sessionList)
 		MultiConnection *con = session->connection;
 
 		UnclaimConnection(con);
-		// con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
 		CloseConnection(con);
 	}
 }
@@ -1449,10 +1448,10 @@ CleanUpSessions(DistributedExecution *execution)
 			 * If execution is outside a transaction, then the connection will be shutdown later so
 			 * we can skip it here.
 			 */
-			if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
-			{
-				CloseConnection(connection);
-			}
+			// if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
+			// {
+			// 	CloseConnection(connection);
+			// }
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
@@ -2191,7 +2190,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 		if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 		{
-			connectionFlags |= FORCE_NEW_CONNECTION;
+			connectionFlags |= OUTSIDE_TRANSACTION;
 		}
 
 		/* open a new connection to the worker */
