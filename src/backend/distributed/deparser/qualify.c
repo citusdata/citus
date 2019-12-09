@@ -30,6 +30,7 @@ static void QualifyAlterTableStmt(AlterTableStmt *stmt);
 static void QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt);
 static void QualifyAlterOwnerStmt(AlterOwnerStmt *stmt);
 static void QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt);
+static void QualifyDropObjectStmt(DropStmt *stmt);
 
 /*
  * QualifyTreeNode transforms the statement in place and makes all (supported) statements
@@ -95,6 +96,12 @@ QualifyTreeNode(Node *stmt)
 			return;
 		}
 
+		case T_DropStmt:
+		{
+			QualifyDropObjectStmt(castNode(DropStmt, stmt));
+			break;
+		}
+
 		default:
 		{
 			/* skip unsupported statements */
@@ -122,6 +129,12 @@ QualifyRenameStmt(RenameStmt *stmt)
 		case OBJECT_ATTRIBUTE:
 		{
 			QualifyRenameAttributeStmt(stmt);
+			return;
+		}
+
+		case OBJECT_COLLATION:
+		{
+			QualifyRenameCollationStmt(stmt);
 			return;
 		}
 
@@ -198,6 +211,12 @@ QualifyAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			return;
 		}
 
+		case OBJECT_COLLATION:
+		{
+			QualifyAlterCollationSchemaStmt(stmt);
+			return;
+		}
+
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
@@ -226,6 +245,12 @@ QualifyAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return;
 		}
 
+		case OBJECT_COLLATION:
+		{
+			QualifyAlterCollationOwnerStmt(stmt);
+			return;
+		}
+
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
@@ -251,6 +276,25 @@ QualifyAlterObjectDependsStmt(AlterObjectDependsStmt *stmt)
 		case OBJECT_PROCEDURE:
 		{
 			QualifyAlterFunctionDependsStmt(stmt);
+			return;
+		}
+
+		default:
+		{
+			return;
+		}
+	}
+}
+
+
+static void
+QualifyDropObjectStmt(DropStmt *stmt)
+{
+	switch (stmt->removeType)
+	{
+		case OBJECT_COLLATION:
+		{
+			QualifyDropCollationStmt(stmt);
 			return;
 		}
 

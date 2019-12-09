@@ -489,9 +489,9 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	const char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
-	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
+	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
@@ -524,9 +524,9 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode((Node *) stmt);
 
-	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
+	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) renameStmtSql,
 								ENABLE_DDL_PROPAGATION);
@@ -618,7 +618,7 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 		return;
 	}
 
-	/* dependencies have changed (schema) lets ensure they exist */
+	/* dependencies have changed (schema) let's ensure they exist */
 	EnsureDependenciesExistsOnAllNodes(typeAddress);
 }
 
