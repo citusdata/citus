@@ -560,7 +560,6 @@ static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 
 static void FinishDistributedExecution(DistributedExecution *execution);
-static void CloseConnections(List *sessionList);
 static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
@@ -1377,34 +1376,10 @@ FinishDistributedExecution(DistributedExecution *execution)
 {
 	UnsetCitusNoticeLevel();
 
-	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED)
-	{
-		CloseConnections(execution->sessionList);
-	}
-
 	if (DistributedExecutionModifiesDatabase(execution))
 	{
 		/* prevent copying shards in same transaction */
 		XactModificationLevel = XACT_MODIFICATION_DATA;
-	}
-}
-
-
-/*
- * CloseConnections closes all the connections from the given sessionList.
- */
-static void
-CloseConnections(List *sessionList)
-{
-	ListCell *sessionCell = NULL;
-
-	foreach(sessionCell, sessionList)
-	{
-		WorkerSession *session = lfirst(sessionCell);
-		MultiConnection *con = session->connection;
-
-		UnclaimConnection(con);
-		CloseConnection(con);
 	}
 }
 
@@ -1448,15 +1423,9 @@ CleanUpSessions(DistributedExecution *execution)
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
 			 *
-			 * If execution is outside a transaction, then the connection will be shutdown later so
-			 * we can skip it here.
 			 */
 
-			if (execution->useRemoteTransactionBlocks !=
-				REMOTE_TRANSACTION_BLOCKS_DISALLOWED)
-			{
-				CloseConnection(connection);
-			}
+			CloseConnection(connection);
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
