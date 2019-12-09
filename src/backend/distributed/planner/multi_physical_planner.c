@@ -144,6 +144,7 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  TaskType taskType,
 									  bool modifyRequiresMasterEvaluation);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								Oid collation,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
 static List * SqlTaskList(Job *job);
@@ -2469,15 +2470,27 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	bool coPartitionedTables = true;
 	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
 	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+
 	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
 		secondTableCache->sortedShardIntervalArray;
 	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
 	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
+
+	/* reference tables are always & only copartitioned with reference tables */
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE &&
+		secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return true;
+	}
+	else if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE ||
+			 secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
 
 	if (firstListShardCount != secondListShardCount)
 	{
@@ -2517,6 +2530,18 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 
 
 	/*
+	 * Don't compare unequal types
+	 */
+	Oid collation = firstTableCache->partitionColumn->varcollid;
+	if (firstTableCache->partitionColumn->vartype !=
+		secondTableCache->partitionColumn->vartype ||
+		collation != secondTableCache->partitionColumn->varcollid)
+	{
+		return false;
+	}
+
+
+	/*
 	 * If not known to be colocated check if the remaining shards are
 	 * anyway. Do so by comparing the shard interval arrays that are sorted on
 	 * interval minimum values. Then it compares every shard interval in order
@@ -2529,17 +2554,17 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
 
 		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													   collation,
 													   firstInterval,
 													   secondInterval);
 		if (!shardIntervalsEqual || !CoPlacedShardIntervals(firstInterval,
 															secondInterval))
 		{
-			coPartitionedTables = false;
-			break;
+			return false;
 		}
 	}
 
-	return coPartitionedTables;
+	return true;
 }
 
 
@@ -2585,8 +2610,8 @@ CoPlacedShardIntervals(ShardInterval *firstInterval, ShardInterval *secondInterv
  * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
  */
 static bool
-ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
-					ShardInterval *secondInterval)
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, Oid collation,
+					ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
 	bool shardIntervalsEqual = false;
 
@@ -2598,8 +2623,10 @@ ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
 	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
 		secondInterval->minValueExists && secondInterval->maxValueExists)
 	{
-		Datum minDatum = CompareCall2(comparisonFunction, firstMin, secondMin);
-		Datum maxDatum = CompareCall2(comparisonFunction, firstMax, secondMax);
+		Datum minDatum = FunctionCall2Coll(comparisonFunction, collation, firstMin,
+										   secondMin);
+		Datum maxDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
+										   secondMax);
 		int firstComparison = DatumGetInt32(minDatum);
 		int secondComparison = DatumGetInt32(maxDatum);
 
@@ -3691,8 +3718,6 @@ FindRangeTableFragmentsList(List *rangeTableFragmentsList, int tableId)
 static bool
 JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment)
 {
-	bool joinPrunable = false;
-
 	/*
 	 * If both range tables are remote queries, we then have a hash repartition
 	 * join. In that case, we can just prune away this join if left and right
@@ -3738,10 +3763,10 @@ JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment
 									leftString->data, rightString->data)));
 		}
 
-		joinPrunable = true;
+		return true;
 	}
 
-	return joinPrunable;
+	return false;
 }
 
 
@@ -3774,10 +3799,13 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	bool nonOverlap = false;
 	DistTableCacheEntry *intervalRelation =
 		DistributedTableCacheEntry(firstInterval->relationId);
+
+	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
+
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
+	Oid collation = intervalRelation->partitionColumn->varcollid;
 
 
 	Datum firstMin = firstInterval->minValue;
@@ -3794,18 +3822,20 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
 		secondInterval->minValueExists && secondInterval->maxValueExists)
 	{
-		Datum firstDatum = CompareCall2(comparisonFunction, firstMax, secondMin);
-		Datum secondDatum = CompareCall2(comparisonFunction, secondMax, firstMin);
+		Datum firstDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
+											 secondMin);
+		Datum secondDatum = FunctionCall2Coll(comparisonFunction, collation, secondMax,
+											  firstMin);
 		int firstComparison = DatumGetInt32(firstDatum);
 		int secondComparison = DatumGetInt32(secondDatum);
 
 		if (firstComparison < 0 || secondComparison < 0)
 		{
-			nonOverlap = true;
+			return false;
 		}
 	}
 
-	return (!nonOverlap);
+	return true;
 }
 
 

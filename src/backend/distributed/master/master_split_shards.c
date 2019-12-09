@@ -81,8 +81,8 @@ worker_hash(PG_FUNCTION_ARGS)
 	fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo), CurrentMemoryContext);
 
 	/* calculate hash value */
-	Datum hashedValueDatum = FunctionCall1Coll(hashFunction, PG_GET_COLLATION(),
-											   valueDatum);
+	Datum hashedValueDatum =
+		FunctionCall1Coll(hashFunction, PG_GET_COLLATION(), valueDatum);
 
 	PG_RETURN_INT32(hashedValueDatum);
 }

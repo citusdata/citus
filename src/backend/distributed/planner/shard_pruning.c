@@ -276,7 +276,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		InitFunctionCallInfoData(*(FunctionCallInfo) &
 								 context.compareIntervalFunctionCall,
 								 cacheEntry->shardIntervalCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -290,7 +290,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		InitFunctionCallInfoData(*(FunctionCallInfo) &
 								 context.compareValueFunctionCall,
 								 cacheEntry->shardColumnCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -679,7 +679,7 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 			arrayEqualityOp->inputcollid = arrayOperatorExpression->inputcollid;
 			arrayEqualityOp->opresulttype = get_func_rettype(
 				arrayOperatorExpression->opfuncid);
-			arrayEqualityOp->opcollid = DEFAULT_COLLATION_OID;
+			arrayEqualityOp->opcollid = context->partitionColumn->varcollid;
 			arrayEqualityOp->location = -1;
 			arrayEqualityOp->args = list_make2(strippedLeftOpExpression, constElement);
 

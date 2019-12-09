@@ -431,13 +431,13 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            3 |          4 |                 2 |                     23
-            4 |          2 |                 2 |                     23
-            5 |          2 |                 1 |                     23
-            6 |          2 |                 2 |                     25
-            7 |          8 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            3 |          4 |                 2 |                     23 |                           0
+            4 |          2 |                 2 |                     23 |                           0
+            5 |          2 |                 1 |                     23 |                           0
+            6 |          2 |                 2 |                     25 |                         100
+            7 |          8 |                 2 |                     23 |                           0
 (5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
@@ -459,17 +459,17 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 -- check effects of dropping tables
 DROP TABLE table1_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            4 |          2 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            4 |          2 |                 2 |                     23 |                           0
 (1 row)
 
 -- dropping all tables in a colocation group also deletes the colocation group
 DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            4 |          2 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            4 |          2 |                 2 |                     23 |                           0
 (1 row)
 
 -- create dropped colocation group again
@@ -555,14 +555,14 @@ SELECT create_distributed_table('table1_group_default', 'id', colocate_with => '
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            3 |          4 |                 2 |                     23
-            4 |          2 |                 2 |                     23
-            5 |          2 |                 1 |                     23
-            6 |          2 |                 2 |                     25
-            7 |          8 |                 2 |                     23
-           11 |          3 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            3 |          4 |                 2 |                     23 |                           0
+            4 |          2 |                 2 |                     23 |                           0
+            5 |          2 |                 1 |                     23 |                           0
+            6 |          2 |                 2 |                     25 |                         100
+            7 |          8 |                 2 |                     23 |                           0
+           11 |          3 |                 2 |                     23 |                           0
 (6 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
@@ -650,14 +650,14 @@ SELECT create_reference_table('table2_groupF');
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            3 |          4 |                 2 |                     23
-            4 |          2 |                 2 |                     23
-            5 |          2 |                 1 |                     23
-            6 |          2 |                 2 |                     25
-            7 |          8 |                 2 |                     23
-           11 |          3 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            3 |          4 |                 2 |                     23 |                           0
+            4 |          2 |                 2 |                     23 |                           0
+            5 |          2 |                 1 |                     23 |                           0
+            6 |          2 |                 2 |                     25 |                         100
+            7 |          8 |                 2 |                     23 |                           0
+           11 |          3 |                 2 |                     23 |                           0
 (6 rows)
 
 -- cross check with internal colocation API
@@ -839,8 +839,8 @@ UPDATE pg_dist_partition SET colocationid = 0
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
@@ -870,8 +870,8 @@ DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
@@ -938,12 +938,12 @@ SELECT create_distributed_table('table2_group_none', 'id', colocate_with => 'NON
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            2 |          2 |                 1 |                     23
-            3 |          2 |                 2 |                     25
-            4 |          8 |                 2 |                     23
-            5 |          2 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            2 |          2 |                 1 |                     23 |                           0
+            3 |          2 |                 2 |                     25 |                         100
+            4 |          8 |                 2 |                     23 |                           0
+            5 |          2 |                 2 |                     23 |                           0
 (4 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
@@ -982,11 +982,11 @@ SELECT mark_tables_colocated('table1_group_none', ARRAY['table2_group_none']);
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-            2 |          2 |                 1 |                     23
-            3 |          2 |                 2 |                     25
-            4 |          8 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+            2 |          2 |                 1 |                     23 |                           0
+            3 |          2 |                 2 |                     25 |                         100
+            4 |          8 |                 2 |                     23 |                           0
 (3 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition

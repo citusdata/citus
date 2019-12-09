@@ -253,6 +253,31 @@ UPDATE test SET y = 40;
 COMMIT;
 SELECT DISTINCT y FROM test;
 
+-- non deterministic collations
+CREATE COLLATION test_pg12.case_insensitive (
+	provider = icu,
+	locale = 'und-u-ks-level2',
+	deterministic = false
+);
+
+CREATE TABLE col_test (
+	id int,
+	val text collate case_insensitive
+);
+
+insert into col_test values
+	(1, 'asdF'), (2, 'vAlue'), (3, 'asDF');
+
+-- Hash distribution of non deterministic collations are unsupported
+select create_distributed_table('col_test', 'val');
+select create_distributed_table('col_test', 'id');
+
+insert into col_test values
+	(4, 'vALue'), (5, 'AsDf'), (6, 'value');
+
+select count(*)
+from col_test
+where val = 'asdf';
 
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
