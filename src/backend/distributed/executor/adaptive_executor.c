@@ -720,7 +720,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (hasDependentJobs)
 	{
-		RemoveTempJobDirs(jobList);
+		DoRepartitionCleanup(jobList);
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)

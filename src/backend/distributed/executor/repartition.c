@@ -149,11 +149,11 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 
 
 /*
- * RemoveTempJobDirs removes the temporary job directories that are
+ * DoRepartitionCleanup removes the temporary job directories and schemas that are
  * used for repartition queries for the given job ids.
  */
 void
-RemoveTempJobDirs(List *jobIds)
+DoRepartitionCleanup(List *jobIds)
 {
 	SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));
 }
@@ -165,5 +165,5 @@ RemoveTempJobDirs(List *jobIds)
 static char *
 GenerateDeleteJobsCommand(List *jobIds)
 {
-	return GenerateJobCommands(jobIds, WORKER_DELETE_JOBDIR_QUERY);
+	return GenerateJobCommands(jobIds, WORKER_REPARTITION_CLEANUP_QUERY);
 }

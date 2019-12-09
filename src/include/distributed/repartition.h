@@ -13,7 +13,7 @@
 #include "nodes/pg_list.h"
 
 extern List * ExecuteDependentTasks(List *taskList, Job *topLevelJob);
-extern void RemoveTempJobDirs(List *jobIds);
+extern void DoRepartitionCleanup(List *jobIds);
 
 
 #endif /* REPARTITION_H */
