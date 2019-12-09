@@ -58,7 +58,7 @@ PG_FUNCTION_INFO_V1(worker_merge_files_into_table);
 PG_FUNCTION_INFO_V1(worker_merge_files_and_run_query);
 PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
 PG_FUNCTION_INFO_V1(worker_create_schema);
-PG_FUNCTION_INFO_V1(worker_remove_jobdir);
+PG_FUNCTION_INFO_V1(worker_repartition_cleanup);
 
 
 /*
@@ -83,10 +83,10 @@ worker_create_schema(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_remove_jobdir removes the job directory with the given job id.
+ * worker_repartition_cleanup removes the job directory and schema with the given job id .
  */
 Datum
-worker_remove_jobdir(PG_FUNCTION_ARGS)
+worker_repartition_cleanup(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
@@ -98,7 +98,7 @@ worker_remove_jobdir(PG_FUNCTION_ARGS)
 
 	EnsureSchemaOwner(schemaId);
 	CitusRemoveDirectory(jobDirectoryName);
-
+	RemoveJobSchema(jobSchemaName);
 	PG_RETURN_VOID();
 }
 

@@ -49,7 +49,6 @@ static void TraverseJobTree(Job *curJob, List **jobs);
 static char * GenerateCreateSchemasCommand(List *jobIds);
 static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
-static void RemoveTempJobDirs(List *jobIds);
 
 
 /*
@@ -57,7 +56,7 @@ static void RemoveTempJobDirs(List *jobIds);
  * in order from the task tree. At a time, it can execute different tasks from
  * different jobs.
  */
-void
+List*
 ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	EnsureNoModificationsHaveBeenDone();
@@ -68,7 +67,7 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
 
-	RemoveTempJobDirs(jobIds);
+	return jobIds;
 }
 
 
@@ -150,22 +149,10 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 
 
 /*
- * CleanUpSchemas removes all the schemas that start with pg_
- * in every worker.
- */
-void
-CleanUpSchemas()
-{
-	List *commandList = list_make1(JOB_SCHEMA_CLEANUP);
-	SendCommandListToAllWorkers(commandList);
-}
-
-
-/*
  * RemoveTempJobDirs removes the temporary job directories that are
  * used for repartition queries for the given job ids.
  */
-static void
+void
 RemoveTempJobDirs(List *jobIds)
 {
 	SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));

@@ -161,6 +161,14 @@
 #include "utils/timestamp.h"
 
 
+/* types for remote transaction management */
+enum RemoteTransactionBlocksUsage
+{
+	REMOTE_TRANSACTION_BLOCKS_REQUIRED,
+	REMOTE_TRANSACTION_BLOCKS_ALLOWED,
+	REMOTE_TRANSACTION_BLOCKS_DISALLOWED,
+};
+
 /*
  * DistributedExecution represents the execution of a distributed query
  * plan.
@@ -245,12 +253,6 @@ typedef struct DistributedExecution
 	 */
 	bool raiseInterrupts;
 
-	/*
-	 * Flag to indicate whether the query is running in a distributed
-	 * transaction.
-	 */
-	bool isTransaction;
-
 	/* indicates whether distributed execution has failed */
 	bool failed;
 
@@ -282,12 +284,10 @@ typedef struct DistributedExecution
 	AttInMetadata *attributeInputMetadata;
 	char **columnArray;
 
-	/*
-	 * isOutsideTransaction is used to determine if we should begin a transaction
-	 * or not. For example, we do not begin a transaction for repartition specific
-	 * transactions.
-	 */
-	bool isOutsideTransaction;
+    /* 
+     * useRemoteTransactionBlocks is used to manage remote transactions.
+	 */ 
+	enum RemoteTransactionBlocksUsage useRemoteTransactionBlocks;
 } DistributedExecution;
 
 
@@ -631,7 +631,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	static bool hasDependentJobsInAllTree = false;
+	List* jobList = NIL;
 
 
 	Job *job = distributedPlan->workerJob;
@@ -650,10 +650,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	ExecuteSubPlans(distributedPlan);
 
 	bool hasDependentJobs = HasDependentJobs(job);
-	hasDependentJobsInAllTree |= hasDependentJobs;
 	if (hasDependentJobs)
 	{
-		ExecuteDependentTasks(taskList, job);
+		jobList = ExecuteDependentTasks(taskList, job);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -719,10 +718,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependentJobsInAllTree && SubPlanLevel == 0)
+	if (hasDependentJobs)
 	{
-		CleanUpSchemas();
-		hasDependentJobsInAllTree = false;
+		RemoveTempJobDirs(jobList);
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -900,7 +898,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
 
-	execution->isOutsideTransaction = isOutsideTransaction;
+	execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_ALLOWED; 
+	if (isOutsideTransaction) {
+		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_DISALLOWED;
+	}
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
 	if (tupleDescriptor != NULL)
@@ -1001,7 +1002,9 @@ StartDistributedExecution(DistributedExecution *execution)
 	 * If the current or previous execution in the current transaction requires
 	 * rollback then we should use transaction blocks.
 	 */
-	execution->isTransaction = InCoordinatedTransaction();
+	if (InCoordinatedTransaction() && execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_ALLOWED) {
+		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_REQUIRED;
+	}
 
 	/*
 	 * We should not record parallel access if the target pool size is less than 2.
@@ -1104,9 +1107,13 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 		return IsTransactionBlock();
 	}
 
+	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED ) {
+		return false;
+	} 
+
 	if (ReadOnlyTask(task->taskType))
 	{
-		return !execution->isOutsideTransaction && SelectOpensTransactionBlock &&
+		return SelectOpensTransactionBlock &&
 			   IsTransactionBlock();
 	}
 
@@ -1367,7 +1374,7 @@ FinishDistributedExecution(DistributedExecution *execution)
 {
 	UnsetCitusNoticeLevel();
 
-	if (execution->isOutsideTransaction)
+	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 	{
 		CloseConnections(execution->sessionList);
 	}
@@ -1394,7 +1401,7 @@ CloseConnections(List *sessionList)
 		MultiConnection *con = session->connection;
 
 		UnclaimConnection(con);
-		con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
+		// con->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
 		CloseConnection(con);
 	}
 }
@@ -1442,7 +1449,7 @@ CleanUpSessions(DistributedExecution *execution)
 			 * If execution is outside a transaction, then the connection will be shutdown later so
 			 * we can skip it here.
 			 */
-			if (!execution->isOutsideTransaction)
+			if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 			{
 				CloseConnection(connection);
 			}
@@ -1589,7 +1596,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 			List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 			MultiConnection *connection = NULL;
-			if (!execution->isOutsideTransaction)
+			if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 			{
 				/*
 				 * Determine whether the task has to be assigned to a particular connection
@@ -2182,7 +2189,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
 
-		if (execution->isOutsideTransaction)
+		if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 		{
 			connectionFlags |= FORCE_NEW_CONNECTION;
 		}
@@ -2658,12 +2665,13 @@ static bool
 TransactionModifiedDistributedTable(DistributedExecution *execution)
 {
 	/*
-	 * We need to explicitly check for isTransaction due to
+	 * We need to explicitly check for REMOTE_TRANSACTION_BLOCKS_REQUIRED due to
 	 * citus.function_opens_transaction_block flag. When set to false, we
 	 * should not be pretending that we're in a coordinated transaction even
 	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
 	 */
-	return execution->isTransaction && XactModificationLevel == XACT_MODIFICATION_DATA;
+	return execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_REQUIRED
+	 && XactModificationLevel == XACT_MODIFICATION_DATA;
 }
 
 
@@ -2693,7 +2701,7 @@ TransactionStateMachine(WorkerSession *session)
 		{
 			case REMOTE_TRANS_INVALID:
 			{
-				if (execution->isTransaction && !execution->isOutsideTransaction)
+				if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_REQUIRED)
 				{
 					/* if we're expanding the nodes in a transaction, use 2PC */
 					Activate2PCIfModifyingTransactionExpandsToNewNode(session);
@@ -2781,7 +2789,7 @@ TransactionStateMachine(WorkerSession *session)
 				UpdateConnectionWaitFlags(session,
 										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
-				if (execution->isTransaction)
+				if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_REQUIRED)
 				{
 					transaction->transactionState = REMOTE_TRANS_STARTED;
 				}
@@ -3035,7 +3043,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	char *queryString = task->queryString;
 	int querySent = 0;
 
-	if (!execution->isOutsideTransaction)
+	if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
 	{
 		/*
 		 * Make sure that subsequent commands on the same placement

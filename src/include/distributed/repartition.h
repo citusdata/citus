@@ -12,8 +12,8 @@
 
 #include "nodes/pg_list.h"
 
-extern void ExecuteDependentTasks(List *taskList, Job *topLevelJob);
-extern void CleanUpSchemas(void);
+extern List* ExecuteDependentTasks(List *taskList, Job *topLevelJob);
+extern void RemoveTempJobDirs(List *jobIds);
 
 
 #endif /* REPARTITION_H */
