@@ -67,7 +67,7 @@ FROM
   (SELECT max(user_id), max(value_2) AS value_2 FROM cte_from GROUP BY value_1) f
 WHERE
   value_2 IN (SELECT * FROM cte_where)
-ORDER BY 
+ORDER BY
   1, 2
 LIMIT
   5;
@@ -100,7 +100,7 @@ WITH cte AS (
 )
 SELECT (SELECT * FROM cte);
 ERROR:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 WITH cte_basic AS (
 	SELECT user_id FROM users_table WHERE user_id = 1
 )
@@ -563,9 +563,9 @@ WITH cte AS (
 SELECT * FROM (
 	SELECT * FROM cte UNION (SELECT * FROM events_table)
 	) a
-ORDER BY 
+ORDER BY
 	1,2,3,4,5,6
-LIMIT 
+LIMIT
 	10;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
@@ -587,9 +587,9 @@ SELECT * FROM (
 		)
 		SELECT * FROM cte
 	)b UNION (SELECT * FROM events_table)) a
-ORDER BY 
+ORDER BY
 1,2,3,4,5,6
-LIMIT 
+LIMIT
 10;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
@@ -613,9 +613,9 @@ SELECT
   *
 FROM
   (SELECT * FROM cte UNION (SELECT * FROM cte)) a
-ORDER BY 
+ORDER BY
   1,2,3,4,5,6
-LIMIT 
+LIMIT
   5;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
@@ -628,7 +628,7 @@ LIMIT
 
 WITH cte AS (
 	SELECT * FROM users_table WHERE user_id IN (1, 2) ORDER BY 1,2,3 LIMIT 5
-), 
+),
 cte_2 AS (
 	SELECT * FROM users_table WHERE user_id  IN (3, 4) ORDER BY 1,2,3 LIMIT 5
 )
@@ -651,14 +651,14 @@ SELECT * FROM cte UNION ALL SELECT * FROM cte_2;
 WITH RECURSIVE basic_recursive(x) AS (
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 )
 SELECT sum(x) FROM basic_recursive;
 ERROR:  recursive CTEs are not supported in distributed queries
 WITH RECURSIVE basic_recursive AS (
     SELECT -1 as user_id, '2017-11-22 20:16:16.614779'::timestamp, -1, -1, -1, -1
   UNION ALL
-    SELECT * FROM users_table WHERE user_id>1
+    SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
 )
 SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1;
 ERROR:  recursive CTEs are not supported in distributed queries
@@ -669,7 +669,7 @@ FROM
 (WITH RECURSIVE basic_recursive AS (
       SELECT -1 as user_id, '2017-11-22 20:16:16.614779'::timestamp, -1, -1, -1, -1
     UNION ALL
-      SELECT * FROM users_table WHERE user_id>1
+      SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1) cte_rec;
 ERROR:  recursive CTEs are not supported in distributed queries
@@ -683,7 +683,7 @@ WHERE
 (WITH RECURSIVE basic_recursive AS (
       SELECT -1 as user_id
     UNION ALL
-      SELECT user_id FROM users_table WHERE user_id>1
+      SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1);
 ERROR:  recursive CTEs are not supported in distributed queries
@@ -691,7 +691,7 @@ ERROR:  recursive CTEs are not supported in distributed queries
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 ),
 basic AS (
     SELECT count(user_id) FROM users_table
@@ -702,7 +702,7 @@ ERROR:  recursive CTEs are not supported in distributed queries
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 ),
 basic AS (
     SELECT count(x) FROM basic_recursive
@@ -712,10 +712,10 @@ ERROR:  recursive CTEs are not supported in distributed queries
 -- recursive CTE in a NESTED manner
 WITH regular_cte AS (
   WITH regular_2 AS (
-    WITH RECURSIVE recursive AS (
+    WITH RECURSIVE recursive(x) AS (
         VALUES (1)
       UNION ALL
-        SELECT user_id + 1 FROM users_table WHERE user_id < 100
+        SELECT user_id + 1 FROM users_table JOIN recursive ON (user_id = x) WHERE user_id < 100
     )
     SELECT * FROM recursive
   )
@@ -724,7 +724,7 @@ WITH regular_cte AS (
 SELECT * FROM regular_cte;
 ERROR:  recursive CTEs are not supported in distributed queries
 -- CTEs should work with VIEWs as well
-CREATE VIEW basic_view AS 
+CREATE VIEW basic_view AS
 SELECT * FROM users_table;
 CREATE VIEW cte_view AS
 WITH cte AS (
@@ -755,7 +755,7 @@ SELECT * FROM cte_view ORDER BY 1, 2 LIMIT 5;
        5 |       5
 (5 rows)
 
-WITH cte_user_with_view AS 
+WITH cte_user_with_view AS
 (
 	SELECT * FROM cte_view WHERE user_id < 3
 )
