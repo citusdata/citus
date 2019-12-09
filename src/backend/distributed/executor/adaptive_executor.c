@@ -1452,10 +1452,10 @@ CleanUpSessions(DistributedExecution *execution)
 			 * we can skip it here.
 			 */
 
-			/* if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED ) */
-			/* { */
-			/*  CloseConnection(connection); */
-			/* } */
+			if (execution->useRemoteTransactionBlocks != REMOTE_TRANSACTION_BLOCKS_DISALLOWED )
+			{ 
+			 CloseConnection(connection);
+			}
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
