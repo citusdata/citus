@@ -12,7 +12,7 @@
 
 #include "nodes/pg_list.h"
 
-extern List* ExecuteDependentTasks(List *taskList, Job *topLevelJob);
+extern List * ExecuteDependentTasks(List *taskList, Job *topLevelJob);
 extern void RemoveTempJobDirs(List *jobIds);
 
 

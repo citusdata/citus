@@ -159,7 +159,7 @@ IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 	bool found = false;
 
 
-	foreach(taskCell, targetTask->dependedTaskList)
+	foreach(taskCell, targetTask->dependentTaskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 		TaskHashKey taskKey = { task->jobId, task->taskId };

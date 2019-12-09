@@ -5,7 +5,7 @@
  * This file contains repartition specific logic.
  * ExecuteDependentTasks takes a list of top level tasks. Its logic is as follows:
  * - It generates all the tasks by descending in the tasks tree. Note that each task
- *  has a dependedTaskList.
+ *  has a dependentTaskList.
  * - It generates FetchTask queryStrings with the MapTask queries. It uses the first replicate to
  *  fetch data when replication factor is > 1. Note that if a task fails in any replica adaptive executor
  *  gives an error, so if we come to a fetchTask we know for sure that its dependedMapTask is executed in all
@@ -56,7 +56,7 @@ static char * GenerateDeleteJobsCommand(List *jobIds);
  * in order from the task tree. At a time, it can execute different tasks from
  * different jobs.
  */
-List*
+List *
 ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	EnsureNoModificationsHaveBeenDone();
@@ -108,7 +108,7 @@ TraverseJobTree(Job *curJob, List **jobIds)
 	ListCell *jobCell = NULL;
 	*jobIds = lappend(*jobIds, (void *) curJob->jobId);
 
-	foreach(jobCell, curJob->dependedJobList)
+	foreach(jobCell, curJob->dependentJobList)
 	{
 		Job *childJob = (Job *) lfirst(jobCell);
 		TraverseJobTree(childJob, jobIds);
