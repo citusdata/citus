@@ -45,6 +45,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
@@ -615,6 +616,16 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.use_std_planner",
+		gettext_noop(""),
+		NULL,
+		&UseStdPlanner,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",

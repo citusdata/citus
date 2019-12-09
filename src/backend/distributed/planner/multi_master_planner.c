@@ -31,6 +31,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
+#include "optimizer/planner.h"
 #include "optimizer/tlist.h"
 #include "optimizer/subselect.h"
 #if PG_VERSION_NUM >= 120000
@@ -131,6 +132,38 @@ MasterTargetList(List *workerTargetList)
 }
 
 
+static Plan *
+replace_function_scan_with_remote_scan(Plan *plan, CustomScan *remoteScan)
+{
+	if (IsA(plan, FunctionScan))
+	{
+		return (Plan *) copyObject(remoteScan);
+	}
+
+	return plan;
+}
+
+
+static Plan *
+PlanMutator(Plan *plan, Plan *(*mutator) (), void *context)
+{
+	if (plan == NULL)
+	{
+		return NULL;
+	}
+
+	plan = mutator(plan, context);
+
+	/* recurse into child plans */
+	plan->lefttree = PlanMutator(plan->lefttree, mutator, context);
+	plan->righttree = PlanMutator(plan->righttree, mutator, context);
+
+	return plan;
+}
+
+
+bool UseStdPlanner = false;
+
 /*
  * BuildSelectStatement builds the final select statement to run on the master
  * node, before returning results to the user. The function first gets the custom
@@ -140,6 +173,8 @@ MasterTargetList(List *workerTargetList)
 static PlannedStmt *
 BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
+
+
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
 	Agg *aggregationPlan = NULL;
@@ -156,6 +191,44 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	root->planner_cxt = CurrentMemoryContext;
 	root->wt_param_id = -1;
 
+	PlannedStmt *standardStmt = standard_planner(masterQuery, 0, NULL);
+	/* replace FUNCTIONSCAN NODE with remoteScan */
+	remoteScan->custom_scan_tlist = masterTargetList;
+	remoteScan->scan.plan.targetlist = masterTargetList;
+	pprint(standardStmt);
+	remoteScan = castNode(CustomScan, set_plan_references(root, (Plan *)remoteScan));
+//	FinalizeStatement(root, standardStmt, remoteScan);
+	standardStmt->planTree = PlanMutator(standardStmt->planTree,
+										 replace_function_scan_with_remote_scan,
+										 remoteScan);
+	{
+		/*
+		 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
+		 */
+		foreach_ptr(targetEntry, masterTargetList)
+		{
+			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+		}
+
+		RangeTblEntry *customScanRangeTableEntry = linitial(standardStmt->rtable);
+		customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
+		columnNameList = NIL;
+	}
+
+	pprint(standardStmt);
+	if (UseStdPlanner)
+	{
+		return standardStmt;
+	}
+
+	/* reset state */
+	glob = makeNode(PlannerGlobal);
+	root = makeNode(PlannerInfo);
+	root->parse = masterQuery;
+	root->glob = glob;
+	root->query_level = 1;
+	root->planner_cxt = CurrentMemoryContext;
+	root->wt_param_id = -1;
 
 	/* (1) make PlannedStmt and set basic information */
 	PlannedStmt *selectStatement = makeNode(PlannedStmt);
@@ -281,6 +354,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	RangeTblEntry *customScanRangeTableEntry = linitial(selectStatement->rtable);
 	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 
+	pprint(selectStatement);
 	return selectStatement;
 }
 

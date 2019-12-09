@@ -83,3 +83,12 @@ CREATE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger
 
 #include "udfs/citus_prepare_pg_upgrade/9.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/9.2-1.sql"
+
+-- changing the return type of the function requires we drop the function
+DROP FUNCTION citus_extradata_container(INTERNAL);
+CREATE OR REPLACE FUNCTION citus_extradata_container(INTERNAL)
+    RETURNS SETOF record
+    LANGUAGE C
+AS 'MODULE_PATHNAME', $$citus_extradata_container$$;
+COMMENT ON FUNCTION pg_catalog.citus_extradata_container(INTERNAL)
+    IS 'placeholder function to store additional data in postgres node trees';
