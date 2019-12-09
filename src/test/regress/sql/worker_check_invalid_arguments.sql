@@ -100,3 +100,6 @@ SELECT worker_merge_files_and_run_query(:JobId, -1,
 SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'bytea']);
+
+-- worker_execute_sql_task should only accept queries
+select worker_execute_sql_task(0,0,'create table foo(a serial)',false);

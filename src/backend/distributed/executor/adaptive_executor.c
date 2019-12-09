@@ -1227,8 +1227,7 @@ ReadOnlyTask(TaskType taskType)
 {
 	switch (taskType)
 	{
-		case ROUTER_TASK:
-		case SQL_TASK:
+		case SELECT_TASK:
 		case MAP_OUTPUT_FETCH_TASK:
 		case MAP_TASK:
 		case MERGE_TASK:
@@ -1715,8 +1714,7 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 {
 	switch (task->taskType)
 	{
-		case SQL_TASK:
-		case ROUTER_TASK:
+		case SELECT_TASK:
 		{
 			return EXECUTION_ORDER_ANY;
 		}

@@ -1,3 +1,51 @@
+### citus v9.1.0 (November 21, 2019) ###
+
+* Adds extensions to distributed object propagation infrastructure
+
+* Adds support for ALTER ROLE propagation
+
+* Adds support for aggregates in create_distributed_function
+
+* Adds support for expressions in reference joins
+
+* Adds support for returning RECORD in multi-shard queries
+
+* Adds support for simple IN subqueries on unique cols in repartition joins
+
+* Adds support for subqueries in HAVING clauses
+
+* Automatically distributes unary aggs w/ combinefunc and non-internal stype
+
+* Disallows distributed func creation when replication_model is 'statement'
+
+* Drops support for deprecated real-time and router executors
+
+* Fixes a bug in local execution that could cause missing rows in RETURNING
+
+* Fixes a bug that caused maintenance daemon to fail on standby nodes
+
+* Fixes a bug that caused other CREATE EXTENSION commands to take longer
+
+* Fixes a bug that prevented REFRESH MATERIALIZED VIEW
+
+* Fixes a bug when view is used in modify statements
+
+* Fixes a memory leak in adaptive executor when query returns many columns
+
+* Fixes underflow init of default values in worker extended op node creation
+
+* Fixes potential segfault in standard_planner inlining functions
+
+* Fixes an issue that caused failures in RHEL 6 builds
+
+* Fixes queries with repartition joins and group by unique column
+
+* Improves CTE/Subquery performance by pruning intermediate rslt broadcasting
+
+* Removes `citus.worker_list_file` GUC
+
+* Revokes usage from the citus schema from public
+
 ### citus v9.0.1 (October 25, 2019) ###
 
 * Fixes a memory leak in the executor

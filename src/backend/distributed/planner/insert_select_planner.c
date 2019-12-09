@@ -283,7 +283,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	Job *workerJob = CitusMakeNode(Job);
 	workerJob->taskList = sqlTaskList;
 	workerJob->subqueryPushdown = false;
-	workerJob->dependedJobList = NIL;
+	workerJob->dependentJobList = NIL;
 	workerJob->jobId = jobId;
 	workerJob->jobQuery = originalQuery;
 	workerJob->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
@@ -575,7 +575,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 									   queryString->data);
-	modifyTask->dependedTaskList = NULL;
+	modifyTask->dependentTaskList = NULL;
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->relationShardList = relationShardList;
@@ -1178,7 +1178,7 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 		Job *workerJob = CitusMakeNode(Job);
 		workerJob->taskList = taskList;
 		workerJob->subqueryPushdown = false;
-		workerJob->dependedJobList = NIL;
+		workerJob->dependentJobList = NIL;
 		workerJob->jobId = jobId;
 		workerJob->jobQuery = insertSelectQuery;
 		workerJob->requiresMasterEvaluation = false;
@@ -1397,7 +1397,7 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 
 		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 										   queryString->data);
-		modifyTask->dependedTaskList = NULL;
+		modifyTask->dependentTaskList = NULL;
 		modifyTask->anchorShardId = shardId;
 		modifyTask->taskPlacementList = insertShardPlacementList;
 		modifyTask->relationShardList = list_make1(relationShard);

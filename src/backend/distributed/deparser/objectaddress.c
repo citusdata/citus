@@ -103,9 +103,23 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		case T_DefineStmt:
 		{
 			DefineStmt *stmt = castNode(DefineStmt, parseTree);
-			if (stmt->kind == OBJECT_AGGREGATE)
+
+			switch (stmt->kind)
 			{
-				return DefineAggregateStmtObjectAddress(stmt, missing_ok);
+				case OBJECT_AGGREGATE:
+				{
+					return DefineAggregateStmtObjectAddress(stmt, missing_ok);
+				}
+
+				case OBJECT_COLLATION:
+				{
+					return DefineCollationStmtObjectAddress(stmt, missing_ok);
+				}
+
+				default:
+				{
+					break;
+				}
 			}
 
 			ereport(ERROR, (errmsg(
@@ -172,6 +186,11 @@ RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
 			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
 		}
 
+		case OBJECT_COLLATION:
+		{
+			return RenameCollationStmtObjectAddress(stmt, missing_ok);
+		}
+
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		case OBJECT_FUNCTION:
@@ -196,6 +215,11 @@ AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		case OBJECT_TYPE:
 		{
 			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
+		}
+
+		case OBJECT_COLLATION:
+		{
+			return AlterCollationSchemaStmtObjectAddress(stmt, missing_ok);
 		}
 
 		case OBJECT_PROCEDURE:
@@ -245,6 +269,13 @@ AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
 {
 	switch (stmt->objectType)
 	{
+		case OBJECT_COLLATION:
+		{
+			ObjectAddress *address = palloc(sizeof(ObjectAddress));
+			*address = AlterCollationOwnerObjectAddress(stmt);
+			return address;
+		}
+
 		case OBJECT_TYPE:
 		{
 			return AlterTypeOwnerObjectAddress(stmt, missing_ok);

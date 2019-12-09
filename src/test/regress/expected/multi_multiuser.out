@@ -5,18 +5,6 @@
 --
 SET citus.next_shard_id TO 1420000;
 SET citus.shard_replication_factor TO 1;
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
-CREATE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
  create_distributed_table 
@@ -433,7 +421,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 RESET ROLE;
 SET ROLE usage_access;
 CREATE TYPE usage_access_type AS ENUM ('a', 'b');
@@ -684,7 +672,7 @@ ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_0000
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.37457": No such file or directory
+WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.44518": No such file or directory
 CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
 -- only the user whom created the files should be able to fetch
@@ -723,7 +711,7 @@ RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-WARNING:  Task file "task_000001.36145" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.43115" does not have expected suffix ".10"
  worker_merge_files_into_table 
 -------------------------------
  
@@ -765,7 +753,7 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
-WARNING:  Task file "task_000001.36145" does not have expected suffix ".10"
+WARNING:  Task file "task_000001.43115" does not have expected suffix ".10"
  worker_merge_files_and_run_query 
 ----------------------------------
  

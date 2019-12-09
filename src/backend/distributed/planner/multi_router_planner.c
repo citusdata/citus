@@ -640,7 +640,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	}
 
 	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -715,7 +715,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 				DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
 					distributedTableId);
 				char *partitionKeyString = cacheEntry->partitionKeyString;
-				char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+				char *partitionColumnName = ColumnToColumnName(distributedTableId,
 															   partitionKeyString);
 
 				appendStringInfo(errorHint, "Consider using an equality filter on "
@@ -1453,7 +1453,7 @@ CreateJob(Query *query)
 	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
-	job->dependedJobList = NIL;
+	job->dependentJobList = NIL;
 	job->subqueryPushdown = false;
 	job->requiresMasterEvaluation = false;
 	job->deferredPruning = false;
@@ -1575,7 +1575,7 @@ CreateTask(TaskType taskType)
 	task->queryString = NULL;
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
-	task->dependedTaskList = NIL;
+	task->dependentTaskList = NIL;
 
 	task->partitionId = 0;
 	task->upstreamTaskId = INVALID_TASK_ID;
@@ -1807,7 +1807,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList,
 						  uint64 shardId)
 {
-	Task *task = CreateTask(ROUTER_TASK);
+	Task *task = CreateTask(SELECT_TASK);
 	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
@@ -2556,7 +2556,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		if (prunedShardIntervalCount != 1)
 		{
 			char *partitionKeyString = cacheEntry->partitionKeyString;
-			char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+			char *partitionColumnName = ColumnToColumnName(distributedTableId,
 														   partitionKeyString);
 			StringInfo errorMessage = makeStringInfo();
 			StringInfo errorHint = makeStringInfo();

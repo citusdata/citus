@@ -314,7 +314,7 @@ $$ LANGUAGE SQL STABLE;
 CREATE OR REPLACE FUNCTION test_parameterized_sql_function_in_subquery_where(org_id_val integer)
 RETURNS TABLE (a bigint)
 AS $$
-    SELECT count(*) AS count_val from test_parameterized_sql as t1 where 
+    SELECT count(*) AS count_val from test_parameterized_sql as t1 where
     org_id IN (SELECT org_id FROM test_parameterized_sql as t2 WHERE t2.org_id = t1.org_id AND org_id = org_id_val);
 $$ LANGUAGE SQL STABLE;
 INSERT INTO test_parameterized_sql VALUES(1, 1);
@@ -332,8 +332,36 @@ ERROR:  could not create distributed plan
 DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
 HINT:  Consider using PL/pgSQL functions instead.
 CONTEXT:  SQL function "test_parameterized_sql_function_in_subquery_where" statement 1
-DROP TABLE temp_table;
-DROP TABLE test_parameterized_sql;
+-- test that sql function calls are treated as multi-statement transactions
+-- and are rolled back properly. Single-row inserts for not-replicated tables
+-- don't go over 2PC if they are not part of a bigger transaction.
+CREATE TABLE table_with_unique_constraint (a int UNIQUE);
+SELECT create_distributed_table('table_with_unique_constraint', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO table_with_unique_constraint VALUES (1), (2), (3);
+CREATE OR REPLACE FUNCTION insert_twice() RETURNS VOID
+AS $$
+  INSERT INTO table_with_unique_constraint VALUES (4);
+  INSERT INTO table_with_unique_constraint VALUES (4);
+$$ LANGUAGE SQL;
+SELECT insert_twice();
+ERROR:  duplicate key value violates unique constraint "table_with_unique_constraint_a_key_1230009"
+DETAIL:  Key (a)=(4) already exists.
+CONTEXT:  while executing command on localhost:57638
+SQL function "insert_twice" statement 2
+SELECT * FROM table_with_unique_constraint ORDER BY a;
+ a 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+DROP TABLE temp_table, test_parameterized_sql, table_with_unique_constraint;
 -- clean-up functions
 DROP FUNCTION sql_test_no_1();
 DROP FUNCTION sql_test_no_2();

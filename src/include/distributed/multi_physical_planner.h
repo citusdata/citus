@@ -77,16 +77,15 @@ typedef enum
 /* Enumeration that defines different task types */
 typedef enum
 {
-	TASK_TYPE_INVALID_FIRST = 0,
-	SQL_TASK = 1,
-	MAP_TASK = 2,
-	MERGE_TASK = 3,
-	MAP_OUTPUT_FETCH_TASK = 4,
-	MERGE_FETCH_TASK = 5,
-	MODIFY_TASK = 6,
-	ROUTER_TASK = 7,
-	DDL_TASK = 8,
-	VACUUM_ANALYZE_TASK = 9
+	TASK_TYPE_INVALID_FIRST,
+	SELECT_TASK,
+	MAP_TASK,
+	MERGE_TASK,
+	MAP_OUTPUT_FETCH_TASK,
+	MERGE_FETCH_TASK,
+	MODIFY_TASK,
+	DDL_TASK,
+	VACUUM_ANALYZE_TASK
 } TaskType;
 
 
@@ -132,7 +131,7 @@ typedef struct Job
 	uint64 jobId;
 	Query *jobQuery;
 	List *taskList;
-	List *dependedJobList;
+	List *dependentJobList;
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
@@ -185,7 +184,7 @@ typedef struct Task
 	char *queryString;
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
-	List *dependedTaskList;     /* only applies to compute tasks */
+	List *dependentTaskList;     /* only applies to compute tasks */
 
 	uint32 partitionId;
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */

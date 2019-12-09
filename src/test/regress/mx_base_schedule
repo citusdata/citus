@@ -3,6 +3,7 @@
 # ----------
 test: multi_cluster_management
 test: multi_test_helpers
+test: multi_test_catalog_views
 
 # the following test has to be run sequentially
 test: multi_mx_create_table

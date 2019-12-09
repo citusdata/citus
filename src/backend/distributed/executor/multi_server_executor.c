@@ -96,8 +96,8 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		/* if we have repartition jobs with adaptive executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
 		 */
-		int dependedJobCount = list_length(job->dependedJobList);
-		if (dependedJobCount > 0)
+		int dependentJobCount = list_length(job->dependentJobList);
+		if (dependentJobCount > 0)
 		{
 			if (!EnableRepartitionJoins)
 			{

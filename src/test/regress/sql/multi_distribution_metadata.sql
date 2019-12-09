@@ -150,6 +150,16 @@ VALUES
 SELECT partmethod, column_to_column_name(logicalrelid, partkey) FROM pg_dist_partition
 	WHERE logicalrelid = 'customers'::regclass;
 
+-- test column_to_column_name with illegal arguments
+SELECT column_to_column_name(1204127312,'');
+SELECT column_to_column_name('customers','');
+SELECT column_to_column_name('pg_dist_node'::regclass, NULL);
+SELECT column_to_column_name('pg_dist_node'::regclass,'{FROMEXPR :fromlist ({RANGETBLREF :rtindex 1 }) :quals <>}');
+
+-- test column_name_to_column with illegal arguments
+SELECT column_name_to_column(1204127312,'');
+SELECT column_name_to_column('customers','notacolumn');
+
 -- make one huge shard and manually inspect shard row
 SELECT create_monolithic_shard_row('customers') AS new_shard_id
 \gset

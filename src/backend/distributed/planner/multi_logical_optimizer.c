@@ -250,9 +250,9 @@ static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
-static AggregateType GetAggregateType(Oid aggFunctionId);
+static AggregateType GetAggregateType(Aggref *aggregatExpression);
 static Oid AggregateArgumentType(Aggref *aggregate);
-static bool AggregateEnabledCustom(Oid aggregateOid);
+static bool AggregateEnabledCustom(Aggref *aggregateExpression);
 static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
 static Oid WorkerPartialAggOid(void);
 static Oid CoordCombineAggOid(void);
@@ -1494,7 +1494,7 @@ static Expr *
 MasterAggregateExpression(Aggref *originalAggregate,
 						  MasterAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	Expr *newMasterExpression = NULL;
 	const uint32 masterTableId = 1;  /* one table on the master node */
 	const Index columnLevelsUp = 0;  /* normal column */
@@ -1821,9 +1821,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	}
 	else if (aggregateType == AGGREGATE_CUSTOM)
 	{
-		HeapTuple aggTuple = SearchSysCache1(AGGFNOID,
-											 ObjectIdGetDatum(
-												 originalAggregate->aggfnoid));
+		HeapTuple aggTuple =
+			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
 
@@ -1857,12 +1856,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			walkerContext->columnId++;
 			Const *nullTag = makeNullConst(resultType, -1, InvalidOid);
 
-			List *aggArguments = list_make3(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
-															false),
-											makeTargetEntry((Expr *) column, 2, NULL,
-															false),
-											makeTargetEntry((Expr *) nullTag, 3, NULL,
-															false));
+			List *aggArguments =
+				list_make3(makeTargetEntry((Expr *) aggOidParam, 1, NULL, false),
+						   makeTargetEntry((Expr *) column, 2, NULL, false),
+						   makeTargetEntry((Expr *) nullTag, 3, NULL, false));
 
 			/* coord_combine_agg(agg, workercol) */
 			Aggref *newMasterAggregate = makeNode(Aggref);
@@ -1870,7 +1867,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			newMasterAggregate->aggtype = originalAggregate->aggtype;
 			newMasterAggregate->args = aggArguments;
 			newMasterAggregate->aggkind = AGGKIND_NORMAL;
-			newMasterAggregate->aggfilter = originalAggregate->aggfilter;
+			newMasterAggregate->aggfilter = NULL;
 			newMasterAggregate->aggtranstype = INTERNALOID;
 			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
 															 resultType);
@@ -2776,7 +2773,7 @@ static List *
 WorkerAggregateExpressionList(Aggref *originalAggregate,
 							  WorkerAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	List *workerAggregateList = NIL;
 	AggClauseCosts aggregateCosts;
 
@@ -2893,9 +2890,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	}
 	else if (aggregateType == AGGREGATE_CUSTOM)
 	{
-		HeapTuple aggTuple = SearchSysCache1(AGGFNOID,
-											 ObjectIdGetDatum(
-												 originalAggregate->aggfnoid));
+		HeapTuple aggTuple =
+			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
 
@@ -2919,8 +2915,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
-										   false,
-										   true);
+										   false, true);
 			List *aggArguments = list_make1(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
 															false));
 			foreach(originalAggArgCell, originalAggregate->args)
@@ -2932,15 +2927,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			}
 
 			/* worker_partial_agg(agg, ...args) */
-			Aggref *newWorkerAggregate = makeNode(Aggref);
+			Aggref *newWorkerAggregate = copyObject(originalAggregate);
 			newWorkerAggregate->aggfnoid = workerPartialId;
 			newWorkerAggregate->aggtype = CSTRINGOID;
 			newWorkerAggregate->args = aggArguments;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
-			newWorkerAggregate->aggfilter = originalAggregate->aggfilter;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
 			newWorkerAggregate->aggargtypes = lcons_oid(OIDOID,
-														originalAggregate->aggargtypes);
+														newWorkerAggregate->aggargtypes);
 			newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 			workerAggregateList = list_make1(newWorkerAggregate);
@@ -2976,8 +2970,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
  * previously stored strings, and returns the appropriate aggregate type.
  */
 static AggregateType
-GetAggregateType(Oid aggFunctionId)
+GetAggregateType(Aggref *aggregateExpression)
 {
+	Oid aggFunctionId = aggregateExpression->aggfnoid;
+
 	/* look up the function name */
 	char *aggregateProcName = get_func_name(aggFunctionId);
 	if (aggregateProcName == NULL)
@@ -2999,7 +2995,7 @@ GetAggregateType(Oid aggFunctionId)
 		}
 	}
 
-	if (AggregateEnabledCustom(aggFunctionId))
+	if (AggregateEnabledCustom(aggregateExpression))
 	{
 		return AGGREGATE_CUSTOM;
 	}
@@ -3028,8 +3024,15 @@ AggregateArgumentType(Aggref *aggregate)
  * distributed across workers using worker_partial_agg & coord_combine_agg.
  */
 static bool
-AggregateEnabledCustom(Oid aggregateOid)
+AggregateEnabledCustom(Aggref *aggregateExpression)
 {
+	if (aggregateExpression->aggorder != NIL ||
+		list_length(aggregateExpression->args) != 1)
+	{
+		return false;
+	}
+
+	Oid aggregateOid = aggregateExpression->aggfnoid;
 	HeapTuple aggTuple = SearchSysCache1(AGGFNOID, aggregateOid);
 	if (!HeapTupleIsValid(aggTuple))
 	{
@@ -3345,7 +3348,7 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 
 		/* GetAggregateType errors out on unsupported aggregate types */
 		Aggref *aggregateExpression = (Aggref *) expression;
-		AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+		AggregateType aggregateType = GetAggregateType(aggregateExpression);
 		Assert(aggregateType != AGGREGATE_INVALID_FIRST);
 
 		/*
@@ -3439,7 +3442,7 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	char *errorDetail = NULL;
 	bool distinctSupported = true;
 
-	AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(aggregateExpression);
 
 	/*
 	 * We partially support count(distinct) in subqueries, other distinct aggregates in
@@ -4173,7 +4176,7 @@ GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
 		else
 		{
 			Aggref *aggNode = (Aggref *) targetExpr;
-			AggregateType aggregateType = GetAggregateType(aggNode->aggfnoid);
+			AggregateType aggregateType = GetAggregateType(aggNode);
 			if (aggregateType == AGGREGATE_AVERAGE)
 			{
 				createNewTargetEntry = true;
@@ -4285,7 +4288,7 @@ HasOrderByAverage(List *sortClauseList, List *targetList)
 		{
 			Aggref *aggregate = (Aggref *) sortExpression;
 
-			AggregateType aggregateType = GetAggregateType(aggregate->aggfnoid);
+			AggregateType aggregateType = GetAggregateType(aggregate);
 			if (aggregateType == AGGREGATE_AVERAGE)
 			{
 				hasOrderByAverage = true;
