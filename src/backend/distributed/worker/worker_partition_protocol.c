@@ -69,7 +69,8 @@ static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite
 static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
 									const char *columnName, Oid columnType,
-									uint32 (*PartitionIdFunction)(Datum, const void *),
+									uint32 (*PartitionIdFunction)(Datum, Oid, const
+																  void *),
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
@@ -78,8 +79,10 @@ static CopyOutState InitRowOutputState(void);
 static void ClearRowOutputState(CopyOutState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
-static uint32 RangePartitionId(Datum partitionValue, const void *context);
-static uint32 HashPartitionId(Datum partitionValue, const void *context);
+static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation, const
+							   void *context);
+static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation, const
+							  void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(char *filename, struct stat filestat);
 
@@ -187,8 +190,6 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	Datum *hashRangeArray = DeconstructArrayObject(hashRangeObject);
 	int32 partitionCount = ArrayObjectCount(hashRangeObject);
 
-	uint32 (*hashPartitionIdFunction)(Datum, const void *);
-
 	CheckCitusVersion(ERROR);
 
 	HashPartitionContext *partitionContext = palloc0(sizeof(HashPartitionContext));
@@ -197,8 +198,6 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	partitionContext->hasUniformHashDistribution =
 		HasUniformHashDistribution(partitionContext->syntheticShardIntervalArray,
 								   partitionCount);
-
-	hashPartitionIdFunction = &HashPartitionId;
 
 	/* use column's type information to get the hashing function */
 	FmgrInfo *hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID,
@@ -209,7 +208,6 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	partitionContext->hashFunction = hashFunction;
 	partitionContext->partitionCount = partitionCount;
-	partitionContext->collation = PG_GET_COLLATION();
 
 	/* we'll use binary search, we need the comparison function */
 	if (!partitionContext->hasUniformHashDistribution)
@@ -228,7 +226,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	/* call the partitioning function that does the actual work */
 	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
-							hashPartitionIdFunction, (const void *) partitionContext,
+							&HashPartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
 	/* close partition files and atomically rename (commit) them */
@@ -856,7 +854,7 @@ FileOutputStreamFlush(FileOutputStream *file)
 static void
 FilterAndPartitionTable(const char *filterQuery,
 						const char *partitionColumnName, Oid partitionColumnType,
-						uint32 (*PartitionIdFunction)(Datum, const void *),
+						uint32 (*PartitionIdFunction)(Datum, Oid, const void *),
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
@@ -864,6 +862,7 @@ FilterAndPartitionTable(const char *filterQuery,
 	FmgrInfo *columnOutputFunctions = NULL;
 	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
+	Oid partitionColumnCollation = InvalidOid;
 
 	const char *noPortalName = NULL;
 	const bool readOnly = true;
@@ -900,6 +899,9 @@ FilterAndPartitionTable(const char *filterQuery,
 
 		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
 		partitionColumnTypeId = SPI_gettypeid(rowDescriptor, partitionColumnIndex);
+		partitionColumnCollation = TupleDescAttr(rowDescriptor, partitionColumnIndex -
+												 1)->attcollation;
+
 		if (partitionColumnType != partitionColumnTypeId)
 		{
 			ereport(ERROR, (errmsg("partition column types %u and %u do not match",
@@ -939,7 +941,9 @@ FilterAndPartitionTable(const char *filterQuery,
 			 */
 			if (!partitionKeyNull)
 			{
-				partitionId = (*PartitionIdFunction)(partitionKey, partitionIdContext);
+				partitionId = (*PartitionIdFunction)(partitionKey,
+													 partitionColumnCollation,
+													 partitionIdContext);
 				if (partitionId == INVALID_SHARD_INDEX)
 				{
 					ereport(ERROR, (errmsg("invalid distribution column value")));
@@ -1145,16 +1149,6 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 }
 
 
-/* Helper function that invokes a function with the default collation oid. */
-Datum
-CompareCall2(FmgrInfo *functionInfo, Datum leftArgument, Datum rightArgument)
-{
-	Datum result = FunctionCall2Coll(functionInfo, DEFAULT_COLLATION_OID,
-									 leftArgument, rightArgument);
-	return result;
-}
-
-
 /*
  * RangePartitionId determines the partition number for the given data value
  * by applying range partitioning. More specifically, the function takes in a
@@ -1167,7 +1161,7 @@ CompareCall2(FmgrInfo *functionInfo, Datum leftArgument, Datum rightArgument)
  * full compatibility with the semantics of Hadoop's TotalOrderPartitioner.
  */
 static uint32
-RangePartitionId(Datum partitionValue, const void *context)
+RangePartitionId(Datum partitionValue, Oid partitionCollation, const void *context)
 {
 	RangePartitionContext *rangePartitionContext = (RangePartitionContext *) context;
 	FmgrInfo *comparisonFunction = rangePartitionContext->comparisonFunction;
@@ -1191,8 +1185,9 @@ RangePartitionId(Datum partitionValue, const void *context)
 
 		Datum middlePoint = pointArray[middleIndex];
 
-		Datum comparisonDatum = CompareCall2(comparisonFunction, partitionValue,
-											 middlePoint);
+		Datum comparisonDatum =
+			FunctionCall2Coll(comparisonFunction, partitionCollation,
+							  partitionValue, middlePoint);
 		int comparisonResult = DatumGetInt32(comparisonDatum);
 
 		/* if partition value is less than middle point */
@@ -1217,9 +1212,12 @@ RangePartitionId(Datum partitionValue, const void *context)
  * using hash partitioning. More specifically, the function returns zero if the
  * given data value is null. If not, the function follows the exact same approach
  * as Citus distributed planner uses.
+ *
+ * partitionCollation is unused, as we do not support non deterministic collations
+ * for hash distributed tables.
  */
 static uint32
-HashPartitionId(Datum partitionValue, const void *context)
+HashPartitionId(Datum partitionValue, Oid partitionCollation, const void *context)
 {
 	HashPartitionContext *hashPartitionContext = (HashPartitionContext *) context;
 	FmgrInfo *hashFunction = hashPartitionContext->hashFunction;
@@ -1227,7 +1225,7 @@ HashPartitionId(Datum partitionValue, const void *context)
 	ShardInterval **syntheticShardIntervalArray =
 		hashPartitionContext->syntheticShardIntervalArray;
 	FmgrInfo *comparisonFunction = hashPartitionContext->comparisonFunction;
-	Datum hashDatum = FunctionCall1Coll(hashFunction, hashPartitionContext->collation,
+	Datum hashDatum = FunctionCall1Coll(hashFunction, DEFAULT_COLLATION_OID,
 										partitionValue);
 	int32 hashResult = 0;
 	uint32 hashPartitionId = 0;
@@ -1248,7 +1246,8 @@ HashPartitionId(Datum partitionValue, const void *context)
 	{
 		hashPartitionId =
 			SearchCachedShardInterval(hashDatum, syntheticShardIntervalArray,
-									  partitionCount, comparisonFunction);
+									  partitionCount, InvalidOid,
+									  comparisonFunction);
 	}
 
 

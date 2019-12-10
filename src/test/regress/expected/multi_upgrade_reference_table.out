@@ -155,8 +155,8 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
 (0 rows)
 
 SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
@@ -209,9 +209,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -267,9 +267,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360001 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360001 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -321,9 +321,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -381,9 +381,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360002 |          1 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360002 |          1 |                 2 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -436,9 +436,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -494,9 +494,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360003 |          1 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360003 |          1 |                 2 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -548,9 +548,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -607,9 +607,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -663,9 +663,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -722,9 +722,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360004 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -778,9 +778,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -848,9 +848,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360005 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360005 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -899,9 +899,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360005 |          1 |                 1 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360005 |          1 |                 1 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -968,9 +968,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-      1360006 |          1 |                 2 |                     23
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+      1360006 |          1 |                 2 |                     23 |                           0
 (1 row)
 
 SELECT
@@ -1023,9 +1023,9 @@ WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype 
---------------+------------+-------------------+------------------------
-        10004 |          1 |                -1 |                      0
+ colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
+--------------+------------+-------------------+------------------------+-----------------------------
+        10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT

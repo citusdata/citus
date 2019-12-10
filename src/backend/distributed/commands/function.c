@@ -346,7 +346,8 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 	{
 		/* check for default colocation group */
 		colocationId = ColocationId(ShardCount, ShardReplicationFactor,
-									distributionArgumentOid);
+									distributionArgumentOid, get_typcollation(
+										distributionArgumentOid));
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
