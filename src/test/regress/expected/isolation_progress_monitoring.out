@@ -2,20 +2,18 @@ Parsed test spec with 5 sessions
 
 starting permutation: take-locks s1-start-operation s2-start-operation s3-start-operation show-progress release-locks-1 show-progress release-locks-2 show-progress release-locks-3
 step take-locks: 
-	-- Locks for steps of sample operation in s1
-	SELECT pg_advisory_lock(10);
-	SELECT pg_advisory_lock(11);
-	SELECT pg_advisory_lock(12);
-
-	-- Locks for steps of sample operation in s2
-	SELECT pg_advisory_lock(20);
-	SELECT pg_advisory_lock(21);
-	SELECT pg_advisory_lock(22);
-
-	-- Locks for steps of sample operation in s3
-	SELECT pg_advisory_lock(30);
-	SELECT pg_advisory_lock(31);
-	SELECT pg_advisory_lock(32);
+ -- Locks for steps of sample operation in s1
+ SELECT pg_advisory_lock(10);
+ SELECT pg_advisory_lock(11);
+ SELECT pg_advisory_lock(12);
+ -- Locks for steps of sample operation in s2
+ SELECT pg_advisory_lock(20);
+ SELECT pg_advisory_lock(21);
+ SELECT pg_advisory_lock(22);
+ -- Locks for steps of sample operation in s3
+ SELECT pg_advisory_lock(30);
+ SELECT pg_advisory_lock(31);
+ SELECT pg_advisory_lock(32);
 
 pg_advisory_lock
 
@@ -45,17 +43,17 @@ pg_advisory_lock
 
                
 step s1-start-operation: 
-	SELECT sample_operation(1337, 10, -1);
+ SELECT sample_operation(1337, 10, -1);
  <waiting ...>
 step s2-start-operation: 
-	SELECT sample_operation(1337, 20, 2);
+ SELECT sample_operation(1337, 20, 2);
  <waiting ...>
 step s3-start-operation: 
-	SELECT sample_operation(3778, 30, 9);
+ SELECT sample_operation(3778, 30, 9);
  <waiting ...>
 step show-progress: 
-	SELECT show_progress(1337);
-	SELECT show_progress(3778);
+ SELECT show_progress(1337);
+ SELECT show_progress(3778);
 
 show_progress  
 
@@ -68,10 +66,10 @@ show_progress
 (0,0)          
 (1,0)          
 step release-locks-1: 
-	-- Release the locks of first steps of sample operations
-	SELECT pg_advisory_unlock(10);
-	SELECT pg_advisory_unlock(20);
-	SELECT pg_advisory_unlock(30);
+ -- Release the locks of first steps of sample operations
+ SELECT pg_advisory_unlock(10);
+ SELECT pg_advisory_unlock(20);
+ SELECT pg_advisory_unlock(30);
 
 pg_advisory_unlock
 
@@ -83,8 +81,8 @@ pg_advisory_unlock
 
 t              
 step show-progress: 
-	SELECT show_progress(1337);
-	SELECT show_progress(3778);
+ SELECT show_progress(1337);
+ SELECT show_progress(3778);
 
 show_progress  
 
@@ -97,10 +95,10 @@ show_progress
 (0,9)          
 (1,0)          
 step release-locks-2: 
-	-- Release the locks of second steps of sample operations
-	SELECT pg_advisory_unlock(11);
-	SELECT pg_advisory_unlock(21);
-	SELECT pg_advisory_unlock(31);
+ -- Release the locks of second steps of sample operations
+ SELECT pg_advisory_unlock(11);
+ SELECT pg_advisory_unlock(21);
+ SELECT pg_advisory_unlock(31);
 
 pg_advisory_unlock
 
@@ -112,8 +110,8 @@ pg_advisory_unlock
 
 t              
 step show-progress: 
-	SELECT show_progress(1337);
-	SELECT show_progress(3778);
+ SELECT show_progress(1337);
+ SELECT show_progress(3778);
 
 show_progress  
 
@@ -126,10 +124,10 @@ show_progress
 (0,9)          
 (1,9)          
 step release-locks-3: 
-	-- Release the locks of final steps of sample operations
-	SELECT pg_advisory_unlock(12);
-	SELECT pg_advisory_unlock(22);
-	SELECT pg_advisory_unlock(32);
+ -- Release the locks of final steps of sample operations
+ SELECT pg_advisory_unlock(12);
+ SELECT pg_advisory_unlock(22);
+ SELECT pg_advisory_unlock(32);
 
 pg_advisory_unlock
 

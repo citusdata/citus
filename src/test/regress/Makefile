@@ -26,6 +26,8 @@ MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) -
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
 citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
+template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
+generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
 # XXX: Can't actually do useful testruns against install - $libdir
 # etc will point to the directory configured during postgres'
 # build. We could copy the installed tree around, but that's quite
@@ -47,6 +49,47 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 check: check-full
 # check-full triggers all tests that ought to be run routinely
 check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-worker check-follower-cluster check-failure
+
+
+ISOLATION_DEPDIR=.deps/isolation
+ISOLATION_BUILDDIR=build/specs
+
+# this can be used to print a value of variable
+# ex: make print-generated_isolation_files
+print-%  : ; @echo $* = $($*)
+
+.PHONY: create-symbolic-link
+
+create-symbolic-link:
+	mkdir -p $(citus_abs_srcdir)/build
+	ln -fsn $(citus_abs_srcdir)/expected $(citus_abs_srcdir)/build/
+
+
+# How this target works:
+# cpp is used before running isolation tests to preprocess spec files.
+# This way we can include any file we want to. Currently this is used to include mx common part.
+# spec files are put to /build/specs for clear separation between generated files and template files
+# a symbolic link is created for /expected in build/expected/.
+# when running isolation tests, as the inputdir, build is passed so
+# it runs the spec files from build/specs and checks the expected output from build/expected.
+# /specs is renamed as /spec because postgres first look at the specs file under current directory,
+# so this is renamed to avoid that since we are running the isolation tests from build/specs now.
+$(generated_isolation_files): $(citus_abs_srcdir)/build/specs/%: $(citus_abs_srcdir)/spec/%
+	@mkdir -p $(citus_abs_srcdir)/$(ISOLATION_DEPDIR) $(citus_abs_srcdir)/$(ISOLATION_BUILDDIR)
+	# -MF is used to store dependency files(.Po) in another directory for separation
+	# -MT is used to change the target of the rule emitted by dependency generation.
+	# -P is used to inhibit generation of linemarkers in the output from the preprocessor.
+	# -undef is used to not predefine any system-specific or GCC-specific macros.
+	# `man cpp` for further information
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< > $@
+
+
+Isolation_Po_files := $(wildcard $(ISOLATION_DEPDIR)/*.Po)
+ifneq (,$(Isolation_Po_files))
+include $(Isolation_Po_files)
+endif
+
+isolation_test_files=$(generated_isolation_files) create-symbolic-link
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
@@ -101,7 +144,7 @@ check-failure-non-adaptive-base: all tempinstall-main
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
-check-isolation-non-adaptive: all tempinstall-main
+check-isolation-non-adaptive: all tempinstall-main $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
@@ -111,11 +154,11 @@ check-multi-vg: all tempinstall-main
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-isolation: all tempinstall-main
+check-isolation: all tempinstall-main $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
-check-isolation-base: all tempinstall-main
+check-isolation-base: all tempinstall-main $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
