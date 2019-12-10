@@ -19,8 +19,6 @@
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
 
-static bool ListMemberUint64(const List *list, uint64 datum);
-
 
 /*
  * SortList takes in a list of void pointers, and sorts these pointers (and the
@@ -154,44 +152,6 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	}
 
 	return itemSet;
-}
-
-
-/*
- * ListAppendUniqueUint64 appends the given uint64 if it does not
- * exist in the list.
- */
-List *
-ListAppendUniqueUint64(List *list, uint64 datum)
-{
-	if (ListMemberUint64(list, datum))
-	{
-		return list;
-	}
-	else
-	{
-		return lappend(list, (void *) datum);
-	}
-}
-
-
-/*
- * ListMemberUint64 returns true iff the uint64 'datum' is a member of the list.
- */
-static bool
-ListMemberUint64(const List *list, uint64 datum)
-{
-	const ListCell *cell;
-
-	foreach(cell, list)
-	{
-		if ((uint64) lfirst(cell) == datum)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 

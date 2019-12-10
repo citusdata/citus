@@ -285,7 +285,11 @@ typedef struct DistributedExecution
 	char **columnArray;
 
 	/*
-	 * useRemoteTransactionBlocks is used to manage remote transactions.
+	 * useRemoteTransactionBlocks is used to manage remote transactions. It
+	 * could state one of the followings:
+	 * - opening a remote transaction is required
+	 * - opening a remote transaction is disallowed
+	 * - opening a remote transaction does not matter, so it is allowed but not required.
 	 */
 	enum RemoteTransactionBlocksUsage useRemoteTransactionBlocks;
 
@@ -1009,7 +1013,8 @@ StartDistributedExecution(DistributedExecution *execution)
 
 	/*
 	 * If the current or previous execution in the current transaction requires
-	 * rollback then we should use transaction blocks.
+	 * rollback then we should use transaction blocks. If we have dependent jobs
+	 * then we do not open a transaction.
 	 */
 	if (InCoordinatedTransaction() && execution->useRemoteTransactionBlocks ==
 		REMOTE_TRANSACTION_BLOCKS_ALLOWED)
@@ -1096,6 +1101,11 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	int taskCount = list_length(taskList);
 
+	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED)
+	{
+		return false;
+	}
+
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
 	{
 		return false;
@@ -1116,11 +1126,6 @@ DistributedExecutionRequiresRollback(DistributedExecution *execution)
 		 * if SELECT FOR UPDATE is executed inside a distributed transaction.
 		 */
 		return IsTransactionBlock();
-	}
-
-	if (execution->useRemoteTransactionBlocks == REMOTE_TRANSACTION_BLOCKS_DISALLOWED)
-	{
-		return false;
 	}
 
 	if (ReadOnlyTask(task->taskType))
