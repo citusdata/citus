@@ -581,6 +581,7 @@ static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *work
 static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 											 WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
+static void HandleMultiConnectionSuccess(WorkerSession *session);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
@@ -2334,14 +2335,7 @@ ConnectionStateMachine(WorkerSession *session)
 				ConnStatusType status = PQstatus(connection->pgConn);
 				if (status == CONNECTION_OK)
 				{
-					ereport(DEBUG4, (errmsg("established connection to %s:%d for "
-											"session %ld",
-											connection->hostname, connection->port,
-											session->sessionId)));
-
-					workerPool->activeConnectionCount++;
-					workerPool->idleConnectionCount++;
-
+					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
@@ -2369,14 +2363,7 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					ereport(DEBUG4, (errmsg("established connection to %s:%d for "
-											"session %ld",
-											connection->hostname, connection->port,
-											session->sessionId)));
-
-					workerPool->activeConnectionCount++;
-					workerPool->idleConnectionCount++;
-
+					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
@@ -2486,6 +2473,25 @@ ConnectionStateMachine(WorkerSession *session)
 			}
 		}
 	} while (connection->connectionState != currentState);
+}
+
+
+/*
+ * HandleMultiConnectionSuccess logs the established connection and updates connection's state.
+ */
+static void
+HandleMultiConnectionSuccess(WorkerSession *session)
+{
+	MultiConnection *connection = session->connection;
+	WorkerPool *workerPool = session->workerPool;
+
+	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
+							"session %ld",
+							connection->hostname, connection->port,
+							session->sessionId)));
+
+	workerPool->activeConnectionCount++;
+	workerPool->idleConnectionCount++;
 }
 
 
