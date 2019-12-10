@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -136,7 +137,8 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	Query *query = distributedPlan->insertSelectSubquery;
+	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
+	Query *query = BuildSelectForInsertSelect(insertSelectQuery);
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;
