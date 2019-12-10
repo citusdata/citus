@@ -15,6 +15,7 @@
  */
 #include "postgres.h"
 
+#include "distributed/cte_inline.h"
 #include "nodes/nodeFuncs.h"
 #if PG_VERSION_NUM >= 120000
 #include "optimizer/optimizer.h"
@@ -55,6 +56,143 @@ static void inline_cte(Query *mainQuery, CommonTableExpr *cte);
 static bool inline_cte_walker(Node *node, inline_cte_walker_context *context);
 static bool contain_dml(Node *node);
 static bool contain_dml_walker(Node *node, void *context);
+
+
+/* the following utility functions are related to Citus' logic */
+static bool RecursivelyInlineCteWalker(Node *node, void *context);
+static void InlineCTEsInQueryTree(Query *query);
+static bool QueryTreeContainsInlinableCteWalker(Node *node);
+
+
+/*
+ * RecursivelyInlineCtesInQueryTree gets a query and recursively traverses the
+ * tree from top to bottom. On each level, the CTEs that are eligable for
+ * inlining are inlined as subqueries. This is useful in distributed planning
+ * because Citus' sub(query) planning logic superior to CTE planning, where CTEs
+ * are always recursively planned, which might produce very slow executions.
+ */
+void
+RecursivelyInlineCtesInQueryTree(Query *query)
+{
+	InlineCTEsInQueryTree(query);
+
+	query_tree_walker(query, RecursivelyInlineCteWalker, NULL, 0);
+}
+
+
+/*
+ * RecursivelyInlineCteWalker recursively finds all the Query nodes and
+ * recursively inline eligable ctes.
+ */
+static bool
+RecursivelyInlineCteWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		InlineCTEsInQueryTree(query);
+
+		query_tree_walker(query, RecursivelyInlineCteWalker, NULL, 0);
+
+		/* we're done, no need to recurse anymore for this query */
+		return false;
+	}
+
+	return expression_tree_walker(node, RecursivelyInlineCteWalker, context);
+}
+
+
+/*
+ * InlineCTEsInQueryTree gets a query tree and tries to inline CTEs as subqueries
+ * in the query tree.
+ *
+ * Most of the code is coming from PostgreSQL's CTE inlining logic, there are very
+ * few additions that Citus added, which are already commented in the code.
+ */
+void
+InlineCTEsInQueryTree(Query *query)
+{
+	ListCell *cteCell = NULL;
+
+	/* iterate on the copy of the list because we'll be modifying query->cteList */
+	List *copyOfCteList = list_copy(query->cteList);
+	foreach(cteCell, copyOfCteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+
+		/*
+		 * First, make sure that Postgres is OK to inline the CTE. Later, check for
+		 * distributed query planning constraints that might prevent inlining.
+		 */
+		if (PostgreSQLCTEInlineCondition(cte, query->commandType))
+		{
+			elog(DEBUG2, "CTE %s is going to be inlined via "
+						 "distributed planning", cte->ctename);
+
+			/* do the hard work of cte inlining */
+			inline_cte(query, cte);
+
+			/* clean-up the necessary fields for distributed planning */
+			cte->cterefcount = 0;
+			query->cteList = list_delete_ptr(query->cteList, cte);
+		}
+	}
+}
+
+
+/*
+ * QueryTreeContainsInlinableCTE recursively traverses the queryTree, and returns true
+ * if any of the (sub)queries in the queryTree contains at least one CTE.
+ */
+bool
+QueryTreeContainsInlinableCTE(Query *queryTree)
+{
+	return QueryTreeContainsInlinableCteWalker((Node *) queryTree);
+}
+
+
+/*
+ * QueryTreeContainsInlinableCteWalker walks over the node, and returns true if any of
+ * the (sub)queries in the node contains at least one CTE.
+ */
+static bool
+QueryTreeContainsInlinableCteWalker(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		ListCell *cteCell = NULL;
+		foreach(cteCell, query->cteList)
+		{
+			CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+
+			if (PostgreSQLCTEInlineCondition(cte, query->commandType))
+			{
+				/*
+				 * Return true even if we can find a single CTE that is
+				 * eligable for inlining.
+				 */
+				return true;
+			}
+		}
+
+		return query_tree_walker(query, QueryTreeContainsInlinableCteWalker, NULL, 0);
+	}
+
+	return expression_tree_walker(node, QueryTreeContainsInlinableCteWalker, NULL);
+}
 
 
 /*
