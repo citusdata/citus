@@ -138,6 +138,10 @@ SELECT a FROM t NATURAL JOIN dist;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 
+-- verify that we can drop columns from reference tables replicated to the coordinator
+-- see https://github.com/citusdata/citus/issues/3279
+ALTER TABLE squares DROP COLUMN b;
+
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
