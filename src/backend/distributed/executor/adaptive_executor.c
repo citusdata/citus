@@ -910,10 +910,18 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
 
-	execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_ALLOWED;
 	if (isOutsideTransaction)
 	{
 		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_DISALLOWED;
+	}
+	else if (DistributedExecutionRequiresRollback(execution) ||
+			 InCoordinatedTransaction() || LocalExecutionHappened)
+	{
+		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_REQUIRED;
+	}
+	else
+	{
+		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_ALLOWED;
 	}
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
@@ -1016,11 +1024,6 @@ StartDistributedExecution(DistributedExecution *execution)
 	 * rollback then we should use transaction blocks. If we have dependent jobs
 	 * then we do not open a transaction.
 	 */
-	if (InCoordinatedTransaction() && execution->useRemoteTransactionBlocks ==
-		REMOTE_TRANSACTION_BLOCKS_ALLOWED)
-	{
-		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_REQUIRED;
-	}
 
 	/*
 	 * We should not record parallel access if the target pool size is less than 2.
