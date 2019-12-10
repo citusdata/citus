@@ -288,6 +288,12 @@ typedef struct DistributedExecution
 	 * useRemoteTransactionBlocks is used to manage remote transactions.
 	 */
 	enum RemoteTransactionBlocksUsage useRemoteTransactionBlocks;
+
+	/*
+	 * jobList contains all jobs in the job tree, this is used to
+	 * do cleanup for repartition queries.
+	 */
+	List *jobList;
 } DistributedExecution;
 
 
@@ -670,6 +676,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 		tupleDescriptor,
 		scanState->
 		tuplestorestate, targetPoolSize, hasDependentJobs);
+
+	/* used to do cleanup in pg catch*/
+	execution->jobList = jobList;
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -2038,6 +2047,12 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * unclaim all connections to allow that.
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
+
+		/* do repartition cleanup if this is a repartition query*/
+		if (list_length(execution->jobList) > 0)
+		{
+			DoRepartitionCleanup(execution->jobList);
+		}
 
 		if (execution->waitEventSet != NULL)
 		{
