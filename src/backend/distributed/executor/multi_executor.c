@@ -585,7 +585,7 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 {
 	bool hasReferenceTable = false;
 	bool hasLocalTable = false;
-	ListCell *oidCell = NULL;
+	ListCell *rangeTableCell = NULL;
 	bool hasReferenceTableReplica = false;
 
 	/*
@@ -622,12 +622,24 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 		return false;
 	}
 
-	foreach(oidCell, plan->relationOids)
+	/*
+	 * plan->rtable contains the flattened RTE lists of the plan tree, which
+	 * includes rtes in subqueries, CTEs, ...
+	 *
+	 * It doesn't contain optimized away table accesses (due to join optimization),
+	 * which is fine for our purpose.
+	 */
+	foreach(rangeTableCell, plan->rtable)
 	{
-		Oid relationId = lfirst_oid(oidCell);
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		bool onlySearchPath = false;
 
-		if (RelationIsAKnownShard(relationId, onlySearchPath))
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
 		{
 			/*
 			 * We don't allow joining non-reference distributed tables, so we
