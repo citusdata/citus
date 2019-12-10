@@ -26,9 +26,6 @@ s/"(referencing_table_0_|referenced_table2_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
 s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 
-# Savepoint error messages changed between postgres 10 and 11.
-s/savepoint ".*" does not exist/no such savepoint/g
-
 # shard table names for multi_subtransactions
 s/"t2_[0-9]+"/"t2_xxxxxxx"/g
 
