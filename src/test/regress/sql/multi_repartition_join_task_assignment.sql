@@ -3,7 +3,7 @@
 --
 -- Tests which cover task assignment for MapMerge jobs for single range repartition
 -- and dual hash repartition joins. The tests also cover task assignment propagation
--- from a sql task to its depended tasks. Note that we set the executor type to task
+-- from a sql task to its dependent tasks. Note that we set the executor type to task
 -- tracker executor here, as we cannot run repartition jobs with real time executor.
 
 

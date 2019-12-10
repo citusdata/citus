@@ -226,7 +226,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->taskId = taskId++;
 		task->taskType = VACUUM_ANALYZE_TASK;
 		task->queryString = pstrdup(vacuumString->data);
-		task->dependedTaskList = NULL;
+		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);

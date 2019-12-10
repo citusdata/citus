@@ -329,7 +329,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 															FILE_FINALIZED, 0,
 															groupId);
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
+			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
 }
@@ -375,6 +375,7 @@ CreateReferenceTableColocationId()
 {
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;
+	Oid distributionColumnCollation = InvalidOid;
 
 	/*
 	 * We don't maintain replication factor of reference tables anymore and
@@ -383,12 +384,15 @@ CreateReferenceTableColocationId()
 	int replicationFactor = -1;
 
 	/* check for existing colocations */
-	uint32 colocationId = ColocationId(shardCount, replicationFactor,
-									   distributionColumnType);
+	uint32 colocationId =
+		ColocationId(shardCount, replicationFactor, distributionColumnType,
+					 distributionColumnCollation);
+
 	if (colocationId == INVALID_COLOCATION_ID)
 	{
 		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
+											 distributionColumnType,
+											 distributionColumnCollation);
 	}
 
 	return colocationId;
@@ -448,7 +452,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 						 "DELETE FROM pg_dist_placement WHERE placementid = "
 						 UINT64_FORMAT,
 						 placement->placementId);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
+		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
 	}
 }
 

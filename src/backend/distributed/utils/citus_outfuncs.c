@@ -323,7 +323,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_NODE_FIELD(jobQuery);
 	WRITE_NODE_FIELD(taskList);
-	WRITE_NODE_FIELD(dependedJobList);
+	WRITE_NODE_FIELD(dependentJobList);
 	WRITE_BOOL_FIELD(subqueryPushdown);
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
@@ -467,7 +467,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(queryString);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
-	WRITE_NODE_FIELD(dependedTaskList);
+	WRITE_NODE_FIELD(dependentTaskList);
 	WRITE_UINT_FIELD(partitionId);
 	WRITE_UINT_FIELD(upstreamTaskId);
 	WRITE_NODE_FIELD(shardInterval);

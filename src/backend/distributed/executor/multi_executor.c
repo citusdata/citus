@@ -56,6 +56,13 @@ bool WritableStandbyCoordinator = false;
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
 
+/*
+ * How many nested executors have we started? This can happen for SQL
+ * UDF calls. The outer query starts an executor, then postgres opens
+ * another executor to run the SQL UDF.
+ */
+int ExecutorLevel = 0;
+
 
 /* local function forward declarations */
 static Relation StubRelation(TupleDesc tupleDescriptor);
@@ -70,23 +77,6 @@ void
 CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
-
-	if (CitusHasBeenLoaded())
-	{
-		if (IsLocalReferenceTableJoinPlan(plannedStmt) &&
-			IsMultiStatementTransaction())
-		{
-			/*
-			 * Currently we don't support this to avoid problems with tuple
-			 * visibility, locking, etc. For example, change to the reference
-			 * table can go through a MultiConnection, which won't be visible
-			 * to the locally planned queries.
-			 */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot join local tables and reference tables in "
-								   "a transaction block")));
-		}
-	}
 
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
@@ -131,16 +121,25 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
-	int originalLevel = FunctionCallLevel;
+	int originalLevel = ExecutorLevel;
 
-	if (dest->mydest == DestSPI)
+	ExecutorLevel++;
+	if (CitusHasBeenLoaded())
 	{
-		/*
-		 * If the query runs via SPI, we assume we're in a function call
-		 * and we should treat statements as part of a bigger transaction.
-		 * We reset this counter to 0 in the abort handler.
-		 */
-		FunctionCallLevel++;
+		if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
+			IsMultiStatementTransaction())
+		{
+			/*
+			 * Currently we don't support this to avoid problems with tuple
+			 * visibility, locking, etc. For example, change to the reference
+			 * table can go through a MultiConnection, which won't be visible
+			 * to the locally planned queries.
+			 */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot join local tables and reference tables in "
+								   "a transaction block, udf block, or distributed "
+								   "CTE subquery")));
+		}
 	}
 
 	/*
@@ -175,15 +174,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
 	}
 
-	if (dest->mydest == DestSPI)
-	{
-		/*
-		 * Restore the original value. It is not sufficient to decrease
-		 * the value because exceptions might cause us to go back a few
-		 * levels at once.
-		 */
-		FunctionCallLevel = originalLevel;
-	}
+	/*
+	 * Restore the original value. It is not sufficient to decrease the value
+	 * because exceptions might cause us to go back a few levels at once.
+	 */
+	ExecutorLevel = originalLevel;
 }
 
 
@@ -478,6 +473,12 @@ void
 ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 {
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+
+	if (query->commandType == CMD_UTILITY)
+	{
+		/* can only execute DML/SELECT via this path */
+		ereport(ERROR, (errmsg("cannot execute utility commands")));
+	}
 
 	/* plan the subquery, this may be another distributed query */
 	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, params);

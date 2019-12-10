@@ -578,7 +578,7 @@ SELECT true AS valid FROM explain_json_2($$
     );
 $$);
 
--- this time the the plan is optimial, we are
+-- this time the plan is optimial, we are
 -- able to keep the UNION query given that foo
 -- is the anchor
 SELECT true AS valid FROM explain_json_2($$
@@ -707,7 +707,7 @@ JOIN LATERAL
       WHERE user_id = users_table.user_id) AS bar
    LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
 
--- similar to the above, make sure that we skip recursive plannig when
+-- similar to the above, make sure that we skip recursive planning when
 -- the subquery doesn't have any tables
 SELECT true AS valid FROM explain_json_2($$
 SELECT *
@@ -722,7 +722,7 @@ JOIN LATERAL
    LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
 $$);
 
--- similar to the above, make sure that we skip recursive plannig when
+-- similar to the above, make sure that we skip recursive planning when
 -- the subquery contains only intermediate results
 SELECT *
 FROM

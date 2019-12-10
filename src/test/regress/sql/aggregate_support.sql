@@ -52,8 +52,18 @@ select create_distributed_function('sum2_strict(int)');
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
 insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
-select key, sum2(val), sum2_strict(val), stddev(valf)
-from aggdata group by key order by key;
+
+select key, sum2(val), sum2_strict(val), stddev(valf) from aggdata group by key order by key;
+-- FILTER supported
+select key, sum2(val) filter (where valf < 5), sum2_strict(val) filter (where valf < 5) from aggdata group by key order by key;
+-- DISTINCT unsupported, unless grouped by partition key
+select key, sum2(distinct val), sum2_strict(distinct val) from aggdata group by key order by key;
+select id, sum2(distinct val), sum2_strict(distinct val) from aggdata group by id order by id;
+-- ORDER BY unsupported
+select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata group by key order by key;
+-- Without intermediate results we return NULL, even though the correct result is 0
+select sum2(val) from aggdata where valf = 0;
+
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
 -- we do not currently support pseudotypes for transition types, so this errors for now
@@ -102,11 +112,9 @@ create aggregate sumstring(text) (
 	initcond = '0'
 );
 
-select sumstring(valf::text order by id)
-from aggdata where valf is not null;
+select sumstring(valf::text) from aggdata where valf is not null;
 select create_distributed_function('sumstring(text)');
-select sumstring(valf::text order by id)
-from aggdata where valf is not null;
+select sumstring(valf::text) from aggdata where valf is not null;
 
 -- test aggregate with stype that has an expanded read-write form
 CREATE FUNCTION array_sort (int[])
@@ -124,6 +132,19 @@ create aggregate array_collect_sort(el int) (
 select create_distributed_function('array_collect_sort(int)');
 
 select array_collect_sort(val) from aggdata;
+
+-- Test multiuser scenario
+create user notsuper;
+select run_command_on_workers($$create user notsuper$$);
+grant all on schema aggregate_support to notsuper;
+grant all on all tables in schema aggregate_support to notsuper;
+select run_command_on_workers($$
+grant all on schema aggregate_support to notsuper;
+grant all on all tables in schema aggregate_support to notsuper;
+$$);
+set role notsuper;
+select array_collect_sort(val) from aggdata;
+reset role;
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;

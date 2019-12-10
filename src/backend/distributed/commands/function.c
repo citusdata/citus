@@ -346,7 +346,8 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 	{
 		/* check for default colocation group */
 		colocationId = ColocationId(ShardCount, ShardReplicationFactor,
-									distributionArgumentOid);
+									distributionArgumentOid, get_typcollation(
+										distributionArgumentOid));
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
@@ -618,29 +619,10 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	}
 
 	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-
-	PushOverrideSearchPath(overridePath);
-
-	/*
-	 * If the function exists we want to use pg_get_function_identity_arguments to
+	 * If the function exists we want to use format_procedure_qualified to
 	 * serialize its canonical arguments
 	 */
-	Datum functionSignatureDatum =
-		DirectFunctionCall1(regprocedureout, ObjectIdGetDatum(funcOid));
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	/* regprocedureout returns cstring */
-	char *functionSignature = DatumGetCString(functionSignatureDatum);
-
+	char *functionSignature = format_procedure_qualified(funcOid);
 	char *functionOwner = GetUserNameFromId(procOwner, false);
 
 	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",
@@ -1008,7 +990,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
  * EnsureSequentialModeForFunctionDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginnig.
+ * sequential mode set from the beginning.
  *
  * As functions are node scoped objects there exists only 1 instance of the function used by
  * potentially multiple shards. To make sure all shards in the transaction can interact
@@ -1586,7 +1568,7 @@ ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStr
 		return;
 	}
 
-	/* dependencies have changed (schema) lets ensure they exist */
+	/* dependencies have changed (schema) let's ensure they exist */
 	EnsureDependenciesExistsOnAllNodes(address);
 }
 

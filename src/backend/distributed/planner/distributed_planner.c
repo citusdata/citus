@@ -15,6 +15,7 @@
 
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
@@ -90,6 +91,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
+static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
@@ -1169,7 +1171,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		/* build target entry pointing to remote scan range table entry */
 		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 
-		if (newVar->vartype == RECORDOID)
+		if (newVar->vartype == RECORDOID || newVar->vartype == RECORDARRAYOID)
 		{
 			/*
 			 * Add the anonymous composite type to the type cache and store
@@ -1224,7 +1226,7 @@ BlessRecordExpression(Expr *expr)
 {
 	int32 typeMod = -1;
 
-	if (IsA(expr, FuncExpr))
+	if (IsA(expr, FuncExpr) || IsA(expr, OpExpr))
 	{
 		/*
 		 * Handle functions that return records on the target
@@ -1236,6 +1238,7 @@ BlessRecordExpression(Expr *expr)
 		/* get_expr_result_type blesses the tuple descriptor */
 		TypeFuncClass typeClass = get_expr_result_type((Node *) expr, &resultTypeId,
 													   &resultTupleDesc);
+
 		if (typeClass == TYPEFUNC_COMPOSITE)
 		{
 			typeMod = resultTupleDesc->tdtypmod;
@@ -1263,7 +1266,7 @@ BlessRecordExpression(Expr *expr)
 			Oid rowArgTypeId = exprType(rowArg);
 			int rowArgTypeMod = exprTypmod(rowArg);
 
-			if (rowArgTypeId == RECORDOID)
+			if (rowArgTypeId == RECORDOID || rowArgTypeId == RECORDARRAYOID)
 			{
 				/* ensure nested rows are blessed as well */
 				rowArgTypeMod = BlessRecordExpression((Expr *) rowArg);
@@ -1281,8 +1284,88 @@ BlessRecordExpression(Expr *expr)
 
 		typeMod = rowTupleDesc->tdtypmod;
 	}
+	else if (IsA(expr, ArrayExpr))
+	{
+		/*
+		 * Handle row array expressions, e.g. SELECT ARRAY[(1,2)];
+		 * Postgres allows ARRAY[(1,2),(1,2,3)]. We do not.
+		 */
+		ArrayExpr *arrayExpr = (ArrayExpr *) expr;
+
+		typeMod = BlessRecordExpressionList(arrayExpr->elements);
+	}
+	else if (IsA(expr, NullIfExpr))
+	{
+		NullIfExpr *nullIfExpr = (NullIfExpr *) expr;
+
+		typeMod = BlessRecordExpressionList(nullIfExpr->args);
+	}
+	else if (IsA(expr, MinMaxExpr))
+	{
+		MinMaxExpr *minMaxExpr = (MinMaxExpr *) expr;
+
+		typeMod = BlessRecordExpressionList(minMaxExpr->args);
+	}
+	else if (IsA(expr, CoalesceExpr))
+	{
+		CoalesceExpr *coalesceExpr = (CoalesceExpr *) expr;
+
+		typeMod = BlessRecordExpressionList(coalesceExpr->args);
+	}
+	else if (IsA(expr, CaseExpr))
+	{
+		CaseExpr *caseExpr = (CaseExpr *) expr;
+		List *results = NIL;
+		ListCell *whenCell = NULL;
+
+		foreach(whenCell, caseExpr->args)
+		{
+			CaseWhen *whenArg = (CaseWhen *) lfirst(whenCell);
+
+			results = lappend(results, whenArg->result);
+		}
+
+		if (caseExpr->defresult != NULL)
+		{
+			results = lappend(results, caseExpr->defresult);
+		}
+
+		typeMod = BlessRecordExpressionList(results);
+	}
 
 	return typeMod;
+}
+
+
+/*
+ * BlessRecordExpressionList maps BlessRecordExpression over a list.
+ * Returns typmod of all expressions, or -1 if they are not all the same.
+ * Ignores expressions with a typmod of -1.
+ */
+static int32
+BlessRecordExpressionList(List *exprs)
+{
+	int32 finalTypeMod = -1;
+	ListCell *exprCell = NULL;
+	foreach(exprCell, exprs)
+	{
+		Node *exprArg = (Node *) lfirst(exprCell);
+		int32 exprTypeMod = BlessRecordExpression((Expr *) exprArg);
+
+		if (exprTypeMod == -1)
+		{
+			continue;
+		}
+		else if (finalTypeMod == -1)
+		{
+			finalTypeMod = exprTypeMod;
+		}
+		else if (finalTypeMod != exprTypeMod)
+		{
+			return -1;
+		}
+	}
+	return finalTypeMod;
 }
 
 
@@ -1707,7 +1790,7 @@ CreateAndPushPlannerRestrictionContext(void)
 
 
 /*
- * CurrentRestrictionContext returns the the most recently added
+ * CurrentRestrictionContext returns the most recently added
  * PlannerRestrictionContext from the plannerRestrictionContextList list.
  */
 static PlannerRestrictionContext *

@@ -48,10 +48,44 @@ INSERT INTO local_table VALUES (2), (4), (7), (20);
 EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 
+-- test non equijoin
+SELECT lt.a, sq.a, sq.b
+FROM local_table lt
+JOIN squares sq ON sq.a > lt.a and sq.b > 90
+ORDER BY 1,2,3;
+
 -- error if in transaction block
 BEGIN;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 ROLLBACK;
+
+-- error if in a DO block
+DO $$
+BEGIN
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+END;
+$$;
+
+-- test plpgsql function
+CREATE FUNCTION test_reference_local_join_plpgsql_func()
+RETURNS void AS $$
+BEGIN
+	INSERT INTO local_table VALUES (21);
+	INSERT INTO numbers VALUES (4);
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+	RAISE EXCEPTION '';
+	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT test_reference_local_join_plpgsql_func();
+SELECT sum(a) FROM local_table;
+SELECT sum(a) FROM numbers;
+
+-- error if in procedure's subtransaction
+CREATE PROCEDURE test_reference_local_join_proc() AS $$
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+$$ LANGUAGE sql;
+CALL test_reference_local_join_proc();
 
 -- error if in a transaction block even if reference table is not in search path
 CREATE SCHEMA s1;
@@ -64,31 +98,52 @@ ROLLBACK;
 
 DROP SCHEMA s1 CASCADE;
 
+-- error if inside a SQL UDF call
+CREATE or replace FUNCTION test_reference_local_join_func()
+RETURNS SETOF RECORD AS $$
+SET LOCAL citus.enable_local_execution to false;
+INSERT INTO numbers VALUES (2);
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+$$ LANGUAGE sql;
+
+SELECT test_reference_local_join_func();
+
 -- shouldn't plan locally if modifications happen in CTEs, ...
-WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *) SELECT * FROM numbers, local_table;
-WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
+SELECT * FROM numbers, local_table;
+
+WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
 -- but this should be fine
-WITH t AS (SELECT *, random() x FROM numbers) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+WITH t AS (SELECT *, random() x FROM numbers)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
 -- shouldn't plan locally even if distributed table is in CTE or subquery
 CREATE TABLE dist(a int);
 SELECT create_distributed_table('dist', 'a');
-WITH t AS (SELECT *, random() x FROM dist) SELECT * FROM numbers, local_table
-  WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+INSERT INTO dist VALUES (20),(30);
+
+WITH t AS (SELECT *, random() x FROM dist)
+SELECT * FROM numbers, local_table
+WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+
+-- test CTE being reference/local join for distributed query
+WITH t as (SELECT n.a, random() x FROM numbers n NATURAL JOIN local_table l)
+SELECT a FROM t NATURAL JOIN dist;
 
  -- error if FOR UPDATE/FOR SHARE
- SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
- SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
+SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 
 -- Make sure the shard was dropped
- SELECT 'numbers_8000001'::regclass::oid;
+SELECT 'numbers_8000001'::regclass::oid;
 
 SET search_path TO DEFAULT;
 RESET client_min_messages;

@@ -169,7 +169,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		task->taskType = DDL_TASK;
 		task->queryString = callCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
-		task->dependedTaskList = NIL;
+		task->dependentTaskList = NIL;
 		task->anchorShardId = placement->shardId;
 		task->relationShardList = NIL;
 		task->taskPlacementList = placementList;

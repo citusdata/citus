@@ -17,9 +17,9 @@
 #include "access/stratnum.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
-#include "distributed/citus_clauses.h"
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
@@ -90,7 +90,7 @@ typedef struct InsertValues
 
 
 /*
- * A ModifyRoute encapsulates the the information needed to route modifications
+ * A ModifyRoute encapsulates the information needed to route modifications
  * to the appropriate shard. For a single-shard modification, only one route
  * is needed, but in the case of e.g. a multi-row INSERT, lists of these values
  * will help divide the rows by their destination shards, permitting later
@@ -379,7 +379,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	TypeCacheEntry *typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
 												  TYPECACHE_HASH_PROC_FINFO);
 
-	/* probable never possible given that the tables are already hash partitioned */
+	/* probably never possible given that the tables are already hash partitioned */
 	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -387,7 +387,10 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 							   format_type_be(targetPartitionColumnVar->vartype))));
 	}
 
-	/* generate hashfunc(partCol) expression */
+	/*
+	 * Generate hashfunc(partCol) expression.
+	 * Don't set inputcollid as we don't support non deterministic collations.
+	 */
 	FuncExpr *hashFunctionExpr = makeNode(FuncExpr);
 	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
 	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
@@ -401,8 +404,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->minValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	greaterThanAndEqualsBoundExpr->opfuncid =
@@ -416,8 +418,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->maxValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	lessThanAndEqualsBoundExpr->opfuncid = get_opcode(lessThanAndEqualsBoundExpr->opno);
@@ -640,7 +641,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	}
 
 	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -715,7 +716,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 				DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
 					distributedTableId);
 				char *partitionKeyString = cacheEntry->partitionKeyString;
-				char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+				char *partitionColumnName = ColumnToColumnName(distributedTableId,
 															   partitionKeyString);
 
 				appendStringInfo(errorHint, "Consider using an equality filter on "
@@ -1453,7 +1454,7 @@ CreateJob(Query *query)
 	job->jobId = UniqueJobId();
 	job->jobQuery = query;
 	job->taskList = NIL;
-	job->dependedJobList = NIL;
+	job->dependentJobList = NIL;
 	job->subqueryPushdown = false;
 	job->requiresMasterEvaluation = false;
 	job->deferredPruning = false;
@@ -1575,7 +1576,7 @@ CreateTask(TaskType taskType)
 	task->queryString = NULL;
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
-	task->dependedTaskList = NIL;
+	task->dependentTaskList = NIL;
 
 	task->partitionId = 0;
 	task->upstreamTaskId = INVALID_TASK_ID;
@@ -1807,7 +1808,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList,
 						  uint64 shardId)
 {
-	Task *task = CreateTask(ROUTER_TASK);
+	Task *task = CreateTask(SELECT_TASK);
 	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
@@ -2429,7 +2430,7 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 
 		/*
 		 * Bail out if placement list becomes empty. This means there is no worker
-		 * containing all shards referecend by the query, hence we can not forward
+		 * containing all shards referenced by the query, hence we can not forward
 		 * this query directly to any worker.
 		 */
 		if (currentPlacementList == NIL)
@@ -2556,7 +2557,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		if (prunedShardIntervalCount != 1)
 		{
 			char *partitionKeyString = cacheEntry->partitionKeyString;
-			char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+			char *partitionColumnName = ColumnToColumnName(distributedTableId,
 														   partitionKeyString);
 			StringInfo errorMessage = makeStringInfo();
 			StringInfo errorHint = makeStringInfo();

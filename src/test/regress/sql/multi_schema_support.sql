@@ -322,14 +322,6 @@ SET search_path TO public;
 SELECT quote_ident(current_setting('lc_collate')) as current_locale \gset
 CREATE COLLATION test_schema_support.english (LOCALE = :current_locale);
 
--- create COLLATION in worker node 1 in schema
-\c - - - :worker_1_port
-CREATE COLLATION test_schema_support.english (LOCALE = :current_locale);
-
--- create COLLATION in worker node 2 in schema
-\c - - - :worker_2_port
-CREATE COLLATION test_schema_support.english (LOCALE = :current_locale);
-
 \c - - - :master_port
 
 CREATE TABLE test_schema_support.nation_hash_collation(

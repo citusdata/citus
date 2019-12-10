@@ -3,17 +3,6 @@ SET search_path TO upgrade_distributed_function_before, public;
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
 
--- set sync intervals to less than 15s so wait_until_metadata_sync never times out
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
-
-CREATE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-
-
 CREATE TABLE t1 (a int PRIMARY KEY, b int);
 SELECT create_distributed_table('t1','a');
 INSERT INTO t1 VALUES (11), (12);

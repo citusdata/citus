@@ -25,6 +25,7 @@ test: multi_cluster_management
 test: alter_role_propagation
 test: propagate_extension_commands
 test: multi_test_helpers
+test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_name_lengths
 test: multi_name_resolution
@@ -174,7 +175,7 @@ test: multi_outer_join
 # functionality related to metadata, shard creation, shard pruning and
 # "hacky" copy script for hash partitioned tables.
 # Note that the order of the following tests are important. multi_complex_count_distinct
-# is independed from the rest of the group, it is added to increase parallelism.
+# is independent from the rest of the group, it is added to increase parallelism.
 # ---
 test: multi_create_fdw
 test: multi_complex_count_distinct multi_select_distinct
@@ -267,6 +268,7 @@ test: multi_replicate_reference_table
 test: multi_reference_table
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+
 test: remove_coordinator
 
 # ----------
@@ -300,6 +302,7 @@ test: ssl_by_default
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 test: distributed_functions distributed_functions_conflict
+test: distributed_collations distributed_collations_conflict
 test: distributed_procedure
 
 # ---------

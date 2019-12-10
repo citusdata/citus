@@ -643,7 +643,7 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	}
 	else
 	{
-		char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		char *partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
 		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 quote_literal_cstr(partitionKeyColumnName));
@@ -1188,14 +1188,14 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	ListCell *commandCell = NULL;
 
 	/* prevent recursive propagation */
-	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	foreach(commandCell, commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+		SendCommandToWorkersWithMetadata(command);
 	}
 }
 

@@ -701,15 +701,56 @@ select shouldhaveshards from pg_dist_node where nodeport = 8888;
 \c - postgres - :worker_1_port
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
+\c - - - :master_port
+--
+-- Check that metadata commands error out if any nodes are out-of-sync
+--
+
+-- increase metadata_sync intervals to avoid metadata sync while we test
+ALTER SYSTEM SET citus.metadata_sync_interval TO 300000;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 300000;
+SELECT pg_reload_conf();
+
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE dist_table_1(a int);
+SELECT create_distributed_table('dist_table_1', 'a');
+
+UPDATE pg_dist_node SET metadatasynced=false WHERE nodeport=:worker_1_port;
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport=:worker_1_port;
+
+CREATE TABLE dist_table_2(a int);
+SELECT create_distributed_table('dist_table_2', 'a');
+SELECT create_reference_table('dist_table_2');
+
+ALTER TABLE dist_table_1 ADD COLUMN b int;
+
+SELECT master_add_node('localhost', :master_port, groupid => 0);
+SELECT master_disable_node('localhost', :worker_1_port);
+SELECT master_disable_node('localhost', :worker_2_port);
+SELECT master_remove_node('localhost', :worker_1_port);
+SELECT master_remove_node('localhost', :worker_2_port);
+
+-- master_update_node should succeed
+SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT master_update_node(:worker_2_nodeid, 'localhost', 4444);
+SELECT master_update_node(:worker_2_nodeid, 'localhost', :worker_2_port);
+
+ALTER SYSTEM SET citus.metadata_sync_interval TO DEFAULT;
+ALTER SYSTEM SET citus.metadata_sync_retry_interval TO DEFAULT;
+SELECT pg_reload_conf();
+
+UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
 -- Cleanup
-\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+DROP TABLE dist_table_1, dist_table_2;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;

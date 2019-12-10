@@ -287,7 +287,7 @@ RecordParallelRelationAccessForTaskList(List *taskList)
 	 */
 	Task *firstTask = linitial(taskList);
 
-	if (firstTask->taskType == SQL_TASK)
+	if (firstTask->taskType == SELECT_TASK)
 	{
 		RecordRelationParallelSelectAccessForTask(firstTask);
 	}

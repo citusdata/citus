@@ -8,15 +8,6 @@ SET citus.next_shard_id TO 1420000;
 
 SET citus.shard_replication_factor TO 1;
 
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
-CREATE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-
-
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
 

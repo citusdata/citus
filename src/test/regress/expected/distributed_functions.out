@@ -13,19 +13,6 @@ CREATE SCHEMA function_tests AUTHORIZATION functionuser;
 CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
--- set sync intervals to less than 15s so wait_until_metadata_sync never times out
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
 -- Create and distribute a simple function
 CREATE FUNCTION add(integer, integer) RETURNS integer
     AS 'select $1 + $2;'
@@ -70,7 +57,7 @@ CREATE FUNCTION add_without_param_names(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-CREATE FUNCTION add_mixed_param_names(integer, val1 integer) RETURNS integer
+CREATE FUNCTION "add_mi'xed_param_names"(integer, "va'l1" integer) RETURNS integer
     AS 'select $1 + $2;'
     LANGUAGE SQL
     IMMUTABLE
@@ -168,21 +155,21 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
-SELECT create_distributed_function('add_mixed_param_names(int, int)');
+SELECT create_distributed_function('"add_mi''xed_param_names"(int, int)');
  create_distributed_function 
 -----------------------------
  
 (1 row)
 
 SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
-WHERE objid = 'add_mixed_param_names(int, int)'::regprocedure;
+WHERE objid = 'add_mi''xed_param_names(int, int)'::regprocedure;
  ?column? | ?column? 
 ----------+----------
  t        | t
 (1 row)
 
 -- also show that we can use the function
-SELECT * FROM run_command_on_workers('SELECT function_tests.add_mixed_param_names(2,3);') ORDER BY 1,2;
+SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_names"(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
 -----------+----------+---------+--------
  localhost |    57637 | t       | 5
@@ -318,6 +305,28 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  t
 (1 row)
 
+ALTER FUNCTION add(int,int) SET "citus.setting;'" TO 'hello '' world';
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) RESET "citus.setting;'";
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) SET search_path TO 'sch'';ma', public;
+SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
+ verify_function_is_same_on_workers 
+------------------------------------
+ t
+(1 row)
+
+ALTER FUNCTION add(int,int) RESET search_path;
 -- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
 ALTER FUNCTION add(int,int) SET client_min_messages FROM CURRENT;
 ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed function
@@ -510,7 +519,7 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$3');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid
 HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1a');
-ERROR:  invalid input syntax for integer: "1a"
+ERROR:  invalid input syntax for type integer: "1a"
 -- non existing column name
 SELECT create_distributed_function('add_with_param_names(int, int)', 'aaa');
 ERROR:  cannot distribute the function "add_with_param_names" since the distribution argument is not valid 
@@ -602,6 +611,12 @@ SELECT create_distributed_function('add_with_param_names(int, int)', '$1', coloc
 ERROR:  cannot colocate function "add_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
 HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+SELECT public.wait_until_metadata_sync();
+ wait_until_metadata_sync 
+--------------------------
+ 
+(1 row)
+
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
@@ -724,12 +739,15 @@ SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 ERROR:  cannot distribute the function "add_with_param_names" since there is no table to colocate with
 HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
 -- sync metadata to workers for consistent results when clearing objects
-SELECT wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync();
  wait_until_metadata_sync 
 --------------------------
  
 (1 row)
 
+SET client_min_messages TO error; -- suppress cascading objects dropping
+DROP SCHEMA function_tests CASCADE;
+DROP SCHEMA function_tests2 CASCADE;
 -- clear objects
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
  stop_metadata_sync_to_node 
@@ -738,41 +756,23 @@ SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isa
  
 (2 rows)
 
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
 -- This is hacky, but we should clean-up the resources as below
 \c - - - :worker_1_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
- worker_drop_distributed_table 
--------------------------------
- 
- 
- 
-(3 rows)
-
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
+SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
 UPDATE pg_dist_local_group SET groupid = 0;
-SELECT worker_drop_distributed_table(logicalrelid::text) FROM pg_dist_partition WHERE logicalrelid::text ILIKE '%replicated_table_func_test%';
- worker_drop_distributed_table 
--------------------------------
- 
- 
- 
-(3 rows)
-
+TRUNCATE pg_dist_node;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-TRUNCATE pg_dist_node;
 \c - - - :master_port
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser;$$);
+SELECT run_command_on_workers($$DROP USER functionuser$$);
      run_command_on_workers      
 ---------------------------------
  (localhost,57637,t,"DROP ROLE")

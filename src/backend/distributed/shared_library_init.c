@@ -13,6 +13,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+/* necessary to get alloca() on illumos */
+#ifdef __sun
+#include <alloca.h>
+#endif
+
 #include "fmgr.h"
 #include "miscadmin.h"
 

@@ -28,6 +28,15 @@ SHLIB_LINK = $(libpq)
 
 include $(citus_top_builddir)/Makefile.global
 
+# make sure citus_version.o is recompiled whenever any change is made to the binary or any
+# other artifact being installed to reflect the correct gitref for every build
+CITUS_VERSION_INVALIDATE := $(filter-out utils/citus_version.o,$(OBJS))
+CITUS_VERSION_INVALIDATE += $(generated_sql_files)
+ifneq ($(wildcard $(citus_top_builddir)/.git/.*),)
+        CITUS_VERSION_INVALIDATE += $(citus_top_builddir)/.git/index
+endif
+utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
+
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
 override CPPFLAGS += -I$(libpq_srcdir)

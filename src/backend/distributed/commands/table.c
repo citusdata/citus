@@ -103,7 +103,7 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			continue;
 		}
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		foreach(partitionCell, partitionList)
 		{
@@ -111,7 +111,7 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, detachPartitionCommand);
+			SendCommandToWorkersWithMetadata(detachPartitionCommand);
 		}
 	}
 }
@@ -1292,7 +1292,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
 		task->queryString = applyCommand->data;
-		task->dependedTaskList = NULL;
+		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
 		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);

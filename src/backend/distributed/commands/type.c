@@ -368,7 +368,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 /*
  * ProcessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
  *
- * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower then 12
+ * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower than 12
  * to distribute the call. Before pg12 these statements could not be called in a
  * transaction. If we would plan the distirbution of these statements the same as we do
  * with the other statements they would get executed in a transaction to perform 2PC, that
@@ -415,8 +415,7 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 		List *commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
 
-		int result = SendBareOptionalCommandListToWorkersAsUser(ALL_WORKERS, commands,
-																NULL);
+		int result = SendBareOptionalCommandListToAllWorkersAsUser(commands, NULL);
 
 		if (result != RESPONSE_OKAY)
 		{
@@ -490,9 +489,9 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 	const char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
-	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
+	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
@@ -525,9 +524,9 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode((Node *) stmt);
 
-	/* to prevent recursion with mx we disable ddl propagation */
 	EnsureSequentialModeForTypeDDL();
 
+	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) renameStmtSql,
 								ENABLE_DDL_PROPAGATION);
@@ -619,7 +618,7 @@ ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 		return;
 	}
 
-	/* dependencies have changed (schema) lets ensure they exist */
+	/* dependencies have changed (schema) let's ensure they exist */
 	EnsureDependenciesExistsOnAllNodes(typeAddress);
 }
 

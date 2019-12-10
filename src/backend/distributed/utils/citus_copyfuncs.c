@@ -80,7 +80,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(jobId);
 	COPY_NODE_FIELD(jobQuery);
 	COPY_NODE_FIELD(taskList);
-	COPY_NODE_FIELD(dependedJobList);
+	COPY_NODE_FIELD(dependentJobList);
 	COPY_SCALAR_FIELD(subqueryPushdown);
 	COPY_SCALAR_FIELD(requiresMasterEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
@@ -251,7 +251,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_STRING_FIELD(queryString);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);
-	COPY_NODE_FIELD(dependedTaskList);
+	COPY_NODE_FIELD(dependentTaskList);
 	COPY_SCALAR_FIELD(partitionId);
 	COPY_SCALAR_FIELD(upstreamTaskId);
 	COPY_NODE_FIELD(shardInterval);

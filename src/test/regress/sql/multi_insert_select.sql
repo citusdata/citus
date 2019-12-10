@@ -1598,7 +1598,7 @@ SELECT
 FROM
   table_with_defaults;
 
--- some of the the ultimate queries where we have constants,
+-- some of the ultimate queries where we have constants,
 -- defaults and group by entry is not on the target entry
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
 SELECT
