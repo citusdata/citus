@@ -294,10 +294,10 @@ typedef struct DistributedExecution
 	enum RemoteTransactionBlocksUsage useRemoteTransactionBlocks;
 
 	/*
-	 * jobList contains all jobs in the job tree, this is used to
+	 * jobIdList contains all jobs in the job tree, this is used to
 	 * do cleanup for repartition queries.
 	 */
-	List *jobList;
+	List *jobIdList;
 } DistributedExecution;
 
 
@@ -562,7 +562,7 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore, int
 														 targetPoolSize, bool
-														 isOutsideTransaction);
+														 excludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -640,7 +640,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	List *jobList = NIL;
+	List *jobIdList = NIL;
 
 
 	Job *job = distributedPlan->workerJob;
@@ -661,7 +661,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)
 	{
-		jobList = ExecuteDependentTasks(taskList, job);
+		jobIdList = ExecuteDependentTasks(taskList, job);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -682,7 +682,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		tuplestorestate, targetPoolSize, hasDependentJobs);
 
 	/* used to do cleanup in pg catch*/
-	execution->jobList = jobList;
+	execution->jobIdList = jobIdList;
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -732,7 +732,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (hasDependentJobs)
 	{
-		DoRepartitionCleanup(jobList);
+		DoRepartitionCleanup(jobIdList);
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -744,6 +744,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 }
 
 
+/*
+ * HasDependentJobs returns true if there is any dependent job
+ * for the mainjob(top level) job.
+ */
 static bool
 HasDependentJobs(Job *mainJob)
 {
@@ -842,7 +846,8 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-						bool hasReturning, int targetPoolSize, bool isOutsideTransaction)
+						bool hasReturning, int targetPoolSize, bool
+						excludeFromTransaction)
 {
 	ParamListInfo paramListInfo = NULL;
 
@@ -860,7 +865,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	DistributedExecution *execution =
 		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
-								   isOutsideTransaction);
+								   excludeFromTransaction);
 
 
 	StartDistributedExecution(execution);
@@ -879,7 +884,7 @@ static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize, bool
-						   isOutsideTransaction)
+						   excludeFromTransaction)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -910,7 +915,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
 
-	if (isOutsideTransaction)
+	if (excludeFromTransaction)
 	{
 		execution->useRemoteTransactionBlocks = REMOTE_TRANSACTION_BLOCKS_DISALLOWED;
 	}
@@ -2057,9 +2062,9 @@ RunDistributedExecution(DistributedExecution *execution)
 		UnclaimAllSessionConnections(execution->sessionList);
 
 		/* do repartition cleanup if this is a repartition query*/
-		if (list_length(execution->jobList) > 0)
+		if (list_length(execution->jobIdList) > 0)
 		{
-			DoRepartitionCleanup(execution->jobList);
+			DoRepartitionCleanup(execution->jobIdList);
 		}
 
 		if (execution->waitEventSet != NULL)
