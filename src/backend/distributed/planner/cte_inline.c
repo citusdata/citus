@@ -134,7 +134,7 @@ InlineCTEsInQueryTree(Query *query)
 		 */
 		if (PostgreSQLCTEInlineCondition(cte, query->commandType))
 		{
-			elog(DEBUG2, "CTE %s is going to be inlined via "
+			elog(DEBUG1, "CTE %s is going to be inlined via "
 						 "distributed planning", cte->ctename);
 
 			/* do the hard work of cte inlining */

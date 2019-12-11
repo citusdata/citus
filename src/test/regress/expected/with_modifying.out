@@ -596,11 +596,7 @@ raw_data AS (
 	DELETE FROM modify_table WHERE id = 1 AND val IN (SELECT val FROM select_data) RETURNING *
 )
 SELECT COUNT(*) FROM raw_data;
- count
----------------------------------------------------------------------
-     2
-(1 row)
-
+ERROR:  set-valued function called in context that cannot accept a set
 INSERT INTO modify_table VALUES (1,2), (1,6), (2, 3), (3, 5);
 WITH select_data AS (
 	SELECT * FROM modify_table

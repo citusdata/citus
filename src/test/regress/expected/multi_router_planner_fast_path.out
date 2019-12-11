@@ -192,6 +192,7 @@ DEBUG:  Plan is router executable
 -- queries with CTEs cannot go through fast-path planning
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT * FROM first_author;
+DEBUG:  CTE first_author is going to be inlined via distributed planning
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
@@ -208,6 +209,8 @@ DETAIL:  distribution column value: 1
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  CTE id_author is going to be inlined via distributed planning
+DEBUG:  CTE id_title is going to be inlined via distributed planning
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
@@ -225,20 +228,18 @@ DETAIL:  distribution column value: 1
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  CTE id_author is going to be inlined via distributed planning
+DEBUG:  CTE id_title is going to be inlined via distributed planning
 DEBUG:  cannot run command which targets multiple shards
-DEBUG:  generating subplan XXX_1 for CTE id_author: SELECT id, author_id FROM fast_path_router_select.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 1)
-DEBUG:  Distributed planning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-DEBUG:  generating subplan XXX_2 for CTE id_title: SELECT id, title FROM fast_path_router_select.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM fast_path_router_select.articles_hash WHERE (author_id OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT articles_hash.id, articles_hash.author_id FROM fast_path_router_select.articles_hash WHERE (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  id | author_id | id | title
 ---------------------------------------------------------------------
 (0 rows)
