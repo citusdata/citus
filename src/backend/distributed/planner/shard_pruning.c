@@ -41,7 +41,7 @@
  * Finally, the union of the shards found by each pruning instance is
  * returned.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

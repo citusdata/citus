@@ -5,7 +5,7 @@
  *    an ObjectAddress. Here we have a walker for parsetrees to find the
  *    address of the object targeted.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

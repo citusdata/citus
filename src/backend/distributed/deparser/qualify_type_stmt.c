@@ -11,7 +11,7 @@
  *	  Goal would be that the deparser functions for these statements can
  *	  serialize the statement without any external lookups.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

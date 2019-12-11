@@ -3,7 +3,7 @@
  * citus_acquire_lock.h
  *	  Background worker to help with acquiering locks by canceling competing backends.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

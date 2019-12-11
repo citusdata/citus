@@ -5,7 +5,7 @@
  *
  *    Procedures can be distributed with create_distributed_function.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

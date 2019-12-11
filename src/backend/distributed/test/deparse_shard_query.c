@@ -5,7 +5,7 @@
  * This file contains functions to exercise deparsing of INSERT .. SELECT queries
  * for distributed tables.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

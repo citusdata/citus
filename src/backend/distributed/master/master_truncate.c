@@ -4,7 +4,7 @@
  *
  * Routine for truncating local data after a table has been distributed.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

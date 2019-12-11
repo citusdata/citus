@@ -4,7 +4,7 @@
  *
  * Utilities related to enterprise code in the community version.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

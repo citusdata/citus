@@ -5,7 +5,7 @@
  * This file contains functions to test co-location functionality
  * within Citus.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
