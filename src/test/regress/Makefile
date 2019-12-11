@@ -28,16 +28,6 @@ citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
-# XXX: Can't actually do useful testruns against install - $libdir
-# etc will point to the directory configured during postgres'
-# build. We could copy the installed tree around, but that's quite
-# likely to be mixed with other binaries and such...
-cleandir-main:
-###	echo rm -rf '$(CURDIR)'/tmp_check/install
-###
-tempinstall-main: cleandir-main
-####	mkdir -p $(MULTI_INSTALLDIR)
-###	$(MAKE) DESTDIR=$(MULTI_INSTALLDIR) -C $(citus_top_builddir) install > tmp_check/install.log 2>&1
 
 # Test input and expected files.  These are created by pg_regress itself, so we
 # don't have a rule to create them.  We do need rules to clean them however.
@@ -102,7 +92,7 @@ check-base: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
-check-base-non-adaptive: all tempinstall-main
+check-base-non-adaptive: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
@@ -125,51 +115,51 @@ check-empty: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
-check-multi: all tempinstall-main
+check-multi: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-multi-non-adaptive: all tempinstall-main
+check-multi-non-adaptive: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-failure-non-adaptive: all tempinstall-main
+check-failure-non-adaptive: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
-check-failure-non-adaptive-base: all tempinstall-main
+check-failure-non-adaptive-base: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
-check-isolation-non-adaptive: all tempinstall-main $(isolation_test_files)
+check-isolation-non-adaptive: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
-check-multi-vg: all tempinstall-main
+check-multi-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-isolation: all tempinstall-main $(isolation_test_files)
+check-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
-check-isolation-base: all tempinstall-main $(isolation_test_files)
+check-isolation-base: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
-check-vanilla: all tempinstall-main
+check-vanilla: all
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
 
-check-multi-mx: all tempinstall-main
+check-multi-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
-check-multi-task-tracker-extra: all tempinstall-main
+check-multi-task-tracker-extra: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=task-tracker \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
