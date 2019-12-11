@@ -83,9 +83,40 @@ WITH t AS (SELECT *, random() x FROM dist) SELECT * FROM numbers, local_table
  SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
  SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 
+
+--
+-- Joins between reference tables and views shouldn't be planned locally.
+--
+
+CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+
+CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
+$Q$);
+
+DROP VIEW numbers_v, local_table_v;
+
+--
+-- Joins between reference tables and materialized views are allowed to
+-- be planned locally
+--
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
+REFRESH MATERIALIZED VIEW numbers_v;
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+
 -- verify that we can drop columns from reference tables replicated to the coordinator
 -- see https://github.com/citusdata/citus/issues/3279
 ALTER TABLE squares DROP COLUMN b;
+
 
 -- clean-up
 SET client_min_messages TO ERROR;

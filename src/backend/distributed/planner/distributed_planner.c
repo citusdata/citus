@@ -1882,6 +1882,15 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
+		/*
+		 * We only allow local join for the relation kinds for which we can
+		 * determine deterministcly that access to hem are local or distributed.
+		 * For this reason, we don't allow non-materialized views.
+		 */
+		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			return false;
+		}
 
 		if (!IsDistributedTable(rangeTableEntry->relid))
 		{

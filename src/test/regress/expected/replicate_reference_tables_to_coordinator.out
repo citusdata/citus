@@ -166,6 +166,51 @@ HINT:  Consider using an equality filter on the distributed table's partition co
  SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
+--
+-- Joins between reference tables and views shouldn't be planned locally.
+--
+CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
+
+CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
+$Q$);
+                coordinator_plan                
+------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan 24_1
+         ->  Seq Scan on local_table
+               Filter: ((a >= 1) AND (a <= 10))
+   Task Count: 1
+(5 rows)
+
+DROP VIEW numbers_v, local_table_v;
+--
+-- Joins between reference tables and materialized views are allowed to
+-- be planned locally
+--
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
+LOG:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
+REFRESH MATERIALIZED VIEW numbers_v;
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+ plan_is_distributed 
+---------------------
+ f
+(1 row)
+
 -- verify that we can drop columns from reference tables replicated to the coordinator
 -- see https://github.com/citusdata/citus/issues/3279
 ALTER TABLE squares DROP COLUMN b;
