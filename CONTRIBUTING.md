@@ -132,10 +132,9 @@ tool.
   popd
   ```
 
-Once you've done that, you can run the `citus_indent` command to recursively check and
-correct the style of any source files in the current directory. You can also run `make
-reindent` from within the Citus repo to correct the style of all source files in the
-repository.
+Once you've done that, you can run the `make reindent` command from the top directory to recursively check and
+correct the style of any source files in the current directory. Under the hood, `make reindent` will run `citus_indent` and some
+other style corrections for you.
 
 ### Making SQL changes
 
