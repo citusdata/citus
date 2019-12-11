@@ -1365,7 +1365,7 @@ CleanUpSessions(DistributedExecution *execution)
 
 				ClearResults(connection, false);
 			}
-			else if (!(transactionState == REMOTE_TRANS_INVALID ||
+			else if (!(transactionState == REMOTE_TRANS_NOT_STARTED ||
 					   transactionState == REMOTE_TRANS_STARTED))
 			{
 				/*
@@ -2467,7 +2467,7 @@ ConnectionStateMachine(WorkerSession *session)
 				if (!connection->remoteTransaction.beginSent)
 				{
 					connection->remoteTransaction.transactionState =
-						REMOTE_TRANS_INVALID;
+						REMOTE_TRANS_NOT_STARTED;
 				}
 
 				break;
@@ -2581,7 +2581,7 @@ TransactionStateMachine(WorkerSession *session)
 
 		switch (currentState)
 		{
-			case REMOTE_TRANS_INVALID:
+			case REMOTE_TRANS_NOT_STARTED:
 			{
 				if (execution->isTransaction)
 				{
@@ -2677,7 +2677,7 @@ TransactionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					transaction->transactionState = REMOTE_TRANS_INVALID;
+					transaction->transactionState = REMOTE_TRANS_NOT_STARTED;
 				}
 				break;
 			}
@@ -3433,7 +3433,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 							&placementExecution->sessionReadyQueueNode);
 		}
 
-		if (transactionState == REMOTE_TRANS_INVALID ||
+		if (transactionState == REMOTE_TRANS_NOT_STARTED ||
 			transactionState == REMOTE_TRANS_STARTED)
 		{
 			/*
@@ -3467,7 +3467,7 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 			RemoteTransaction *transaction = &(connection->remoteTransaction);
 			RemoteTransactionState transactionState = transaction->transactionState;
 
-			if (transactionState == REMOTE_TRANS_INVALID ||
+			if (transactionState == REMOTE_TRANS_NOT_STARTED ||
 				transactionState == REMOTE_TRANS_STARTED)
 			{
 				UpdateConnectionWaitFlags(session,

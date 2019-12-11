@@ -781,7 +781,7 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 {
 	dlist_iter placementIter;
 
-	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_INVALID)
+	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
 	{
 		/*
 		 * When StartPlacementListConnection() is called, we set the
