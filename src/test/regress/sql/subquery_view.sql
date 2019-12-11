@@ -339,10 +339,13 @@ SELECT time, event_type, value_2, value_3 FROM
 		WHERE
 			foo.user_id = events_table.value_2;
 
-
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 SELECT * FROM subquery_and_ctes_second
 ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
+
+SET citus.enable_cte_inlining TO true;
 
 CREATE VIEW deep_subquery AS
 SELECT count(*)

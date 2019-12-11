@@ -727,6 +727,19 @@ static PlannedStmt *
 InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 										  DistributedPlanningContext *planContext)
 {
+	if (!EnableCTEInlining)
+	{
+		/*
+		 * In Postgres 12+, users can adjust whether to inline/not inline CTEs
+		 * by [NOT] MATERIALIZED keywords. However, in PG 11, that's not possible.
+		 * So, with this we provide a way to prevent CTE inlining on Postgres 11.
+		 *
+		 * The main use-case for this is not to have divergent test outputs between
+		 * PG 11 vs PG 12, so not very much intended for users.
+		 */
+		return NULL;
+	}
+
 	/*
 	 * We'll inline the CTEs and try distributed planning, preserve the original
 	 * query in case the planning fails and we fallback to recursive planning of

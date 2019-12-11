@@ -30,6 +30,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
+#include "distributed/cte_inline.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
@@ -759,6 +760,20 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_cte_inlining",
+		gettext_noop("When set to false, CTE inlining feature is disabled"),
+		gettext_noop("This feature is not intended for users. It is developed "
+					 "to get consistent regression test outputs between Postgres 11"
+					 "and Postgres 12. In Postgres 12+, the user can control the behaviour"
+					 "by [NOT] MATERIALIZED keyword on CTEs. However, in PG 11, we cannot do "
+					 "that."),
+		&EnableCTEInlining,
+		true,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(

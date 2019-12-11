@@ -127,6 +127,9 @@ LIMIT
   5;
 
 -- cte LEFT JOIN distributed_table should error out
+-- as long as the CTE is recursively planned
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH cte AS (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
@@ -140,6 +143,8 @@ ORDER BY
   1,2,3
 LIMIT
   5;
+
+SET citus.enable_cte_inlining TO true;
 
 -- cte RIGHT JOIN distributed_table should work
 WITH cte AS (
@@ -172,6 +177,8 @@ LIMIT
   5;
 
 -- distributed_table RIGHT JOIN cte should error out
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH cte AS (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
@@ -200,6 +207,8 @@ ORDER BY
   1,2,3
 LIMIT
   5;
+
+SET citus.enable_cte_inlining TO false;
 
 -- Joins with reference tables are planned as router queries
 WITH cte AS (

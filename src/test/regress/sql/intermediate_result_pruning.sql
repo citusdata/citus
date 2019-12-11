@@ -19,6 +19,8 @@ SELECT create_distributed_table('table_3', 'key');
 CREATE TABLE ref_table (key int, value text);
 SELECT create_reference_table('ref_table');
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 
 -- load some data
 INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
