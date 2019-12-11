@@ -23,6 +23,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/resource_lock.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_transaction.h"
@@ -42,6 +43,7 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
+static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError);
 
 
 /*
@@ -135,6 +137,18 @@ SendCommandToAllWorkers(char *command)
 void
 SendCommandListToAllWorkers(List *commandList)
 {
+	SendCommandListToAllWorkersInternal(commandList, true);
+}
+
+
+/*
+ * SendCommandListToAllWorkersInternal sends the given command to all workers in a single
+ * transaction. If failOnError is false, then it continues sending the commandList to other
+ * workers even if it fails in one of them.
+ */
+static void
+SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
+{
 	ListCell *workerNodeCell = NULL;
 	char *extensionOwner = CitusExtensionOwnerName();
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
@@ -142,10 +156,33 @@ SendCommandListToAllWorkers(List *commandList)
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-												   workerNode->workerPort, extensionOwner,
-												   commandList);
+		if (failOnError)
+		{
+			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+													   workerNode->workerPort,
+													   extensionOwner,
+													   commandList);
+		}
+		else
+		{
+			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+														 workerNode->workerPort,
+														 extensionOwner,
+														 commandList);
+		}
 	}
+}
+
+
+/*
+ * SendOptionalCommandListToAllWorkers sends the given command to all works in
+ * a single transaction. If there is an error during the command, it is ignored
+ * so this method doesnt return any error.
+ */
+void
+SendOptionalCommandListToAllWorkers(List *commandList)
+{
+	SendCommandListToAllWorkersInternal(commandList, false);
 }
 
 

@@ -150,12 +150,21 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 
 /*
  * DoRepartitionCleanup removes the temporary job directories and schemas that are
- * used for repartition queries for the given job ids.
+ * used for repartition queries for the given job ids. It might return an error if
+ * canError is true.
  */
 void
-DoRepartitionCleanup(List *jobIds)
+DoRepartitionCleanup(List *jobIds, bool canError)
 {
-	SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));
+	if (canError)
+	{
+		SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));
+	}
+	else
+	{
+		SendOptionalCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(
+														   jobIds)));
+	}
 }
 
 

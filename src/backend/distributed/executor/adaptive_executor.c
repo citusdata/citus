@@ -732,7 +732,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (hasDependentJobs)
 	{
-		DoRepartitionCleanup(jobIdList);
+		DoRepartitionCleanup(jobIdList, true);
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -2064,7 +2064,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* do repartition cleanup if this is a repartition query*/
 		if (list_length(execution->jobIdList) > 0)
 		{
-			DoRepartitionCleanup(execution->jobIdList);
+			DoRepartitionCleanup(execution->jobIdList, false);
 		}
 
 		if (execution->waitEventSet != NULL)
