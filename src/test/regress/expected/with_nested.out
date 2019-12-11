@@ -393,7 +393,7 @@ cte2 AS (
     )
     SELECT user_id, time, value_1, min(count) FROM cte2_1_1 GROUP BY 1, 2, 3 ORDER BY 1,2,3
   )
-  SELECT * FROM cte2_1 LIMIT 3 OFFSET 2
+  SELECT * FROM cte2_1 ORDER BY 1,2,3,4 LIMIT 3 OFFSET 2
 )
 SELECT * FROM cte2;
  user_id |              time               | value_1 | min 
