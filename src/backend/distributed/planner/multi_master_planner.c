@@ -137,7 +137,19 @@ replace_function_scan_with_remote_scan(Plan *plan, CustomScan *remoteScan)
 {
 	if (IsA(plan, FunctionScan))
 	{
-		return (Plan *) copyObject(remoteScan);
+		FunctionScan *functionScan = castNode(FunctionScan, plan);
+		CustomScan *copyRemoteScan = remoteScan;
+		/* TODO decide if we want to copy the statement, can't do so now as plan references need to be updated which requires context we dont have here at the moment */
+//		copyRemoteScan = copyObject(copyRemoteScan);
+		/*
+		 * The standard planner might have shuffled around the target list compared to the
+		 * target list of our function. The source tuples of the function align with the
+		 * internal layout of the tuple from the remote scan so we can simply reuse the
+		 * target list from the standard plan of the function scan
+		 */
+		copyRemoteScan->scan.plan.targetlist = functionScan->scan.plan.targetlist;
+
+		return (Plan *) copyRemoteScan;
 	}
 
 	return plan;
@@ -196,11 +208,14 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	remoteScan->custom_scan_tlist = masterTargetList;
 	remoteScan->scan.plan.targetlist = masterTargetList;
 	pprint(standardStmt);
-	remoteScan = castNode(CustomScan, set_plan_references(root, (Plan *)remoteScan));
-//	FinalizeStatement(root, standardStmt, remoteScan);
 	standardStmt->planTree = PlanMutator(standardStmt->planTree,
 										 replace_function_scan_with_remote_scan,
 										 remoteScan);
+	/*
+	 * TODO; with the final targetlist set we can set the plan references, might need to
+	 * be moved inside replace_function_scan_with_remote_scan
+	 */
+	set_plan_references(root, (Plan *)remoteScan);
 	{
 		/*
 		 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans

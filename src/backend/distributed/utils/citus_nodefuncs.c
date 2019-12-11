@@ -74,7 +74,8 @@ PG_FUNCTION_INFO_V1(citus_extradata_container);
 void
 SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 					 char *fragmentSchemaName, char *fragmentTableName,
-					 List *tableIdList)
+					 List *tableIdList, List *funcColumnNames, List *funcColumnTypes,
+					 List *funcColumnTypeMods, List *funcCollations)
 {
 	Assert(rte->eref);
 
@@ -127,6 +128,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	/* create function expression to store our faux arguments in */
 	FuncExpr *fauxFuncExpr = makeNode(FuncExpr);
 	fauxFuncExpr->funcid = CitusExtraDataContainerFuncId();
+	fauxFuncExpr->funcresulttype = RECORDOID;
 	fauxFuncExpr->funcretset = true;
 	fauxFuncExpr->location = -1;
 	fauxFuncExpr->args = list_make4(rteKindData, fragmentSchemaData,
@@ -137,6 +139,10 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 
 	/* set the column count to pass ruleutils checks, not used elsewhere */
 	fauxFunction->funccolcount = list_length(rte->eref->colnames);
+	fauxFunction->funccolnames = funcColumnNames;
+	fauxFunction->funccoltypes = funcColumnTypes;
+	fauxFunction->funccoltypmods = funcColumnTypeMods;
+	fauxFunction->funccolcollations = funcCollations;
 
 	rte->rtekind = RTE_FUNCTION;
 	rte->functions = list_make1(fauxFunction);
@@ -281,7 +287,7 @@ ModifyRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 
 	SetRangeTblExtraData(rte, rteKind,
 						 fragmentSchemaName, fragmentTableName,
-						 tableIdList);
+						 tableIdList, NIL, NIL, NIL, NIL);
 }
 
 

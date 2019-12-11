@@ -92,3 +92,4 @@ CREATE OR REPLACE FUNCTION citus_extradata_container(INTERNAL)
 AS 'MODULE_PATHNAME', $$citus_extradata_container$$;
 COMMENT ON FUNCTION pg_catalog.citus_extradata_container(INTERNAL)
     IS 'placeholder function to store additional data in postgres node trees';
+

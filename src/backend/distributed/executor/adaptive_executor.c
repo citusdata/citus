@@ -637,7 +637,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	CustomScan *remoteScan = ((CustomScan *)scanState->customScanState.ss.ps.plan);
+	TupleDesc tupleDescriptor = ExecCleanTypeFromTL(remoteScan->custom_scan_tlist);//ScanStateGetTupleDescriptor(scanState);
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;

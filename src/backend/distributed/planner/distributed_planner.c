@@ -53,6 +53,7 @@
 #endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "optimizer/planmain.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
@@ -1430,7 +1431,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	List *columnNameList = NIL;
 
 	/* we will have custom scan range table entry as the first one in the list */
-	int customScanRangeTableIndex = 1;
+	int customScanRangeTableIndex = INDEX_VAR;
 
 	/* build a targetlist to read from the custom scan output */
 	foreach(targetEntryCell, localPlan->planTree->targetlist)
@@ -1472,6 +1473,16 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	}
 
 	customScan->scan.plan.targetlist = targetList;
+	customScan->custom_scan_tlist = targetList;
+//
+//	PlannerGlobal *glob = makeNode(PlannerGlobal);
+//	PlannerInfo *root = makeNode(PlannerInfo);
+//	root->parse = NULL;
+//	root->glob = glob;
+//	root->query_level = 1;
+//	root->planner_cxt = CurrentMemoryContext;
+//	root->wt_param_id = -1;
+//	set_plan_references(root, (Plan *) customScan);
 
 	PlannedStmt *routerPlan = makeNode(PlannedStmt);
 	routerPlan->planTree = (Plan *) customScan;
