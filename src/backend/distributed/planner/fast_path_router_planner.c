@@ -29,7 +29,7 @@
  * could use to decide the shard that a distributed query touches reside on
  * a worker node.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"

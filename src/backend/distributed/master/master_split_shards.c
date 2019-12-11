@@ -5,7 +5,7 @@
  * This file contains functions to split a shard according to a given
  * distribution column value.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

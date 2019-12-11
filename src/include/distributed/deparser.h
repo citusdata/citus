@@ -3,7 +3,7 @@
  * deparser.h
  *	  Used when deparsing any ddl parsetree into its sql from.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *

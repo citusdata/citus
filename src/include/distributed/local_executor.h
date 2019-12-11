@@ -3,7 +3,7 @@
  * local_executor.h
  *	Functions and global variables to control local query execution.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

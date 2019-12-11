@@ -5,7 +5,7 @@
  * This file contains functions to plan multiple shard queries without any
  * aggregation step including distributed table modifications.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

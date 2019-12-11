@@ -3,7 +3,7 @@
  * distobject.c
  *	  Functions to interact with distributed objects by their ObjectAddress
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

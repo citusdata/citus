@@ -5,7 +5,7 @@
  *
  *    This file is modeled after postgres' utils/adt/format_*.c files
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -3,7 +3,7 @@
  * variableset.c
  *    Support for propagation of SET (commands to set variables)
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

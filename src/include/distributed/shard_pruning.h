@@ -3,7 +3,7 @@
  * shard_pruning.h
  *   Shard pruning infrastructure.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

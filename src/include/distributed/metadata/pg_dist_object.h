@@ -9,7 +9,7 @@
  * This also means that all nodes joining the network are assumed to
  * recreate all these objects.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

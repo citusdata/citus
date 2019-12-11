@@ -9,7 +9,7 @@
  *	  should be reused across multiple statements and should live in their own deparse
  *	  file.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
