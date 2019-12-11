@@ -196,9 +196,9 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 				scanState->tuplestorestate =
 					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-				ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
-										tupleDescriptor, scanState->tuplestorestate,
-										hasReturning, MaxAdaptiveExecutorPoolSize);
+				ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+											  tupleDescriptor, scanState->tuplestorestate,
+											  hasReturning);
 
 				if (SortReturning && hasReturning)
 				{

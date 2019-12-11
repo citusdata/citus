@@ -174,9 +174,20 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		task->relationShardList = NIL;
 		task->taskPlacementList = placementList;
 
+		/*
+		 * We are delegating the distributed transaction to the worker, so we
+		 * should not run the CALL in a transaction block.
+		 */
+		TransactionProperties xactProperties = {
+			.errorOnAnyFailure = true,
+			.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_DISALLOWED,
+			.requires2PC = false
+		};
+
 		ExecuteTaskListExtended(ROW_MODIFY_NONE, list_make1(task),
 								tupleDesc, tupleStore, hasReturning,
-								MaxAdaptiveExecutorPoolSize);
+								MaxAdaptiveExecutorPoolSize,
+								&xactProperties);
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{
