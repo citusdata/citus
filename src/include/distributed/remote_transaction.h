@@ -26,7 +26,7 @@ struct MultiConnection;
 typedef enum
 {
 	/* no transaction active */
-	REMOTE_TRANS_INVALID = 0,
+	REMOTE_TRANS_NOT_STARTED = 0,
 
 	/* transaction start */
 	REMOTE_TRANS_STARTING,
