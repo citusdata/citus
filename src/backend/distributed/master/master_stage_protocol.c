@@ -284,7 +284,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						errhint("Try running master_create_empty_shard() first")));
 	}
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/* issue command to append table to each shard placement */
 	foreach(shardPlacementCell, shardPlacementList)

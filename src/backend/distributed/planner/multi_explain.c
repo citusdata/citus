@@ -386,7 +386,7 @@ RemoteExplain(Task *task, ExplainState *es)
 	 * Use a coordinated transaction to ensure that we open a transaction block
 	 * such that we can set a savepoint.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{

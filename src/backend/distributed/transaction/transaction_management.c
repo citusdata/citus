@@ -96,7 +96,6 @@ bool FunctionOpensTransactionBlock = true;
 
 
 /* transaction management functions */
-static void BeginCoordinatedTransaction(void);
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 											  SubTransactionId parentSubid, void *arg);
@@ -111,18 +110,26 @@ static bool MaybeExecutingUDF(void);
 
 
 /*
- * BeginOrContinueCoordinatedTransaction starts a coordinated transaction,
- * unless one already is in progress.
+ * UseCoordinatedTransaction sets up the necessary variables to use
+ * a coordinated transaction, unless one is already in progress.
  */
 void
-BeginOrContinueCoordinatedTransaction(void)
+UseCoordinatedTransaction(void)
 {
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_STARTED)
 	{
 		return;
 	}
 
-	BeginCoordinatedTransaction();
+	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
+		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
+	{
+		ereport(ERROR, (errmsg("starting transaction in wrong state")));
+	}
+
+	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+
+	AssignDistributedTransactionId();
 }
 
 
@@ -166,25 +173,6 @@ InitializeTransactionManagement(void)
 												  8 * 1024,
 												  8 * 1024,
 												  8 * 1024);
-}
-
-
-/*
- * BeginCoordinatedTransaction begins a coordinated transaction. No
- * pre-existing coordinated transaction may be in progress./
- */
-static void
-BeginCoordinatedTransaction(void)
-{
-	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
-		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
-	{
-		ereport(ERROR, (errmsg("starting transaction in wrong state")));
-	}
-
-	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
-
-	AssignDistributedTransactionId();
 }
 
 

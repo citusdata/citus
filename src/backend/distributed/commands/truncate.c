@@ -237,7 +237,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	relationIdList = SortList(relationIdList, CompareOids);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	foreach_oid(relationId, relationIdList)
 	{

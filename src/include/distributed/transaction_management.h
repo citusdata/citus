@@ -106,7 +106,7 @@ extern StringInfo activeSetStmts;
 /*
  * Coordinated transaction management.
  */
-extern void BeginOrContinueCoordinatedTransaction(void);
+extern void UseCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
 extern bool IsMultiStatementTransaction(void);

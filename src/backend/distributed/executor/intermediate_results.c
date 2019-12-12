@@ -122,7 +122,7 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	List *nodeList = ActivePrimaryWorkerNodeList(NoLock);
 	EState *estate = CreateExecutorState();
@@ -164,7 +164,7 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	EState *estate = CreateExecutorState();
 	RemoteFileDestReceiver *resultDest =

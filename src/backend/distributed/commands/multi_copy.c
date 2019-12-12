@@ -298,7 +298,7 @@ PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
 static void
 CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 {
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/* disallow COPY to/from file or program except for superusers */
 	if (copyStatement->filename != NULL && !superuser())
@@ -2251,7 +2251,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	/* keep the table metadata to avoid looking it up for every tuple */
 	copyDest->tableMetadata = cacheEntry;
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
 		MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
