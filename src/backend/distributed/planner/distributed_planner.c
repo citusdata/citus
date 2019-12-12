@@ -1955,6 +1955,20 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
+		/*
+		 * Don't plan joins involving functions locally since we are not sure if
+		 * they do distributed accesses or not, and defaulting to local planning
+		 * might break transactional semantics.
+		 *
+		 * For example, Access to the reference table in the function might go
+		 * over a connection, but access to the same reference table outside
+		 * the function will go over the current backend. The snapshot for the
+		 * connection in the function is taken after the statement snapshot,
+		 * so they can see two different views of data.
+		 *
+		 * Looking at gram.y, RTE_TABLEFUNC is used only for XMLTABLE() which
+		 * is okay to be planned locally, so allowing that.
+		 */
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
 			return false;
