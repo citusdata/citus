@@ -48,16 +48,32 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 
 -- drop all shards
 SELECT master_apply_delete_command('DELETE FROM sharded_table');
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 999001;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
+CREATE TABLE lockable_table ( name text, id bigint );
+SELECT create_distributed_table('lockable_table', 'id', 'hash', colocate_with := 'none');
+SET citus.shard_count TO 2;
+SET citus.next_shard_id TO 990002;
 
 -- lock shard metadata: take some share locks and exclusive locks
 BEGIN;
 SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);
 SELECT lock_shard_metadata(7, ARRAY[999001, 999003, 999004]);
 
-SELECT locktype, objid, mode, granted
-FROM pg_locks
-WHERE objid IN (999001, 999002, 999003, 999004)
-ORDER BY objid, mode;
+SELECT
+    CASE
+        WHEN l.objsubid = 5 THEN 'shard'
+        WHEN l.objsubid = 4 THEN 'shard_metadata'
+        ELSE 'colocated_shards_metadata'
+    END AS locktype,
+    objid,
+    classid,
+    mode,
+    granted
+FROM pg_locks l
+WHERE l.locktype = 'advisory'
+ORDER BY locktype, objid, classid, mode;
 END;
 
 -- lock shard metadata: unsupported lock type
@@ -91,6 +107,7 @@ SELECT lock_shard_resources(5, ARRAY[]::bigint[]);
 
 -- drop table
 DROP TABLE sharded_table;
+DROP TABLE lockable_table;
 
 -- VACUUM tests
 

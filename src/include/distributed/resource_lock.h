@@ -36,7 +36,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
-	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
+	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
 } AdvisoryLocktagClass;
 
 
@@ -47,6 +48,14 @@ typedef enum AdvisoryLocktagClass
 						 (uint32) ((shardid) >> 32), \
 						 (uint32) (shardid), \
 						 ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA)
+
+#define SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(tag, db, colocationId, \
+													   shardIntervalIndex) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 db, \
+						 (uint32) shardIntervalIndex, \
+						 (uint32) colocationId, \
+						 ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA)
 
 /* reuse advisory lock, but with different, unused field 4 (5)*/
 #define SET_LOCKTAG_SHARD_RESOURCE(tag, db, shardid) \

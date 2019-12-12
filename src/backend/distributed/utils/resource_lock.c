@@ -332,7 +332,34 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid distributedTableId = shardInterval->relationId;
+	DistTableCacheEntry *distributedTable = DistributedTableCacheEntry(
+		distributedTableId);
+	uint32 colocationId = distributedTable->colocationId;
+
+	if (colocationId == INVALID_COLOCATION_ID ||
+		distributedTable->partitionMethod != DISTRIBUTE_BY_HASH)
+	{
+		SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+	}
+	else
+	{
+		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(tag, MyDatabaseId, colocationId,
+													   shardInterval->shardIndex);
+
+		/*
+		 * NOTE: These next 2 lines are not really needed for correct locking.
+		 * However, we keep them so that we can have mixed cluster with nodes
+		 * that contain a Citus version earlier than 9.2. Those versions didn't
+		 * have the lock above, so the next two lines ensure mixed versions
+		 * still share a lock.
+		 * Putting PG_VERSION_NUM < 120000 here, by the time we stop supporting
+		 * PG11 we should probably reconsider if we want to remove these lines.
+		 */
+		(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
+		SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+	}
 
 	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
 }
