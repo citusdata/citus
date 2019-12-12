@@ -62,6 +62,28 @@ BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
 ROLLBACK;
 
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM local_table
+) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
+END;
+
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM numbers
+) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
+END;
+
+BEGIN;
+SELECT count(*) FROM local_table
+WHERE EXISTS(SELECT random() FROM numbers WHERE local_table.a = numbers.a);
+END;
+
+BEGIN;
+SELECT count(*) FROM numbers
+WHERE EXISTS(SELECT random() FROM local_table WHERE local_table.a = numbers.a);
+END;
+
 DROP SCHEMA s1 CASCADE;
 
 -- shouldn't plan locally if modifications happen in CTEs, ...
