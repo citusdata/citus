@@ -190,6 +190,28 @@ BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
 ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
 ROLLBACK;
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM local_table
+) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM numbers
+) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+SELECT count(*) FROM local_table
+WHERE EXISTS(SELECT random() FROM numbers WHERE local_table.a = numbers.a);
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+SELECT count(*) FROM numbers
+WHERE EXISTS(SELECT random() FROM local_table WHERE local_table.a = numbers.a);
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
 DROP SCHEMA s1 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table s1.ref
