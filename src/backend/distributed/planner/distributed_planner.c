@@ -1960,7 +1960,7 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 		 * they do distributed accesses or not, and defaulting to local planning
 		 * might break transactional semantics.
 		 *
-		 * For example, Access to the reference table in the function might go
+		 * For example, access to the reference table in the function might go
 		 * over a connection, but access to the same reference table outside
 		 * the function will go over the current backend. The snapshot for the
 		 * connection in the function is taken after the statement snapshot,
@@ -1981,7 +1981,7 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 
 		/*
 		 * We only allow local join for the relation kinds for which we can
-		 * determine deterministcly that access to hem are local or distributed.
+		 * determine deterministically that access to them are local or distributed.
 		 * For this reason, we don't allow non-materialized views.
 		 */
 		if (rangeTableEntry->relkind == RELKIND_VIEW)
