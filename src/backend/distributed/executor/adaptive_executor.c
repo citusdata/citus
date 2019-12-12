@@ -143,6 +143,7 @@
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
@@ -1810,7 +1811,7 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 
 		CHECK_FOR_INTERRUPTS();
 
-		if (InterruptHoldoffCount > 0 && (QueryCancelPending || ProcDiePending))
+		if (IsHoldOffCancellationReceived())
 		{
 			break;
 		}
@@ -1918,8 +1919,7 @@ RunDistributedExecution(DistributedExecution *execution)
 						CHECK_FOR_INTERRUPTS();
 					}
 
-					if (InterruptHoldoffCount > 0 && (QueryCancelPending ||
-													  ProcDiePending))
+					if (IsHoldOffCancellationReceived())
 					{
 						/*
 						 * Break out of event loop immediately in case of cancellation.

@@ -17,6 +17,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/cancel_utils.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
@@ -757,7 +758,7 @@ FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 			 * interrupts held, return instead, and mark the transaction as
 			 * failed.
 			 */
-			if (InterruptHoldoffCount > 0 && (QueryCancelPending || ProcDiePending))
+			if (IsHoldOffCancellationReceived())
 			{
 				connection->remoteTransaction.transactionFailed = true;
 				break;
@@ -863,8 +864,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 						CHECK_FOR_INTERRUPTS();
 					}
 
-					if (InterruptHoldoffCount > 0 && (QueryCancelPending ||
-													  ProcDiePending))
+					if (IsHoldOffCancellationReceived())
 					{
 						/*
 						 * Break out of event loop immediately in case of cancellation.
