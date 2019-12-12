@@ -2642,7 +2642,6 @@ RangeTblEntry *
 ExtractDistributedInsertValuesRTE(Query *query)
 {
 	ListCell *rteCell = NULL;
-	RangeTblEntry *valuesRTE = NULL;
 
 	if (query->commandType != CMD_INSERT)
 	{
@@ -2655,12 +2654,10 @@ ExtractDistributedInsertValuesRTE(Query *query)
 
 		if (rte->rtekind == RTE_VALUES)
 		{
-			valuesRTE = rte;
-			break;
+			return rte;
 		}
 	}
-
-	return valuesRTE;
+	return NULL;
 }
 
 
