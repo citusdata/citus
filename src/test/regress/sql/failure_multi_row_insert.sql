@@ -70,6 +70,13 @@ INSERT INTO distributed_table VALUES (2,21), (1,22);
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
 INSERT INTO reference_table VALUES (1), (2), (3), (4);
 
+SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
+INSERT INTO distributed_table VALUES (1,1), (2,2), (3,3), (4,2), (5,2), (6,2), (7,2);
+
+-- cancel the second insert over the same connection
+SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).cancel(' || :pid || ')');
+INSERT INTO distributed_table VALUES (1,1), (2,2), (3,3), (4,2), (5,2), (6,2), (7,2);
+
 -- we've either failed or cancelled all queries, so should be empty
 SELECT * FROM distributed_table;
 SELECT * FROM reference_table;
