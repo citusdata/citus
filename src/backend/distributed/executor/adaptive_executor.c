@@ -1808,6 +1808,13 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 		execution->totalTaskCount = 1;
 		execution->unfinishedTaskCount = 1;
 
+		CHECK_FOR_INTERRUPTS();
+
+		if (InterruptHoldoffCount > 0 && (QueryCancelPending || ProcDiePending))
+		{
+			break;
+		}
+
 		/* simply call the regular execution function */
 		RunDistributedExecution(execution);
 	}
