@@ -14,6 +14,7 @@
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_class.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
@@ -634,9 +635,29 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		bool onlySearchPath = false;
 
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning functions
+		 * in FROM clause locally. Early exit. We cannot use Assert() here since
+		 * all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			return false;
+		}
+
 		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
 			continue;
+		}
+
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning reference
+		 * table and view join locally. Early exit. We cannot use Assert() here
+		 * since all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			return false;
 		}
 
 		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
