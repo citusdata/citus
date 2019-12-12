@@ -25,6 +25,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
@@ -738,7 +739,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 				CHECK_FOR_INTERRUPTS();
 
-				if (InterruptHoldoffCount > 0 && (QueryCancelPending || ProcDiePending))
+				if (IsHoldOffCancellationReceived())
 				{
 					/*
 					 * because we can't break from 2 loops easily we need to not forget to
