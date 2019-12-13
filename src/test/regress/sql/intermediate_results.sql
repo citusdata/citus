@@ -148,4 +148,58 @@ select broadcast_intermediate_result('a', 'create table foo(int serial)');
 select broadcast_intermediate_result('a', 'prepare foo as select 1');
 select create_intermediate_result('a', 'create table foo(int serial)');
 
+--
+-- read_intermediate_results
+--
+
+BEGIN;
+SELECT create_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_series(1,3) s'),
+       create_intermediate_result('squares_2', 'SELECT s, s*s FROM generate_series(4,6) s'),
+       create_intermediate_result('squares_3', 'SELECT s, s*s FROM generate_series(7,10) s');
+
+SELECT count(*) FROM read_intermediate_results(ARRAY[]::text[], 'binary') AS res (x int, x2 int);
+SELECT * FROM read_intermediate_results(ARRAY['squares_1']::text[], 'binary') AS res (x int, x2 int);
+SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2', 'squares_3']::text[], 'binary') AS res (x int, x2 int);
+
+COMMIT;
+
+-- in separate transactions, the result is no longer available
+SELECT create_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_series(1,5) s');
+SELECT * FROM read_intermediate_results(ARRAY['squares_1']::text[], 'binary') AS res (x int, x2 int);
+
+-- error behaviour, and also check that results are deleted on rollback
+BEGIN;
+SELECT create_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_series(1,3) s');
+SAVEPOINT s1;
+SELECT * FROM read_intermediate_results(ARRAY['notexistingfile', 'squares_1'], 'binary') AS res (x int, x2 int);
+ROLLBACK TO SAVEPOINT s1;
+SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'notexistingfile'], 'binary') AS res (x int, x2 int);
+ROLLBACK TO SAVEPOINT s1;
+SELECT * FROM read_intermediate_results(ARRAY['squares_1', NULL], 'binary') AS res (x int, x2 int);
+ROLLBACK TO SAVEPOINT s1;
+-- after rollbacks we should be able to run vail read_intermediate_results still.
+SELECT count(*) FROM read_intermediate_results(ARRAY['squares_1']::text[], 'binary') AS res (x int, x2 int);
+SELECT count(*) FROM read_intermediate_results(ARRAY[]::text[], 'binary') AS res (x int, x2 int);
+END;
+
+SELECT * FROM read_intermediate_results(ARRAY['squares_1']::text[], 'binary') AS res (x int, x2 int);
+
+-- Test non-binary format: read_intermediate_results(..., 'text')
+BEGIN;
+-- ROW(...) types switch the output format to text
+SELECT broadcast_intermediate_result('stored_squares_1',
+                                     'SELECT s, s*s, ROW(1::text, 2) FROM generate_series(1,3) s'),
+       broadcast_intermediate_result('stored_squares_2',
+                                     'SELECT s, s*s, ROW(2::text, 3) FROM generate_series(4,6) s');
+
+-- query the intermediate result in a router query using text format
+SELECT * FROM interesting_squares JOIN (
+  SELECT * FROM
+    read_intermediate_results(ARRAY['stored_squares_1', 'stored_squares_2'], 'binary') AS res (x int, x2 int, z intermediate_results.square_type)
+) squares
+ON (squares.x::text = interested_in) WHERE user_id = 'jon' ORDER BY 1,2;
+
+END;
+
+
 DROP SCHEMA intermediate_results CASCADE;

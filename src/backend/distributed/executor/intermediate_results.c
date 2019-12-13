@@ -92,10 +92,14 @@ static void RemoteFileDestReceiverDestroy(DestReceiver *destReceiver);
 static char * CreateIntermediateResultsDirectory(void);
 static char * IntermediateResultsDirectory(void);
 static char * QueryResultFileName(const char *resultId);
-
+static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
+												  char *copyFormat,
+												  Datum *resultIdArray,
+												  int resultCount);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
+PG_FUNCTION_INFO_V1(read_intermediate_result_array);
 PG_FUNCTION_INFO_V1(broadcast_intermediate_result);
 PG_FUNCTION_INFO_V1(create_intermediate_result);
 
@@ -693,31 +697,75 @@ IntermediateResultSize(char *resultId)
 Datum
 read_intermediate_result(PG_FUNCTION_ARGS)
 {
-	text *resultIdText = PG_GETARG_TEXT_P(0);
-	char *resultIdString = text_to_cstring(resultIdText);
+	Datum resultId = PG_GETARG_DATUM(0);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
-	struct stat fileStat;
+	CheckCitusVersion(ERROR);
 
-	TupleDesc tupleDescriptor = NULL;
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel, &resultId, 1);
+
+	PG_RETURN_DATUM(0);
+}
+
+
+/*
+ * read_intermediate_result_array returns the set of records in a set of given
+ * COPY-formatted intermediate result files.
+ *
+ * The usage and semantics of this is same as read_intermediate_result(), except
+ * that its first argument is an array of result ids.
+ */
+Datum
+read_intermediate_result_array(PG_FUNCTION_ARGS)
+{
+	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
+	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
+
+	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
+	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
 	CheckCitusVersion(ERROR);
 
-	char *resultFileName = QueryResultFileName(resultIdString);
-	int statOK = stat(resultFileName, &fileStat);
-	if (statOK != 0)
+	int32 resultCount = ArrayGetNItems(ARR_NDIM(resultIdObject), ARR_DIMS(
+										   resultIdObject));
+	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
+
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel,
+										  resultIdArray, resultCount);
+
+	PG_RETURN_DATUM(0);
+}
+
+
+/*
+ * ReadIntermediateResultsIntoFuncOutput reads the given result files and stores
+ * them at the function's output tuple store. Errors out if any of the result files
+ * don't exist.
+ */
+static void
+ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
+									  Datum *resultIdArray, int resultCount)
+{
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+
+	for (int resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("result \"%s\" does not exist", resultIdString)));
+		char *resultId = TextDatumGetCString(resultIdArray[resultIndex]);
+		char *resultFileName = QueryResultFileName(resultId);
+		struct stat fileStat;
+
+		int statOK = stat(resultFileName, &fileStat);
+		if (statOK != 0)
+		{
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("result \"%s\" does not exist", resultId)));
+		}
+
+		ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor, tupleStore);
 	}
 
-	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupleDescriptor);
-
-	ReadFileIntoTupleStore(resultFileName, copyFormatLabel, tupleDescriptor, tupstore);
-
-	tuplestore_donestoring(tupstore);
-
-	return (Datum) 0;
+	tuplestore_donestoring(tupleStore);
 }
