@@ -143,7 +143,39 @@ RETURNING
 	distributed_table.*;
 
 -- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
--- recursively planned
+-- recursively planned, however it can be planned using the repartition planner
+SET citus.enable_repartition_joins to on;
+SELECT DISTINCT foo_inner_1.tenant_id FROM
+(
+    SELECT
+        second_distributed_table.dept, second_distributed_table.tenant_id
+    FROM
+        second_distributed_table, distributed_table
+    WHERE
+        distributed_table.tenant_id = second_distributed_table.tenant_id
+    AND
+        second_distributed_table.dept IN (3,4)
+)
+foo_inner_1 JOIN LATERAL
+(
+    SELECT
+        second_distributed_table.tenant_id
+    FROM
+        second_distributed_table, distributed_table
+    WHERE
+        distributed_table.tenant_id = second_distributed_table.tenant_id
+        AND foo_inner_1.dept = second_distributed_table.dept
+    AND
+        second_distributed_table.dept IN (4,5)
+) foo_inner_2
+ON (foo_inner_2.tenant_id != foo_inner_1.tenant_id)
+ORDER BY foo_inner_1.tenant_id;
+RESET citus.enable_repartition_joins;
+
+
+-- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
+-- recursively planned, this one can not be planned by the repartion planner
+-- because of the IN query on a non unique column
 UPDATE
 	second_distributed_table
 SET
@@ -159,8 +191,7 @@ FROM
 		WHERE
 			distributed_table.tenant_id = second_distributed_table.tenant_id
 		AND
-			second_distributed_table.dept IN (3,4)
-	)
+			second_distributed_table.dept IN (select dept from second_distributed_table))
 	foo_inner_1 JOIN LATERAL
 	(
 		SELECT

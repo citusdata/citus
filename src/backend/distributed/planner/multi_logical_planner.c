@@ -1434,22 +1434,6 @@ IsJoinClause(Node *clause)
 		return false;
 	}
 
-	OpExpr *operatorExpression = castNode(OpExpr, clause);
-	bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
-
-	if (!equalsOperator)
-	{
-		/*
-		 * The single and dual repartition join and local join planners expect the clauses
-		 * to be equi-join to calculate a hash on which to distribute.
-		 *
-		 * In the future we should move this clause to those planners and allow
-		 * non-equi-join's in the reference join and cartesian product. This is tracked in
-		 * https://github.com/citusdata/citus/issues/3198
-		 */
-		return false;
-	}
-
 	/*
 	 * take all column references from the clause, if we find 2 column references from a
 	 * different relation we assume this is a join clause

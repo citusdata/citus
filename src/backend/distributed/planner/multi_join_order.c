@@ -227,6 +227,10 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
 		Var *leftColumn = LeftColumnOrNULL(joinClause);
 		Var *rightColumn = RightColumnOrNULL(joinClause);
+		if (!OperatorImplementsEquality(joinClause->opno))
+		{
+			continue;
+		}
 
 		/*
 		 * Check if both join columns and both partition key columns match, since the
@@ -1015,6 +1019,10 @@ SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
 	foreach(applicableJoinClauseCell, applicableJoinClauses)
 	{
 		OpExpr *applicableJoinClause = castNode(OpExpr, lfirst(applicableJoinClauseCell));
+		if (!OperatorImplementsEquality(applicableJoinClause->opno))
+		{
+			continue;
+		}
 		Var *leftColumn = LeftColumnOrNULL(applicableJoinClause);
 		Var *rightColumn = RightColumnOrNULL(applicableJoinClause);
 		if (leftColumn == NULL || rightColumn == NULL)
@@ -1086,6 +1094,10 @@ DualPartitionJoinClause(List *applicableJoinClauses)
 	foreach(applicableJoinClauseCell, applicableJoinClauses)
 	{
 		OpExpr *applicableJoinClause = (OpExpr *) lfirst(applicableJoinClauseCell);
+		if (!OperatorImplementsEquality(applicableJoinClause->opno))
+		{
+			continue;
+		}
 		Var *leftColumn = LeftColumnOrNULL(applicableJoinClause);
 		Var *rightColumn = RightColumnOrNULL(applicableJoinClause);
 
