@@ -47,8 +47,28 @@ enum MultiConnectionMode
 	FOR_DML = 1 << 2,
 
 	/* open a connection per (co-located set of) placement(s) */
-	CONNECTION_PER_PLACEMENT = 1 << 3
+	CONNECTION_PER_PLACEMENT = 1 << 3,
+
+	/* connection has not been used to access data */
+	REQUIRE_SIDECHANNEL = 1 << 4
 };
+
+/*
+ * ConnectionPurpose defines what a connection is used for during the
+ * current transaction. This is primarily to not allocate connections
+ * that are needed for data access to other purposes.
+ */
+typedef enum ConnectionPurpose
+{
+	/* connection can be used for any purpose */
+	CONNECTION_PURPOSE_ANY,
+
+	/* connection can be used to access placements */
+	CONNECTION_PURPOSE_DATA_ACCESS,
+
+	/* connection can be used for auxiliary functions, but not data access */
+	CONNECTION_PURPOSE_SIDECHANNEL
+} ConnectionPurpose;
 
 typedef enum MultiConnectionState
 {
@@ -87,6 +107,9 @@ typedef struct MultiConnection
 
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
+
+	/* defines the purpose of the connection */
+	ConnectionPurpose purpose;
 
 	/* time connection establishment was started, for timeout */
 	TimestampTz connectionStart;
@@ -178,8 +201,6 @@ extern bool CheckConninfo(const char *conninfo, const char **whitelist,
 /* Low-level connection establishment APIs */
 extern MultiConnection * GetNodeConnection(uint32 flags, const char *hostname,
 										   int32 port);
-extern MultiConnection * GetNonDataAccessConnection(const char *hostname, int32 port);
-extern MultiConnection * StartNonDataAccessConnection(const char *hostname, int32 port);
 extern MultiConnection * StartNodeConnection(uint32 flags, const char *hostname,
 											 int32 port);
 extern MultiConnection * GetNodeUserDatabaseConnection(uint32 flags, const char *hostname,
