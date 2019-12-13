@@ -422,6 +422,43 @@ SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
 SELECT public.wait_until_metadata_sync();
 
 
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+CREATE TABLE test (id int, name text);
+SELECT create_distributed_table('test','id');
+INSERT INTO test VALUES (3,'three');
+
+CREATE OR REPLACE FUNCTION increment(int)
+RETURNS NUMERIC AS $$
+DECLARE ret_val NUMERIC;
+BEGIN
+        SELECT max(id)::numeric+1 INTO ret_val  FROM test WHERE id = $1;
+        RETURN ret_val;
+END;
+$$  LANGUAGE plpgsql;
+
+SELECT create_distributed_function('increment(int)', '$1', colocate_with := 'test');
+
+-- call a distributed function inside a pl/pgsql function
+
+CREATE OR REPLACE FUNCTION test_func_calls_dist_func()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+BEGIN
+        SELECT INTO incremented_val increment(1);
+        RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+
+SELECT test_func_calls_dist_func();
+SELECT test_func_calls_dist_func();
+
+-- test an INSERT..SELECT via the coordinator just because it is kind of funky
+INSERT INTO test SELECT increment(3);
+SELECT * FROM test ORDER BY id;
+
+DROP TABLE test;
+
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
