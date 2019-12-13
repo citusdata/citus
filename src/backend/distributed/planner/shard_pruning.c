@@ -668,6 +668,15 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 		ArrayIterator arrayIterator = array_create_iterator(array, 0, NULL);
 		while (array_iterate(arrayIterator, &arrayElement, &isNull))
 		{
+			if (isNull)
+			{
+				/*
+				 * We can ignore IN (NULL) clauses because a value is never
+				 * equal to NULL.
+				 */
+				continue;
+			}
+
 			Const *constElement = makeConst(elementType, -1,
 											DEFAULT_COLLATION_OID, typlen, arrayElement,
 											isNull, typbyval);
