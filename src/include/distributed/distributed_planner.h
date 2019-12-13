@@ -32,6 +32,11 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
+
+/* level of planner calls */
+extern int PlannerLevel;
+
+
 typedef struct RelationRestrictionContext
 {
 	bool hasDistributedRelation;

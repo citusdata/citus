@@ -62,6 +62,9 @@ static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
 
+/* keep track of planner call stack levels */
+int PlannerLevel = 0;
+
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);
@@ -187,6 +190,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PG_TRY();
 	{
 		/*
+		 * We keep track of how many times we've recursed into the planner, primarily
+		 * to detect whether we are in a function call. We need to make sure that the
+		 * PlannerLevel is decremented exactly once at the end of this PG_TRY block,
+		 * both in the happy case and when an error occurs.
+		 */
+		PlannerLevel++;
+
+		/*
 		 * For trivial queries, we're skipping the standard_planner() in
 		 * order to eliminate its overhead.
 		 *
@@ -240,13 +251,19 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 				result->planTree->total_cost = FLT_MAX / 100000000;
 			}
 		}
+
+		PlannerLevel--;
 	}
 	PG_CATCH();
 	{
 		PopPlannerRestrictionContext();
+
+		PlannerLevel--;
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
 
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
