@@ -159,8 +159,9 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash
 
 -- query is a single shard query but can't do shard pruning,
 -- not router-plannable due to <= and IN
-SELECT * FROM articles_hash WHERE author_id <= 1;
-SELECT * FROM articles_hash WHERE author_id IN (1, 3);
+SELECT * FROM articles_hash WHERE author_id <= 1 ORDER BY id;
+SELECT * FROM articles_hash WHERE author_id IN (1, 3) ORDER BY id;
+SELECT * FROM articles_hash WHERE author_id IN (1, NULL) ORDER BY id;
 
 -- queries with CTEs are supported
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
