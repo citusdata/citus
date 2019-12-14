@@ -10,7 +10,9 @@
  */
 #include "postgres.h"
 
+#include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -133,6 +135,8 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 												  relationRestriction);
+static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
+													  restrictionContext);
 static RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
@@ -345,8 +349,20 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 	allAttributeEquivalenceList = lappend(allAttributeEquivalenceList,
 										  attributeEquivalance);
 
-	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
-													restrictionContext);
+	if (!EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
+												  restrictionContext))
+	{
+		/* cannot confirm equality for all distribution colums */
+		return false;
+	}
+
+	if (!AllRelationsInRestrictionContextColocated(restrictionContext))
+	{
+		/* distribution columns are equal, but tables are not co-located */
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -1647,6 +1663,42 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
 	}
 
 	return InvalidAttrNumber;
+}
+
+
+/*
+ * AllRelationsInRestrictionContextColocated determines whether all of the relations in the
+ * given relation restrictions list are co-located.
+ */
+static bool
+AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictionContext)
+{
+	RelationRestriction *relationRestriction = NULL;
+	int initialColocationId = INVALID_COLOCATION_ID;
+
+	/* check whether all relations exists in the main restriction list */
+	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
+	{
+		Oid relationId = relationRestriction->relationId;
+
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+
+		int colocationId = TableColocationId(relationId);
+
+		if (initialColocationId == INVALID_COLOCATION_ID)
+		{
+			initialColocationId = colocationId;
+		}
+		else if (colocationId != initialColocationId)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

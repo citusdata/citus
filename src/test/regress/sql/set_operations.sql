@@ -7,6 +7,9 @@ SELECT create_distributed_table('test', 'x');
 CREATE TABLE recursive_union.ref (a int, b int);
 SELECT create_reference_table('ref');
 
+CREATE TABLE test_not_colocated (LIKE test);
+SELECT create_distributed_table('test_not_colocated', 'x', colocate_with := 'none');
+
 INSERT INTO test VALUES (1,1), (2,2);
 INSERT INTO ref VALUES (2,2), (3,3);
 
@@ -168,6 +171,10 @@ SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 
 -- this should create lots of recursive calls since both views and set operations lead to recursive plans :)
 ((SELECT x FROM set_view_recursive_second) INTERSECT (SELECT * FROM set_view_recursive)) EXCEPT (SELECT * FROM set_view_pushdown);
+
+-- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
+SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
+SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
 
 RESET client_min_messages;
 DROP SCHEMA recursive_union CASCADE;

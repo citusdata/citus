@@ -656,7 +656,7 @@ WHERE  user_id IN (SELECT user_id
 UPDATE users_test_table
 SET    value_2 = (SELECT value_3
                   FROM   users_test_table);
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE users_test_table
 SET value_2 = 2
 WHERE
@@ -671,7 +671,7 @@ WHERE
            GROUP BY
               user_id
           );
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE users_test_table
 SET (value_1, value_2) = (2,1)
 WHERE  user_id IN
