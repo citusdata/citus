@@ -4937,7 +4937,7 @@ GreedyAssignTaskList(List *taskList)
 	uint32 taskCount = list_length(taskList);
 
 	/* get the worker node list and sort the list */
-	List *workerNodeList = ActiveReadableWorkerNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/*
