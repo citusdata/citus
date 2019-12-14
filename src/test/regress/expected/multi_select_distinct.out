@@ -207,13 +207,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY 1
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Sort
-   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
+   Sort Key: remote_scan.count DESC, remote_scan.l_orderkey
    ->  HashAggregate
-         Group Key: remote_scan.l_orderkey
-         Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
+         Group Key: remote_scan.count, remote_scan.l_orderkey
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
@@ -224,7 +223,7 @@ EXPLAIN (COSTS FALSE)
                            Filter: (count(*) > 5)
                            ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                  Filter: (l_orderkey < 200)
-(15 rows)
+(14 rows)
 
 -- check the plan if the hash aggreate is disabled
 SET enable_hashagg TO off;
@@ -235,15 +234,13 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY 1
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
  Sort
-   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
-   ->  GroupAggregate
-         Group Key: remote_scan.l_orderkey
-         Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
+   Sort Key: remote_scan.count DESC, remote_scan.l_orderkey
+   ->  Unique
          ->  Sort
-               Sort Key: remote_scan.l_orderkey
+               Sort Key: remote_scan.count DESC, remote_scan.l_orderkey
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
@@ -254,7 +251,7 @@ EXPLAIN (COSTS FALSE)
                                  Filter: (count(*) > 5)
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        Filter: (l_orderkey < 200)
-(17 rows)
+(15 rows)
 
 SET enable_hashagg TO on;
 -- distinct on aggregate of group by columns, we try to check whether we handle
@@ -782,8 +779,7 @@ EXPLAIN (COSTS FALSE)
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
-         ->  GroupAggregate
-               Group Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey, remote_scan.l_linenumber, remote_scan.l_quantity, remote_scan.l_extendedprice, remote_scan.l_discount, remote_scan.l_tax, remote_scan.l_returnflag, remote_scan.l_linestatus, remote_scan.l_shipdate, remote_scan.l_commitdate, remote_scan.l_receiptdate, remote_scan.l_shipinstruct, remote_scan.l_shipmode, remote_scan.l_comment
+         ->  Unique
                ->  Sort
                      Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey, remote_scan.l_linenumber, remote_scan.l_quantity, remote_scan.l_extendedprice, remote_scan.l_discount, remote_scan.l_tax, remote_scan.l_returnflag, remote_scan.l_linestatus, remote_scan.l_shipdate, remote_scan.l_commitdate, remote_scan.l_receiptdate, remote_scan.l_shipinstruct, remote_scan.l_shipmode, remote_scan.l_comment
                      ->  Custom Scan (Citus Adaptive)
@@ -798,7 +794,7 @@ EXPLAIN (COSTS FALSE)
                                                    ->  Sort
                                                          Sort Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
                                                          ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(19 rows)
+(18 rows)
 
 SET enable_hashagg TO on;
 -- distinct on count distinct
@@ -842,14 +838,39 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
 		ORDER BY 1,2;
-                                                                         QUERY PLAN                                                                          
--------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
  Sort
-   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
+   Sort Key: remote_scan.count, remote_scan.count_1
    ->  HashAggregate
-         Group Key: COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint), COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)
-         ->  HashAggregate
-               Group Key: remote_scan.worker_column_3
+         Group Key: remote_scan.count, remote_scan.count_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  GroupAggregate
+                           Group Key: l_orderkey
+                           ->  Sort
+                                 Sort Key: l_orderkey
+                                 ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+(14 rows)
+
+-- check the plan if the hash aggreate is disabled. We expect to see sort + unique
+-- plans for the outer distinct.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+		FROM lineitem_hash_part
+		GROUP BY l_orderkey
+		ORDER BY 1,2;
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.count, remote_scan.count_1
+   ->  Unique
+         ->  Sort
+               Sort Key: remote_scan.count, remote_scan.count_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
@@ -860,38 +881,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  Sort
                                        Sort Key: l_orderkey
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(16 rows)
-
--- check the plan if the hash aggreate is disabled. We expect to see sort + unique
--- plans for the outer distinct.
-SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
-	SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
-		FROM lineitem_hash_part
-		GROUP BY l_orderkey
-		ORDER BY 1,2;
-                                                                              QUERY PLAN                                                                              
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Sort
-   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
-   ->  Unique
-         ->  Sort
-               Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
-               ->  GroupAggregate
-                     Group Key: remote_scan.worker_column_3
-                     ->  Sort
-                           Sort Key: remote_scan.worker_column_3
-                           ->  Custom Scan (Citus Adaptive)
-                                 Task Count: 4
-                                 Tasks Shown: One of 4
-                                 ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
-                                       ->  GroupAggregate
-                                             Group Key: l_orderkey
-                                             ->  Sort
-                                                   Sort Key: l_orderkey
-                                                   ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(19 rows)
+(15 rows)
 
 SET enable_hashagg TO on;
 -- distinct on aggregation with filter and expression
@@ -968,15 +958,41 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_orderkey
 		ORDER BY 2
 		LIMIT 15;
-                                                       QUERY PLAN                                                        
--------------------------------------------------------------------------------------------------------------------------
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (array_length(array_cat_agg(remote_scan.array_length), 1))
+         Sort Key: remote_scan.array_length
          ->  HashAggregate
-               Group Key: array_length(array_cat_agg(remote_scan.array_length), 1), array_cat_agg(remote_scan.array_agg)
-               ->  HashAggregate
-                     Group Key: remote_scan.worker_column_3
+               Group Key: remote_scan.array_length, remote_scan.array_agg
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  GroupAggregate
+                                 Group Key: l_orderkey
+                                 ->  Sort
+                                       Sort Key: l_orderkey
+                                       ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
+(15 rows)
+
+-- check the plan if the hash aggreate is disabled.
+SET enable_hashagg TO off;
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
+		FROM lineitem_hash_part
+		GROUP BY l_orderkey
+		ORDER BY 2
+		LIMIT 15;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.array_length
+         ->  Unique
+               ->  Sort
+                     Sort Key: remote_scan.array_length, remote_scan.array_agg
                      ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
@@ -987,39 +1003,7 @@ EXPLAIN (COSTS FALSE)
                                        ->  Sort
                                              Sort Key: l_orderkey
                                              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(17 rows)
-
--- check the plan if the hash aggreate is disabled.
-SET enable_hashagg TO off;
-EXPLAIN (COSTS FALSE)
-	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
-		FROM lineitem_hash_part
-		GROUP BY l_orderkey
-		ORDER BY 2
-		LIMIT 15;
-                                                            QUERY PLAN                                                            
-----------------------------------------------------------------------------------------------------------------------------------
- Limit
-   ->  Sort
-         Sort Key: (array_length(array_cat_agg(remote_scan.array_length), 1))
-         ->  Unique
-               ->  Sort
-                     Sort Key: (array_length(array_cat_agg(remote_scan.array_length), 1)), (array_cat_agg(remote_scan.array_agg))
-                     ->  GroupAggregate
-                           Group Key: remote_scan.worker_column_3
-                           ->  Sort
-                                 Sort Key: remote_scan.worker_column_3
-                                 ->  Custom Scan (Citus Adaptive)
-                                       Task Count: 4
-                                       Tasks Shown: One of 4
-                                       ->  Task
-                                             Node: host=localhost port=57637 dbname=regression
-                                             ->  GroupAggregate
-                                                   Group Key: l_orderkey
-                                                   ->  Sort
-                                                         Sort Key: l_orderkey
-                                                         ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(20 rows)
+(16 rows)
 
 SET enable_hashagg TO on;
 -- distinct on non-partition column with aggregate

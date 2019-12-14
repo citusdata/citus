@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/extended_op_node_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
@@ -24,8 +25,7 @@
 #include "nodes/pg_list.h"
 
 
-static bool GroupedByDisjointPartitionColumn(List *tableNodeList,
-											 MultiExtendedOp *opNode);
+static bool GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode);
 static bool ExtendedOpNodeContainsRepartitionSubquery(MultiExtendedOp *originalOpNode);
 
 static bool HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
@@ -46,11 +46,9 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
 
-
 	List *tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
-	bool groupedByDisjointPartitionColumn = GroupedByDisjointPartitionColumn(
-		tableNodeList,
-		extendedOpNode);
+	bool groupedByDisjointPartitionColumn =
+		GroupedByPartitionColumn((MultiNode *) extendedOpNode, extendedOpNode);
 
 	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
 
@@ -83,41 +81,86 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 
 
 /*
- * GroupedByDisjointPartitionColumn returns true if the query is grouped by the
- * partition column of a table whose shards have disjoint sets of partition values.
+ * GroupedByPartitionColumn returns true if a GROUP BY in the opNode contains
+ * the partition column of the underlying relation, which is determined by
+ * searching the MultiNode tree for a MultiTable and MultiPartition with
+ * a matching column.
+ *
+ * When there is a re-partition join, the search terminates at the
+ * MultiPartition node. Hence we can push down the GROUP BY if the join
+ * column is in the GROUP BY.
  */
 static bool
-GroupedByDisjointPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
+GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode)
 {
-	bool result = false;
-	ListCell *tableNodeCell = NULL;
-
-	foreach(tableNodeCell, tableNodeList)
+	if (node == NULL)
 	{
-		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
+		return false;
+	}
+
+	if (CitusIsA(node, MultiTable))
+	{
+		MultiTable *tableNode = (MultiTable *) node;
+
 		Oid relationId = tableNode->relationId;
 
-		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
+		if (relationId == SUBQUERY_RELATION_ID ||
+			relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
 		{
-			continue;
+			/* ignore subqueries for now */
+			return false;
 		}
 
 		char partitionMethod = PartitionMethod(relationId);
 		if (partitionMethod != DISTRIBUTE_BY_RANGE &&
 			partitionMethod != DISTRIBUTE_BY_HASH)
 		{
-			continue;
+			/* only range- and hash-distributed tables are strictly partitioned  */
+			return false;
 		}
 
 		if (GroupedByColumn(opNode->groupClauseList, opNode->targetList,
 							tableNode->partitionColumn))
 		{
-			result = true;
-			break;
+			/* this node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (CitusIsA(node, MultiPartition))
+	{
+		MultiPartition *partitionNode = (MultiPartition *) node;
+
+		if (GroupedByColumn(opNode->groupClauseList, opNode->targetList,
+							partitionNode->partitionColumn))
+		{
+			/* this node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (UnaryOperator(node))
+	{
+		MultiNode *childNode = ((MultiUnaryNode *) node)->childNode;
+
+		if (GroupedByPartitionColumn(childNode, opNode))
+		{
+			/* a child node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (BinaryOperator(node))
+	{
+		MultiNode *leftChildNode = ((MultiBinaryNode *) node)->leftChildNode;
+		MultiNode *rightChildNode = ((MultiBinaryNode *) node)->rightChildNode;
+
+		if (GroupedByPartitionColumn(leftChildNode, opNode) ||
+			GroupedByPartitionColumn(rightChildNode, opNode))
+		{
+			/* a child node is partitioned by a column in the GROUP BY */
+			return true;
 		}
 	}
 
-	return result;
+	return false;
 }
 
 

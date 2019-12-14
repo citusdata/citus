@@ -97,6 +97,14 @@ SELECT create_distributed_function('last(anyelement)');
 SELECT key, first(val ORDER BY id), last(val ORDER BY id)
 FROM aggdata GROUP BY key ORDER BY key;
 
+-- However, GROUP BY on distribution column gets pushed down
+SELECT id, first(val ORDER BY key), last(val ORDER BY key)
+FROM aggdata GROUP BY id ORDER BY id;
+
+-- Test that expressions don't slip past. This fails
+SELECT id%5, first(val ORDER BY key), last(val ORDER BY key)
+FROM aggdata GROUP BY id%5 ORDER BY id%5;
+
 -- test aggregate with stype which is not a by-value datum
 -- also test our handling of the aggregate not existing on workers
 create function sumstring_sfunc(state text, x text)
