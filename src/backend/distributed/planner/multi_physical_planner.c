@@ -3458,6 +3458,28 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 
 
 /*
+ * NodeIsRangeTblRefReferenceTable checks if the node is a RangeTblRef that
+ * points to a reference table in the rangeTableList.
+ */
+static bool
+NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
+{
+	if (!IsA(node, RangeTblRef))
+	{
+		return false;
+	}
+	RangeTblRef *tableRef = castNode(RangeTblRef, node);
+	RangeTblEntry *rangeTableEntry = rt_fetch(tableRef->rtindex, rangeTableList);
+	CitusRTEKind rangeTableType = GetRangeTblKind(rangeTableEntry);
+	if (rangeTableType != CITUS_RTE_RELATION)
+	{
+		return false;
+	}
+	return PartitionMethod(rangeTableEntry->relid) == DISTRIBUTE_BY_NONE;
+}
+
+
+/*
  * JoinSequenceArray walks over the join nodes in the job query and constructs a join
  * sequence containing an entry for each joined table. The function then returns an
  * array of join sequence nodes, in which each node contains the id of a table in the
@@ -3496,18 +3518,26 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 	foreach(joinExprCell, joinExprList)
 	{
 		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinExprCell);
-		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpr->rarg;
+		RangeTblRef *rightTableRef = castNode(RangeTblRef, joinExpr->rarg);
 		uint32 nextRangeTableId = rightTableRef->rtindex;
 		Index existingRangeTableId = 0;
 		bool applyJoinPruning = false;
 
 		List *nextJoinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
+		bool leftIsReferenceTable = NodeIsRangeTblRefReferenceTable(joinExpr->larg,
+																	rangeTableList);
+		bool rightIsReferenceTable = NodeIsRangeTblRefReferenceTable(joinExpr->rarg,
+																	 rangeTableList);
+		bool isReferenceJoin = IsSupportedReferenceJoin(joinExpr->jointype,
+														leftIsReferenceTable,
+														rightIsReferenceTable);
 
 		/*
 		 * If next join clause list is empty, the user tried a cartesian product
-		 * between tables. We don't support this functionality, and error out.
+		 * between tables. We don't support this functionality for non
+		 * reference joins, and error out.
 		 */
-		if (nextJoinClauseList == NIL)
+		if (nextJoinClauseList == NIL && !isReferenceJoin)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot perform distributed planning on this query"),

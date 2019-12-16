@@ -35,7 +35,8 @@ typedef enum JoinRuleType
 	SINGLE_HASH_PARTITION_JOIN = 3,
 	SINGLE_RANGE_PARTITION_JOIN = 4,
 	DUAL_PARTITION_JOIN = 5,
-	CARTESIAN_PRODUCT = 6,
+	CARTESIAN_PRODUCT_REFERENCE_JOIN = 6,
+	CARTESIAN_PRODUCT = 7,
 
 	/*
 	 * Add new join rule types above this comment. After adding, you must also
@@ -89,6 +90,8 @@ extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 									List *joinClauseList);
 extern bool NodeIsEqualsOpExpr(Node *node);
+extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
+									 bool rightIsReferenceTable);
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
