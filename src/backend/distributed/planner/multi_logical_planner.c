@@ -1429,11 +1429,6 @@ IsJoinClause(Node *clause)
 {
 	Var *var = NULL;
 
-	if (!IsA(clause, OpExpr))
-	{
-		return false;
-	}
-
 	/*
 	 * take all column references from the clause, if we find 2 column references from a
 	 * different relation we assume this is a join clause
@@ -1689,7 +1684,7 @@ MultiSelectNode(List *whereClauseList)
 	foreach(whereClauseCell, whereClauseList)
 	{
 		Node *whereClause = (Node *) lfirst(whereClauseCell);
-		if (IsSelectClause(whereClause) || or_clause(whereClause))
+		if (IsSelectClause(whereClause))
 		{
 			selectClauseList = lappend(selectClauseList, whereClause);
 		}

@@ -15,6 +15,8 @@
 #ifndef MULTI_JOIN_ORDER_H
 #define MULTI_JOIN_ORDER_H
 
+#include "postgres.h"
+
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 
@@ -83,9 +85,10 @@ extern bool EnableSingleHashRepartitioning;
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
 extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
-								   OpExpr *joinClause);
+								   Node *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 									List *joinClauseList);
+extern bool NodeIsEqualsOpExpr(Node *node);
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);

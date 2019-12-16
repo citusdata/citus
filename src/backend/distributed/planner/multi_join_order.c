@@ -212,7 +212,6 @@ ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
 static bool
 JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 {
-	ListCell *joinClauseCell = NULL;
 	if (currentColumn == NULL || candidateColumn == NULL)
 	{
 		/*
@@ -222,15 +221,16 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 		return false;
 	}
 
-	foreach(joinClauseCell, joinClauseList)
+	Node *joinClause = NULL;
+	foreach_ptr(joinClause, joinClauseList)
 	{
-		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
-		Var *leftColumn = LeftColumnOrNULL(joinClause);
-		Var *rightColumn = RightColumnOrNULL(joinClause);
-		if (!OperatorImplementsEquality(joinClause->opno))
+		if (!NodeIsEqualsOpExpr(joinClause))
 		{
 			continue;
 		}
+		OpExpr *joinClauseOpExpr = castNode(OpExpr, joinClause);
+		Var *leftColumn = LeftColumnOrNULL(joinClauseOpExpr);
+		Var *rightColumn = RightColumnOrNULL(joinClauseOpExpr);
 
 		/*
 		 * Check if both join columns and both partition key columns match, since the
@@ -250,6 +250,22 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 	}
 
 	return false;
+}
+
+
+/*
+ * NodeIsEqualsOpExpr checks if the node is an OpExpr, where the operator
+ * matches OperatorImplementsEquality.
+ */
+bool
+NodeIsEqualsOpExpr(Node *node)
+{
+	if (!IsA(node, OpExpr))
+	{
+		return false;
+	}
+	OpExpr *opExpr = castNode(OpExpr, node);
+	return OperatorImplementsEquality(opExpr->opno);
 }
 
 
@@ -1010,21 +1026,21 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 OpExpr *
 SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
 {
-	ListCell *applicableJoinClauseCell = NULL;
 	if (partitionColumn == NULL)
 	{
 		return NULL;
 	}
 
-	foreach(applicableJoinClauseCell, applicableJoinClauses)
+	Node *applicableJoinClause = NULL;
+	foreach_ptr(applicableJoinClause, applicableJoinClauses)
 	{
-		OpExpr *applicableJoinClause = castNode(OpExpr, lfirst(applicableJoinClauseCell));
-		if (!OperatorImplementsEquality(applicableJoinClause->opno))
+		if (!NodeIsEqualsOpExpr(applicableJoinClause))
 		{
 			continue;
 		}
-		Var *leftColumn = LeftColumnOrNULL(applicableJoinClause);
-		Var *rightColumn = RightColumnOrNULL(applicableJoinClause);
+		OpExpr *applicableJoinOpExpr = castNode(OpExpr, applicableJoinClause);
+		Var *leftColumn = LeftColumnOrNULL(applicableJoinOpExpr);
+		Var *rightColumn = RightColumnOrNULL(applicableJoinOpExpr);
 		if (leftColumn == NULL || rightColumn == NULL)
 		{
 			/* not a simple partition column join */
@@ -1042,7 +1058,7 @@ SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
 		{
 			if (leftColumn->vartype == rightColumn->vartype)
 			{
-				return applicableJoinClause;
+				return applicableJoinOpExpr;
 			}
 			else
 			{
@@ -1089,17 +1105,16 @@ DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 OpExpr *
 DualPartitionJoinClause(List *applicableJoinClauses)
 {
-	ListCell *applicableJoinClauseCell = NULL;
-
-	foreach(applicableJoinClauseCell, applicableJoinClauses)
+	Node *applicableJoinClause = NULL;
+	foreach_ptr(applicableJoinClause, applicableJoinClauses)
 	{
-		OpExpr *applicableJoinClause = (OpExpr *) lfirst(applicableJoinClauseCell);
-		if (!OperatorImplementsEquality(applicableJoinClause->opno))
+		if (!NodeIsEqualsOpExpr(applicableJoinClause))
 		{
 			continue;
 		}
-		Var *leftColumn = LeftColumnOrNULL(applicableJoinClause);
-		Var *rightColumn = RightColumnOrNULL(applicableJoinClause);
+		OpExpr *applicableJoinOpExpr = castNode(OpExpr, applicableJoinClause);
+		Var *leftColumn = LeftColumnOrNULL(applicableJoinOpExpr);
+		Var *rightColumn = RightColumnOrNULL(applicableJoinOpExpr);
 
 		if (leftColumn == NULL || rightColumn == NULL)
 		{
@@ -1109,7 +1124,7 @@ DualPartitionJoinClause(List *applicableJoinClauses)
 		/* we only need to check that the join column types match */
 		if (leftColumn->vartype == rightColumn->vartype)
 		{
-			return applicableJoinClause;
+			return applicableJoinOpExpr;
 		}
 		else
 		{
@@ -1170,9 +1185,9 @@ MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
  * in either the list of tables on the left *or* in the right hand table.
  */
 bool
-IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, OpExpr *joinClause)
+IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, Node *joinClause)
 {
-	List *varList = pull_var_clause_default((Node *) joinClause);
+	List *varList = pull_var_clause_default(joinClause);
 	Var *var = NULL;
 	bool joinContainsRightTable = false;
 	foreach_ptr(var, varList)
@@ -1208,15 +1223,14 @@ IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId, OpExpr *joinC
 List *
 ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId, List *joinClauseList)
 {
-	ListCell *joinClauseCell = NULL;
 	List *applicableJoinClauses = NIL;
 
 	/* make sure joinClauseList contains only join clauses */
 	joinClauseList = JoinClauseList(joinClauseList);
 
-	foreach(joinClauseCell, joinClauseList)
+	Node *joinClause = NULL;
+	foreach_ptr(joinClause, joinClauseList)
 	{
-		OpExpr *joinClause = castNode(OpExpr, lfirst(joinClauseCell));
 		if (IsApplicableJoinClause(leftTableIdList, rightTableId, joinClause))
 		{
 			applicableJoinClauses = lappend(applicableJoinClauses, joinClause);

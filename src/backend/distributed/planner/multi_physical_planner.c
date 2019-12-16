@@ -40,6 +40,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -3497,7 +3498,6 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinExprCell);
 		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpr->rarg;
 		uint32 nextRangeTableId = rightTableRef->rtindex;
-		ListCell *nextJoinClauseCell = NULL;
 		Index existingRangeTableId = 0;
 		bool applyJoinPruning = false;
 
@@ -3518,17 +3518,23 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 		 * We now determine if we can apply join pruning between existing range
 		 * tables and this new one.
 		 */
-		foreach(nextJoinClauseCell, nextJoinClauseList)
+		Node *nextJoinClause = NULL;
+		foreach_ptr(nextJoinClause, nextJoinClauseList)
 		{
-			OpExpr *nextJoinClause = (OpExpr *) lfirst(nextJoinClauseCell);
-
-			if (!IsJoinClause((Node *) nextJoinClause))
+			if (!NodeIsEqualsOpExpr(nextJoinClause))
 			{
 				continue;
 			}
 
-			Var *leftColumn = LeftColumnOrNULL(nextJoinClause);
-			Var *rightColumn = RightColumnOrNULL(nextJoinClause);
+			OpExpr *nextJoinClauseOpExpr = castNode(OpExpr, nextJoinClause);
+
+			if (!IsJoinClause((Node *) nextJoinClauseOpExpr))
+			{
+				continue;
+			}
+
+			Var *leftColumn = LeftColumnOrNULL(nextJoinClauseOpExpr);
+			Var *rightColumn = RightColumnOrNULL(nextJoinClauseOpExpr);
 			if (leftColumn == NULL || rightColumn == NULL)
 			{
 				continue;
@@ -3567,7 +3573,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 			if (leftPartitioned && rightPartitioned)
 			{
 				/* make sure this join clause references only simple columns */
-				CheckJoinBetweenColumns(nextJoinClause);
+				CheckJoinBetweenColumns(nextJoinClauseOpExpr);
 
 				applyJoinPruning = true;
 				break;
