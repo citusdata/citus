@@ -42,7 +42,8 @@ static bool ShouldPullDistinctColumn(bool repartitionSubquery,
  * value should be used in a read-only manner.
  */
 ExtendedOpNodeProperties
-BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
+BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
+							  pullUpIntermediateRows)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
 
@@ -75,6 +76,7 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 		hasNonPartitionColumnDistinctAgg;
 	extendedOpNodeProperties.pullDistinctColumns = pullDistinctColumns;
 	extendedOpNodeProperties.pushDownWindowFunctions = pushDownWindowFunctions;
+	extendedOpNodeProperties.pullUpIntermediateRows = pullUpIntermediateRows;
 
 	return extendedOpNodeProperties;
 }

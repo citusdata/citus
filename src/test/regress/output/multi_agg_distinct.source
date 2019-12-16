@@ -1,6 +1,7 @@
 --
 -- MULTI_AGG_DISTINCT
 --
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- Create a new range partitioned lineitem table and load data into it
 CREATE TABLE lineitem_range (
 	l_orderkey bigint not null,

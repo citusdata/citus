@@ -4,6 +4,7 @@
 
 
 SET citus.next_shard_id TO 520000;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 CREATE OR REPLACE FUNCTION count_keys (jsonb)
 RETURNS bigint LANGUAGE SQL

@@ -5,6 +5,7 @@
 
 create schema aggregate_support;
 set search_path to aggregate_support;
+set citus.coordinator_aggregation_strategy to 'disabled';
 
 -- We test with & without STRICT as our code is responsible for managing these NULL checks
 create function sum2_sfunc_strict(state int, x int)
@@ -63,6 +64,9 @@ select id, sum2(distinct val), sum2_strict(distinct val) from aggdata group by i
 select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata group by key order by key;
 -- Test handling a lack of intermediate results
 select sum2(val), sum2_strict(val) from aggdata where valf = 0;
+-- Test HAVING
+select key, stddev(valf) from aggdata group by key having stddev(valf) > 2 order by key;
+select key, stddev(valf) from aggdata group by key having stddev(val::float8) > 1 order by key;
 
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
@@ -153,6 +157,42 @@ $$);
 set role notsuper;
 select array_collect_sort(val) from aggdata;
 reset role;
+
+-- Test aggregation on coordinator
+set citus.coordinator_aggregation_strategy to 'row-gather';
+
+select key, first(val order by id), last(val order by id)
+from aggdata group by key order by key;
+
+select key, sum2(distinct val), sum2_strict(distinct val) from aggdata group by key order by key;
+select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata group by key order by key;
+select string_agg(distinct floor(val/2)::text, '|' order by floor(val/2)::text) from aggdata;
+select string_agg(distinct floor(val/2)::text, '|' order by floor(val/2)::text) filter (where val < 5) from aggdata;
+select mode() within group (order by floor(val/2)) from aggdata;
+select percentile_cont(0.5) within group(order by valf) from aggdata;
+select key, percentile_cont(key/10.0) within group(order by val) from aggdata group by key;
+select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) order by 1;
+select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) having corr(valf + val, val) < 1 order by 1;
+select array_agg(val order by valf) from aggdata;
+
+-- Test TransformSubqueryNode
+SET citus.task_executor_type to "task-tracker";
+
+select * FROM (
+    SELECT key, mode() within group (order by floor(agg1.val/2)) m from aggdata agg1
+    group by key
+) subq ORDER BY 2, 1 LIMIT 5;
+
+select * FROM (
+    SELECT key, avg(distinct floor(agg1.val/2)) m from aggdata agg1
+    group by key
+) subq;
+
+RESET citus.task_executor_type;
+
+-- This fails due to table types not being managed properly
+select key, count(distinct aggdata)
+from aggdata group by key order by 1, 2;
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;

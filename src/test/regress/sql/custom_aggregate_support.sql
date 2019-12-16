@@ -12,6 +12,7 @@ WHERE name = 'hll'
 :create_cmd;
 
 SET citus.shard_count TO 4;
+set citus.coordinator_aggregation_strategy to 'disabled';
 
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);

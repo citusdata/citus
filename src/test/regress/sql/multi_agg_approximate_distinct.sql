@@ -13,6 +13,8 @@ WHERE name = 'hll'
 
 :create_cmd;
 
+SET citus.coordinator_aggregation_strategy TO 'disabled';
+
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 
 SELECT count(distinct l_orderkey) FROM lineitem;

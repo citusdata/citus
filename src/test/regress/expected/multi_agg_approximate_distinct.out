@@ -9,6 +9,7 @@ AS create_cmd FROM pg_available_extensions()
 WHERE name = 'hll'
 \gset
 :create_cmd;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
  count
