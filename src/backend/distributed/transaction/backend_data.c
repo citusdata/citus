@@ -720,7 +720,7 @@ GetCurrentDistributedTransactionId(void)
  * sets it for the current backend. It also sets the databaseId and
  * processId fields.
  *
- * This function should only be called on BeginCoordinatedTransaction(). Any other
+ * This function should only be called on UseCoordinatedTransaction(). Any other
  * callers is very likely to break the distributed transaction management.
  */
 void

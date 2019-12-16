@@ -361,7 +361,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 {
 	ListCell *shardIntervalCell = NULL;
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/* At this point we intentionally decided to not use 2PC for reference tables */
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)

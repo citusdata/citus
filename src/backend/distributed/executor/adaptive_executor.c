@@ -897,7 +897,7 @@ StartDistributedExecution(DistributedExecution *execution)
 		 */
 		if (DistributedExecutionRequiresRollback(execution) || LocalExecutionHappened)
 		{
-			BeginOrContinueCoordinatedTransaction();
+			UseCoordinatedTransaction();
 
 			if (TaskListRequires2PC(taskList) || LocalExecutionHappened)
 			{
