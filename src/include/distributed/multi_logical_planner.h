@@ -193,6 +193,7 @@ extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsDistributedTableRTE(Node *node);
 extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
+extern bool ContainsReadIntermediateResultArrayFunction(Node *node);
 extern char * FindIntermediateResultIdIfExists(RangeTblEntry *rte);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);

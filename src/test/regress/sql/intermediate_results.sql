@@ -121,15 +121,15 @@ END;
 BEGIN;
 -- accurate row count estimates for primitive types
 SELECT create_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,632) s');
-EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int, x2 int);
 
 -- less accurate results for variable types
 SELECT create_intermediate_result('hellos', $$SELECT s, 'hello-'||s FROM generate_series(1,63) s$$);
-EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('hellos', 'binary') AS res (x int, y text);
 
 -- not very accurate results for text encoding
 SELECT create_intermediate_result('stored_squares', 'SELECT square FROM stored_squares');
-EXPLAIN (COSTS OFF) SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_result('stored_squares', 'text') AS res (s intermediate_results.square_type);
 END;
 
 -- pipe query output into a result file and create a table to check the result
@@ -201,5 +201,21 @@ ON (squares.x::text = interested_in) WHERE user_id = 'jon' ORDER BY 1,2;
 
 END;
 
+-- Cost estimation for read_intermediate_results
+BEGIN;
+-- almost accurate row count estimates for primitive types
+SELECT create_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_series(1,632) s'),
+       create_intermediate_result('squares_2', 'SELECT s, s*s FROM generate_series(633,1024) s');
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2'], 'binary') AS res (x int, x2 int);
+
+-- less accurate results for variable types
+SELECT create_intermediate_result('hellos_1', $$SELECT s, 'hello-'||s FROM generate_series(1,63) s$$),
+       create_intermediate_result('hellos_2', $$SELECT s, 'hello-'||s FROM generate_series(64,129) s$$);
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['hellos_1', 'hellos_2'], 'binary') AS res (x int, y text);
+
+-- not very accurate results for text encoding
+SELECT create_intermediate_result('stored_squares', 'SELECT square FROM stored_squares');
+EXPLAIN (COSTS ON) SELECT * FROM read_intermediate_results(ARRAY['stored_squares'], 'text') AS res (s intermediate_results.square_type);
+END;
 
 DROP SCHEMA intermediate_results CASCADE;

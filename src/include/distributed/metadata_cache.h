@@ -188,6 +188,7 @@ extern Oid CitusCopyFormatTypeId(void);
 
 /* function oids */
 extern Oid CitusReadIntermediateResultFuncId(void);
+Oid CitusReadIntermediateResultArrayFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
 extern Oid CitusAnyValueFunctionId(void);
