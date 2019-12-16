@@ -229,6 +229,17 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		ereport(DEBUG4, (errmsg("function is distributed")));
 	}
 
+	/*
+	 * This can be called while executing INSERT ... SELECT func(). insert_select_executor
+	 * doesn't get the planned subquery and gets the actual struct Query, so the planning
+	 * for these kinds of queries happens at the execution time.
+	 */
+	if (ExecutingInsertSelect())
+	{
+		ereport(DEBUG1, (errmsg("not pushing down function calls in INSERT ... SELECT")));
+		return NULL;
+	}
+
 	if (IsMultiStatementTransaction())
 	{
 		/* cannot delegate function calls in a multi-statement transaction */
@@ -285,17 +296,6 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	if (!IsA(partitionValue, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
-		return NULL;
-	}
-
-	/*
-	 * This can be called while executing INSERT ... SELECT func(). insert_select_executor
-	 * doesn't get the planned subquery and gets the actual struct Query, so the planning
-	 * for these kinds of queries happens at the execution time.
-	 */
-	if (ExecutingInsertSelect())
-	{
-		ereport(DEBUG1, (errmsg("not pushing down function calls in INSERT ... SELECT")));
 		return NULL;
 	}
 

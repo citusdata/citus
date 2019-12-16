@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
@@ -290,6 +291,14 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
 			ExecutorLevel = 0;
+
+			/*
+			 * Getting here without PlannerLevel 0 is a bug, however it is such a big
+			 * problem that will persist between reuse of the backend we still assign 0 in
+			 * production deploys, but during development and tests we want to crash.
+			 */
+			Assert(PlannerLevel == 0);
+			PlannerLevel = 0;
 
 			/*
 			 * We should reset SubPlanLevel in case a transaction is aborted,
@@ -683,9 +692,12 @@ IsMultiStatementTransaction(void)
  * MaybeExecutingUDF returns true if we are possibly executing a function call.
  * We use nested level of executor to check this, so this can return true for
  * CTEs, etc. which also start nested executors.
+ *
+ * If the planner is being called from the executor, then we may also be in
+ * a UDF.
  */
 static bool
 MaybeExecutingUDF(void)
 {
-	return ExecutorLevel > 1;
+	return ExecutorLevel > 1 || (ExecutorLevel == 1 && PlannerLevel > 0);
 }
