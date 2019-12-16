@@ -216,7 +216,14 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 	ListCell *nodeIdCell = NULL;
 	foreach(nodeIdCell, entry->nodeIdList)
 	{
-		WorkerNode *workerNode = LookupNodeByNodeId(lfirst_int(nodeIdCell));
+		uint32 nodeId = lfirst_int(nodeIdCell);
+		WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
+
+		if(workerNode == NULL)
+		{
+			elog(WARNING, "Failed Node Lookup with Id %d", nodeId);
+			continue;
+		}
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 
