@@ -55,8 +55,10 @@ static HeapTuple GetProcForm(Oid oid, Form_pg_proc *form);
 static HeapTuple GetTypeForm(Oid oid, Form_pg_type *form);
 static void * pallocInAggContext(FunctionCallInfo fcinfo, size_t size);
 static void aclcheckAggregate(ObjectType objectType, Oid userOid, Oid funcOid);
+static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
 static void InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple,
 							   Oid transtype);
+static StypeBox * TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo);
 static void HandleTransition(StypeBox *box, FunctionCallInfo fcinfo,
 							 FunctionCallInfo innerFcinfo);
 static void HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value);
@@ -142,8 +144,29 @@ aclcheckAggregate(ObjectType objectType, Oid userOid, Oid funcOid)
 }
 
 
+/* Copied from nodeAgg.c */
+static Datum
+GetAggInitVal(Datum textInitVal, Oid transtype)
+{
+	/* *INDENT-OFF* */
+	Oid			typinput,
+				typioparam;
+	char	   *strInitVal;
+	Datum		initVal;
+
+	getTypeInputInfo(transtype, &typinput, &typioparam);
+	strInitVal = TextDatumGetCString(textInitVal);
+	initVal = OidInputFunctionCall(typinput, strInitVal,
+								   typioparam, -1);
+	pfree(strInitVal);
+	return initVal;
+	/* *INDENT-ON* */
+}
+
+
 /*
- * See GetAggInitVal from pg's nodeAgg.c
+ * InitializeStypeBox fills in the rest of an StypeBox's fields besides agg,
+ * handling both permission checking & setting up the initial transition state.
  */
 static void
 InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, Oid
@@ -171,9 +194,6 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 	}
 	else
 	{
-		Oid typinput,
-			typioparam;
-
 		MemoryContext aggregateContext;
 		if (!AggCheckCallContext(fcinfo, &aggregateContext))
 		{
@@ -181,14 +201,49 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 		}
 		MemoryContext oldContext = MemoryContextSwitchTo(aggregateContext);
 
-		getTypeInputInfo(transtype, &typinput, &typioparam);
-		char *strInitVal = TextDatumGetCString(textInitVal);
-		box->value = OidInputFunctionCall(typinput, strInitVal,
-										  typioparam, -1);
-		pfree(strInitVal);
+		box->value = GetAggInitVal(textInitVal, transtype);
 
 		MemoryContextSwitchTo(oldContext);
 	}
+}
+
+
+/*
+ * TryCreateStypeBoxFromFcinfoAggref attempts to initialize an StypeBox through
+ * introspection of the fcinfo's Aggref from AggGetAggref. This is required
+ * when we receive no intermediate rows.
+ *
+ * Returns NULL if the Aggref isn't our expected shape.
+ */
+static StypeBox *
+TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo)
+{
+	Aggref *aggref = AggGetAggref(fcinfo);
+	if (aggref == NULL || aggref->args == NIL)
+	{
+		return NULL;
+	}
+
+	TargetEntry *aggArg = linitial(aggref->args);
+	if (!IsA(aggArg->expr, Const))
+	{
+		return NULL;
+	}
+
+	Const *aggConst = (Const *) aggArg->expr;
+	if (aggConst->consttype != OIDOID && aggConst->consttype != REGPROCEDUREOID)
+	{
+		return NULL;
+	}
+
+	Form_pg_aggregate aggform;
+	StypeBox *box = pallocInAggContext(fcinfo, sizeof(StypeBox));
+	box->agg = DatumGetObjectId(aggConst->constvalue);
+	HeapTuple aggTuple = GetAggregateForm(box->agg, &aggform);
+	InitializeStypeBox(fcinfo, box, aggTuple, aggform->aggtranstype);
+	ReleaseSysCache(aggTuple);
+
+	return box;
 }
 
 
@@ -367,6 +422,11 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	Oid typoutput = InvalidOid;
 	bool typIsVarlena = false;
 
+	if (box == NULL)
+	{
+		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
+	}
+
 	if (box == NULL || box->valueNull)
 	{
 		PG_RETURN_NULL();
@@ -544,11 +604,12 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 
 	if (box == NULL)
 	{
-		/*
-		 * Ideally we'd return initval,
-		 * but we don't know which aggregate we're handling here
-		 */
-		PG_RETURN_NULL();
+		box = TryCreateStypeBoxFromFcinfoAggref(fcinfo);
+
+		if (box == NULL)
+		{
+			PG_RETURN_NULL();
+		}
 	}
 
 	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);

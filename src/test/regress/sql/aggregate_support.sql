@@ -61,8 +61,8 @@ select key, sum2(distinct val), sum2_strict(distinct val) from aggdata group by 
 select id, sum2(distinct val), sum2_strict(distinct val) from aggdata group by id order by id;
 -- ORDER BY unsupported
 select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata group by key order by key;
--- Without intermediate results we return NULL, even though the correct result is 0
-select sum2(val) from aggdata where valf = 0;
+-- Test handling a lack of intermediate results
+select sum2(val), sum2_strict(val) from aggdata where valf = 0;
 
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
