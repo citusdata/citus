@@ -62,6 +62,28 @@ BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
 ROLLBACK;
 
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM local_table
+) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
+END;
+
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM numbers
+) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
+END;
+
+BEGIN;
+SELECT count(*) FROM local_table
+WHERE EXISTS(SELECT random() FROM numbers WHERE local_table.a = numbers.a);
+END;
+
+BEGIN;
+SELECT count(*) FROM numbers
+WHERE EXISTS(SELECT random() FROM local_table WHERE local_table.a = numbers.a);
+END;
+
 DROP SCHEMA s1 CASCADE;
 
 -- shouldn't plan locally if modifications happen in CTEs, ...
@@ -82,6 +104,64 @@ WITH t AS (SELECT *, random() x FROM dist) SELECT * FROM numbers, local_table
  -- error if FOR UPDATE/FOR SHARE
  SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
  SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
+
+
+--
+-- Joins between reference tables and views shouldn't be planned locally.
+--
+
+CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+
+CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
+$Q$);
+
+DROP VIEW numbers_v, local_table_v;
+
+--
+-- Joins between reference tables and materialized views are allowed to
+-- be planned locally.
+--
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
+REFRESH MATERIALIZED VIEW numbers_v;
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+
+BEGIN;
+SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+END;
+
+--
+-- Joins between reference tables, local tables, and function calls shouldn't
+-- be planned locally.
+--
+SELECT count(*)
+FROM local_table a, numbers b, generate_series(1, 10) c
+WHERE a.a = b.a AND a.a = c;
+
+-- but it should be okay if the function call is not a data source
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
+$Q$);
+
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
+$Q$);
+
+-- verify that we can drop columns from reference tables replicated to the coordinator
+-- see https://github.com/citusdata/citus/issues/3279
+ALTER TABLE squares DROP COLUMN b;
+
 
 -- clean-up
 SET client_min_messages TO ERROR;
