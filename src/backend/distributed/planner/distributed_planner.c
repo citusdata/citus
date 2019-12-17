@@ -99,6 +99,13 @@ static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
 static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
 											 RelOptInfo *relOptInfo);
+static void AdjustReadIntermediateResultArrayCost(RangeTblEntry *rangeTableEntry,
+												  RelOptInfo *relOptInfo);
+static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
+													  List *columnTypes,
+													  int resultIdCount,
+													  Datum *resultIds,
+													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
 static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
@@ -1517,6 +1524,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	DistTableCacheEntry *cacheEntry = NULL;
 
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
+	AdjustReadIntermediateResultArrayCost(rte, relOptInfo);
 
 	if (rte->rtekind != RTE_RELATION)
 	{
@@ -1578,30 +1586,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 static void
 AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *relOptInfo)
 {
-	PathTarget *reltarget = relOptInfo->reltarget;
-	List *pathList = relOptInfo->pathlist;
-	Path *path = NULL;
-	RangeTblFunction *rangeTableFunction = NULL;
-	FuncExpr *funcExpression = NULL;
-	Const *resultFormatConst = NULL;
-	Datum resultFormatDatum = 0;
-	Oid resultFormatId = InvalidOid;
-	Const *resultIdConst = NULL;
-	Datum resultIdDatum = 0;
-	char *resultId = NULL;
-	int64 resultSize = 0;
-	ListCell *typeCell = NULL;
-	bool binaryFormat = false;
-	double rowCost = 0.;
-	double rowSizeEstimate = 0;
-	double rowCountEstimate = 0.;
-	double ioCost = 0.;
-#if PG_VERSION_NUM >= 120000
-	QualCost funcCost = { 0., 0. };
-#else
-	double funcCost = 0.;
-#endif
-
 	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
 		list_length(rangeTableEntry->functions) != 1)
 	{
@@ -1620,41 +1604,133 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 		return;
 	}
 
-	rangeTableFunction = (RangeTblFunction *) linitial(rangeTableEntry->functions);
-	funcExpression = (FuncExpr *) rangeTableFunction->funcexpr;
-	resultIdConst = (Const *) linitial(funcExpression->args);
+	RangeTblFunction *rangeTableFunction = (RangeTblFunction *) linitial(
+		rangeTableEntry->functions);
+	FuncExpr *funcExpression = (FuncExpr *) rangeTableFunction->funcexpr;
+	Const *resultIdConst = (Const *) linitial(funcExpression->args);
 	if (!IsA(resultIdConst, Const))
 	{
 		/* not sure how to interpret non-const */
 		return;
 	}
 
-	resultIdDatum = resultIdConst->constvalue;
-	resultId = TextDatumGetCString(resultIdDatum);
+	Datum resultIdDatum = resultIdConst->constvalue;
 
-	resultSize = IntermediateResultSize(resultId);
-	if (resultSize < 0)
-	{
-		/* result does not exist, will probably error out later on */
-		return;
-	}
-
-	resultFormatConst = (Const *) lsecond(funcExpression->args);
+	Const *resultFormatConst = (Const *) lsecond(funcExpression->args);
 	if (!IsA(resultFormatConst, Const))
 	{
 		/* not sure how to interpret non-const */
 		return;
 	}
 
-	resultFormatDatum = resultFormatConst->constvalue;
-	resultFormatId = DatumGetObjectId(resultFormatDatum);
+	AdjustReadIntermediateResultsCostInternal(relOptInfo,
+											  rangeTableFunction->funccoltypes,
+											  1, &resultIdDatum, resultFormatConst);
+}
 
-	if (resultFormatId == BinaryCopyFormatId())
+
+/*
+ * AdjustReadIntermediateResultArrayCost adjusts the row count and total cost
+ * of a read_intermediate_results(resultIds, format) call based on the file size.
+ */
+static void
+AdjustReadIntermediateResultArrayCost(RangeTblEntry *rangeTableEntry,
+									  RelOptInfo *relOptInfo)
+{
+	Datum *resultIdArray = NULL;
+	int resultIdCount = 0;
+
+	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
+		list_length(rangeTableEntry->functions) != 1)
 	{
-		binaryFormat = true;
+		/* avoid more expensive checks below for non-functions */
+		return;
+	}
 
-		/* subtract 11-byte signature + 8 byte header + 2-byte footer */
-		resultSize -= 21;
+	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG5))
+	{
+		/* read_intermediate_result may not exist */
+		return;
+	}
+
+	if (!ContainsReadIntermediateResultArrayFunction((Node *) rangeTableEntry->functions))
+	{
+		return;
+	}
+
+	RangeTblFunction *rangeTableFunction =
+		(RangeTblFunction *) linitial(rangeTableEntry->functions);
+	FuncExpr *funcExpression = (FuncExpr *) rangeTableFunction->funcexpr;
+	Const *resultIdConst = (Const *) linitial(funcExpression->args);
+	if (!IsA(resultIdConst, Const))
+	{
+		/* not sure how to interpret non-const */
+		return;
+	}
+
+	Datum resultIdArrayDatum = resultIdConst->constvalue;
+	deconstruct_array(DatumGetArrayTypeP(resultIdArrayDatum), TEXTOID, -1, false,
+					  'i', &resultIdArray, NULL, &resultIdCount);
+
+	Const *resultFormatConst = (Const *) lsecond(funcExpression->args);
+	if (!IsA(resultFormatConst, Const))
+	{
+		/* not sure how to interpret non-const */
+		return;
+	}
+
+	AdjustReadIntermediateResultsCostInternal(relOptInfo,
+											  rangeTableFunction->funccoltypes,
+											  resultIdCount, resultIdArray,
+											  resultFormatConst);
+}
+
+
+/*
+ * AdjustReadIntermediateResultsCostInternal adjusts the row count and total cost
+ * of reading intermediate results based on file sizes.
+ */
+static void
+AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTypes,
+										  int resultIdCount, Datum *resultIds,
+										  Const *resultFormatConst)
+{
+	PathTarget *reltarget = relOptInfo->reltarget;
+	List *pathList = relOptInfo->pathlist;
+	Path *path = NULL;
+	double rowCost = 0.;
+	double rowSizeEstimate = 0;
+	double rowCountEstimate = 0.;
+	double ioCost = 0.;
+#if PG_VERSION_NUM >= 120000
+	QualCost funcCost = { 0., 0. };
+#else
+	double funcCost = 0.;
+#endif
+	int64 totalResultSize = 0;
+	ListCell *typeCell = NULL;
+
+	Datum resultFormatDatum = resultFormatConst->constvalue;
+	Oid resultFormatId = DatumGetObjectId(resultFormatDatum);
+	bool binaryFormat = (resultFormatId == BinaryCopyFormatId());
+
+	for (int index = 0; index < resultIdCount; index++)
+	{
+		char *resultId = TextDatumGetCString(resultIds[index]);
+		int64 resultSize = IntermediateResultSize(resultId);
+		if (resultSize < 0)
+		{
+			/* result does not exist, will probably error out later on */
+			return;
+		}
+
+		if (binaryFormat)
+		{
+			/* subtract 11-byte signature + 8 byte header + 2-byte footer */
+			totalResultSize -= 21;
+		}
+
+		totalResultSize += resultSize;
 	}
 
 	/* start with the cost of evaluating quals */
@@ -1666,7 +1742,7 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 	/* add 2 bytes for column count (binary) or line separator (text) */
 	rowSizeEstimate += 2;
 
-	foreach(typeCell, rangeTableFunction->funccoltypes)
+	foreach(typeCell, columnTypes)
 	{
 		Oid columnTypeId = lfirst_oid(typeCell);
 		Oid inputFunctionId = InvalidOid;
@@ -1702,10 +1778,10 @@ AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *rel
 #endif
 
 	/* estimate the number of rows based on the file size and estimated row size */
-	rowCountEstimate = Max(1, (double) resultSize / rowSizeEstimate);
+	rowCountEstimate = Max(1, (double) totalResultSize / rowSizeEstimate);
 
 	/* cost of reading the data */
-	ioCost = seq_page_cost * resultSize / BLCKSZ;
+	ioCost = seq_page_cost * totalResultSize / BLCKSZ;
 
 	Assert(pathList != NIL);
 

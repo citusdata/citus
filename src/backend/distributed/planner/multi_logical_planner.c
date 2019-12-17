@@ -78,6 +78,8 @@ static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static bool HasTablesample(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static bool IsReadIntermediateResultFunction(Node *node);
+static bool IsReadIntermediateResultArrayFunction(Node *node);
+static bool IsFunctionWithOid(Node *node, Oid funcOid);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
@@ -769,17 +771,51 @@ ContainsReadIntermediateResultFunction(Node *node)
 
 
 /*
+ * ContainsReadIntermediateResultArrayFunction determines whether an expresion
+ * tree contains a call to the read_intermediate_results(result_ids, format)
+ * function.
+ */
+bool
+ContainsReadIntermediateResultArrayFunction(Node *node)
+{
+	return FindNodeCheck(node, IsReadIntermediateResultArrayFunction);
+}
+
+
+/*
  * IsReadIntermediateResultFunction determines whether a given node is a function call
  * to the read_intermediate_result function.
  */
 static bool
 IsReadIntermediateResultFunction(Node *node)
 {
+	return IsFunctionWithOid(node, CitusReadIntermediateResultFuncId());
+}
+
+
+/*
+ * IsReadIntermediateResultArrayFunction determines whether a given node is a
+ * function call to the read_intermediate_results(result_ids, format) function.
+ */
+static bool
+IsReadIntermediateResultArrayFunction(Node *node)
+{
+	return IsFunctionWithOid(node, CitusReadIntermediateResultArrayFuncId());
+}
+
+
+/*
+ * IsFunctionWithOid determines whether a given node is a function call
+ * to the read_intermediate_result function.
+ */
+static bool
+IsFunctionWithOid(Node *node, Oid funcOid)
+{
 	if (IsA(node, FuncExpr))
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;
 
-		if (funcExpr->funcid == CitusReadIntermediateResultFuncId())
+		if (funcExpr->funcid == funcOid)
 		{
 			return true;
 		}

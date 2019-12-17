@@ -136,6 +136,7 @@ typedef struct MetadataCacheData
 	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
+	Oid readIntermediateResultArrayFuncId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
 	Oid anyValueFunctionId;
@@ -2062,6 +2063,26 @@ CitusReadIntermediateResultFuncId(void)
 	}
 
 	return MetadataCache.readIntermediateResultFuncId;
+}
+
+
+/* return oid of the read_intermediate_results(text[],citus_copy_format) function */
+Oid
+CitusReadIntermediateResultArrayFuncId(void)
+{
+	if (MetadataCache.readIntermediateResultArrayFuncId == InvalidOid)
+	{
+		List *functionNameList = list_make2(makeString("pg_catalog"),
+											makeString("read_intermediate_results"));
+		Oid copyFormatTypeOid = CitusCopyFormatTypeId();
+		Oid paramOids[2] = { TEXTARRAYOID, copyFormatTypeOid };
+		bool missingOK = false;
+
+		MetadataCache.readIntermediateResultArrayFuncId =
+			LookupFuncName(functionNameList, 2, paramOids, missingOK);
+	}
+
+	return MetadataCache.readIntermediateResultArrayFuncId;
 }
 
 
