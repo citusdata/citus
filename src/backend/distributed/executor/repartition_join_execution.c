@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * repartition.c
+ * repartition_join_execution.c
  *
  * This file contains repartition specific logic.
  * ExecuteDependentTasks takes a list of top level tasks. Its logic is as follows:
@@ -32,7 +32,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/repartition.h"
+#include "distributed/repartition_join_execution.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/worker_manager.h"
 #include "distributed/transaction_management.h"
@@ -150,21 +150,13 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 
 /*
  * DoRepartitionCleanup removes the temporary job directories and schemas that are
- * used for repartition queries for the given job ids. It might return an error if
- * canError is true.
+ * used for repartition queries for the given job ids.
  */
 void
-DoRepartitionCleanup(List *jobIds, bool canError)
+DoRepartitionCleanup(List *jobIds)
 {
-	if (canError)
-	{
-		SendCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(jobIds)));
-	}
-	else
-	{
-		SendOptionalCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(
-														   jobIds)));
-	}
+	SendOptionalCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(
+													   jobIds)));
 }
 
 

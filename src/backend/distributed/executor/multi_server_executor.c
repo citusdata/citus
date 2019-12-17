@@ -36,6 +36,8 @@ bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format 
 bool EnableRepartitionJoins = false;
 
 
+static bool HasReplicatedNonReferenceTable(List *relationOids);
+
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
  * executor type config value. The function then checks if the given distributedPlan needs
@@ -106,9 +108,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-			uint32 tableReplicationFactor = TableShardReplicationFactor(
-				distributedPlan->targetRelationId);
-			if (tableReplicationFactor > 1)
+			if (HasReplicatedNonReferenceTable(distributedPlan->relationIdList))
 			{
 				return MULTI_EXECUTOR_TASK_TRACKER;
 			}
@@ -131,6 +131,35 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return executorType;
+}
+
+
+/*
+ * HasReplicatedNonReferenceTable returns true if there is any
+ * table in the given list that is:
+ * - not a reference table
+ * - has replication factor > 1
+ */
+static bool
+HasReplicatedNonReferenceTable(List *relationOids)
+{
+	ListCell *oidCell = NULL;
+
+	foreach(oidCell, relationOids)
+	{
+		Oid oid = lfirst_oid(oidCell);
+		char partitionMethod = PartitionMethod(oid);
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+		uint32 tableReplicationFactor = TableShardReplicationFactor(oid);
+		if (tableReplicationFactor > 1)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 

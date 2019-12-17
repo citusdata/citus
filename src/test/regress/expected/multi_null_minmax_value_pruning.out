@@ -124,7 +124,7 @@ DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -189,7 +189,7 @@ DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -256,7 +256,7 @@ DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob

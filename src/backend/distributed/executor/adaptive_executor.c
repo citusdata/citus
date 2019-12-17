@@ -151,7 +151,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/adaptive_executor.h"
-#include "distributed/repartition.h"
+#include "distributed/repartition_join_execution.h"
 #include "lib/ilist.h"
 #include "commands/schemacmds.h"
 #include "storage/fd.h"
@@ -726,7 +726,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (hasDependentJobs)
 	{
-		DoRepartitionCleanup(jobIdList, true);
+		DoRepartitionCleanup(jobIdList);
 	}
 
 	if (SortReturning && distributedPlan->hasReturning)
@@ -2137,7 +2137,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* do repartition cleanup if this is a repartition query*/
 		if (list_length(execution->jobIdList) > 0)
 		{
-			DoRepartitionCleanup(execution->jobIdList, false);
+			DoRepartitionCleanup(execution->jobIdList);
 		}
 
 		if (execution->waitEventSet != NULL)
