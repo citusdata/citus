@@ -24,6 +24,7 @@ test: multi_703_upgrade
 test: multi_cluster_management
 test: alter_role_propagation
 test: propagate_extension_commands
+test: escape_extension_name
 test: multi_test_helpers
 test: multi_test_catalog_views
 test: multi_table_ddl
