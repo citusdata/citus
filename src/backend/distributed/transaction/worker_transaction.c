@@ -150,7 +150,7 @@ static void
 SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
 {
 	ListCell *workerNodeCell = NULL;
-	char *extensionOwner = CitusExtensionOwnerName();
+	char *extensionOwnerAsSuperuser = CitusExtensionOwnerName();
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 
 	foreach(workerNodeCell, workerNodeList)
@@ -160,14 +160,14 @@ SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
 		{
 			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
 													   workerNode->workerPort,
-													   extensionOwner,
+													   extensionOwnerAsSuperuser,
 													   commandList);
 		}
 		else
 		{
 			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
 														 workerNode->workerPort,
-														 extensionOwner,
+														 extensionOwnerAsSuperuser,
 														 commandList);
 		}
 	}

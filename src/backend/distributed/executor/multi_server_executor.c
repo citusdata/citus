@@ -36,7 +36,7 @@ bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format 
 bool EnableRepartitionJoins = false;
 
 
-static bool HasReplicatedNonReferenceTable(List *relationOids);
+static bool HasReplicatedDistributedTable(List *relationOids);
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -108,7 +108,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-			if (HasReplicatedNonReferenceTable(distributedPlan->relationIdList))
+			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
 			{
 				return MULTI_EXECUTOR_TASK_TRACKER;
 			}
@@ -135,13 +135,13 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 
 /*
- * HasReplicatedNonReferenceTable returns true if there is any
+ * HasReplicatedDistributedTable returns true if there is any
  * table in the given list that is:
  * - not a reference table
  * - has replication factor > 1
  */
 static bool
-HasReplicatedNonReferenceTable(List *relationOids)
+HasReplicatedDistributedTable(List *relationOids)
 {
 	ListCell *oidCell = NULL;
 

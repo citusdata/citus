@@ -214,5 +214,12 @@ TaskHashCompare(const void *key1, const void *key2, Size keysize)
 {
 	TaskHashKey *taskKey1 = (TaskHashKey *) key1;
 	TaskHashKey *taskKey2 = (TaskHashKey *) key2;
-	return taskKey1->jobId != taskKey2->jobId || taskKey1->taskId != taskKey2->taskId;
+	if (taskKey1->jobId != taskKey2->jobId || taskKey1->taskId != taskKey2->taskId)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 }

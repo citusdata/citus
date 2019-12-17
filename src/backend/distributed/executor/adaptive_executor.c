@@ -664,9 +664,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(distributedPlan->modLevel, taskList,
-											   hasDependentJobs);
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		distributedPlan->modLevel, taskList,
+		hasDependentJobs);
+
 
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
@@ -812,8 +813,9 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList, int
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
 
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList, true);
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, true);
+
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
@@ -852,8 +854,8 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList, false);
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
