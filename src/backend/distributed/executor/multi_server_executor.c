@@ -24,6 +24,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/master_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/log_utils.h"
@@ -34,6 +35,8 @@ int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
+
+static bool HasReplicatedDistributedTable(List *relationOids);
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -89,6 +92,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
 
+
 	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
 		/* if we have repartition jobs with adaptive executor and repartition
@@ -104,12 +108,11 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-
-			ereport(DEBUG1, (errmsg(
-								 "cannot use adaptive executor with repartition jobs"),
-							 errhint("Since you enabled citus.enable_repartition_joins "
-									 "Citus chose to use task-tracker.")));
-			return MULTI_EXECUTOR_TASK_TRACKER;
+			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
+			{
+				return MULTI_EXECUTOR_TASK_TRACKER;
+			}
+			return MULTI_EXECUTOR_ADAPTIVE;
 		}
 	}
 	else
@@ -128,6 +131,35 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return executorType;
+}
+
+
+/*
+ * HasReplicatedDistributedTable returns true if there is any
+ * table in the given list that is:
+ * - not a reference table
+ * - has replication factor > 1
+ */
+static bool
+HasReplicatedDistributedTable(List *relationOids)
+{
+	ListCell *oidCell = NULL;
+
+	foreach(oidCell, relationOids)
+	{
+		Oid oid = lfirst_oid(oidCell);
+		char partitionMethod = PartitionMethod(oid);
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+		uint32 tableReplicationFactor = TableShardReplicationFactor(oid);
+		if (tableReplicationFactor > 1)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 

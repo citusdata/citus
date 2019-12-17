@@ -351,6 +351,17 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
 
+		if (flags & OUTSIDE_TRANSACTION)
+		{
+			/* dont return connections that are used in transactions */
+			if (connection->remoteTransaction.transactionState !=
+				REMOTE_TRANS_NOT_STARTED)
+			{
+				continue;
+			}
+		}
+
+		/* don't return claimed connections */
 		if (connection->claimedExclusively)
 		{
 			/* connection is in use for an ongoing operation */
@@ -949,6 +960,7 @@ static MultiConnection *
 StartConnectionEstablishment(ConnectionHashKey *key)
 {
 	bool found = false;
+	static uint64 connectionId = 1;
 
 	/* search our cache for precomputed connection settings */
 	ConnParamsHashEntry *entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
@@ -979,6 +991,7 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 											  (const char **) entry->values,
 											  false);
 	connection->connectionStart = GetCurrentTimestamp();
+	connection->connectionId = connectionId++;
 	connection->purpose = CONNECTION_PURPOSE_ANY;
 
 	/*

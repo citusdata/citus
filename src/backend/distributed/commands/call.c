@@ -24,6 +24,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"

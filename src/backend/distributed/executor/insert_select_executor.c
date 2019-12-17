@@ -20,6 +20,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/recursive_planning.h"

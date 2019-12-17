@@ -150,13 +150,17 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/adaptive_executor.h"
+#include "distributed/repartition_join_execution.h"
 #include "lib/ilist.h"
+#include "commands/schemacmds.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
+
 
 /*
  * DistributedExecution represents the execution of a distributed query
@@ -272,7 +276,14 @@ typedef struct DistributedExecution
 	 */
 	AttInMetadata *attributeInputMetadata;
 	char **columnArray;
+
+	/*
+	 * jobIdList contains all jobs in the job tree, this is used to
+	 * do cleanup for repartition queries.
+	 */
+	List *jobIdList;
 } DistributedExecution;
+
 
 /*
  * WorkerPool represents a pool of sessions on the same worker.
@@ -416,6 +427,13 @@ typedef struct WorkerSession
 
 struct TaskPlacementExecution;
 
+/* GUC, determining whether Citus opens 1 connection per task */
+bool ForceMaxQueryParallelization = false;
+int MaxAdaptiveExecutorPoolSize = 16;
+
+/* GUC, number of ms to wait between opening connections to the same worker */
+int ExecutorSlowStartInterval = 10;
+
 
 /*
  * TaskExecutionState indicates whether or not a command on a shard
@@ -520,18 +538,10 @@ typedef struct TaskPlacementExecution
 } TaskPlacementExecution;
 
 
-/* GUC, determining whether Citus opens 1 connection per task */
-bool ForceMaxQueryParallelization = false;
-int MaxAdaptiveExecutorPoolSize = 16;
-
-/* GUC, number of ms to wait between opening connections to the same worker */
-int ExecutorSlowStartInterval = 10;
-
-
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
-														 List *taskList,
-														 bool hasReturning,
+														 List *taskList, bool
+														 hasReturning,
 														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
@@ -540,7 +550,9 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 xactProperties);
 static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLevel
 																	modLevel,
-																	List *taskList);
+																	List *taskList,
+																	bool
+																	exludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
@@ -598,10 +610,10 @@ static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
+static bool HasDependentJobs(Job *mainJob);
 static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
-
 
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
@@ -620,6 +632,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
+	List *jobIdList = NIL;
 
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
@@ -636,6 +649,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	ExecuteSubPlans(distributedPlan);
 
+	bool hasDependentJobs = HasDependentJobs(job);
+	if (hasDependentJobs)
+	{
+		jobIdList = ExecuteDependentTasks(taskList, job);
+	}
+
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
 		/* defer decision after ExecuteSubPlans() */
@@ -645,8 +664,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(distributedPlan->modLevel, taskList);
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		distributedPlan->modLevel, taskList,
+		hasDependentJobs);
+
 
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
@@ -704,12 +725,28 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
+	if (hasDependentJobs)
+	{
+		DoRepartitionCleanup(jobIdList);
+	}
+
 	if (SortReturning && distributedPlan->hasReturning)
 	{
 		SortTupleStore(scanState);
 	}
 
 	return resultSlot;
+}
+
+
+/*
+ * HasDependentJobs returns true if there is any dependent job
+ * for the mainjob(top level) job.
+ */
+static bool
+HasDependentJobs(Job *mainJob)
+{
+	return list_length(mainJob->dependentJobList) > 0;
 }
 
 
@@ -765,6 +802,28 @@ ExecuteUtilityTaskListWithoutResults(List *taskList)
 
 
 /*
+ * ExecuteTaskListRepartiton is a proxy to ExecuteTaskListExtended() with defaults
+ * for some of the arguments for a repartition query.
+ */
+uint64
+ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList, int
+								  targetPoolSize)
+{
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = NULL;
+	bool hasReturning = false;
+
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, true);
+
+
+	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
+								   tupleStore, hasReturning, targetPoolSize,
+								   &xactProperties);
+}
+
+
+/*
  * ExecuteTaskList is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */
@@ -776,7 +835,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 	bool hasReturning = false;
 
 	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList);
+		DecideTransactionPropertiesForTaskList(modLevel, taskList, false);
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
@@ -795,8 +854,8 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList);
+	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
@@ -914,7 +973,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
  * errorOnAnyFailure, but not the other way around) we keep them in the same place.
  */
 static TransactionProperties
-DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList)
+DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, bool
+									   exludeFromTransaction)
 {
 	TransactionProperties xactProperties = {
 		.errorOnAnyFailure = false,
@@ -925,6 +985,12 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList)
 	if (taskList == NIL)
 	{
 		/* nothing to do, return defaults */
+		return xactProperties;
+	}
+
+	if (exludeFromTransaction)
+	{
+		xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_DISALLOWED;
 		return xactProperties;
 	}
 
@@ -1141,7 +1207,8 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 	if (ReadOnlyTask(task->taskType))
 	{
-		return SelectOpensTransactionBlock && IsTransactionBlock();
+		return SelectOpensTransactionBlock &&
+			   IsTransactionBlock();
 	}
 
 	if (IsMultiStatementTransaction())
@@ -1252,17 +1319,26 @@ TaskListRequires2PC(List *taskList)
 bool
 ReadOnlyTask(TaskType taskType)
 {
-	if (taskType == SELECT_TASK)
+	switch (taskType)
 	{
-		/*
-		 * TODO: We currently do not execute modifying CTEs via SELECT_TASK.
-		 * When we implement it, we should either not use the mentioned task types for
-		 * modifying CTEs detect them here.
-		 */
-		return true;
-	}
+		case SELECT_TASK:
+		case MAP_OUTPUT_FETCH_TASK:
+		case MAP_TASK:
+		case MERGE_TASK:
+		{
+			/*
+			 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
+			 * When we implement it, we should either not use the mentioned task types for
+			 * modifying CTEs detect them here.
+			 */
+			return true;
+		}
 
-	return false;
+		default:
+		{
+			return false;
+		}
+	}
 }
 
 
@@ -1437,7 +1513,9 @@ CleanUpSessions(DistributedExecution *execution)
 			 * We cannot get MULTI_CONNECTION_LOST via the ConnectionStateMachine,
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
+			 *
 			 */
+
 			CloseConnection(connection);
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
@@ -1581,14 +1659,20 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 			List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-			/*
-			 * Determine whether the task has to be assigned to a particular connection
-			 * due to a preceding access to the placement in the same transaction.
-			 */
-			MultiConnection *connection = GetConnectionIfPlacementAccessedInXact(
-				connectionFlags,
-				placementAccessList,
-				NULL);
+			MultiConnection *connection = NULL;
+			if (execution->transactionProperties->useRemoteTransactionBlocks !=
+				TRANSACTION_BLOCKS_DISALLOWED)
+			{
+				/*
+				 * Determine whether the task has to be assigned to a particular connection
+				 * due to a preceding access to the placement in the same transaction.
+				 */
+				connection = GetConnectionIfPlacementAccessedInXact(
+					connectionFlags,
+					placementAccessList,
+					NULL);
+			}
+
 			if (connection != NULL)
 			{
 				/*
@@ -1723,14 +1807,14 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 
 		case DDL_TASK:
 		case VACUUM_ANALYZE_TASK:
-		{
-			return EXECUTION_ORDER_PARALLEL;
-		}
-
 		case MAP_TASK:
 		case MERGE_TASK:
 		case MAP_OUTPUT_FETCH_TASK:
 		case MERGE_FETCH_TASK:
+		{
+			return EXECUTION_ORDER_PARALLEL;
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported task type %d in adaptive executor",
@@ -1801,6 +1885,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 			return session;
 		}
 	}
+
 
 	session = (WorkerSession *) palloc0(sizeof(WorkerSession));
 	session->sessionId = sessionId++;
@@ -2051,6 +2136,12 @@ RunDistributedExecution(DistributedExecution *execution)
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
 
+		/* do repartition cleanup if this is a repartition query*/
+		if (list_length(execution->jobIdList) > 0)
+		{
+			DoRepartitionCleanup(execution->jobIdList);
+		}
+
 		if (execution->waitEventSet != NULL)
 		{
 			FreeWaitEventSet(execution->waitEventSet);
@@ -2173,6 +2264,12 @@ ManageWorkerPool(WorkerPool *workerPool)
 	{
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
+
+		if (execution->transactionProperties->useRemoteTransactionBlocks ==
+			TRANSACTION_BLOCKS_DISALLOWED)
+		{
+			connectionFlags |= OUTSIDE_TRANSACTION;
+		}
 
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
@@ -2651,12 +2748,14 @@ static bool
 TransactionModifiedDistributedTable(DistributedExecution *execution)
 {
 	/*
-	 * We need to explicitly check for a coordinated transaction due to
+	 * We need to explicitly check for TRANSACTION_BLOCKS_REQUIRED due to
 	 * citus.function_opens_transaction_block flag. When set to false, we
 	 * should not be pretending that we're in a coordinated transaction even
 	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
 	 */
-	return InCoordinatedTransaction() && XactModificationLevel == XACT_MODIFICATION_DATA;
+	return execution->transactionProperties->useRemoteTransactionBlocks ==
+		   TRANSACTION_BLOCKS_REQUIRED &&
+		   XactModificationLevel == XACT_MODIFICATION_DATA;
 }
 
 
@@ -3030,11 +3129,16 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	char *queryString = task->queryString;
 	int querySent = 0;
 
-	/*
-	 * Make sure that subsequent commands on the same placement
-	 * use the same connection.
-	 */
-	AssignPlacementListToConnection(placementAccessList, connection);
+	if (execution->transactionProperties->useRemoteTransactionBlocks !=
+		TRANSACTION_BLOCKS_DISALLOWED)
+	{
+		/*
+		 * Make sure that subsequent commands on the same placement
+		 * use the same connection.
+		 */
+		AssignPlacementListToConnection(placementAccessList, connection);
+	}
+
 
 	/* one more command is sent over the session */
 	session->commandsSent++;

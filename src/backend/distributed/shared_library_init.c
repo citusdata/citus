@@ -62,6 +62,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
+#include "distributed/adaptive_executor.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "optimizer/planner.h"

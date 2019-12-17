@@ -144,7 +144,6 @@ ORDER BY
 	1, 2, 3, 4
 LIMIT 10;
 
-
 -- All combined
 WITH cte AS (
 	WITH task_tracker AS (

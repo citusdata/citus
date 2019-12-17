@@ -49,8 +49,10 @@ enum MultiConnectionMode
 	/* open a connection per (co-located set of) placement(s) */
 	CONNECTION_PER_PLACEMENT = 1 << 3,
 
+	OUTSIDE_TRANSACTION = 1 << 4,
+
 	/* connection has not been used to access data */
-	REQUIRE_SIDECHANNEL = 1 << 4
+	REQUIRE_SIDECHANNEL = 1 << 5
 };
 
 /*
@@ -92,6 +94,9 @@ typedef struct MultiConnection
 
 	/* underlying libpq connection */
 	struct pg_conn *pgConn;
+
+	/* connection id */
+	uint64 connectionId;
 
 	/* state of the connection */
 	MultiConnectionState connectionState;

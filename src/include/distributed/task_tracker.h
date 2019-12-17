@@ -109,6 +109,8 @@ typedef struct WorkerTasksSharedStateData
 } WorkerTasksSharedStateData;
 
 
+extern void TrackerCleanupJobDirectories(void);
+
 /* Config variables managed via guc.c */
 extern int TaskTrackerDelay;
 extern int MaxTrackedTasksPerNode;

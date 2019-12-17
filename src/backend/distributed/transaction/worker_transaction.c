@@ -23,6 +23,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/resource_lock.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_transaction.h"
@@ -42,6 +43,8 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
+static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
+												char *superuser);
 
 
 /*
@@ -114,6 +117,72 @@ SendCommandToWorkersWithMetadata(const char *command)
 {
 	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
 									   0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToAllWorkers sends the given command to
+ * all workers as a superuser.
+ */
+void
+SendCommandToAllWorkers(char *command, char *superuser)
+{
+	SendCommandListToAllWorkers(list_make1(command), superuser);
+}
+
+
+/*
+ * SendCommandListToAllWorkers sends the given command to all workers in
+ * a single transaction.
+ */
+void
+SendCommandListToAllWorkers(List *commandList, char *superuser)
+{
+	SendCommandListToAllWorkersInternal(commandList, true, superuser);
+}
+
+
+/*
+ * SendCommandListToAllWorkersInternal sends the given command to all workers in a single
+ * transaction as a superuser. If failOnError is false, then it continues sending the commandList to other
+ * workers even if it fails in one of them.
+ */
+static void
+SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, char *superuser)
+{
+	ListCell *workerNodeCell = NULL;
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		if (failOnError)
+		{
+			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+													   workerNode->workerPort,
+													   superuser,
+													   commandList);
+		}
+		else
+		{
+			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+														 workerNode->workerPort,
+														 superuser,
+														 commandList);
+		}
+	}
+}
+
+
+/*
+ * SendOptionalCommandListToAllWorkers sends the given command to all works in
+ * a single transaction as a superuser. If there is an error during the command, it is ignored
+ * so this method doesnt return any error.
+ */
+void
+SendOptionalCommandListToAllWorkers(List *commandList, char *superuser)
+{
+	SendCommandListToAllWorkersInternal(commandList, false, superuser);
 }
 
 

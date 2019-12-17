@@ -36,6 +36,12 @@
 #define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT ")"
 #define JOB_CLEANUP_TASK_ID INT_MAX
 
+/* Adaptive executor repartioning related defines */
+#define WORKER_CREATE_SCHEMA_QUERY "SELECT worker_create_schema (" UINT64_FORMAT ");"
+#define WORKER_REPARTITION_CLEANUP_QUERY "SELECT worker_repartition_cleanup (" \
+	UINT64_FORMAT \
+	");"
+
 
 /* Enumeration to track one task's execution status */
 typedef enum

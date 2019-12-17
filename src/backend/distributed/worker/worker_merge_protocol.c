@@ -31,6 +31,8 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/task_tracker_protocol.h"
+#include "distributed/task_tracker.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -39,6 +41,8 @@
 #include "utils/builtins.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "commands/schemacmds.h"
+#include "distributed/resource_lock.h"
 
 
 /* Local functions forward declarations */
@@ -53,6 +57,50 @@ static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relatio
 PG_FUNCTION_INFO_V1(worker_merge_files_into_table);
 PG_FUNCTION_INFO_V1(worker_merge_files_and_run_query);
 PG_FUNCTION_INFO_V1(worker_cleanup_job_schema_cache);
+PG_FUNCTION_INFO_V1(worker_create_schema);
+PG_FUNCTION_INFO_V1(worker_repartition_cleanup);
+
+
+/*
+ * worker_create_schema creates a schema with the given job id in local.
+ */
+Datum
+worker_create_schema(PG_FUNCTION_ARGS)
+{
+	uint64 jobId = PG_GETARG_INT64(0);
+
+	StringInfo jobSchemaName = JobSchemaName(jobId);
+	CheckCitusVersion(ERROR);
+
+	bool schemaExists = JobSchemaExists(jobSchemaName);
+	if (!schemaExists)
+	{
+		CreateJobSchema(jobSchemaName);
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_repartition_cleanup removes the job directory and schema with the given job id .
+ */
+Datum
+worker_repartition_cleanup(PG_FUNCTION_ARGS)
+{
+	uint64 jobId = PG_GETARG_INT64(0);
+	StringInfo jobDirectoryName = JobDirectoryName(jobId);
+	StringInfo jobSchemaName = JobSchemaName(jobId);
+
+	CheckCitusVersion(ERROR);
+
+	Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
+
+	EnsureSchemaOwner(schemaId);
+	CitusRemoveDirectory(jobDirectoryName);
+	RemoveJobSchema(jobSchemaName);
+	PG_RETURN_VOID();
+}
 
 
 /*
@@ -135,7 +183,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 							   userId);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
 	PG_RETURN_VOID();
 }
 

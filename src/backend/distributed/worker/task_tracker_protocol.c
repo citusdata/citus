@@ -42,7 +42,6 @@
 
 /* Local functions forward declarations */
 static bool TaskTrackerRunning(void);
-static void CreateJobSchema(StringInfo schemaName);
 static void CreateTask(uint64 jobId, uint32 taskId, char *taskCallString);
 static void UpdateTask(WorkerTask *workerTask, char *taskCallString);
 static void CleanupTask(WorkerTask *workerTask);
@@ -308,7 +307,7 @@ TaskTrackerRunning(void)
  * Further note that the created schema does not become visible to other
  * processes until the transaction commits.
  */
-static void
+void
 CreateJobSchema(StringInfo schemaName)
 {
 	const char *queryString = NULL;
