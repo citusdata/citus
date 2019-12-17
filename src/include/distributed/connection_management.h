@@ -50,6 +50,7 @@ enum MultiConnectionMode
 	CONNECTION_PER_PLACEMENT = 1 << 3,
 
 	OUTSIDE_TRANSACTION = 1 << 4,
+
 	/* connection has not been used to access data */
 	REQUIRE_SIDECHANNEL = 1 << 5
 };

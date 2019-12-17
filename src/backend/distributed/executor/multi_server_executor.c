@@ -106,7 +106,9 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-			if (ShardReplicationFactor > 1)
+			uint32 tableReplicationFactor = TableShardReplicationFactor(
+				distributedPlan->targetRelationId);
+			if (tableReplicationFactor > 1)
 			{
 				return MULTI_EXECUTOR_TASK_TRACKER;
 			}
