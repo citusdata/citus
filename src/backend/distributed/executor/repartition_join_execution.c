@@ -80,7 +80,7 @@ CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
 {
 	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
-	SendCommandToAllWorkers(createSchemasCommand);
+	SendCommandToAllWorkers(createSchemasCommand, CitusExtensionOwnerName());
 	return jobIds;
 }
 
@@ -156,7 +156,8 @@ void
 DoRepartitionCleanup(List *jobIds)
 {
 	SendOptionalCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(
-													   jobIds)));
+													   jobIds)),
+										CitusExtensionOwnerName());
 }
 
 

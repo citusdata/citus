@@ -43,7 +43,8 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
-static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError);
+static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
+												char *superuser);
 
 
 /*
@@ -121,12 +122,12 @@ SendCommandToWorkersWithMetadata(const char *command)
 
 /*
  * SendCommandToAllWorkers sends the given command to
- * all workers.
+ * all workers as a superuser.
  */
 void
-SendCommandToAllWorkers(char *command)
+SendCommandToAllWorkers(char *command, char *superuser)
 {
-	SendCommandListToAllWorkers(list_make1(command));
+	SendCommandListToAllWorkers(list_make1(command), superuser);
 }
 
 
@@ -135,22 +136,21 @@ SendCommandToAllWorkers(char *command)
  * a single transaction.
  */
 void
-SendCommandListToAllWorkers(List *commandList)
+SendCommandListToAllWorkers(List *commandList, char *superuser)
 {
-	SendCommandListToAllWorkersInternal(commandList, true);
+	SendCommandListToAllWorkersInternal(commandList, true, superuser);
 }
 
 
 /*
  * SendCommandListToAllWorkersInternal sends the given command to all workers in a single
- * transaction. If failOnError is false, then it continues sending the commandList to other
+ * transaction as a superuser. If failOnError is false, then it continues sending the commandList to other
  * workers even if it fails in one of them.
  */
 static void
-SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
+SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, char *superuser)
 {
 	ListCell *workerNodeCell = NULL;
-	char *extensionOwnerAsSuperuser = CitusExtensionOwnerName();
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 
 	foreach(workerNodeCell, workerNodeList)
@@ -160,14 +160,14 @@ SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
 		{
 			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
 													   workerNode->workerPort,
-													   extensionOwnerAsSuperuser,
+													   superuser,
 													   commandList);
 		}
 		else
 		{
 			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
 														 workerNode->workerPort,
-														 extensionOwnerAsSuperuser,
+														 superuser,
 														 commandList);
 		}
 	}
@@ -176,13 +176,13 @@ SendCommandListToAllWorkersInternal(List *commandList, bool failOnError)
 
 /*
  * SendOptionalCommandListToAllWorkers sends the given command to all works in
- * a single transaction. If there is an error during the command, it is ignored
+ * a single transaction as a superuser. If there is an error during the command, it is ignored
  * so this method doesnt return any error.
  */
 void
-SendOptionalCommandListToAllWorkers(List *commandList)
+SendOptionalCommandListToAllWorkers(List *commandList, char *superuser)
 {
-	SendCommandListToAllWorkersInternal(commandList, false);
+	SendCommandListToAllWorkersInternal(commandList, false, superuser);
 }
 
 
