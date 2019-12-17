@@ -276,7 +276,9 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		 * exclusively and that would prevent the consecutive DML/DDL
 		 * use the same connection.
 		 */
-		MultiConnection *connection = StartNonDataAccessConnection(nodeName, nodePort);
+		int flags = REQUIRE_SIDECHANNEL;
+
+		MultiConnection *connection = StartNodeConnection(flags, nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
 		MarkRemoteTransactionCritical(connection);
 

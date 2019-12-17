@@ -82,5 +82,23 @@ SELECT income FROM second_raw_table WHERE tenant_id IN (SELECT * FROM ids_insert
 ROLLBACK;
 
 RESET client_min_messages;
-RESET citus.shard_count;
+
+CREATE OR REPLACE FUNCTION run_ctes(id int)
+RETURNS text
+LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
+	value text;
+BEGIN
+
+	WITH
+	dist AS (SELECT tenant_id FROM raw_table WHERE tenant_id < 10 OFFSET 0)
+	SELECT count(*) INTO value FROM dist WHERE id = tenant_id;
+
+	RETURN value ;
+END;
+$BODY$;
+
+SELECT count(*) FROM (SELECT run_ctes(s) FROM generate_series(1,current_setting('max_connections')::int+2) s) a;
+
 DROP SCHEMA with_transactions CASCADE;
