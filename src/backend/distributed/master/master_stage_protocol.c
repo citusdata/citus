@@ -7,7 +7,7 @@
  * command, but also differ from them in that users stage data from tables and
  * not files, and that they can also append to existing shards.
  *
- * Copyright (c) 2013-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -285,7 +285,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						errhint("Try running master_create_empty_shard() first")));
 	}
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/* issue command to append table to each shard placement */
 	foreach(shardPlacementCell, shardPlacementList)

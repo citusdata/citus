@@ -1,7 +1,7 @@
 -- File to create functions and helpers needed for subsequent tests
 
 -- create a helper function to create objects on each node
-CREATE FUNCTION run_command_on_master_and_workers(p_sql text)
+CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
      EXECUTE p_sql;
@@ -9,7 +9,7 @@ BEGIN
 END;$$;
 
 -- Create a function to make sure that queries returning the same result
-CREATE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION raise_failed_execution(query text) RETURNS void AS $$
 BEGIN
 	EXECUTE query;
 	EXCEPTION WHEN OTHERS THEN
@@ -33,8 +33,23 @@ BEGIN
   RETURN;
 END; $$ language plpgsql;
 
+-- Is a distributed plan?
+CREATE OR REPLACE FUNCTION plan_is_distributed(explain_commmand text)
+RETURNS BOOLEAN AS $$
+DECLARE
+    query_plan TEXT;
+BEGIN
+  FOR query_plan IN execute explain_commmand LOOP
+    IF query_plan LIKE '%Task Count:%'
+    THEN
+        RETURN TRUE;
+    END IF;
+  END LOOP;
+  RETURN FALSE;
+END; $$ language plpgsql;
+
 -- helper function to quickly run SQL on the whole cluster
-CREATE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
+CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
      EXECUTE p_sql;
@@ -43,7 +58,7 @@ END;$$;
 
 -- 1. Marks the given procedure as colocated with the given table.
 -- 2. Marks the argument index with which we route the procedure.
-CREATE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
+CREATE OR REPLACE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     update citus.pg_dist_object
@@ -73,7 +88,7 @@ BEGIN
 END;
 $func$;
 
-CREATE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus';
@@ -84,7 +99,7 @@ ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
 SELECT pg_reload_conf();
 
 -- Verifies pg_dist_node and pg_dist_palcement in the given worker matches the ones in coordinator
-CREATE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
+CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
     RETURNS BOOLEAN
     LANGUAGE sql
     AS $$

@@ -2,6 +2,8 @@ SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 
+CREATE SCHEMA multi_modifications;
+
 -- some failure messages that comes from the worker nodes
 -- might change due to parallel executions, so suppress those
 -- using \set VERBOSITY terse
@@ -545,6 +547,15 @@ INSERT INTO raw_table VALUES (2, 500);
 INSERT INTO summary_table VALUES (1);
 INSERT INTO summary_table VALUES (2);
 
+-- test noop deletes and updates
+DELETE FROM summary_table WHERE false;
+DELETE FROM summary_table WHERE null;
+DELETE FROM summary_table WHERE null > jsonb_build_array();
+
+UPDATE summary_table SET uniques = 0 WHERE false;
+UPDATE summary_table SET uniques = 0 WHERE null;
+UPDATE summary_table SET uniques = 0 WHERE null > jsonb_build_array();
+
 SELECT * FROM summary_table ORDER BY id;
 
 UPDATE summary_table SET average_value = average_query.average FROM (
@@ -871,7 +882,11 @@ DELETE FROM summary_table WHERE id < (
     SELECT 0 FROM pg_dist_node
 );
 
+CREATE TABLE multi_modifications.local (a int default 1, b int);
+INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
+
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
 DROP TABLE reference_summary_table;
+DROP SCHEMA multi_modifications CASCADE;

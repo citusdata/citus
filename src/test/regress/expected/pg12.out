@@ -365,8 +365,40 @@ SELECT DISTINCT y FROM test;
  25
 (1 row)
 
+-- non deterministic collations
+CREATE COLLATION test_pg12.case_insensitive (
+	provider = icu,
+	locale = 'und-u-ks-level2',
+	deterministic = false
+);
+CREATE TABLE col_test (
+	id int,
+	val text collate case_insensitive
+);
+insert into col_test values
+	(1, 'asdF'), (2, 'vAlue'), (3, 'asDF');
+-- Hash distribution of non deterministic collations are unsupported
+select create_distributed_table('col_test', 'val');
+ERROR:  Hash distributed partition columns may not use a non deterministic collation
+select create_distributed_table('col_test', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+insert into col_test values
+	(4, 'vALue'), (5, 'AsDf'), (6, 'value');
+select count(*)
+from col_test
+where val = 'asdf';
+ count 
+-------
+     3
+(1 row)
+
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
-NOTICE:  drop cascades to 11 other objects
+NOTICE:  drop cascades to 13 other objects
 \set VERBOSITY default
 SET citus.shard_replication_factor to 2;

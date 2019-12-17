@@ -3,7 +3,7 @@
  * dependencies.c
  *    Commands to create dependencies of an object on all workers.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -3,7 +3,7 @@
  * namespace.h
  *    Helper functions for citus to work with postgres namespaces/schemas
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

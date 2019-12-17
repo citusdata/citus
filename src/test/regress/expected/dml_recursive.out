@@ -305,7 +305,7 @@ FROM
 	distributed_table
 WHERE
 	distributed_table.tenant_id = local_table.id;
-ERROR:  relation local_table is not distributed
+ERROR:  cannot plan modifications of local tables involving distributed tables
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_queries CASCADE;
 NOTICE:  drop cascades to 5 other objects

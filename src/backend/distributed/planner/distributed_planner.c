@@ -63,6 +63,9 @@ static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
 
+/* keep track of planner call stack levels */
+int PlannerLevel = 0;
+
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);
@@ -189,6 +192,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PG_TRY();
 	{
 		/*
+		 * We keep track of how many times we've recursed into the planner, primarily
+		 * to detect whether we are in a function call. We need to make sure that the
+		 * PlannerLevel is decremented exactly once at the end of this PG_TRY block,
+		 * both in the happy case and when an error occurs.
+		 */
+		PlannerLevel++;
+
+		/*
 		 * For trivial queries, we're skipping the standard_planner() in
 		 * order to eliminate its overhead.
 		 *
@@ -242,13 +253,19 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 				result->planTree->total_cost = FLT_MAX / 100000000;
 			}
 		}
+
+		PlannerLevel--;
 	}
 	PG_CATCH();
 	{
 		PopPlannerRestrictionContext();
+
+		PlannerLevel--;
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
 
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
@@ -1955,6 +1972,20 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
+		/*
+		 * Don't plan joins involving functions locally since we are not sure if
+		 * they do distributed accesses or not, and defaulting to local planning
+		 * might break transactional semantics.
+		 *
+		 * For example, access to the reference table in the function might go
+		 * over a connection, but access to the same reference table outside
+		 * the function will go over the current backend. The snapshot for the
+		 * connection in the function is taken after the statement snapshot,
+		 * so they can see two different views of data.
+		 *
+		 * Looking at gram.y, RTE_TABLEFUNC is used only for XMLTABLE() which
+		 * is okay to be planned locally, so allowing that.
+		 */
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
 			return false;
@@ -1965,6 +1996,15 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
+		/*
+		 * We only allow local join for the relation kinds for which we can
+		 * determine deterministically that access to them are local or distributed.
+		 * For this reason, we don't allow non-materialized views.
+		 */
+		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			return false;
+		}
 
 		if (!IsDistributedTable(rangeTableEntry->relid))
 		{

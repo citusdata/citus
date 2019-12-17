@@ -401,14 +401,14 @@ SELECT * FROM cte UNION ALL SELECT * FROM cte_2;
 WITH RECURSIVE basic_recursive(x) AS (
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 )
 SELECT sum(x) FROM basic_recursive;
 
 WITH RECURSIVE basic_recursive AS (
     SELECT -1 as user_id, '2017-11-22 20:16:16.614779'::timestamp, -1, -1, -1, -1
   UNION ALL
-    SELECT * FROM users_table WHERE user_id>1
+    SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
 )
 SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1;
 
@@ -420,7 +420,7 @@ FROM
 (WITH RECURSIVE basic_recursive AS (
       SELECT -1 as user_id, '2017-11-22 20:16:16.614779'::timestamp, -1, -1, -1, -1
     UNION ALL
-      SELECT * FROM users_table WHERE user_id>1
+      SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1) cte_rec;
 
@@ -435,7 +435,7 @@ WHERE
 (WITH RECURSIVE basic_recursive AS (
       SELECT -1 as user_id
     UNION ALL
-      SELECT user_id FROM users_table WHERE user_id>1
+      SELECT basic_recursive.* FROM users_table JOIN basic_recursive USING (user_id) WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1);
 
@@ -444,7 +444,7 @@ WHERE
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 ),
 basic AS (
     SELECT count(user_id) FROM users_table
@@ -456,7 +456,7 @@ SELECT x FROM basic, basic_recursive;
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
   UNION ALL
-    SELECT user_id + 1 FROM users_table WHERE user_id < 100
+    SELECT user_id + 1 FROM users_table JOIN basic_recursive ON (user_id = x) WHERE user_id < 100
 ),
 basic AS (
     SELECT count(x) FROM basic_recursive
@@ -467,10 +467,10 @@ SELECT * FROM basic;
 -- recursive CTE in a NESTED manner
 WITH regular_cte AS (
   WITH regular_2 AS (
-    WITH RECURSIVE recursive AS (
+    WITH RECURSIVE recursive(x) AS (
         VALUES (1)
       UNION ALL
-        SELECT user_id + 1 FROM users_table WHERE user_id < 100
+        SELECT user_id + 1 FROM users_table JOIN recursive ON (user_id = x) WHERE user_id < 100
     )
     SELECT * FROM recursive
   )

@@ -41,7 +41,7 @@
  * Finally, the union of the shards found by each pruning instance is
  * returned.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -276,7 +276,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		InitFunctionCallInfoData(*(FunctionCallInfo) &
 								 context.compareIntervalFunctionCall,
 								 cacheEntry->shardIntervalCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -290,7 +290,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		InitFunctionCallInfoData(*(FunctionCallInfo) &
 								 context.compareValueFunctionCall,
 								 cacheEntry->shardColumnCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -668,6 +668,15 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 		ArrayIterator arrayIterator = array_create_iterator(array, 0, NULL);
 		while (array_iterate(arrayIterator, &arrayElement, &isNull))
 		{
+			if (isNull)
+			{
+				/*
+				 * We can ignore IN (NULL) clauses because a value is never
+				 * equal to NULL.
+				 */
+				continue;
+			}
+
 			Const *constElement = makeConst(elementType, -1,
 											DEFAULT_COLLATION_OID, typlen, arrayElement,
 											isNull, typbyval);
@@ -679,7 +688,7 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 			arrayEqualityOp->inputcollid = arrayOperatorExpression->inputcollid;
 			arrayEqualityOp->opresulttype = get_func_rettype(
 				arrayOperatorExpression->opfuncid);
-			arrayEqualityOp->opcollid = DEFAULT_COLLATION_OID;
+			arrayEqualityOp->opcollid = context->partitionColumn->varcollid;
 			arrayEqualityOp->location = -1;
 			arrayEqualityOp->args = list_make2(strippedLeftOpExpression, constElement);
 

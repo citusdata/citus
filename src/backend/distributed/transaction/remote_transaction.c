@@ -61,7 +61,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
 	ListCell *subIdCell = NULL;
 
-	Assert(transaction->transactionState == REMOTE_TRANS_INVALID);
+	Assert(transaction->transactionState == REMOTE_TRANS_NOT_STARTED);
 
 	/* remember transaction as being in-progress */
 	dlist_push_tail(&InProgressTransactions, &connection->transactionNode);
@@ -206,7 +206,7 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 	const bool isCommit = true;
 
 	/* can only commit if transaction is in progress */
-	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
+	Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
 	/* can't commit if we already started to commit or abort */
 	Assert(transaction->transactionState < REMOTE_TRANS_1PC_ABORTING);
@@ -348,7 +348,7 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 	const bool raiseErrors = false;
 	const bool isNotCommit = false;
 
-	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
+	Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
 	/*
 	 * Clear previous results, so we have a better chance to send ROLLBACK
@@ -474,7 +474,7 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	const bool raiseErrors = true;
 
 	/* can't prepare a nonexistant transaction */
-	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
+	Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
 	/* can't prepare in a failed transaction */
 	Assert(!transaction->transactionFailed);
@@ -615,7 +615,7 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 		 * don't start it again. That's quite normal if a piece of code allows
 		 * cached connections.
 		 */
-		if (transaction->transactionState != REMOTE_TRANS_INVALID)
+		if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
 		{
 			continue;
 		}
@@ -760,7 +760,7 @@ CloseRemoteTransaction(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	/* unlink from list of open transactions, if necessary */
-	if (transaction->transactionState != REMOTE_TRANS_INVALID)
+	if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
 	{
 		/* XXX: Should we error out for a critical transaction? */
 
@@ -802,7 +802,7 @@ CoordinatedRemoteTransactionsPrepare(void)
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
-		Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
+		Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
 		/* can't PREPARE a transaction that failed */
 		if (transaction->transactionFailed)
@@ -863,7 +863,7 @@ CoordinatedRemoteTransactionsCommit(void)
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
-		if (transaction->transactionState == REMOTE_TRANS_INVALID ||
+		if (transaction->transactionState == REMOTE_TRANS_NOT_STARTED ||
 			transaction->transactionState == REMOTE_TRANS_1PC_COMMITTING ||
 			transaction->transactionState == REMOTE_TRANS_2PC_COMMITTING ||
 			transaction->transactionState == REMOTE_TRANS_COMMITTED ||
@@ -920,7 +920,7 @@ CoordinatedRemoteTransactionsAbort(void)
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
-		if (transaction->transactionState == REMOTE_TRANS_INVALID ||
+		if (transaction->transactionState == REMOTE_TRANS_NOT_STARTED ||
 			transaction->transactionState == REMOTE_TRANS_1PC_ABORTING ||
 			transaction->transactionState == REMOTE_TRANS_2PC_ABORTING ||
 			transaction->transactionState == REMOTE_TRANS_ABORTED)

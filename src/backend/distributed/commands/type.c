@@ -36,7 +36,7 @@
  *       types will be created during the activation of a new node to allow
  *       reference tables to use this type.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

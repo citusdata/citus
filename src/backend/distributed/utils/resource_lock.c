@@ -197,7 +197,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	appendStringInfo(lockCommand, "])");
 
 	/* need to hold the lock until commit */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/*
 	 * Use the superuser connection to make sure we are allowed to lock.

@@ -10,7 +10,7 @@
  *
  *    ALTER or DROP operations are not yet propagated.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -346,7 +346,8 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 	{
 		/* check for default colocation group */
 		colocationId = ColocationId(ShardCount, ShardReplicationFactor,
-									distributionArgumentOid);
+									distributionArgumentOid, get_typcollation(
+										distributionArgumentOid));
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{

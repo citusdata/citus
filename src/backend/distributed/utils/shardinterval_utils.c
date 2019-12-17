@@ -4,7 +4,7 @@
  *
  * This file contains functions to perform useful operations on shard intervals.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -52,6 +52,33 @@ LowestShardIntervalById(List *shardIntervalList)
 
 
 /*
+ * SortedShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
+ * no min/max values are placed at the end of the array.
+ */
+ShardInterval **
+SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
+					   Oid collation, FmgrInfo *shardIntervalSortCompareFunction)
+{
+	SortShardIntervalContext sortContext = {
+		.comparisonFunction = shardIntervalSortCompareFunction,
+		.collation = collation
+	};
+
+	/* short cut if there are no shard intervals in the array */
+	if (shardCount == 0)
+	{
+		return shardIntervalArray;
+	}
+
+	/* if a shard doesn't have min/max values, it's placed in the end of the array */
+	qsort_arg(shardIntervalArray, shardCount, sizeof(ShardInterval *),
+			  (qsort_arg_comparator) CompareShardIntervals, (void *) &sortContext);
+
+	return shardIntervalArray;
+}
+
+
+/*
  * CompareShardIntervals acts as a helper function to compare two shard intervals
  * by their minimum values, using the value's type comparison function.
  *
@@ -60,7 +87,7 @@ LowestShardIntervalById(List *shardIntervalList)
  */
 int
 CompareShardIntervals(const void *leftElement, const void *rightElement,
-					  FmgrInfo *typeCompareFunction)
+					  SortShardIntervalContext *sortContext)
 {
 	ShardInterval *leftShardInterval = *((ShardInterval **) leftElement);
 	ShardInterval *rightShardInterval = *((ShardInterval **) rightElement);
@@ -70,7 +97,7 @@ CompareShardIntervals(const void *leftElement, const void *rightElement,
 	bool rightHasNull = (!rightShardInterval->minValueExists ||
 						 !rightShardInterval->maxValueExists);
 
-	Assert(typeCompareFunction != NULL);
+	Assert(sortContext->comparisonFunction != NULL);
 
 	if (leftHasNull && rightHasNull)
 	{
@@ -89,7 +116,9 @@ CompareShardIntervals(const void *leftElement, const void *rightElement,
 		/* if both shard interval have min/max values, calculate comparison result */
 		Datum leftDatum = leftShardInterval->minValue;
 		Datum rightDatum = rightShardInterval->minValue;
-		Datum comparisonDatum = CompareCall2(typeCompareFunction, leftDatum, rightDatum);
+		Datum comparisonDatum = FunctionCall2Coll(sortContext->comparisonFunction,
+												  sortContext->collation, leftDatum,
+												  rightDatum);
 		comparisonResult = DatumGetInt32(comparisonDatum);
 	}
 
@@ -303,8 +332,10 @@ FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 		{
 			Assert(compareFunction != NULL);
 
+			Oid shardIntervalCollation = cacheEntry->partitionColumn->varcollid;
 			shardIndex = SearchCachedShardInterval(searchedValue, shardIntervalCache,
-												   shardCount, compareFunction);
+												   shardCount, shardIntervalCollation,
+												   compareFunction);
 
 			/* we should always return a valid shard index for hash partitioned tables */
 			if (shardIndex == INVALID_SHARD_INDEX)
@@ -345,8 +376,10 @@ FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 	{
 		Assert(compareFunction != NULL);
 
+		Oid shardIntervalCollation = cacheEntry->partitionColumn->varcollid;
 		shardIndex = SearchCachedShardInterval(searchedValue, shardIntervalCache,
-											   shardCount, compareFunction);
+											   shardCount, shardIntervalCollation,
+											   compareFunction);
 	}
 
 	return shardIndex;
@@ -370,7 +403,8 @@ FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
  */
 int
 SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-						  int shardCount, FmgrInfo *compareFunction)
+						  int shardCount, Oid shardIntervalCollation,
+						  FmgrInfo *compareFunction)
 {
 	int lowerBoundIndex = 0;
 	int upperBoundIndex = shardCount;
@@ -380,7 +414,7 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 		int middleIndex = (lowerBoundIndex + upperBoundIndex) / 2;
 
 		int minValueComparison = FunctionCall2Coll(compareFunction,
-												   DEFAULT_COLLATION_OID,
+												   shardIntervalCollation,
 												   partitionColumnValue,
 												   shardIntervalCache[middleIndex]->
 												   minValue);
@@ -392,7 +426,7 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 		}
 
 		int maxValueComparison = FunctionCall2Coll(compareFunction,
-												   DEFAULT_COLLATION_OID,
+												   shardIntervalCollation,
 												   partitionColumnValue,
 												   shardIntervalCache[middleIndex]->
 												   maxValue);

@@ -190,6 +190,28 @@ BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
 ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
 ROLLBACK;
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM local_table
+) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+WITH t1 AS (
+	SELECT random() r, a FROM numbers
+) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+SELECT count(*) FROM local_table
+WHERE EXISTS(SELECT random() FROM numbers WHERE local_table.a = numbers.a);
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+BEGIN;
+SELECT count(*) FROM numbers
+WHERE EXISTS(SELECT random() FROM local_table WHERE local_table.a = numbers.a);
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
 DROP SCHEMA s1 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table s1.ref
@@ -244,6 +266,85 @@ HINT:  Consider using an equality filter on the distributed table's partition co
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
+--
+-- Joins between reference tables and views shouldn't be planned locally.
+--
+CREATE VIEW numbers_v AS SELECT * FROM numbers WHERE a=1;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
+
+CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
+SELECT public.coordinator_plan($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
+$Q$);
+                coordinator_plan                
+------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan 24_1
+         ->  Seq Scan on local_table
+               Filter: ((a >= 1) AND (a <= 10))
+   Task Count: 1
+(5 rows)
+
+DROP VIEW numbers_v, local_table_v;
+--
+-- Joins between reference tables and materialized views are allowed to
+-- be planned locally.
+--
+CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
+LOG:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
+REFRESH MATERIALIZED VIEW numbers_v;
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+$Q$);
+ plan_is_distributed 
+---------------------
+ f
+(1 row)
+
+BEGIN;
+SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+END;
+--
+-- Joins between reference tables, local tables, and function calls shouldn't
+-- be planned locally.
+--
+SELECT count(*)
+FROM local_table a, numbers b, generate_series(1, 10) c
+WHERE a.a = b.a AND a.a = c;
+ERROR:  relation local_table is not distributed
+-- but it should be okay if the function call is not a data source
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
+$Q$);
+ plan_is_distributed 
+---------------------
+ f
+(1 row)
+
+SELECT public.plan_is_distributed($Q$
+EXPLAIN (COSTS FALSE)
+SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
+$Q$);
+ plan_is_distributed 
+---------------------
+ f
+(1 row)
+
+-- verify that we can drop columns from reference tables replicated to the coordinator
+-- see https://github.com/citusdata/citus/issues/3279
+ALTER TABLE squares DROP COLUMN b;
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;

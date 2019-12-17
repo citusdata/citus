@@ -6,7 +6,7 @@
  * in a delete command and deletes a shard if and only if all rows in the shard
  * satisfy the conditions in the delete command.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -361,7 +361,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 {
 	ListCell *shardIntervalCell = NULL;
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	/* At this point we intentionally decided to not use 2PC for reference tables */
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)

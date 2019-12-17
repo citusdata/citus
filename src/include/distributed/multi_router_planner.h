@@ -4,7 +4,7 @@
  *
  * Declarations for public functions and types related to router planning.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -4,7 +4,7 @@
  *    Functions to follow and record dependencies for objects to be
  *    created in the right order.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

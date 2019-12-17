@@ -3,7 +3,7 @@
  * placement_connection.c
  *   Per placement connection handling.
  *
- * Copyright (c) 2016-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -781,7 +781,7 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 {
 	dlist_iter placementIter;
 
-	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_INVALID)
+	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
 	{
 		/*
 		 * When StartPlacementListConnection() is called, we set the

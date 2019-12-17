@@ -77,7 +77,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		return MULTI_EXECUTOR_ADAPTIVE;
 	}
 
-	if (distributedPlan->insertSelectSubquery != NULL)
+	if (distributedPlan->insertSelectQuery != NULL)
 	{
 		/*
 		 * Even if adaptiveExecutorEnabled, we go through

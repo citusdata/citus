@@ -5,7 +5,7 @@
  * This file contains functions to exercise distributed deadlock detection
  * related lower level functionality.
  *
- * Copyright (c) 20167, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

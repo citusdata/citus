@@ -53,7 +53,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	 * Intermediate results of subplans will be stored in a directory that is
 	 * derived from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
 	foreach(subPlanCell, subPlanList)
 	{

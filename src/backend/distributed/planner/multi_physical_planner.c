@@ -144,6 +144,7 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  TaskType taskType,
 									  bool modifyRequiresMasterEvaluation);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								Oid collation,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
 static List * SqlTaskList(Job *job);
@@ -193,6 +194,8 @@ static List * AssignDualHashTaskList(List *taskList);
 static void AssignDataFetchDependencies(List *taskList);
 static uint32 TaskListHighestTaskId(List *taskList);
 static List * MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList);
+static StringInfo CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
+									   char *partitionColumnName);
 static char * ColumnName(Var *column, List *rangeTableList);
 static StringInfo SplitPointArrayString(ArrayType *splitPointObject,
 										Oid columnType, int32 columnTypeMod);
@@ -2469,15 +2472,27 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	bool coPartitionedTables = true;
 	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
 	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+
 	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
 		secondTableCache->sortedShardIntervalArray;
 	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
 	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
+
+	/* reference tables are always & only copartitioned with reference tables */
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE &&
+		secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return true;
+	}
+	else if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE ||
+			 secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
 
 	if (firstListShardCount != secondListShardCount)
 	{
@@ -2517,6 +2532,18 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 
 
 	/*
+	 * Don't compare unequal types
+	 */
+	Oid collation = firstTableCache->partitionColumn->varcollid;
+	if (firstTableCache->partitionColumn->vartype !=
+		secondTableCache->partitionColumn->vartype ||
+		collation != secondTableCache->partitionColumn->varcollid)
+	{
+		return false;
+	}
+
+
+	/*
 	 * If not known to be colocated check if the remaining shards are
 	 * anyway. Do so by comparing the shard interval arrays that are sorted on
 	 * interval minimum values. Then it compares every shard interval in order
@@ -2529,17 +2556,17 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
 
 		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													   collation,
 													   firstInterval,
 													   secondInterval);
 		if (!shardIntervalsEqual || !CoPlacedShardIntervals(firstInterval,
 															secondInterval))
 		{
-			coPartitionedTables = false;
-			break;
+			return false;
 		}
 	}
 
-	return coPartitionedTables;
+	return true;
 }
 
 
@@ -2585,8 +2612,8 @@ CoPlacedShardIntervals(ShardInterval *firstInterval, ShardInterval *secondInterv
  * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
  */
 static bool
-ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
-					ShardInterval *secondInterval)
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, Oid collation,
+					ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
 	bool shardIntervalsEqual = false;
 
@@ -2598,8 +2625,10 @@ ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
 	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
 		secondInterval->minValueExists && secondInterval->maxValueExists)
 	{
-		Datum minDatum = CompareCall2(comparisonFunction, firstMin, secondMin);
-		Datum maxDatum = CompareCall2(comparisonFunction, firstMax, secondMax);
+		Datum minDatum = FunctionCall2Coll(comparisonFunction, collation, firstMin,
+										   secondMin);
+		Datum maxDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
+										   secondMax);
 		int firstComparison = DatumGetInt32(minDatum);
 		int secondComparison = DatumGetInt32(maxDatum);
 
@@ -3691,8 +3720,6 @@ FindRangeTableFragmentsList(List *rangeTableFragmentsList, int tableId)
 static bool
 JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment)
 {
-	bool joinPrunable = false;
-
 	/*
 	 * If both range tables are remote queries, we then have a hash repartition
 	 * join. In that case, we can just prune away this join if left and right
@@ -3738,10 +3765,10 @@ JoinPrunable(RangeTableFragment *leftFragment, RangeTableFragment *rightFragment
 									leftString->data, rightString->data)));
 		}
 
-		joinPrunable = true;
+		return true;
 	}
 
-	return joinPrunable;
+	return false;
 }
 
 
@@ -3774,10 +3801,13 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	bool nonOverlap = false;
 	DistTableCacheEntry *intervalRelation =
 		DistributedTableCacheEntry(firstInterval->relationId);
+
+	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
+
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
+	Oid collation = intervalRelation->partitionColumn->varcollid;
 
 
 	Datum firstMin = firstInterval->minValue;
@@ -3794,18 +3824,20 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
 		secondInterval->minValueExists && secondInterval->maxValueExists)
 	{
-		Datum firstDatum = CompareCall2(comparisonFunction, firstMax, secondMin);
-		Datum secondDatum = CompareCall2(comparisonFunction, secondMax, firstMin);
+		Datum firstDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
+											 secondMin);
+		Datum secondDatum = FunctionCall2Coll(comparisonFunction, collation, secondMax,
+											  firstMin);
 		int firstComparison = DatumGetInt32(firstDatum);
 		int secondComparison = DatumGetInt32(secondDatum);
 
 		if (firstComparison < 0 || secondComparison < 0)
 		{
-			nonOverlap = true;
+			return false;
 		}
 	}
 
-	return (!nonOverlap);
+	return true;
 }
 
 
@@ -4141,9 +4173,6 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	List *rangeTableList = filterQuery->rtable;
 	ListCell *filterTaskCell = NULL;
 	Var *partitionColumn = mapMergeJob->partitionColumn;
-	Oid partitionColumnType = partitionColumn->vartype;
-	char *partitionColumnTypeFullName = format_type_be_qualified(partitionColumnType);
-	int32 partitionColumnTypeMod = partitionColumn->vartypmod;
 	char *partitionColumnName = NULL;
 
 	List *groupClauseList = filterQuery->groupClause;
@@ -4164,56 +4193,8 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	foreach(filterTaskCell, filterTaskList)
 	{
 		Task *filterTask = (Task *) lfirst(filterTaskCell);
-		uint64 jobId = filterTask->jobId;
-		uint32 taskId = filterTask->taskId;
-
-		/* wrap repartition query string around filter query string */
-		StringInfo mapQueryString = makeStringInfo();
-		char *filterQueryString = filterTask->queryString;
-		char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
-
-		PartitionType partitionType = mapMergeJob->partitionType;
-		if (partitionType == RANGE_PARTITION_TYPE)
-		{
-			ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
-			uint32 intervalCount = mapMergeJob->partitionCount;
-
-			ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
-			StringInfo splitPointString = SplitPointArrayString(splitPointObject,
-																partitionColumnType,
-																partitionColumnTypeMod);
-
-			appendStringInfo(mapQueryString, RANGE_PARTITION_COMMAND, jobId, taskId,
-							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnTypeFullName, splitPointString->data);
-		}
-		else if (partitionType == SINGLE_HASH_PARTITION_TYPE)
-		{
-			ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
-			uint32 intervalCount = mapMergeJob->partitionCount;
-
-			ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
-			StringInfo splitPointString = SplitPointArrayString(splitPointObject,
-																partitionColumnType,
-																partitionColumnTypeMod);
-			appendStringInfo(mapQueryString, HASH_PARTITION_COMMAND, jobId, taskId,
-							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnTypeFullName, splitPointString->data);
-		}
-		else
-		{
-			uint32 partitionCount = mapMergeJob->partitionCount;
-			ShardInterval **intervalArray =
-				GenerateSyntheticShardIntervalArray(partitionCount);
-			ArrayType *splitPointObject = SplitPointObject(intervalArray,
-														   mapMergeJob->partitionCount);
-			StringInfo splitPointString =
-				SplitPointArrayString(splitPointObject, INT4OID, get_typmodin(INT4OID));
-
-			appendStringInfo(mapQueryString, HASH_PARTITION_COMMAND, jobId, taskId,
-							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnTypeFullName, splitPointString->data);
-		}
+		StringInfo mapQueryString = CreateMapQueryString(mapMergeJob, filterTask,
+														 partitionColumnName);
 
 		/* convert filter query task into map task */
 		Task *mapTask = filterTask;
@@ -4224,6 +4205,60 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	}
 
 	return mapTaskList;
+}
+
+
+/*
+ * CreateMapQueryString creates and returns the map query string for the given filterTask.
+ */
+static StringInfo
+CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
+					 char *partitionColumnName)
+{
+	uint64 jobId = filterTask->jobId;
+	uint32 taskId = filterTask->taskId;
+
+	/* wrap repartition query string around filter query string */
+	StringInfo mapQueryString = makeStringInfo();
+	char *filterQueryString = filterTask->queryString;
+	char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
+	PartitionType partitionType = mapMergeJob->partitionType;
+
+	Var *partitionColumn = mapMergeJob->partitionColumn;
+	Oid partitionColumnType = partitionColumn->vartype;
+	char *partitionColumnTypeFullName = format_type_be_qualified(partitionColumnType);
+	int32 partitionColumnTypeMod = partitionColumn->vartypmod;
+
+	ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
+	uint32 intervalCount = mapMergeJob->partitionCount;
+
+	if (partitionType != SINGLE_HASH_PARTITION_TYPE && partitionType !=
+		RANGE_PARTITION_TYPE)
+	{
+		partitionColumnType = INT4OID;
+		partitionColumnTypeMod = get_typmodin(INT4OID);
+		intervalArray = GenerateSyntheticShardIntervalArray(intervalCount);
+	}
+
+	ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
+	StringInfo splitPointString = SplitPointArrayString(splitPointObject,
+														partitionColumnType,
+														partitionColumnTypeMod);
+
+	char *partitionCommand = NULL;
+	if (partitionType == RANGE_PARTITION_TYPE)
+	{
+		partitionCommand = RANGE_PARTITION_COMMAND;
+	}
+	else
+	{
+		partitionCommand = HASH_PARTITION_COMMAND;
+	}
+
+	appendStringInfo(mapQueryString, partitionCommand, jobId, taskId,
+					 filterQueryEscapedText, partitionColumnName,
+					 partitionColumnTypeFullName, splitPointString->data);
+	return mapQueryString;
 }
 
 
@@ -5108,6 +5143,11 @@ ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(Task *, List 
 	ListCell *taskCell = NULL;
 	ListCell *placementListCell = NULL;
 	uint32 unAssignedTaskCount = 0;
+
+	if (taskList == NIL)
+	{
+		return NIL;
+	}
 
 	/*
 	 * We first sort tasks by their anchor shard id. We then sort placements for

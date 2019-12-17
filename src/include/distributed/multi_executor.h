@@ -26,6 +26,40 @@ typedef enum
 	SEQUENTIAL_CONNECTION = 1
 } MultiShardConnectionTypes;
 
+/*
+ * TransactionBlocksUsage indicates whether to use remote transaction
+ * blocks according to one of the following policies:
+ * - opening a remote transaction is required
+ * - opening a remote transaction does not matter, so it is allowed but not required.
+ * - opening a remote transaction is disallowed
+ */
+typedef enum TransactionBlocksUsage
+{
+	TRANSACTION_BLOCKS_REQUIRED,
+	TRANSACTION_BLOCKS_ALLOWED,
+	TRANSACTION_BLOCKS_DISALLOWED,
+} TransactionBlocksUsage;
+
+/*
+ * TransactionProperties reflects how we should execute a task list
+ * given previous commands in the transaction and the type of task list.
+ */
+typedef struct TransactionProperties
+{
+	/* if true, any failure on the worker causes the execution to end immediately */
+	bool errorOnAnyFailure;
+
+	/*
+	 * Determines whether transaction blocks on workers are required, disallowed, or
+	 * allowed (will use them if already in a coordinated transaction).
+	 */
+	TransactionBlocksUsage useRemoteTransactionBlocks;
+
+	/* if true, the current execution requires 2PC to be globally enabled */
+	bool requires2PC;
+} TransactionProperties;
+
+
 extern int MultiShardConnectionType;
 extern bool WritableStandbyCoordinator;
 extern bool ForceMaxQueryParallelization;
@@ -42,8 +76,12 @@ extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
-									  bool hasReturning, int targetPoolSize, bool
-									  isRepartition);
+									  bool hasReturning, int targetPoolSize,
+									  TransactionProperties *xactProperties);
+extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
+											TupleDesc tupleDescriptor,
+											Tuplestorestate *tupleStore,
+											bool hasReturning);
 extern void ExecuteUtilityTaskListWithoutResults(List *taskList);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);

@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
@@ -96,7 +97,6 @@ bool FunctionOpensTransactionBlock = true;
 
 
 /* transaction management functions */
-static void BeginCoordinatedTransaction(void);
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 											  SubTransactionId parentSubid, void *arg);
@@ -111,18 +111,26 @@ static bool MaybeExecutingUDF(void);
 
 
 /*
- * BeginOrContinueCoordinatedTransaction starts a coordinated transaction,
- * unless one already is in progress.
+ * UseCoordinatedTransaction sets up the necessary variables to use
+ * a coordinated transaction, unless one is already in progress.
  */
 void
-BeginOrContinueCoordinatedTransaction(void)
+UseCoordinatedTransaction(void)
 {
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_STARTED)
 	{
 		return;
 	}
 
-	BeginCoordinatedTransaction();
+	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
+		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
+	{
+		ereport(ERROR, (errmsg("starting transaction in wrong state")));
+	}
+
+	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+
+	AssignDistributedTransactionId();
 }
 
 
@@ -166,25 +174,6 @@ InitializeTransactionManagement(void)
 												  8 * 1024,
 												  8 * 1024,
 												  8 * 1024);
-}
-
-
-/*
- * BeginCoordinatedTransaction begins a coordinated transaction. No
- * pre-existing coordinated transaction may be in progress./
- */
-static void
-BeginCoordinatedTransaction(void)
-{
-	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
-		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
-	{
-		ereport(ERROR, (errmsg("starting transaction in wrong state")));
-	}
-
-	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
-
-	AssignDistributedTransactionId();
 }
 
 
@@ -301,7 +290,22 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
+
+			/*
+			 * Getting here without ExecutorLevel 0 is a bug, however it is such a big
+			 * problem that will persist between reuse of the backend we still assign 0 in
+			 * production deploys, but during development and tests we want to crash.
+			 */
+			Assert(ExecutorLevel == 0);
 			ExecutorLevel = 0;
+
+			/*
+			 * Getting here without PlannerLevel 0 is a bug, however it is such a big
+			 * problem that will persist between reuse of the backend we still assign 0 in
+			 * production deploys, but during development and tests we want to crash.
+			 */
+			Assert(PlannerLevel == 0);
+			PlannerLevel = 0;
 
 			/*
 			 * We should reset SubPlanLevel in case a transaction is aborted,
@@ -695,9 +699,12 @@ IsMultiStatementTransaction(void)
  * MaybeExecutingUDF returns true if we are possibly executing a function call.
  * We use nested level of executor to check this, so this can return true for
  * CTEs, etc. which also start nested executors.
+ *
+ * If the planner is being called from the executor, then we may also be in
+ * a UDF.
  */
 static bool
 MaybeExecutingUDF(void)
 {
-	return ExecutorLevel > 1;
+	return ExecutorLevel > 1 || (ExecutorLevel == 1 && PlannerLevel > 0);
 }

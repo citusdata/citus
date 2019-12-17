@@ -5,7 +5,7 @@
  * This file contains functions to plan multiple shard queries without any
  * aggregation step including distributed table modifications.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -17,9 +17,9 @@
 #include "access/stratnum.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
-#include "distributed/citus_clauses.h"
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
@@ -379,7 +379,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	TypeCacheEntry *typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
 												  TYPECACHE_HASH_PROC_FINFO);
 
-	/* probable never possible given that the tables are already hash partitioned */
+	/* probably never possible given that the tables are already hash partitioned */
 	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -387,7 +387,10 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 							   format_type_be(targetPartitionColumnVar->vartype))));
 	}
 
-	/* generate hashfunc(partCol) expression */
+	/*
+	 * Generate hashfunc(partCol) expression.
+	 * Don't set inputcollid as we don't support non deterministic collations.
+	 */
 	FuncExpr *hashFunctionExpr = makeNode(FuncExpr);
 	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
 	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
@@ -401,8 +404,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->minValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	greaterThanAndEqualsBoundExpr->opfuncid =
@@ -416,8 +418,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 								 InvalidOid, false,
 								 (Expr *) hashFunctionExpr,
 								 (Expr *) MakeInt4Constant(shardInterval->maxValue),
-								 targetPartitionColumnVar->varcollid,
-								 targetPartitionColumnVar->varcollid);
+								 InvalidOid, InvalidOid);
 
 	/* update the operators with correct operator numbers and function ids */
 	lessThanAndEqualsBoundExpr->opfuncid = get_opcode(lessThanAndEqualsBoundExpr->opno);
@@ -546,13 +547,22 @@ DeferredErrorMessage *
 ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuery,
 					 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
+
+	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
+	if (!IsDistributedTable(distributedTableId))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications of local tables involving "
+							 "distributed tables",
+							 NULL, NULL);
+	}
+
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 
 	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
@@ -1705,6 +1715,11 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 												 MODIFY_TASK,
 												 requiresMasterEvaluation);
 	}
+	else if (shardId == INVALID_SHARD_ID)
+	{
+		/* modification that prunes to 0 shards */
+		job->taskList = NIL;
+	}
 	else
 	{
 		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
@@ -2058,7 +2073,6 @@ PlanRouterQuery(Query *originalQuery,
 		}
 
 		Assert(UpdateOrDeleteQuery(originalQuery));
-
 		planningError = ModifyQuerySupported(originalQuery, originalQuery,
 											 isMultiShardQuery,
 											 plannerRestrictionContext);
@@ -2628,7 +2642,6 @@ RangeTblEntry *
 ExtractDistributedInsertValuesRTE(Query *query)
 {
 	ListCell *rteCell = NULL;
-	RangeTblEntry *valuesRTE = NULL;
 
 	if (query->commandType != CMD_INSERT)
 	{
@@ -2641,12 +2654,10 @@ ExtractDistributedInsertValuesRTE(Query *query)
 
 		if (rte->rtekind == RTE_VALUES)
 		{
-			valuesRTE = rte;
-			break;
+			return rte;
 		}
 	}
-
-	return valuesRTE;
+	return NULL;
 }
 
 

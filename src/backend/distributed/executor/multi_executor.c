@@ -14,6 +14,7 @@
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_class.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
@@ -121,64 +122,70 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
-	int originalLevel = ExecutorLevel;
 
-	ExecutorLevel++;
-	if (CitusHasBeenLoaded())
+	PG_TRY();
 	{
-		if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
-			IsMultiStatementTransaction())
+		ExecutorLevel++;
+
+		if (CitusHasBeenLoaded())
 		{
-			/*
-			 * Currently we don't support this to avoid problems with tuple
-			 * visibility, locking, etc. For example, change to the reference
-			 * table can go through a MultiConnection, which won't be visible
-			 * to the locally planned queries.
-			 */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot join local tables and reference tables in "
-								   "a transaction block, udf block, or distributed "
-								   "CTE subquery")));
+			if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
+				IsMultiStatementTransaction())
+			{
+				/*
+				 * Currently we don't support this to avoid problems with tuple
+				 * visibility, locking, etc. For example, change to the reference
+				 * table can go through a MultiConnection, which won't be visible
+				 * to the locally planned queries.
+				 */
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot join local tables and reference tables in "
+									   "a transaction block, udf block, or distributed "
+									   "CTE subquery")));
+			}
 		}
-	}
 
-	/*
-	 * Disable execution of ALTER TABLE constraint validation queries. These
-	 * constraints will be validated in worker nodes, so running these queries
-	 * from the coordinator would be redundant.
-	 *
-	 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
-	 * partition doesn't violate constraints of the parent table, which
-	 * might involve running some SELECT queries.
-	 *
-	 * Ideally we'd completely skip these checks in the coordinator, but we don't
-	 * have any means to tell postgres to skip the checks. So the best we can do is
-	 * to not execute the queries and return an empty result set, as if this table has
-	 * no rows, so no constraints will be violated.
-	 */
-	if (AlterTableConstraintCheck(queryDesc))
-	{
-		EState *estate = queryDesc->estate;
+		/*
+		 * Disable execution of ALTER TABLE constraint validation queries. These
+		 * constraints will be validated in worker nodes, so running these queries
+		 * from the coordinator would be redundant.
+		 *
+		 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
+		 * partition doesn't violate constraints of the parent table, which
+		 * might involve running some SELECT queries.
+		 *
+		 * Ideally we'd completely skip these checks in the coordinator, but we don't
+		 * have any means to tell postgres to skip the checks. So the best we can do is
+		 * to not execute the queries and return an empty result set, as if this table has
+		 * no rows, so no constraints will be violated.
+		 */
+		if (AlterTableConstraintCheck(queryDesc))
+		{
+			EState *estate = queryDesc->estate;
 
-		estate->es_processed = 0;
+			estate->es_processed = 0;
 #if PG_VERSION_NUM < 120000
-		estate->es_lastoid = InvalidOid;
+			estate->es_lastoid = InvalidOid;
 #endif
 
-		/* start and shutdown tuple receiver to simulate empty result */
-		dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
-		dest->rShutdown(dest);
-	}
-	else
-	{
-		standard_ExecutorRun(queryDesc, direction, count, execute_once);
-	}
+			/* start and shutdown tuple receiver to simulate empty result */
+			dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
+			dest->rShutdown(dest);
+		}
+		else
+		{
+			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		}
 
-	/*
-	 * Restore the original value. It is not sufficient to decrease the value
-	 * because exceptions might cause us to go back a few levels at once.
-	 */
-	ExecutorLevel = originalLevel;
+		ExecutorLevel--;
+	}
+	PG_CATCH();
+	{
+		ExecutorLevel--;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
@@ -580,7 +587,7 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 {
 	bool hasReferenceTable = false;
 	bool hasLocalTable = false;
-	ListCell *oidCell = NULL;
+	ListCell *rangeTableCell = NULL;
 	bool hasReferenceTableReplica = false;
 
 	/*
@@ -617,12 +624,44 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 		return false;
 	}
 
-	foreach(oidCell, plan->relationOids)
+	/*
+	 * plan->rtable contains the flattened RTE lists of the plan tree, which
+	 * includes rtes in subqueries, CTEs, ...
+	 *
+	 * It doesn't contain optimized away table accesses (due to join optimization),
+	 * which is fine for our purpose.
+	 */
+	foreach(rangeTableCell, plan->rtable)
 	{
-		Oid relationId = lfirst_oid(oidCell);
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		bool onlySearchPath = false;
 
-		if (RelationIsAKnownShard(relationId, onlySearchPath))
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning functions
+		 * in FROM clause locally. Early exit. We cannot use Assert() here since
+		 * all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			return false;
+		}
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning reference
+		 * table and view join locally. Early exit. We cannot use Assert() here
+		 * since all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			return false;
+		}
+
+		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
 		{
 			/*
 			 * We don't allow joining non-reference distributed tables, so we
