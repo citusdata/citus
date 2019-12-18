@@ -1,0 +1,226 @@
+SET citus.log_multi_join_order to TRUE;
+SET client_min_messages to DEBUG1;
+SET citus.enable_repartition_joins to on;
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND l_suppkey < s_suppkey
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+       195 |       196 |   804
+       245 |       246 |   754
+       278 |       279 |   721
+       308 |       309 |   691
+       309 |       310 |  1380
+       350 |       351 |   649
+       358 |       359 |   641
+       574 |       575 |   425
+       641 |       642 |   358
+       654 |       655 |   345
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND int4eq(l_suppkey, s_suppkey)
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+       195 |       196 |     1
+       245 |       246 |     1
+       278 |       279 |     1
+       308 |       309 |     1
+       309 |       310 |     2
+       350 |       351 |     1
+       358 |       359 |     1
+       574 |       575 |     1
+       641 |       642 |     1
+       654 |       655 |     1
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND NOT int4ne(l_suppkey, s_suppkey)
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+       195 |       196 |     1
+       245 |       246 |     1
+       278 |       279 |     1
+       308 |       309 |     1
+       309 |       310 |     2
+       350 |       351 |     1
+       358 |       359 |     1
+       574 |       575 |     1
+       641 |       642 |     1
+       654 |       655 |     1
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ][ cartesian product reference join "supplier" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+        18 |      7519 |  1000
+        79 |      7580 |  1000
+        91 |      2592 |  1000
+       149 |      5150 |  1000
+       149 |      7650 |  1000
+       175 |      5176 |  1000
+       179 |      2680 |  1000
+       182 |      7683 |  1000
+       195 |       196 |  1000
+       204 |      7705 |  1000
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND (int4eq(l_suppkey, s_suppkey) OR l_suppkey = s_suppkey)
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+       195 |       196 |     1
+       245 |       246 |     1
+       278 |       279 |     1
+       308 |       309 |     1
+       309 |       310 |     2
+       350 |       351 |     1
+       358 |       359 |     1
+       574 |       575 |     1
+       641 |       642 |     1
+       654 |       655 |     1
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND (int4eq(l_suppkey, s_suppkey) OR random() > 2)
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+       195 |       196 |     1
+       245 |       246 |     1
+       278 |       279 |     1
+       308 |       309 |     1
+       309 |       310 |     2
+       350 |       351 |     1
+       358 |       359 |     1
+       574 |       575 |     1
+       641 |       642 |     1
+       654 |       655 |     1
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND (l_suppkey = 1 OR s_suppkey = 1)
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+        18 |      7519 |     1
+        79 |      7580 |     1
+        91 |      2592 |     1
+       149 |      5150 |     1
+       149 |      7650 |     1
+       175 |      5176 |     1
+       179 |      2680 |     1
+       182 |      7683 |     1
+       195 |       196 |     1
+       204 |      7705 |     1
+(10 rows)
+
+SELECT
+    l_partkey, l_suppkey, count(*)
+FROM
+    lineitem, part_append, supplier
+WHERE
+    l_partkey = p_partkey
+    AND l_partkey + p_partkey = s_suppkey
+GROUP BY
+    l_partkey, l_suppkey
+ORDER BY
+    l_partkey, l_suppkey
+LIMIT 10;
+LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ][ reference join "supplier" ]
+DEBUG:  push down of limit count: 10
+ l_partkey | l_suppkey | count 
+-----------+-----------+-------
+        18 |      7519 |     1
+        79 |      7580 |     1
+        91 |      2592 |     1
+       149 |      5150 |     1
+       149 |      7650 |     1
+       175 |      5176 |     1
+       179 |      2680 |     1
+       182 |      7683 |     1
+       195 |       196 |     1
+       204 |      7705 |     1
+(10 rows)
+

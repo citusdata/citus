@@ -112,7 +112,7 @@ test: multi_join_order_tpch_repartition
 # new shards before these tests, as they expect specific shard identifiers in
 # the output.
 # ----------
-test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment
+test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment multi_repartition_join_ref
 test: adaptive_executor_repartition
 
 # ---------
