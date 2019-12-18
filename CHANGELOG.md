@@ -1,3 +1,25 @@
+### citus v9.1.1 (December 18, 2019) ###
+
+* Fixes a bug causing SQL-executing UDFs to crash when passing in DDL
+
+* Fixes a bug that caused column_to_column_name to crash for invalid input
+
+* Fixes a bug that caused inserts into local tables w/ dist. subqueries to crash
+
+* Fixes a bug that caused some noop DML statements to fail
+
+* Fixes a bug that prevents dropping reference table columns
+
+* Fixes a crash in IN (.., NULL) queries
+
+* Fixes a crash when calling a distributed function from PL/pgSQL
+
+* Fixes an issue that caused CTEs to sometimes leak connections
+
+* Fixes strange errors in DML with unreachable sublinks
+
+* Prevents statements in SQL functions to run outside of a transaction
+
 ### citus v9.1.0 (November 21, 2019) ###
 
 * Adds extensions to distributed object propagation infrastructure
