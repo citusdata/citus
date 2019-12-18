@@ -23,6 +23,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
@@ -96,12 +97,17 @@ static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
 												  char *copyFormat,
 												  Datum *resultIdArray,
 												  int resultCount);
+static uint64 FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId);
+static CopyStatus CopyDataFromConnection(MultiConnection *connection,
+										 FileCompat *fileCompat,
+										 uint64 *bytesReceived);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
 PG_FUNCTION_INFO_V1(read_intermediate_result_array);
 PG_FUNCTION_INFO_V1(broadcast_intermediate_result);
 PG_FUNCTION_INFO_V1(create_intermediate_result);
+PG_FUNCTION_INFO_V1(fetch_intermediate_results);
 
 
 /*
@@ -512,6 +518,20 @@ RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 
 
 /*
+ * SendQueryResultViaCopy is called when a COPY "resultid" TO STDOUT
+ * WITH (format result) command is received from the client. The
+ * contents of the file are sent directly to the client.
+ */
+void
+SendQueryResultViaCopy(const char *resultId)
+{
+	const char *resultFileName = QueryResultFileName(resultId);
+
+	SendRegularFile(resultFileName);
+}
+
+
+/*
  * ReceiveQueryResultViaCopy is called when a COPY "resultid" FROM
  * STDIN WITH (format result) command is received from the client.
  * The command is followed by the raw copy data stream, which is
@@ -768,4 +788,227 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 	}
 
 	tuplestore_donestoring(tupleStore);
+}
+
+
+/*
+ * fetch_intermediate_results fetches a set of intermediate results defined in an
+ * array of result IDs from a remote node and writes them to a local intermediate
+ * result with the same ID.
+ */
+Datum
+fetch_intermediate_results(PG_FUNCTION_ARGS)
+{
+	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
+	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
+	int32 resultCount = ArrayObjectCount(resultIdObject);
+	text *remoteHostText = PG_GETARG_TEXT_P(1);
+	char *remoteHost = text_to_cstring(remoteHostText);
+	int remotePort = PG_GETARG_INT32(2);
+
+	int connectionFlags = 0;
+	int resultIndex = 0;
+	int64 totalBytesWritten = 0L;
+
+	CheckCitusVersion(ERROR);
+
+	if (resultCount == 0)
+	{
+		PG_RETURN_INT64(0);
+	}
+
+	if (!IsMultiStatementTransaction())
+	{
+		ereport(ERROR, (errmsg("fetch_intermediate_results can only be used in a "
+							   "distributed transaction")));
+	}
+
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results will be stored in a directory that is derived
+	 * from the distributed transaction ID.
+	 */
+	UseCoordinatedTransaction();
+
+	MultiConnection *connection = GetNodeConnection(connectionFlags, remoteHost,
+													remotePort);
+
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch intermediate "
+							   "results",
+							   remoteHost, remotePort)));
+	}
+
+	RemoteTransactionBegin(connection);
+
+	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
+	{
+		char *resultId = TextDatumGetCString(resultIdArray[resultIndex]);
+
+		totalBytesWritten += FetchRemoteIntermediateResult(connection, resultId);
+	}
+
+	RemoteTransactionCommit(connection);
+	CloseConnection(connection);
+
+	PG_RETURN_INT64(totalBytesWritten);
+}
+
+
+/*
+ * FetchRemoteIntermediateResult fetches a remote intermediate result over
+ * the given connection.
+ */
+static uint64
+FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
+{
+	uint64 totalBytesWritten = 0;
+
+	StringInfo copyCommand = makeStringInfo();
+	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
+	const int fileMode = (S_IRUSR | S_IWUSR);
+
+	PGconn *pgConn = connection->pgConn;
+	int socket = PQsocket(pgConn);
+	bool raiseErrors = true;
+
+	CreateIntermediateResultsDirectory();
+
+	appendStringInfo(copyCommand, "COPY \"%s\" TO STDOUT WITH (format result)",
+					 resultId);
+
+	if (!SendRemoteCommand(connection, copyCommand->data))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+	if (PQresultStatus(result) != PGRES_COPY_OUT)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	PQclear(result);
+
+	char *localPath = QueryResultFileName(resultId);
+	File fileDesc = FileOpenForTransmit(localPath, fileFlags, fileMode);
+	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
+
+	while (true)
+	{
+		int waitFlags = WL_SOCKET_READABLE;
+
+		CopyStatus copyStatus = CopyDataFromConnection(connection, &fileCompat,
+													   &totalBytesWritten);
+		if (copyStatus == CLIENT_COPY_FAILED)
+		{
+			ereport(ERROR, (errmsg("failed to read result \"%s\" from node %s:%d",
+								   resultId, connection->hostname, connection->port)));
+		}
+		else if (copyStatus == CLIENT_COPY_DONE)
+		{
+			break;
+		}
+
+		Assert(copyStatus == CLIENT_COPY_MORE);
+
+		int rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0, PG_WAIT_EXTENSION);
+		if (rc & WL_POSTMASTER_DEATH)
+		{
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+		}
+
+		if (rc & WL_LATCH_SET)
+		{
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+		}
+	}
+
+	FileClose(fileDesc);
+
+	ClearResults(connection, raiseErrors);
+
+	return totalBytesWritten;
+}
+
+
+/*
+ * CopyDataFromConnection reads a row of copy data from connection and writes it
+ * to the given file.
+ */
+static CopyStatus
+CopyDataFromConnection(MultiConnection *connection, FileCompat *fileCompat,
+					   uint64 *bytesReceived)
+{
+	/*
+	 * Consume input to handle the case where previous copy operation might have
+	 * received zero bytes.
+	 */
+	int consumed = PQconsumeInput(connection->pgConn);
+	if (consumed == 0)
+	{
+		return CLIENT_COPY_FAILED;
+	}
+
+	/* receive copy data message in an asynchronous manner */
+	char *receiveBuffer = NULL;
+	bool asynchronous = true;
+	int receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
+	while (receiveLength > 0)
+	{
+		/* received copy data; append these data to file */
+		errno = 0;
+
+		int bytesWritten = FileWriteCompat(fileCompat, receiveBuffer,
+										   receiveLength, PG_WAIT_IO);
+		if (bytesWritten != receiveLength)
+		{
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("could not append to file: %m")));
+		}
+
+		*bytesReceived += receiveLength;
+		PQfreemem(receiveBuffer);
+		receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
+	}
+
+	if (receiveLength == 0)
+	{
+		/* we cannot read more data without blocking */
+		return CLIENT_COPY_MORE;
+	}
+	else if (receiveLength == -1)
+	{
+		/* received copy done message */
+		bool raiseInterrupts = true;
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		ExecStatusType resultStatus = PQresultStatus(result);
+		CopyStatus copyStatus = 0;
+
+		if (resultStatus == PGRES_COMMAND_OK)
+		{
+			copyStatus = CLIENT_COPY_DONE;
+		}
+		else
+		{
+			copyStatus = CLIENT_COPY_FAILED;
+
+			ReportResultError(connection, result, WARNING);
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+
+		return copyStatus;
+	}
+	else
+	{
+		Assert(receiveLength == -2);
+		ReportConnectionError(connection, WARNING);
+
+		return CLIENT_COPY_FAILED;
+	}
 }
