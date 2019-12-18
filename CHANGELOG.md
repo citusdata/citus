@@ -1,3 +1,5 @@
+### citus v9.1.1 (December 18, 2019) ###
+
 ### citus v9.1.0 (November 21, 2019) ###
 
 * Adds extensions to distributed object propagation infrastructure
