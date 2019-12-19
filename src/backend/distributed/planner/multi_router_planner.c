@@ -2014,6 +2014,8 @@ PlanRouterQuery(Query *originalQuery,
 	bool shardsPresent = false;
 	uint64 shardId = INVALID_SHARD_ID;
 	CmdType commandType = originalQuery->commandType;
+	bool fastPathRouterQuery =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	*placementList = NIL;
 
@@ -2022,7 +2024,7 @@ PlanRouterQuery(Query *originalQuery,
 	 * not been called. Thus, restriction information is not avaliable and we do the
 	 * shard pruning based on the distribution column in the quals of the query.
 	 */
-	if (FastPathRouterQuery(originalQuery))
+	if (fastPathRouterQuery)
 	{
 		List *shardIntervalList =
 			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,

@@ -85,10 +85,23 @@ typedef struct JoinRestriction
 	RelOptInfo *outerrel;
 } JoinRestriction;
 
+typedef struct FastPathRestrictionContext
+{
+	bool fastPathRouterQuery;
+}FastPathRestrictionContext;
+
 typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
 	JoinRestrictionContext *joinRestrictionContext;
+
+	/*
+	 * When the query is qualified for fast path, we don't have
+	 * the RelationRestrictionContext and JoinRestrictionContext
+	 * since those are dependent to calling standard_planner.
+	 * Instead, we keep this struct to pass some extra information.
+	 */
+	FastPathRestrictionContext *fastPathRestrictionContext;
 	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
