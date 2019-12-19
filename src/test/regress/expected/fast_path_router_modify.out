@@ -61,6 +61,7 @@ DELETE FROM modify_fast_path WHERE key = 1 and FALSE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 -- UPDATE may include complex target entries
 UPDATE modify_fast_path SET value_1 = value_1 + 12 * value_1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
