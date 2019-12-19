@@ -128,6 +128,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool setPartitionedTablesInherited = false;
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 	int rteIdCounter = 1;
+	bool fastPathRouterQuery = false;
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -151,6 +152,10 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		else
 		{
 			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+			if (needsDistributedPlanning)
+			{
+				fastPathRouterQuery = FastPathRouterQuery(parse);
+			}
 		}
 	}
 
@@ -215,8 +220,11 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * transformations made by postgres' planner.
 		 */
 
-		if (needsDistributedPlanning && FastPathRouterQuery(originalQuery))
+		if (needsDistributedPlanning && fastPathRouterQuery)
 		{
+			plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
+				true;
+
 			result = FastPathPlanner(originalQuery, parse, boundParams);
 		}
 		else
@@ -1870,6 +1878,9 @@ CreateAndPushPlannerRestrictionContext(void)
 	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
 
+	plannerRestrictionContext->fastPathRestrictionContext =
+		palloc0(sizeof(FastPathRestrictionContext));
+
 	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
 
 	/* we'll apply logical AND as we add tables */
@@ -1928,6 +1939,10 @@ ResetPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionCont
 
 	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
+
+	plannerRestrictionContext->fastPathRestrictionContext =
+		palloc0(sizeof(FastPathRestrictionContext));
+
 
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;

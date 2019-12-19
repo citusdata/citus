@@ -442,6 +442,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			plannerRestrictionContext->relationRestrictionContext);
 	copyOfPlannerRestrictionContext->joinRestrictionContext =
 		plannerRestrictionContext->joinRestrictionContext;
+	copyOfPlannerRestrictionContext->fastPathRestrictionContext =
+		plannerRestrictionContext->fastPathRestrictionContext;
+
 	relationRestrictionList =
 		copyOfPlannerRestrictionContext->relationRestrictionContext->
 		relationRestrictionList;
