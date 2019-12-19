@@ -27,9 +27,9 @@ GRANT SELECT ON pg_catalog.pg_dist_rebalance_strategy TO public;
 
 #include "udfs/citus_validate_rebalance_strategy_functions/9.2-1.sql"
 #include "udfs/pg_dist_rebalance_strategy_trigger_func/9.2-1.sql"
-CREATE TRIGGER pg_dist_rebalance_strategy_trigger
+CREATE TRIGGER pg_dist_rebalance_strategy_validation_trigger
   BEFORE INSERT OR UPDATE ON pg_dist_rebalance_strategy
-  FOR EACH ROW EXECUTE PROCEDURE citus.pg_dist_rebalance_strategy_trigger_func();
+  FOR EACH ROW EXECUTE PROCEDURE citus_internal.pg_dist_rebalance_strategy_trigger_func();
 
 #include "udfs/citus_add_rebalance_strategy/9.2-1.sql"
 #include "udfs/citus_set_default_rebalance_strategy/9.2-1.sql"
@@ -66,6 +66,14 @@ INSERT INTO
         0.01
     );
 
+
+CREATE FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check()
+  RETURNS TRIGGER
+  LANGUAGE C
+  AS 'MODULE_PATHNAME';
+CREATE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON pg_dist_rebalance_strategy
+  FOR EACH STATEMENT EXECUTE FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 
 
 #include "udfs/master_drain_node/9.2-1.sql"

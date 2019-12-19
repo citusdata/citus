@@ -1,5 +1,5 @@
 -- Ensures that only a single default strategy is possible
-CREATE OR REPLACE FUNCTION citus.pg_dist_rebalance_strategy_trigger_func()
+CREATE OR REPLACE FUNCTION citus_internal.pg_dist_rebalance_strategy_trigger_func()
 RETURNS TRIGGER AS $$
   BEGIN
     -- citus_add_rebalance_strategy also takes out a ShareRowExclusiveLock

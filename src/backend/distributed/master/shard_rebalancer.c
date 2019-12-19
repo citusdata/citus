@@ -30,7 +30,27 @@ NOT_SUPPORTED_IN_COMMUNITY(get_rebalance_table_shards_plan);
 NOT_SUPPORTED_IN_COMMUNITY(get_rebalance_progress);
 NOT_SUPPORTED_IN_COMMUNITY(master_drain_node);
 NOT_SUPPORTED_IN_COMMUNITY(citus_shard_cost_by_disk_size);
+PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
+
+
+/*
+ * citus_rebalance_strategy_enterprise_check is trigger function, intended for
+ * use in prohibiting writes to pg_dist_rebalance_strategy in Citus Community.
+ */
+Datum
+pg_dist_rebalance_strategy_enterprise_check(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot write to pg_dist_rebalance_strategy"),
+					errdetail(
+						"Citus Community Edition does not support the use of "
+						"custom rebalance strategies."),
+					errhint(
+						"To learn more about using advanced rebalancing schemes "
+						"with Citus, please contact us at "
+						"https://citusdata.com/about/contact_us")));
+}
 
 
 /*

@@ -18,6 +18,7 @@ CREATE FUNCTION only_worker_2(shardid bigint, nodeidarg int)
         (CASE WHEN nodeport = 57638 THEN TRUE ELSE FALSE END)
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
+ALTER TABLE pg_catalog.pg_dist_rebalance_strategy DISABLE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger;
 
 SELECT citus_add_rebalance_strategy(
         'custom_strategy',
@@ -28,3 +29,4 @@ SELECT citus_add_rebalance_strategy(
         0.2
     );
 SELECT citus_set_default_rebalance_strategy('custom_strategy');
+ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ENABLE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger;
