@@ -552,6 +552,8 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
+	bool fastPathRouterQuery =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
 	if (!IsDistributedTable(distributedTableId))
@@ -575,8 +577,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	 * rows based on the ctid column. This is a bad idea because ctid of
 	 * the rows could be changed before the modification part of
 	 * the query is executed.
+	 *
+	 * We can exclude fast path queries since they cannot have intermediate
+	 * results by definition.
 	 */
-	if (ContainsReadIntermediateResultFunction((Node *) originalQuery))
+	if (!fastPathRouterQuery &&
+		ContainsReadIntermediateResultFunction((Node *) originalQuery))
 	{
 		bool hasTidColumn = FindNodeCheck((Node *) originalQuery->jointree, IsTidColumn);
 		if (hasTidColumn)
@@ -649,8 +655,15 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
+	/*
+	 * Extract range table entries for queries that are not fast path. We can skip fast
+	 * path queries because their definition is a single RTE entry, which is a relation,
+	 * so the following check doesn't apply for fast-path queries.
+	 */
+	if (!fastPathRouterQuery)
+	{
+		ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
+	}
 
 	foreach(rangeTableCell, rangeTableList)
 	{

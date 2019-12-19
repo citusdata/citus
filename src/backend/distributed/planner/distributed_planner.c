@@ -79,7 +79,8 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
-static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
+static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery,
+									bool fastPathRouterQuery);
 static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
@@ -168,7 +169,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * don't have a way of doing both things and therefore error out, but do
 		 * have a handy tip for users.
 		 */
-		if (InsertSelectIntoLocalTable(parse))
+		if (!fastPathRouterQuery && InsertSelectIntoLocalTable(parse))
 		{
 			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
 								   "local table"),
@@ -183,13 +184,27 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
 		 * of the query tree. Note that we copy the query tree once we're sure it's a
 		 * distributed query.
+		 *
+		 * Since fast-path queries do not through standard planner, we skip unnecessary
+		 * parts in that case.
 		 */
-		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
-		originalQuery = copyObject(parse);
+		if (!fastPathRouterQuery)
+		{
+			rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+			originalQuery = copyObject(parse);
 
-		setPartitionedTablesInherited = false;
-		AdjustPartitioningForDistributedPlanning(rangeTableList,
-												 setPartitionedTablesInherited);
+			setPartitionedTablesInherited = false;
+			AdjustPartitioningForDistributedPlanning(rangeTableList,
+													 setPartitionedTablesInherited);
+		}
+		else
+		{
+			/*
+			 *  We still need to copy the parse tree because the FastPathPlanner
+			 *  modifies it.
+			 */
+			originalQuery = copyObject(parse);
+		}
 	}
 
 	/*
@@ -249,9 +264,12 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			result = CreateDistributedPlannedStmt(planId, result, originalQuery, parse,
 												  boundParams, plannerRestrictionContext);
 
-			setPartitionedTablesInherited = true;
-			AdjustPartitioningForDistributedPlanning(rangeTableList,
-													 setPartitionedTablesInherited);
+			if (!fastPathRouterQuery)
+			{
+				setPartitionedTablesInherited = true;
+				AdjustPartitioningForDistributedPlanning(rangeTableList,
+														 setPartitionedTablesInherited);
+			}
 		}
 		else
 		{
@@ -667,7 +685,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 {
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
-
+	bool fastPathRouterQuery =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -703,7 +722,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
 
 			return distributedPlan;
 		}
@@ -725,7 +744,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
 
 			return distributedPlan;
 		}
@@ -819,7 +838,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
 
 		return distributedPlan;
 	}
@@ -831,7 +850,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
 
 		return distributedPlan;
 	}
@@ -864,7 +883,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
-	FinalizeDistributedPlan(distributedPlan, originalQuery);
+	FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
 
 	return distributedPlan;
 }
@@ -875,9 +894,17 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
  * currently only implements some optimizations for intermediate result(s) pruning.
  */
 static void
-FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery,
+						bool fastPathRouterQuery)
 {
-	RecordSubPlansUsedInPlan(plan, originalQuery);
+	/*
+	 * Fast path queries, we cannot have any subplans by their definition,
+	 * so skip expensive traversals.
+	 */
+	if (!fastPathRouterQuery)
+	{
+		RecordSubPlansUsedInPlan(plan, originalQuery);
+	}
 }
 
 
