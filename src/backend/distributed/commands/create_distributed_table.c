@@ -92,7 +92,6 @@ static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
 static void EnsureTableNotDistributed(Oid relationId);
-static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
@@ -936,7 +935,7 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
  *
  * The passed in oid has to belong to a value of citus.distribution_type.
  */
-static char
+char
 LookupDistributionMethod(Oid distributionMethodOid)
 {
 	char distributionMethod = 0;

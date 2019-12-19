@@ -90,9 +90,7 @@ static void SendCopyDataOverConnection(StringInfo dataBuffer,
 static void RemoteFileDestReceiverShutdown(DestReceiver *destReceiver);
 static void RemoteFileDestReceiverDestroy(DestReceiver *destReceiver);
 
-static char * CreateIntermediateResultsDirectory(void);
 static char * IntermediateResultsDirectory(void);
-static char * QueryResultFileName(const char *resultId);
 static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
 												  char *copyFormat,
 												  Datum *resultIdArray,
@@ -556,7 +554,7 @@ ReceiveQueryResultViaCopy(const char *resultId)
  * directory for the current transaction if it does not exist and ensures
  * that the directory is removed at the end of the transaction.
  */
-static char *
+char *
 CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
@@ -591,7 +589,7 @@ CreateIntermediateResultsDirectory(void)
  * an intermediate result with the given key in the per transaction
  * result directory.
  */
-static char *
+char *
 QueryResultFileName(const char *resultId)
 {
 	StringInfo resultFileName = makeStringInfo();

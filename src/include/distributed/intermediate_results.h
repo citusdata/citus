@@ -29,6 +29,8 @@ extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectory(void);
 extern int64 IntermediateResultSize(char *resultId);
+extern char * QueryResultFileName(const char *resultId);
+extern char * CreateIntermediateResultsDirectory(void);
 
 
 #endif /* INTERMEDIATE_RESULTS_H */
