@@ -71,9 +71,6 @@ static uint64 DistributedTableSize(Oid relationId, char *sizeQuery);
 static uint64 DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										   char *sizeQuery);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
-static StringInfo GenerateSizeQueryOnMultiplePlacements(Oid distributedRelationId,
-														List *shardIntervalList,
-														char *sizeQuery);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
 
 
@@ -212,9 +209,9 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
-	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(relationId,
-																	  shardIntervalsOnNode,
-																	  sizeQuery);
+	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(
+		shardIntervalsOnNode,
+		sizeQuery);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);
@@ -328,19 +325,14 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 
 /*
  * GenerateSizeQueryOnMultiplePlacements generates a select size query to get
- * size of multiple tables from the relation with distributedRelationId. Note
- * that, different size functions supported by PG are also supported by this
- * function changing the size query given as the last parameter to function.
- * Format of sizeQuery is pg_*_size(%s). Examples of it can be found in the
- * master_protocol.h
+ * size of multiple tables. Note that, different size functions supported by PG
+ * are also supported by this function changing the size query given as the
+ * last parameter to function.  Format of sizeQuery is pg_*_size(%s). Examples
+ * of it can be found in the master_protocol.h
  */
-static StringInfo
-GenerateSizeQueryOnMultiplePlacements(Oid distributedRelationId, List *shardIntervalList,
-									  char *sizeQuery)
+StringInfo
+GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
 {
-	Oid schemaId = get_rel_namespace(distributedRelationId);
-	char *schemaName = get_namespace_name(schemaId);
-
 	StringInfo selectQuery = makeStringInfo();
 	ListCell *shardIntervalCell = NULL;
 
@@ -350,7 +342,9 @@ GenerateSizeQueryOnMultiplePlacements(Oid distributedRelationId, List *shardInte
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		char *shardName = get_rel_name(distributedRelationId);
+		Oid schemaId = get_rel_namespace(shardInterval->relationId);
+		char *schemaName = get_namespace_name(schemaId);
+		char *shardName = get_rel_name(shardInterval->relationId);
 		AppendShardIdToName(&shardName, shardId);
 
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);

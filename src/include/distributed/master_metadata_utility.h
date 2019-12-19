@@ -112,6 +112,8 @@ extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
+extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+														char *sizeQuery);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,

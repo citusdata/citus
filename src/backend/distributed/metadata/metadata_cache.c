@@ -114,6 +114,7 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
@@ -1857,6 +1858,17 @@ DistLocalGroupIdRelationId(void)
 						 &MetadataCache.distLocalGroupRelationId);
 
 	return MetadataCache.distLocalGroupRelationId;
+}
+
+
+/* return oid of pg_dist_rebalance_strategy relation */
+Oid
+DistRebalanceStrategyRelationId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_strategy",
+						 &MetadataCache.distRebalanceStrategyRelationId);
+
+	return MetadataCache.distRebalanceStrategyRelationId;
 }
 
 
