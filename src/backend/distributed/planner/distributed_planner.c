@@ -129,6 +129,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 	int rteIdCounter = 1;
 	bool fastPathRouterQuery = false;
+	Const *distributionKeyValue = NULL;
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -154,7 +155,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
 			if (needsDistributedPlanning)
 			{
-				fastPathRouterQuery = FastPathRouterQuery(parse);
+				fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
 			}
 		}
 	}
@@ -224,6 +225,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		{
 			plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
 				true;
+			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue =
+				distributionKeyValue;
 
 			result = FastPathPlanner(originalQuery, parse, boundParams);
 		}

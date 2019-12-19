@@ -78,6 +78,6 @@ extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
 									 boundParams);
-extern bool FastPathRouterQuery(Query *query);
+extern bool FastPathRouterQuery(Query *query, Const **distributionKeyValue);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

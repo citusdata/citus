@@ -1617,8 +1617,9 @@ ExtractFirstDistributedTableId(Query *query)
 	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
 	Oid distributedTableId = InvalidOid;
+	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
-	Assert(IsModifyCommand(query) || FastPathRouterQuery(query));
+	Assert(IsModifyCommand(query) || FastPathRouterQuery(query, &distKey));
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -2026,9 +2027,32 @@ PlanRouterQuery(Query *originalQuery,
 	 */
 	if (fastPathRouterQuery)
 	{
-		List *shardIntervalList =
-			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
-												&isMultiShardQuery);
+		List *shardIntervalList = NIL;
+		Const *distributionKeyValue =
+			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
+
+		if (distributionKeyValue)
+		{
+			Oid relationId = ExtractFirstDistributedTableId(originalQuery);
+			DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
+			ShardInterval *shardInterval =
+				FindShardInterval(distributionKeyValue->constvalue, cache);
+
+			shardIntervalList = list_make1(shardInterval);
+
+			if (partitionValueConst != NULL)
+			{
+				/* set the outgoing partition column value if requested */
+				*partitionValueConst = distributionKeyValue;
+			}
+		}
+		else
+		{
+			shardIntervalList =
+				TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
+													&isMultiShardQuery);
+		}
+
 
 		/*
 		 * This could only happen when there is a parameter on the distribution key.
@@ -2263,7 +2287,8 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 					&queryPartitionValueConst);
 
 	/* we're only expecting single shard from a single table */
-	Assert(FastPathRouterQuery(query));
+	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+	Assert(FastPathRouterQuery(query, &distKey));
 
 	if (list_length(prunedShardIntervalList) > 1)
 	{

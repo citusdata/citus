@@ -2,8 +2,8 @@ CREATE SCHEMA fast_path_router_modify;
 SET search_path TO fast_path_router_modify;
 SET citus.next_shard_id TO 1840000;
 -- all the tests in this file is intended for testing fast-path
--- router planner, so we're explicitly enabling itin this file. 
--- We've bunch of other tests that triggers non-fast-path-router 
+-- router planner, so we're explicitly enabling itin this file.
+-- We've bunch of other tests that triggers non-fast-path-router
 -- planner (note this is already true by default)
 SET citus.enable_fast_path_router_planner TO true;
 SET citus.shard_replication_factor TO 1;
@@ -61,6 +61,7 @@ DELETE FROM modify_fast_path WHERE key = 1 and FALSE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 -- UPDATE may include complex target entries
 UPDATE modify_fast_path SET value_1 = value_1 + 12 * value_1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
@@ -193,12 +194,12 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 -- joins are not supported via fast-path
-UPDATE modify_fast_path 
-	SET value_1 = 1 
-	FROM modify_fast_path_reference 
-	WHERE 
-		modify_fast_path.key = modify_fast_path_reference.key AND 
-		modify_fast_path.key  = 1 AND 
+UPDATE modify_fast_path
+	SET value_1 = 1
+	FROM modify_fast_path_reference
+	WHERE
+		modify_fast_path.key = modify_fast_path_reference.key AND
+		modify_fast_path.key  = 1 AND
 		modify_fast_path_reference.key = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

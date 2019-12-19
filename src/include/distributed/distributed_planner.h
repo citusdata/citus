@@ -88,6 +88,14 @@ typedef struct JoinRestriction
 typedef struct FastPathRestrictionContext
 {
 	bool fastPathRouterQuery;
+
+	/*
+	 * While calculating fastPathRouterQuery, we could sometimes be
+	 * able to extract the distribution key value as well (such as when
+	 * there are no prepared statements). Could be NULL when the distribution
+	 * key contains parameter, so check for it before using.
+	 */
+	Const *distributionKeyValue;
 }FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext
