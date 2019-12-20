@@ -33,8 +33,8 @@ CitusSetTag(Node *node, int tag)
 
 
 #define DECLARE_FROM_AND_NEW_NODE(nodeTypeName) \
-	nodeTypeName *newnode = (nodeTypeName *) \
-							CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
+	nodeTypeName *newnode = \
+		(nodeTypeName *) CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
 	nodeTypeName *from = (nodeTypeName *) source_node
 
 /* Copy a simple scalar field (int, float, bool, enum, etc) */
