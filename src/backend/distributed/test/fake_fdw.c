@@ -118,7 +118,10 @@ FakeGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid,
  * FakeBeginForeignScan begins the fake plan (i.e. does nothing).
  */
 static void
-FakeBeginForeignScan(ForeignScanState *node, int eflags) { }
+FakeBeginForeignScan(ForeignScanState *node, int eflags)
+{
+	/* this comment is for indentation consistency */
+}
 
 
 /*
@@ -138,11 +141,17 @@ FakeIterateForeignScan(ForeignScanState *node)
  * FakeReScanForeignScan restarts the fake plan (i.e. does nothing).
  */
 static void
-FakeReScanForeignScan(ForeignScanState *node) { }
+FakeReScanForeignScan(ForeignScanState *node)
+{
+	/* this comment is for indentation consistency */
+}
 
 
 /*
  * FakeEndForeignScan ends the fake plan (i.e. does nothing).
  */
 static void
-FakeEndForeignScan(ForeignScanState *node) { }
+FakeEndForeignScan(ForeignScanState *node)
+{
+	/* this comment is for indentation consistency */
+}
