@@ -127,6 +127,9 @@ extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  char replicationModel);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
+extern void UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement,
+												char shardState);
+extern void MarkShardPlacementInactive(ShardPlacement *shardPlacement);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,

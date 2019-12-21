@@ -137,6 +137,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
@@ -3495,7 +3496,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 			 */
 			if (shardPlacement->shardState == FILE_FINALIZED)
 			{
-				UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+				MarkShardPlacementInactive(shardPlacement);
 			}
 		}
 
