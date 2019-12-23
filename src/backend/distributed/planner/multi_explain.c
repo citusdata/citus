@@ -66,6 +66,8 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
+bool ExplainStatementRunning = false;
+
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
