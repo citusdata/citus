@@ -352,10 +352,20 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 		return;
 	}
 
-	ereport(LOG, (errmsg("issuing %s", ApplyLogRedaction(command)),
-				  errdetail("on server %s@%s:%d connectionId: %ld", connection->user,
-							connection->hostname,
-							connection->port, connection->connectionId)));
+	if (log_min_messages <= NOTICE)
+	{
+		/*
+		 * If the message might be written to the server log then we apply
+		 * log redaction to avoid private data from leaking into logs
+		 * (enterprise only).
+		 */
+		command = ApplyLogRedaction(command);
+	}
+
+	ereport(NOTICE, (errmsg("issuing %s", command),
+					 errdetail("on server %s@%s:%d connectionId: %ld", connection->user,
+							   connection->hostname,
+							   connection->port, connection->connectionId)));
 }
 
 

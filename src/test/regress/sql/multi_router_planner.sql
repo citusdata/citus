@@ -785,6 +785,8 @@ UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :s
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
 
+SET citus.log_remote_commands TO on;
+
 -- single shard select queries are router plannable
 SELECT * FROM articles_range where author_id = 1;
 SELECT * FROM articles_range where author_id = 1 or author_id = 5;
@@ -799,6 +801,8 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 -- zero shard join is router plannable
 SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1 and au.id = 2;
+
+RESET citus.log_remote_commands;
 
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns

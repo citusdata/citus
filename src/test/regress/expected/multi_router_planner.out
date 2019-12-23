@@ -1723,10 +1723,13 @@ SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
+SET citus.log_remote_commands TO on;
 -- single shard select queries are router plannable
 SELECT * FROM articles_range where author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE (author_id OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1734,6 +1737,8 @@ DEBUG:  Plan is router executable
 SELECT * FROM articles_range where author_id = 1 or author_id = 5;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE ((author_id OPERATOR(pg_catalog.=) 1) OR (author_id OPERATOR(pg_catalog.=) 5))
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1742,6 +1747,8 @@ DEBUG:  Plan is router executable
 SELECT * FROM articles_range where author_id = 1 and author_id = 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT id, author_id, title, word_count FROM (SELECT NULL::bigint AS id, NULL::bigint AS author_id, NULL::character varying(20) AS title, NULL::integer AS word_count WHERE false) articles_range(id, author_id, title, word_count) WHERE ((author_id OPERATOR(pg_catalog.=) 1) AND (author_id OPERATOR(pg_catalog.=) 2))
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 2
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1751,6 +1758,8 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT ar.id, ar.author_id, ar.title, ar.word_count, au.name, au.id FROM (public.articles_range_840012 ar JOIN public.authors_range_840008 au ON ((ar.author_id OPERATOR(pg_catalog.=) au.id))) WHERE (ar.author_id OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 1
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -1760,10 +1769,13 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1 and au.id = 2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT ar.id, ar.author_id, ar.title, ar.word_count, au.name, au.id FROM ((SELECT NULL::bigint AS id, NULL::bigint AS author_id, NULL::character varying(20) AS title, NULL::integer AS word_count WHERE false) ar(id, author_id, title, word_count) JOIN (SELECT NULL::character varying(20) AS name, NULL::bigint AS id WHERE false) au(name, id) ON ((ar.author_id OPERATOR(pg_catalog.=) au.id))) WHERE ((ar.author_id OPERATOR(pg_catalog.=) 1) AND (au.id OPERATOR(pg_catalog.=) 2))
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 1
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
 
+RESET citus.log_remote_commands;
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns
 SET citus.task_executor_type to "task-tracker";

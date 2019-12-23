@@ -489,8 +489,17 @@ LogLocalCommand(const char *command)
 		return;
 	}
 
-	ereport(LOG, (errmsg("executing the command locally: %s",
-						 ApplyLogRedaction(command))));
+	if (log_min_messages <= NOTICE)
+	{
+		/*
+		 * If the message might be written to the server log then we apply
+		 * log redaction to avoid private data from leaking into logs
+		 * (enterprise only).
+		 */
+		command = ApplyLogRedaction(command);
+	}
+
+	ereport(NOTICE, (errmsg("executing the command locally: %s", command)));
 }
 
 
