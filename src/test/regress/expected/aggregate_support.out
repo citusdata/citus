@@ -75,11 +75,11 @@ select key, sum2(val) filter (where valf < 5), sum2_strict(val) filter (where va
  key | sum2 | sum2_strict 
 -----+------+-------------
    1 |      |            
-   2 |      |          10
-   3 |      |            
-   5 |      |            
-   6 |      |            
-   7 |      |            
+   2 |   10 |          10
+   3 |    0 |            
+   5 |    0 |            
+   6 |    0 |            
+   7 |    0 |            
    9 |    0 |           0
 (7 rows)
 
@@ -106,11 +106,11 @@ select id, sum2(distinct val), sum2_strict(distinct val) from aggdata group by i
 -- ORDER BY unsupported
 select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata group by key order by key;
 ERROR:  unsupported aggregate function sum2
--- Without intermediate results we return NULL, even though the correct result is 0
-select sum2(val) from aggdata where valf = 0;
- sum2 
-------
-     
+-- Test handling a lack of intermediate results
+select sum2(val), sum2_strict(val) from aggdata where valf = 0;
+ sum2 | sum2_strict 
+------+-------------
+    0 |            
 (1 row)
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
@@ -165,7 +165,7 @@ create aggregate sumstring(text) (
 );
 select sumstring(valf::text) from aggdata where valf is not null;
 ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 select create_distributed_function('sumstring(text)');
  create_distributed_function 
 -----------------------------
