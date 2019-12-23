@@ -2102,7 +2102,8 @@ PlanRouterQuery(Query *originalQuery,
 			ShardPlacement *shardPlacement =
 				FindShardPlacementOnGroup(GetLocalGroupId(), shardInterval->shardId);
 			if (shardPlacement != NULL &&
-				!ReferenceTableShardId(shardInterval->shardId) &&
+				(!ReferenceTableShardId(shardInterval->shardId) ||
+				 !IsModifyCommand(originalQuery)) &&
 				!ExplainStatementRunning)
 			{
 				/*
