@@ -34,6 +34,12 @@ jobs:
       - run:
           name: 'Check if changed'
           command: git diff --cached --exit-code
+      - run:
+          name: 'Normalize test output'
+          command: ci/normalize_expected.sh
+      - run:
+          name: 'Check if changed'
+          command: git diff --cached --exit-code
   check-sql-snapshots:
     docker:
       - image: 'citus/extbuilder:latest'
