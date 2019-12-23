@@ -195,6 +195,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_NODE_FIELD(subPlanList);
 	WRITE_NODE_FIELD(usedSubPlanNodeList);
+	WRITE_BOOL_FIELD(fastPathRouterPlan);
 
 	WRITE_NODE_FIELD(planningError);
 }

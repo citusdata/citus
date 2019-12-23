@@ -311,6 +311,12 @@ typedef struct DistributedPlan
 	List *usedSubPlanNodeList;
 
 	/*
+	 * When the query is very simple such that we don't need to call
+	 * standard_planner(). See FastPathRouterQuery() for the definition.
+	 */
+	bool fastPathRouterPlan;
+
+	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
 	 * or if prepared statement parameters prevented successful planning.
