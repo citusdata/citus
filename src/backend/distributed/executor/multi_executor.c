@@ -78,13 +78,14 @@ void
 CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
+	bool forceLocal = queryDesc->instrument_options & (1 << 8);
 
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
 	 * declared with PGDLLIMPORT.
 	 */
 #ifndef WIN32
-	if (RecoveryInProgress() && WritableStandbyCoordinator &&
+	if (!forceLocal && RecoveryInProgress() && WritableStandbyCoordinator &&
 		IsCitusPlan(plannedStmt->planTree))
 	{
 		PG_TRY();
@@ -122,6 +123,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
+	bool forceLocal = queryDesc->instrument_options & (1 << 8);
 
 	PG_TRY();
 	{
@@ -129,7 +131,8 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (CitusHasBeenLoaded())
 		{
-			if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
+			if (!forceLocal &&
+				IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
 				IsMultiStatementTransaction())
 			{
 				/*

@@ -197,15 +197,7 @@ LocalTaskPlannedStmt(Query *workerJobQuery, Task *task, ParamListInfo boundParam
 		shardQuery = ParseQueryString(task->queryString, parameterTypes, numParams);
 	}
 
-	/*
-	 * Altough the shardQuery is local to this node, we prefer planner()
-	 * over standard_planner(). The primary reason for that is Citus itself
-	 * is not very tolarent standard_planner() calls that doesn't go through
-	 * distributed_planner() because of the way that restriction hooks are
-	 * implemented. So, let planner to call distributed_planner() which
-	 * eventually calls standard_planner().
-	 */
-	int cursorOptions = 0;
+	int cursorOptions = CURSOR_OPT_FORCE_LOCAL;
 	PlannedStmt *localPlan = planner(shardQuery, cursorOptions, boundParams);
 
 	return localPlan;
@@ -418,11 +410,13 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 									scanState->tuplestorestate,
 									CurrentMemoryContext, false);
 
+	int instrument = 1 << 8;
+
 	/* Create a QueryDesc for the query */
 	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
 										   GetActiveSnapshot(), InvalidSnapshot,
 										   tupleStoreDestReceiever, paramListInfo,
-										   queryEnv, 0);
+										   queryEnv, instrument);
 
 	ExecutorStart(queryDesc, eflags);
 	ExecutorRun(queryDesc, scanDirection, 0L, true);
