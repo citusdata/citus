@@ -1122,6 +1122,33 @@ LOG:  executing the command locally: DELETE FROM local_shard_execution.reference
 (2 rows)
 
 COMMIT;
+-- however complex the query, local execution can handle
+SET client_min_messages TO LOG;
+SET citus.log_local_commands TO ON;
+WITH cte_1 AS
+  (SELECT *
+   FROM
+     (WITH cte_1 AS
+        (SELECT *
+         FROM distributed_table
+         WHERE key = 1) SELECT *
+      FROM cte_1) AS foo)
+SELECT count(*)
+FROM cte_1
+JOIN distributed_table USING (key)
+WHERE distributed_table.key = 1
+  AND distributed_table.key IN
+    (SELECT key
+     FROM distributed_table
+     WHERE key = 1);
+LOG:  executing the command locally: WITH cte_1 AS (SELECT foo.key, foo.value, foo.age FROM (WITH cte_1 AS (SELECT distributed_table_1.key, distributed_table_1.value, distributed_table_1.age FROM local_shard_execution.distributed_table_1470001 distributed_table_1 WHERE (distributed_table_1.key OPERATOR(pg_catalog.=) 1)) SELECT cte_1_1.key, cte_1_1.value, cte_1_1.age FROM cte_1 cte_1_1) foo) SELECT count(*) AS count FROM (cte_1 JOIN local_shard_execution.distributed_table_1470001 distributed_table(key, value, age) USING (key)) WHERE ((distributed_table.key OPERATOR(pg_catalog.=) 1) AND (distributed_table.key OPERATOR(pg_catalog.=) ANY (SELECT distributed_table_1.key FROM local_shard_execution.distributed_table_1470001 distributed_table_1 WHERE (distributed_table_1.key OPERATOR(pg_catalog.=) 1))))
+ count 
+-------
+     0
+(1 row)
+
+RESET client_min_messages;
+RESET citus.log_local_commands;
 \c - - - :master_port
 -- local execution with custom type
 SET citus.replication_model TO "streaming";

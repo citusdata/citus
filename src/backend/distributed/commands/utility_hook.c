@@ -48,6 +48,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
@@ -164,6 +165,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
 	{
+		ExplainStatementRunning = true;
+
 		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
 
 		if (IsTransactionBlock())
@@ -693,6 +696,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeDropSchemaOrDBs++;
 		}
 
+
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
 
@@ -721,6 +725,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			activeDropSchemaOrDBs--;
 		}
+
+
+		if (IsA(parsetree, ExplainStmt) &&
+			IsA(((ExplainStmt *) parsetree)->query, Query))
+		{
+			ExplainStatementRunning = false;
+		}
 	}
 	PG_CATCH();
 	{
@@ -732,6 +743,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsDropSchemaOrDB(parsetree))
 		{
 			activeDropSchemaOrDBs--;
+		}
+
+		if (IsA(parsetree, ExplainStmt) &&
+			IsA(((ExplainStmt *) parsetree)->query, Query))
+		{
+			ExplainStatementRunning = false;
 		}
 
 		PG_RE_THROW();

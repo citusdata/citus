@@ -24,7 +24,9 @@ extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);
 extern void ErrorIfLocalExecutionHappened(void);
+extern void GenerateShardQueryStringIfMissing(Query *workerJobQuery, Task *task);
 extern void DisableLocalExecution(void);
+extern bool TaskAccessesLocalNode(Task *task);
 extern bool AnyTaskAccessesRemoteNode(List *taskList);
 
 #endif /* LOCAL_EXECUTION_H */

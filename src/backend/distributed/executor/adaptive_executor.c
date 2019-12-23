@@ -132,7 +132,9 @@
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
@@ -540,6 +542,7 @@ typedef struct TaskPlacementExecution
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
+														 Query *jobQuery,
 														 List *taskList, bool
 														 hasReturning,
 														 ParamListInfo paramListInfo,
@@ -671,6 +674,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
+		job->jobQuery,
 		taskList,
 		distributedPlan->hasReturning,
 		paramListInfo,
@@ -887,7 +891,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	}
 
 	DistributedExecution *execution =
-		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
+		CreateDistributedExecution(modLevel, NULL, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
 								   xactProperties);
 
@@ -904,7 +908,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
  * a distributed plan.
  */
 static DistributedExecution *
-CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
+CreateDistributedExecution(RowModifyLevel modLevel, Query *jobQuery, List *taskList,
+						   bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize,
 						   TransactionProperties *xactProperties)
@@ -958,6 +963,21 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,
 								   &execution->remoteTaskList);
+	}
+	else if (jobQuery && list_length(execution->tasksToExecute) == 1)
+	{
+		Task *task = (Task *) linitial(execution->tasksToExecute);
+
+		if (TaskAccessesLocalNode(task))
+		{
+			/*
+			 * For performance reasons, the queryString is not generated for
+			 * local-fast path queries during the planning. However, at this
+			 * point the executor decided that the task cannot be executed locally.
+			 * So, generate the queryString.
+			 */
+			GenerateShardQueryStringIfMissing(jobQuery, task);
+		}
 	}
 
 	return execution;

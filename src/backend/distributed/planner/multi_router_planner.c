@@ -31,6 +31,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -159,11 +160,11 @@ static List * TargetShardIntervalForFastPathQuery(Query *query,
 												  bool *isMultiShardQuery);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool localFastPathQuery);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool localFastPathQuery);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
@@ -1665,6 +1666,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	List *relationShardList = NIL;
 	List *prunedShardIntervalListList = NIL;
 	bool isMultiShardModifyQuery = false;
+	bool localFastPathQuery = false;
 	Const *partitionKeyValue = NULL;
 
 	/* router planner should create task even if it doesn't hit a shard at all */
@@ -1678,7 +1680,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 									   &prunedShardIntervalListList,
 									   replacePrunedQueryWithDummy,
 									   &isMultiShardModifyQuery,
-									   &partitionKeyValue);
+									   &partitionKeyValue,
+									   &localFastPathQuery);
 	if (*planningError)
 	{
 		return NULL;
@@ -1706,7 +1709,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId, localFastPathQuery);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1741,7 +1744,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId, localFastPathQuery);
 	}
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
@@ -1836,17 +1839,29 @@ RemoveCoordinatorPlacement(List *placementList)
  */
 static List *
 SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList,
-						  uint64 shardId)
+						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(SELECT_TASK);
 	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
-	pg_get_query_def(query, queryString);
 
-	task->queryString = queryString->data;
+	/*
+	 * For performance reasons, we skip generating the queryString for local
+	 * fast path queries. With this, we can avoid deparsing during the execution
+	 * as well.
+	 */
+	if (localFastPathQuery)
+	{
+		queryString = NULL;
+	}
+	else
+	{
+		pg_get_query_def(query, queryString);
+	}
+
+	task->queryString = queryString ? queryString->data : NULL;
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->taskPlacementList = placementList;
@@ -1904,7 +1919,7 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
  */
 static List *
 SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList, uint64 shardId)
+						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	StringInfo queryString = makeStringInfo();
@@ -1925,9 +1940,21 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 							   "and modify a reference table")));
 	}
 
-	pg_get_query_def(query, queryString);
+	/*
+	 * For performance reasons, we skip generating the queryString for local
+	 * fast path queries. With this, we can avoid deparsing during the execution
+	 * as well.
+	 */
+	if (localFastPathQuery)
+	{
+		queryString = NULL;
+	}
+	else
+	{
+		pg_get_query_def(query, queryString);
+	}
 
-	task->queryString = queryString->data;
+	task->queryString = queryString ? queryString->data : NULL;
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->taskPlacementList = placementList;
@@ -2020,7 +2047,7 @@ PlanRouterQuery(Query *originalQuery,
 				List **placementList, uint64 *anchorShardId, List **relationShardList,
 				List **prunedShardIntervalListList,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
-				Const **partitionValueConst)
+				Const **partitionValueConst, bool *localFastPathQuery)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
 
@@ -2069,7 +2096,6 @@ PlanRouterQuery(Query *originalQuery,
 													&isMultiShardQuery);
 		}
 
-
 		/*
 		 * This could only happen when there is a parameter on the distribution key.
 		 * We defer error here, later the planner is forced to use a generic plan
@@ -2085,10 +2111,31 @@ PlanRouterQuery(Query *originalQuery,
 
 		*prunedShardIntervalListList = list_make1(shardIntervalList);
 
-		if (!isMultiShardQuery)
+		if (!isMultiShardQuery && list_length(shardIntervalList) == 1)
 		{
 			ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
 									"query")));
+
+			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+			ShardPlacement *shardPlacement =
+				FindShardPlacementOnGroup(GetLocalGroupId(), shardInterval->shardId);
+			if (shardPlacement != NULL &&
+				!ReferenceTableShardId(shardInterval->shardId) &&
+				!ExplainStatementRunning)
+			{
+				/*
+				 * The query could be executed locally, but that's not a decision
+				 * we can give at the moment. We're only doing some performance
+				 * optimizations if that's how the executor behaves. Otherwise, the
+				 * optimizations would be lost during the execution.
+				 *
+				 * Modifications on reference tables needs to be executed remotely as
+				 * well, so doesn't worth the optimization.
+				 *
+				 * Citus cannot handle EXPLAIN on local tables, so skip those as well.
+				 */
+				*localFastPathQuery = true;
+			}
 		}
 	}
 	else
@@ -2220,12 +2267,20 @@ PlanRouterQuery(Query *originalQuery,
 		return planningError;
 	}
 
-	/*
-	 * If this is an UPDATE or DELETE query which requires master evaluation,
-	 * don't try update shard names, and postpone that to execution phase.
-	 */
-	if (!(UpdateOrDeleteQuery(originalQuery) && RequiresMasterEvaluation(originalQuery)))
+	if (*localFastPathQuery)
 	{
+		/*
+		 * When this is a local-fast path query, skip this relatively
+		 * expensive traversal because we may not need at all and
+		 * performance is important in this path.*/
+	}
+	else if (!(UpdateOrDeleteQuery(originalQuery) &&
+			   RequiresMasterEvaluation(originalQuery)))
+	{
+		/*
+		 * If this is an UPDATE or DELETE query which requires master evaluation,
+		 * don't try update shard names, and postpone that to execution phase.
+		 */
 		UpdateRelationToShardNames((Node *) originalQuery, *relationShardList);
 	}
 

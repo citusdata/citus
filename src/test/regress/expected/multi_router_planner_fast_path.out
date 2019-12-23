@@ -1175,7 +1175,6 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and false;
-DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | title | word_count 
@@ -1197,7 +1196,6 @@ DETAIL:  distribution column value: 1
 SELECT *
 	FROM articles_hash
 	WHERE null and author_id = 1;
-DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | title | word_count 
