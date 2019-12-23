@@ -1158,6 +1158,25 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		}
 
 		heap_close(distShardRelation, AccessShareLock);
+
+		ShardInterval *firstShardInterval = shardIntervalArray[0];
+		bool foundInCache = false;
+		ShardCacheEntry *shardEntry = hash_search(DistShardCacheHash,
+												  &firstShardInterval->shardId, HASH_FIND,
+												  &foundInCache);
+		if (foundInCache && shardEntry->tableEntry != cacheEntry)
+		{
+			/*
+			 * Normally, all shard cache entries for a given DistTableEntry are removed
+			 * before we get here. There is one exception: When a shard changes from
+			 * one relation ID to another. That typically happens during metadata
+			 * syncing when the distributed table is dropped and re-created without
+			 * changing the shard IDs. That means that old relation no longer exists
+			 * and we can safely wipe its entry, which will remove all corresponding
+			 * shard cache entries.
+			 */
+			ResetDistTableCacheEntry(shardEntry->tableEntry);
+		}
 	}
 
 	/* look up value comparison function */
