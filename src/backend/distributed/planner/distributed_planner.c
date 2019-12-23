@@ -79,8 +79,7 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
-static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery,
-									bool fastPathRouterQuery);
+static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
 static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
@@ -685,8 +684,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 {
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
-	bool fastPathRouterQuery =
-		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -722,7 +719,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 			return distributedPlan;
 		}
@@ -744,7 +741,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
+			FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 			return distributedPlan;
 		}
@@ -838,7 +835,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 												plannerRestrictionContext);
 		distributedPlan->subPlanList = subPlanList;
 
-		FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 		return distributedPlan;
 	}
@@ -850,7 +847,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
-		FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
+		FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 		return distributedPlan;
 	}
@@ -883,7 +880,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
-	FinalizeDistributedPlan(distributedPlan, originalQuery, fastPathRouterQuery);
+	FinalizeDistributedPlan(distributedPlan, originalQuery);
 
 	return distributedPlan;
 }
@@ -894,14 +891,13 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
  * currently only implements some optimizations for intermediate result(s) pruning.
  */
 static void
-FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery,
-						bool fastPathRouterQuery)
+FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
 {
 	/*
 	 * Fast path queries, we cannot have any subplans by their definition,
 	 * so skip expensive traversals.
 	 */
-	if (!fastPathRouterQuery)
+	if (!plan->fastPathRouterPlan)
 	{
 		RecordSubPlansUsedInPlan(plan, originalQuery);
 	}

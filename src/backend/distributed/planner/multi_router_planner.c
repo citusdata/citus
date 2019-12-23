@@ -189,6 +189,9 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 								   plannerRestrictionContext);
 	}
 
+	distributedPlan->fastPathRouterPlan =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
+
 	return distributedPlan;
 }
 
