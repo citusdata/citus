@@ -13,14 +13,6 @@ WHERE name = 'hll'
 
 :create_cmd;
 
-\c - - - :worker_1_port
-:create_cmd;
-
-\c - - - :worker_2_port
-:create_cmd;
-
-\c - - - :master_port
-
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 
 SELECT count(distinct l_orderkey) FROM lineitem;

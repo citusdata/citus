@@ -14,21 +14,6 @@ WHERE name = 'hll'
  f
 (1 row)
 
-\c - - - :worker_1_port
-:create_cmd;
- hll_present 
--------------
- f
-(1 row)
-
-\c - - - :worker_2_port
-:create_cmd;
- hll_present 
--------------
- f
-(1 row)
-
-\c - - - :master_port
 SET citus.shard_count TO 4;
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);
@@ -210,21 +195,6 @@ WHERE name = 'topn'
  f
 (1 row)
 
-\c - - - :worker_1_port
-:create_topn;
- topn_present 
---------------
- f
-(1 row)
-
-\c - - - :worker_2_port
-:create_topn;
- topn_present 
---------------
- f
-(1 row)
-
-\c - - - :master_port
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 SELECT create_distributed_table('customer_reviews', 'user_id');
