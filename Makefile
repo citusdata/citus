@@ -17,7 +17,6 @@ all: extension
 extension: $(citus_top_builddir)/src/include/citus_version.h
 	$(MAKE) -C src/backend/distributed/ all
 install-extension: extension
-	rm -f $(extension_dir)/citus*
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
