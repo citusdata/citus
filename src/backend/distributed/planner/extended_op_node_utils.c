@@ -31,9 +31,6 @@ static bool ExtendedOpNodeContainsRepartitionSubquery(MultiExtendedOp *originalO
 static bool HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 											 List *tableNodeList);
 static bool PartitionColumnInTableList(Var *column, List *tableNodeList);
-static bool ShouldPullDistinctColumn(bool repartitionSubquery,
-									 bool groupedByDisjointPartitionColumn,
-									 bool hasNonPartitionColumnDistinctAgg);
 
 
 /*
@@ -58,10 +55,6 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 	bool hasNonPartitionColumnDistinctAgg =
 		HasNonPartitionColumnDistinctAgg(targetList, havingQual, tableNodeList);
 
-	bool pullDistinctColumns =
-		ShouldPullDistinctColumn(repartitionSubquery, groupedByDisjointPartitionColumn,
-								 hasNonPartitionColumnDistinctAgg);
-
 	/*
 	 * TODO: Only window functions that can be pushed down reach here, thus,
 	 * using hasWindowFuncs is safe for now. However, this should be fixed
@@ -74,7 +67,6 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 	extendedOpNodeProperties.repartitionSubquery = repartitionSubquery;
 	extendedOpNodeProperties.hasNonPartitionColumnDistinctAgg =
 		hasNonPartitionColumnDistinctAgg;
-	extendedOpNodeProperties.pullDistinctColumns = pullDistinctColumns;
 	extendedOpNodeProperties.pushDownWindowFunctions = pushDownWindowFunctions;
 	extendedOpNodeProperties.pullUpIntermediateRows = pullUpIntermediateRows;
 
@@ -288,40 +280,6 @@ PartitionColumnInTableList(Var *column, List *tableNodeList)
 				return true;
 			}
 		}
-	}
-
-	return false;
-}
-
-
-/*
- * ShouldPullDistinctColumn returns true if distinct aggregate should pull
- * individual columns from worker to master and evaluate aggregate operation
- * at master.
- *
- * Pull cases are:
- * - repartition subqueries
- * - query has count distinct on a non-partition column on at least one target
- * - count distinct is on a non-partition column and query is not
- *   grouped on partition column
- */
-static bool
-ShouldPullDistinctColumn(bool repartitionSubquery,
-						 bool groupedByDisjointPartitionColumn,
-						 bool hasNonPartitionColumnDistinctAgg)
-{
-	if (repartitionSubquery)
-	{
-		return true;
-	}
-
-	if (groupedByDisjointPartitionColumn)
-	{
-		return false;
-	}
-	else if (!groupedByDisjointPartitionColumn && hasNonPartitionColumnDistinctAgg)
-	{
-		return true;
 	}
 
 	return false;

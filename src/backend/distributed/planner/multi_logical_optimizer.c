@@ -1606,54 +1606,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterExpression = (Expr *) aggregate;
 	}
 	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-			 CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-			 walkerContext->extendedOpNodeProperties->pullDistinctColumns)
-	{
-		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
-		List *varList = pull_var_clause_default((Node *) aggregate);
-		ListCell *varCell = NULL;
-		List *uniqueVarList = NIL;
-		int startColumnCount = walkerContext->columnId;
-
-		/* determine unique vars that were placed in target list by worker */
-		foreach(varCell, varList)
-		{
-			Var *column = (Var *) lfirst(varCell);
-			uniqueVarList = list_append_unique(uniqueVarList, copyObject(column));
-		}
-
-		/*
-		 * Go over each var inside aggregate and update their varattno's according to
-		 * worker query target entry column index.
-		 */
-		foreach(varCell, varList)
-		{
-			Var *columnToUpdate = (Var *) lfirst(varCell);
-			ListCell *uniqueVarCell = NULL;
-			int columnIndex = 0;
-
-			foreach(uniqueVarCell, uniqueVarList)
-			{
-				Var *currentVar = (Var *) lfirst(uniqueVarCell);
-				if (equal(columnToUpdate, currentVar))
-				{
-					break;
-				}
-				columnIndex++;
-			}
-
-			columnToUpdate->varno = masterTableId;
-			columnToUpdate->varnoold = masterTableId;
-			columnToUpdate->varattno = startColumnCount + columnIndex;
-			columnToUpdate->varoattno = startColumnCount + columnIndex;
-		}
-
-		/* we added that many columns */
-		walkerContext->columnId += list_length(uniqueVarList);
-
-		newMasterExpression = (Expr *) aggregate;
-	}
-	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 			 CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 	{
 		/*
@@ -2927,22 +2879,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	AggClauseCosts aggregateCosts;
 
 	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-		walkerContext->extendedOpNodeProperties->pullDistinctColumns)
-	{
-		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
-		List *columnList = pull_var_clause_default((Node *) aggregate);
-		ListCell *columnCell = NULL;
-		foreach(columnCell, columnList)
-		{
-			Var *column = (Var *) lfirst(columnCell);
-			workerAggregateList = list_append_unique(workerAggregateList, column);
-		}
-
-		walkerContext->createGroupByClause = true;
-	}
-	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-			 CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
+		CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 	{
 		/*
 		 * If the original aggregate is a count(distinct) approximation, we want
@@ -3661,8 +3598,9 @@ static DeferredErrorMessage *
 DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 										 MultiNode *logicalPlanNode)
 {
+	Assert(aggregateExpression->aggdistinct);
+
 	const char *errorDetail = NULL;
-	bool distinctSupported = true;
 
 	AggregateType aggregateType = GetAggregateType(aggregateExpression);
 
@@ -3672,11 +3610,13 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		return NULL;
 	}
 
+
 	/*
 	 * We partially support count(distinct) in subqueries, other distinct aggregates in
 	 * subqueries are not supported yet.
 	 */
-	if (aggregateType == AGGREGATE_COUNT)
+	if (aggregateType == AGGREGATE_COUNT &&
+		CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 	{
 		Node *aggregateArgument = (Node *) linitial(aggregateExpression->args);
 		List *columnList = pull_var_clause_default(aggregateArgument);
@@ -3705,8 +3645,7 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot compute aggregate (distinct)",
-									 "Only count(distinct) aggregate is "
-									 "supported in subqueries", NULL);
+									 NULL, NULL);
 			}
 		}
 	}
@@ -3737,7 +3676,6 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		List *aggregateVarList = pull_var_clause_default((Node *) aggregateExpression);
 		if (aggregateVarList == NIL)
 		{
-			distinctSupported = false;
 			errorDetail = "aggregate (distinct) with no columns is unsupported";
 		}
 	}
@@ -3745,7 +3683,6 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	List *repartitionNodeList = FindNodesOfType(logicalPlanNode, T_MultiPartition);
 	if (repartitionNodeList != NIL)
 	{
-		distinctSupported = false;
 		errorDetail = "aggregate (distinct) with table repartitioning is unsupported";
 	}
 
@@ -3753,42 +3690,35 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	List *extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
-	Var *distinctColumn = AggregateDistinctColumn(aggregateExpression);
-	if (distinctSupported)
+	if (errorDetail == NULL)
 	{
-		if (distinctColumn == NULL)
+		/*
+		 * If the query has a single table, and table is grouped by partition
+		 * column, then we support count distincts even if distinct column can
+		 * not be identified.
+		 */
+		Var *distinctColumn = AggregateDistinctColumn(aggregateExpression);
+		bool distinctSupported = TablePartitioningSupportsDistinct(tableNodeList,
+																   extendedOpNode,
+																   distinctColumn,
+																   aggregateType);
+
+		if (!distinctSupported)
 		{
-			/*
-			 * If the query has a single table, and table is grouped by partition
-			 * column, then we support count distincts even distinct column can
-			 * not be identified.
-			 */
-			distinctSupported = TablePartitioningSupportsDistinct(tableNodeList,
-																  extendedOpNode,
-																  distinctColumn,
-																  aggregateType);
-			if (!distinctSupported)
+			if (distinctColumn == NULL)
 			{
-				errorDetail = "aggregate (distinct) on complex expressions is"
-							  " unsupported";
+				errorDetail =
+					"aggregate (distinct) on complex expressions is unsupported";
 			}
-		}
-		else if (aggregateType != AGGREGATE_COUNT)
-		{
-			bool supports = TablePartitioningSupportsDistinct(tableNodeList,
-															  extendedOpNode,
-															  distinctColumn,
-															  aggregateType);
-			if (!supports)
+			else
 			{
-				distinctSupported = false;
 				errorDetail = "table partitioning is unsuitable for aggregate (distinct)";
 			}
 		}
 	}
 
 	/* if current aggregate expression isn't supported, error out */
-	if (!distinctSupported)
+	if (errorDetail != NULL)
 	{
 		const char *errorHint = NULL;
 		if (aggregateType == AGGREGATE_COUNT)
@@ -3884,7 +3814,8 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		{
 			Var *tablePartitionColumn = tableNode->partitionColumn;
 
-			if (aggregateType == AGGREGATE_COUNT)
+			if (aggregateType == AGGREGATE_COUNT &&
+				CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 			{
 				tableDistinctSupported = true;
 			}
