@@ -24,8 +24,6 @@
 typedef struct ExtendedOpNodeProperties
 {
 	bool groupedByDisjointPartitionColumn;
-	bool repartitionSubquery;
-	bool hasNonPartitionColumnDistinctAgg;
 	bool pushDownWindowFunctions;
 	bool pullUpIntermediateRows;
 } ExtendedOpNodeProperties;
