@@ -11,14 +11,6 @@ WHERE name = 'hll'
 
 :create_cmd;
 
-\c - - - :worker_1_port
-:create_cmd;
-
-\c - - - :worker_2_port
-:create_cmd;
-
-\c - - - :master_port
-
 SET citus.shard_count TO 4;
 
 CREATE TABLE raw_table (day date, user_id int);
@@ -160,13 +152,6 @@ WHERE name = 'topn'
 
 :create_topn;
 
-\c - - - :worker_1_port
-:create_topn;
-
-\c - - - :worker_2_port
-:create_topn;
-
-\c - - - :master_port
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 

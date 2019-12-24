@@ -14,21 +14,6 @@ WHERE name = 'hll'
  f
 (1 row)
 
-\c - - - :worker_1_port
-:create_cmd;
- hll_present 
--------------
- f
-(1 row)
-
-\c - - - :worker_2_port
-:create_cmd;
- hll_present 
--------------
- f
-(1 row)
-
-\c - - - :master_port
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
