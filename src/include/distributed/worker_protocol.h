@@ -136,6 +136,12 @@ extern StringInfo UserTaskFilename(StringInfo directoryName, uint32 taskId);
 extern List * ColumnDefinitionList(List *columnNameList, List *columnTypeList);
 extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionList);
 extern CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);
+extern DestReceiver * CreateFileDestReceiver(char *filePath,
+											 MemoryContext tupleContext,
+											 bool binaryCopyFormat);
+extern void FileDestReceiverStats(DestReceiver *dest,
+								  uint64 *rowsSent,
+								  uint64 *bytesSent);
 
 /* Function declaration for parsing tree node */
 extern Node * ParseTreeNode(const char *ddlCommand);

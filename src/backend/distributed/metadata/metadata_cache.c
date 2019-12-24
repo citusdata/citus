@@ -194,15 +194,9 @@ static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
 static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void BuildCachedShardList(DistTableCacheEntry *cacheEntry);
 static void PrepareWorkerNodeCache(void);
-static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
-										  int shardCount);
 static bool CheckInstalledVersion(int elevel);
 static char * AvailableExtensionVersion(void);
 static char * InstalledExtensionVersion(void);
-static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
-										int shardIntervalArrayLength,
-										Oid shardIntervalCollation,
-										FmgrInfo *shardIntervalSortCompareFunction);
 static bool CitusHasBeenLoadedInternal(void);
 static void InitializeCaches(void);
 static void InitializeDistCache(void);
@@ -1245,22 +1239,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 			cacheEntry->hasOverlappingShardInterval = true;
 		}
 
-		/*
-		 * If table is hash-partitioned and has shards, there never should be
-		 * any uninitalized shards.  Historically we've not prevented that for
-		 * range partitioned tables, but it might be a good idea to start
-		 * doing so.
-		 */
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-			cacheEntry->hasUninitializedShardInterval)
-		{
-			ereport(ERROR, (errmsg("hash partitioned table has uninitialized shards")));
-		}
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-			cacheEntry->hasOverlappingShardInterval)
-		{
-			ereport(ERROR, (errmsg("hash partitioned table has overlapping shards")));
-		}
+		ErrorIfInconsistentShardIntervals(cacheEntry);
 	}
 
 	/*
@@ -1331,6 +1310,31 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 
 /*
+ * ErrorIfInconsistentShardIntervals checks if shard intervals are consistent with
+ * our expectations.
+ */
+void
+ErrorIfInconsistentShardIntervals(DistTableCacheEntry *cacheEntry)
+{
+	/*
+	 * If table is hash-partitioned and has shards, there never should be any
+	 * uninitalized shards.  Historically we've not prevented that for range
+	 * partitioned tables, but it might be a good idea to start doing so.
+	 */
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		cacheEntry->hasUninitializedShardInterval)
+	{
+		ereport(ERROR, (errmsg("hash partitioned table has uninitialized shards")));
+	}
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+		cacheEntry->hasOverlappingShardInterval)
+	{
+		ereport(ERROR, (errmsg("hash partitioned table has overlapping shards")));
+	}
+}
+
+
+/*
  * HasUniformHashDistribution determines whether the given list of sorted shards
  * has a uniform hash distribution, as produced by master_create_worker_shards for
  * hash partitioned tables.
@@ -1376,7 +1380,7 @@ HasUniformHashDistribution(ShardInterval **shardIntervalArray,
  * ensure that input shard interval array is sorted on shardminvalue and uninitialized
  * shard intervals are at the end of the array.
  */
-static bool
+bool
 HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shardCount)
 {
 	bool hasUninitializedShardInterval = false;
@@ -1406,7 +1410,7 @@ HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shar
  * HasOverlappingShardInterval determines whether the given list of sorted
  * shards has overlapping ranges.
  */
-static bool
+bool
 HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 							int shardIntervalArrayLength,
 							Oid shardIntervalCollation,
@@ -3682,8 +3686,9 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 			Var *partitionColumn = (Var *) partitionNode;
 			Assert(IsA(partitionNode, Var));
 
-			*intervalTypeId = partitionColumn->vartype;
-			*intervalTypeMod = partitionColumn->vartypmod;
+			GetIntervalTypeInfo(partitionMethod, partitionColumn,
+								intervalTypeId, intervalTypeMod);
+
 			*columnTypeId = partitionColumn->vartype;
 			*columnTypeMod = partitionColumn->vartypmod;
 			break;
@@ -3695,7 +3700,9 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 			Var *partitionColumn = (Var *) partitionNode;
 			Assert(IsA(partitionNode, Var));
 
-			*intervalTypeId = INT4OID;
+			GetIntervalTypeInfo(partitionMethod, partitionColumn,
+								intervalTypeId, intervalTypeMod);
+
 			*columnTypeId = partitionColumn->vartype;
 			*columnTypeMod = partitionColumn->vartypmod;
 			break;
@@ -3717,6 +3724,42 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 
 
 /*
+ * GetIntervalTypeInfo gets type id and type mod of the min/max values
+ * of shard intervals for a distributed table with given partition method
+ * and partition column.
+ */
+void
+GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
+					Oid *intervalTypeId, int32 *intervalTypeMod)
+{
+	*intervalTypeId = InvalidOid;
+	*intervalTypeMod = -1;
+
+	switch (partitionMethod)
+	{
+		case DISTRIBUTE_BY_APPEND:
+		case DISTRIBUTE_BY_RANGE:
+		{
+			*intervalTypeId = partitionColumn->vartype;
+			*intervalTypeMod = partitionColumn->vartypmod;
+			break;
+		}
+
+		case DISTRIBUTE_BY_HASH:
+		{
+			*intervalTypeId = INT4OID;
+			break;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+}
+
+
+/*
  * TupleToShardInterval transforms the specified dist_shard tuple into a new
  * ShardInterval using the provided descriptor and partition type information.
  */
@@ -3725,10 +3768,33 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 					 intervalTypeId,
 					 int32 intervalTypeMod)
 {
-	Oid inputFunctionId = InvalidOid;
-	Oid typeIoParam = InvalidOid;
 	Datum datumArray[Natts_pg_dist_shard];
 	bool isNullArray[Natts_pg_dist_shard];
+
+	/*
+	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
+	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
+	 */
+	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+	ShardInterval *shardInterval =
+		DeformedDistShardTupleToShardInterval(datumArray, isNullArray,
+											  intervalTypeId, intervalTypeMod);
+
+	return shardInterval;
+}
+
+
+/*
+ * DeformedDistShardTupleToShardInterval transforms the specified deformed
+ * pg_dist_shard tuple into a new ShardInterval.
+ */
+ShardInterval *
+DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
+									  Oid intervalTypeId, int32 intervalTypeMod)
+{
+	Oid inputFunctionId = InvalidOid;
+	Oid typeIoParam = InvalidOid;
 	Datum minValue = 0;
 	Datum maxValue = 0;
 	bool minValueExists = false;
@@ -3738,14 +3804,8 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 	char intervalAlign = '0';
 	char intervalDelim = '0';
 
-	/*
-	 * We use heap_deform_tuple() instead of heap_getattr() to expand tuple
-	 * to contain missing values when ALTER TABLE ADD COLUMN happens.
-	 */
-	heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-
-	Oid relationId = DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid -
-												 1]);
+	Oid relationId =
+		DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid - 1]);
 	int64 shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
 	char storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
 	Datum minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];

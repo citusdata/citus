@@ -24,6 +24,8 @@
 /* necessary to get S_IRUSR, S_IWUSR definitions on illumos */
 #include <sys/stat.h>
 
+#define COPY_BUFFER_SIZE (4 * 1024 * 1024)
+
 /* TaskFileDestReceiver can be used to stream results into a file */
 typedef struct TaskFileDestReceiver
 {
@@ -33,8 +35,8 @@ typedef struct TaskFileDestReceiver
 	/* descriptor of the tuples that are sent to the worker */
 	TupleDesc tupleDescriptor;
 
-	/* EState for per-tuple memory allocation */
-	EState *executorState;
+	/* context for per-tuple memory allocation */
+	MemoryContext tupleContext;
 
 	/* MemoryContext for DestReceiver session */
 	MemoryContext memoryContext;
@@ -48,13 +50,12 @@ typedef struct TaskFileDestReceiver
 	CopyOutState copyOutState;
 	FmgrInfo *columnOutputFunctions;
 
-	/* number of tuples sent */
+	/* statistics */
 	uint64 tuplesSent;
+	uint64 bytesSent;
 } TaskFileDestReceiver;
 
 
-static DestReceiver * CreateTaskFileDestReceiver(char *filePath, EState *executorState,
-												 bool binaryCopyFormat);
 static void TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 										TupleDesc inputTupleDescriptor);
 static bool TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
@@ -102,9 +103,10 @@ WorkerExecuteSqlTask(Query *query, char *taskFilename, bool binaryCopyFormat)
 	ParamListInfo paramListInfo = NULL;
 
 	EState *estate = CreateExecutorState();
+	MemoryContext tupleContext = GetPerTupleMemoryContext(estate);
 	TaskFileDestReceiver *taskFileDest =
-		(TaskFileDestReceiver *) CreateTaskFileDestReceiver(taskFilename, estate,
-															binaryCopyFormat);
+		(TaskFileDestReceiver *) CreateFileDestReceiver(taskFilename, tupleContext,
+														binaryCopyFormat);
 
 	ExecuteQueryIntoDestReceiver(query, paramListInfo, (DestReceiver *) taskFileDest);
 
@@ -118,11 +120,11 @@ WorkerExecuteSqlTask(Query *query, char *taskFilename, bool binaryCopyFormat)
 
 
 /*
- * CreateTaskFileDestReceiver creates a DestReceiver for writing query results
- * to a task file.
+ * CreateFileDestReceiver creates a DestReceiver for writing query results
+ * to a file.
  */
-static DestReceiver *
-CreateTaskFileDestReceiver(char *filePath, EState *executorState, bool binaryCopyFormat)
+DestReceiver *
+CreateFileDestReceiver(char *filePath, MemoryContext tupleContext, bool binaryCopyFormat)
 {
 	TaskFileDestReceiver *taskFileDest = (TaskFileDestReceiver *) palloc0(
 		sizeof(TaskFileDestReceiver));
@@ -135,7 +137,7 @@ CreateTaskFileDestReceiver(char *filePath, EState *executorState, bool binaryCop
 	taskFileDest->pub.mydest = DestCopyOut;
 
 	/* set up output parameters */
-	taskFileDest->executorState = executorState;
+	taskFileDest->tupleContext = tupleContext;
 	taskFileDest->memoryContext = CurrentMemoryContext;
 	taskFileDest->filePath = pstrdup(filePath);
 	taskFileDest->binaryCopyFormat = binaryCopyFormat;
@@ -173,7 +175,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
 	copyOutState->binary = taskFileDest->binaryCopyFormat;
 	copyOutState->fe_msgbuf = makeStringInfo();
-	copyOutState->rowcontext = GetPerTupleMemoryContext(taskFileDest->executorState);
+	copyOutState->rowcontext = taskFileDest->tupleContext;
 	taskFileDest->copyOutState = copyOutState;
 
 	taskFileDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
@@ -187,10 +189,7 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	if (copyOutState->binary)
 	{
 		/* write headers when using binary encoding */
-		resetStringInfo(copyOutState->fe_msgbuf);
 		AppendCopyBinaryHeaders(copyOutState);
-
-		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -214,8 +213,7 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	StringInfo copyData = copyOutState->fe_msgbuf;
 
-	EState *executorState = taskFileDest->executorState;
-	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	MemoryContext executorTupleContext = taskFileDest->tupleContext;
 	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 	slot_getallattrs(slot);
@@ -223,19 +221,21 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	resetStringInfo(copyData);
-
 	/* construct row in COPY format */
 	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
 					  copyOutState, columnOutputFunctions, NULL);
 
-	WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
+	if (copyData->len > COPY_BUFFER_SIZE)
+	{
+		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
+		resetStringInfo(copyData);
+	}
 
 	MemoryContextSwitchTo(oldContext);
 
 	taskFileDest->tuplesSent++;
 
-	ResetPerTupleExprContext(executorState);
+	MemoryContextReset(executorTupleContext);
 
 	return true;
 }
@@ -254,6 +254,8 @@ WriteToLocalFile(StringInfo copyData, TaskFileDestReceiver *taskFileDest)
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not append to file: %m")));
 	}
+
+	taskFileDest->bytesSent += bytesWritten;
 }
 
 
@@ -268,12 +270,18 @@ TaskFileDestReceiverShutdown(DestReceiver *destReceiver)
 	TaskFileDestReceiver *taskFileDest = (TaskFileDestReceiver *) destReceiver;
 	CopyOutState copyOutState = taskFileDest->copyOutState;
 
+	if (copyOutState->fe_msgbuf->len > 0)
+	{
+		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
+		resetStringInfo(copyOutState->fe_msgbuf);
+	}
+
 	if (copyOutState->binary)
 	{
 		/* write footers when using binary encoding */
-		resetStringInfo(copyOutState->fe_msgbuf);
 		AppendCopyBinaryFooters(copyOutState);
 		WriteToLocalFile(copyOutState->fe_msgbuf, taskFileDest);
+		resetStringInfo(copyOutState->fe_msgbuf);
 	}
 
 	FileClose(taskFileDest->fileCompat.fd);
@@ -301,4 +309,16 @@ TaskFileDestReceiverDestroy(DestReceiver *destReceiver)
 
 	pfree(taskFileDest->filePath);
 	pfree(taskFileDest);
+}
+
+
+/*
+ * FileDestReceiverStats returns statistics for the given file dest receiver.
+ */
+void
+FileDestReceiverStats(DestReceiver *dest, uint64 *rowsSent, uint64 *bytesSent)
+{
+	TaskFileDestReceiver *fileDestReceiver = (TaskFileDestReceiver *) dest;
+	*rowsSent = fileDestReceiver->tuplesSent;
+	*bytesSent = fileDestReceiver->bytesSent;
 }

@@ -1,5 +1,6 @@
 #include "udfs/read_intermediate_results/9.2-1.sql"
 #include "udfs/fetch_intermediate_results/9.2-1.sql"
+#include "udfs/worker_partition_query_result/9.2-1.sql"
 
 ALTER TABLE pg_catalog.pg_dist_colocation ADD distributioncolumncollation oid;
 UPDATE pg_catalog.pg_dist_colocation dc SET distributioncolumncollation = t.typcollation

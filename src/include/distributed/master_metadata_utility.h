@@ -155,6 +155,11 @@ extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
 extern int CompareShardPlacementsByWorker(const void *leftElement,
 										  const void *rightElement);
-
+extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
+															 bool *isNullArray,
+															 Oid intervalTypeId,
+															 int32 intervalTypeMod);
+extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
+								Oid *intervalTypeId, int32 *intervalTypeMod);
 
 #endif   /* MASTER_METADATA_UTILITY_H */

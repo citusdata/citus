@@ -140,13 +140,20 @@ extern void InvalidateMetadataSystemCache(void);
 extern Datum DistNodeMetadata(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
+extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
+										  int shardCount);
+extern bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+										int shardIntervalArrayLength,
+										Oid shardIntervalCollation,
+										FmgrInfo *shardIntervalSortCompareFunction);
 
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
-bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
-
+extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
+extern void ErrorIfInconsistentShardIntervals(DistTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
+extern char LookupDistributionMethod(Oid distributionMethodOid);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
