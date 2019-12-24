@@ -75,6 +75,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */

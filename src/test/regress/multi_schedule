@@ -271,6 +271,7 @@ test: multi_replicate_reference_table
 test: multi_reference_table
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+test: coordinator_shouldhaveshards
 
 test: remove_coordinator
 

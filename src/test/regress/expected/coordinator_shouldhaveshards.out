@@ -1,0 +1,118 @@
+-- Test queries on a distributed table with shards on the coordinator
+CREATE SCHEMA coordinator_shouldhaveshards;
+SET search_path TO coordinator_shouldhaveshards;
+-- idempotently add node to allow this test to run without add_coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column? 
+----------
+        1
+(1 row)
+
+RESET client_min_messages;
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column? 
+----------
+        1
+(1 row)
+
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test','x', colocate_with := 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT count(*) FROM pg_dist_shard JOIN pg_dist_placement USING (shardid)
+WHERE logicalrelid = 'test'::regclass AND groupid = 0;
+ count 
+-------
+     2
+(1 row)
+
+-- INSERT..SELECT with COPY under the covers
+INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
+-- router queries execute locally
+INSERT INTO test VALUES (1, 1);
+SELECT y FROM test WHERE x = 1;
+ y 
+---
+ 1
+(1 row)
+
+-- multi-shard queries connect to localhost
+SELECT count(*) FROM test;
+ count 
+-------
+   100
+(1 row)
+
+WITH a AS (SELECT * FROM test) SELECT count(*) FROM test;
+ count 
+-------
+   100
+(1 row)
+
+-- multi-shard queries in transaction blocks execute locally
+BEGIN;
+SELECT y FROM test WHERE x = 1;
+ y 
+---
+ 1
+(1 row)
+
+SELECT count(*) FROM test;
+ count 
+-------
+   100
+(1 row)
+
+END;
+BEGIN;
+SELECT y FROM test WHERE x = 1;
+ y 
+---
+ 1
+(1 row)
+
+SELECT count(*) FROM test;
+ count 
+-------
+   100
+(1 row)
+
+END;
+-- DDL connects to locahost
+ALTER TABLE test ADD COLUMN z int;
+-- DDL after local execution
+BEGIN;
+SELECT y FROM test WHERE x = 1;
+ y 
+---
+ 1
+(1 row)
+
+ALTER TABLE test DROP COLUMN z;
+ERROR:  cannot execute command because a local execution has already been done in the transaction
+DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
+HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
+ROLLBACK;
+BEGIN;
+ALTER TABLE test DROP COLUMN z;
+SELECT y FROM test WHERE x = 1;
+ y 
+---
+ 1
+(1 row)
+
+END;
+DELETE FROM test;
+DROP TABLE test;
+DROP SCHEMA coordinator_shouldhaveshards CASCADE;
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+ ?column? 
+----------
+        1
+(1 row)
+
