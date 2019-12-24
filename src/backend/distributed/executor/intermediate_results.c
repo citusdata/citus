@@ -98,9 +98,6 @@ static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
 												  Datum *resultIdArray,
 												  int resultCount);
 static uint64 FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId);
-static CopyStatus CopyDataFromConnection(MultiConnection *connection,
-										 FileCompat *fileCompat,
-										 uint64 *bytesReceived);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
@@ -932,83 +929,4 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 	ClearResults(connection, raiseErrors);
 
 	return totalBytesWritten;
-}
-
-
-/*
- * CopyDataFromConnection reads a row of copy data from connection and writes it
- * to the given file.
- */
-static CopyStatus
-CopyDataFromConnection(MultiConnection *connection, FileCompat *fileCompat,
-					   uint64 *bytesReceived)
-{
-	/*
-	 * Consume input to handle the case where previous copy operation might have
-	 * received zero bytes.
-	 */
-	int consumed = PQconsumeInput(connection->pgConn);
-	if (consumed == 0)
-	{
-		return CLIENT_COPY_FAILED;
-	}
-
-	/* receive copy data message in an asynchronous manner */
-	char *receiveBuffer = NULL;
-	bool asynchronous = true;
-	int receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
-	while (receiveLength > 0)
-	{
-		/* received copy data; append these data to file */
-		errno = 0;
-
-		int bytesWritten = FileWriteCompat(fileCompat, receiveBuffer,
-										   receiveLength, PG_WAIT_IO);
-		if (bytesWritten != receiveLength)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not append to file: %m")));
-		}
-
-		*bytesReceived += receiveLength;
-		PQfreemem(receiveBuffer);
-		receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
-	}
-
-	if (receiveLength == 0)
-	{
-		/* we cannot read more data without blocking */
-		return CLIENT_COPY_MORE;
-	}
-	else if (receiveLength == -1)
-	{
-		/* received copy done message */
-		bool raiseInterrupts = true;
-		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
-		ExecStatusType resultStatus = PQresultStatus(result);
-		CopyStatus copyStatus = 0;
-
-		if (resultStatus == PGRES_COMMAND_OK)
-		{
-			copyStatus = CLIENT_COPY_DONE;
-		}
-		else
-		{
-			copyStatus = CLIENT_COPY_FAILED;
-
-			ReportResultError(connection, result, WARNING);
-		}
-
-		PQclear(result);
-		ForgetResults(connection);
-
-		return copyStatus;
-	}
-	else
-	{
-		Assert(receiveLength == -2);
-		ReportConnectionError(connection, WARNING);
-
-		return CLIENT_COPY_FAILED;
-	}
 }

@@ -16,6 +16,7 @@
 
 
 #include "distributed/connection_management.h"
+#include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 
 #ifdef HAVE_POLL_H
@@ -123,6 +124,8 @@ extern ResultStatus MultiClientResultStatus(int32 connectionId);
 extern QueryStatus MultiClientQueryStatus(int32 connectionId);
 extern CopyStatus MultiClientCopyData(int32 connectionId, int32 fileDescriptor,
 									  uint64 *returnBytesReceived);
+extern CopyStatus CopyDataFromConnection(MultiConnection *connection,
+										 FileCompat *fileCompat, uint64 *bytesReceived);
 extern BatchQueryStatus MultiClientBatchResult(int32 connectionId, void **queryResult,
 											   int *rowCount, int *columnCount);
 extern char * MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex);
