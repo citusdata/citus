@@ -807,8 +807,8 @@ EXPLAIN (COSTS FALSE) SELECT *
 (23 rows)
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
-                                                     QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan."time" DESC
@@ -816,20 +816,18 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                ->  Distributed Subplan 90_1
                      ->  Limit
                            ->  Sort
-                                 Sort Key: (max(remote_scan.lastseen)) DESC
-                                 ->  HashAggregate
-                                       Group Key: remote_scan.user_id
-                                       ->  Custom Scan (Citus Adaptive)
-                                             Task Count: 4
-                                             Tasks Shown: One of 4
-                                             ->  Task
-                                                   Node: host=localhost port=57637 dbname=regression
-                                                   ->  Limit
-                                                         ->  Sort
-                                                               Sort Key: (max("time")) DESC
-                                                               ->  HashAggregate
-                                                                     Group Key: user_id
-                                                                     ->  Seq Scan on users_table_1400256 users_table
+                                 Sort Key: remote_scan.lastseen DESC
+                                 ->  Custom Scan (Citus Adaptive)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  Limit
+                                                   ->  Sort
+                                                         Sort Key: (max("time")) DESC
+                                                         ->  HashAggregate
+                                                               Group Key: user_id
+                                                               ->  Seq Scan on users_table_1400256 users_table
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -842,7 +840,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                                        ->  Function Scan on read_intermediate_result intermediate_result
                                        ->  Hash
                                              ->  Seq Scan on events_table_1400260 et
-(33 rows)
+(31 rows)
 
 SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
@@ -910,7 +908,7 @@ DELETE FROM small_view;
 ERROR:  cannot modify views over distributed tables
 INSERT INTO small_view VALUES(8, 5) ON CONFLICT(tenant_id) DO UPDATE SET tenant_id=99;
 ERROR:  cannot modify views over distributed tables
--- using views in modify statements' FROM / WHERE clauses is still valid 
+-- using views in modify statements' FROM / WHERE clauses is still valid
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
@@ -924,7 +922,7 @@ SELECT * FROM large order by 1, 2;
 -- we should still have identical rows for next test statements, then insert new rows to both tables
 INSERT INTO large VALUES(14, 14);
 INSERT INTO small VALUES(14, 14);
--- using views in subqueries within modify statements is still valid 
+-- using views in subqueries within modify statements is still valid
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
@@ -938,8 +936,8 @@ SELECT * FROM large order by 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
 INSERT INTO large VALUES(14, 14);
--- using views in modify statements' FROM / WHERE clauses is still valid 
-UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
 ----+-----------
@@ -1150,7 +1148,7 @@ SELECT create_distributed_table('small','tenant_id');
 CREATE VIEW small_view AS SELECT id, tenant_id FROM (SELECT *, id*2 FROM small WHERE id < 100 ORDER BY 1,2 LIMIT 5) as foo;
 \copy small FROM STDIN DELIMITER ','
 \copy large FROM STDIN DELIMITER ','
--- using views in modify statements' FROM / WHERE clauses is still valid 
+-- using views in modify statements' FROM / WHERE clauses is still valid
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
@@ -1164,7 +1162,7 @@ SELECT * FROM large order by 1, 2;
 -- we should still have identical rows for next test statements, then insert new rows to both tables
 INSERT INTO large VALUES(14, 14);
 INSERT INTO small VALUES(14, 14);
--- using views in subqueries within modify statements is still valid 
+-- using views in subqueries within modify statements is still valid
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
@@ -1178,8 +1176,8 @@ SELECT * FROM large order by 1, 2;
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
 INSERT INTO large VALUES(14, 14);
--- using views in modify statements' FROM / WHERE clauses is still valid 
-UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id; 
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
 ----+-----------

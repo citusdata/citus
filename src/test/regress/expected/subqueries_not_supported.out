@@ -54,11 +54,11 @@ SELECT
 FROM
 	(
 		SELECT 
-			array_agg(users_table.user_id ORDER BY users_table.time) 
+			array_agg(users_table.value_2 ORDER BY users_table.time) 
 		FROM 
 			users_table, (SELECT user_id FROM events_table) as evs
 		WHERE users_table.user_id = evs.user_id
-		GROUP BY users_table.user_id 
+		GROUP BY users_table.value_2 
 		LIMIT 5
 	) as foo;
 ERROR:  array_agg with order by is unsupported

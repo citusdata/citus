@@ -33,7 +33,7 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 ANALYZE lineitem_hash;
 SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
--- is a grouping on the partition key	
+-- is a grouping on the partition key
 SELECT
 	l_orderkey, count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -61,33 +61,30 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                                                                                                                              QUERY PLAN                                                                                                                              
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN                                                                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
-   Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
+   Output: remote_scan.l_orderkey, remote_scan.count
    ->  Sort
-         Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
-         Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey DESC
-         ->  HashAggregate
-               Output: remote_scan.l_orderkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
-               Group Key: remote_scan.l_orderkey
-               ->  Custom Scan (Citus Task-Tracker)
-                     Output: remote_scan.l_orderkey, remote_scan.count
-                     Task Count: 8
-                     Tasks Shown: One of 8
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
+         Output: remote_scan.l_orderkey, remote_scan.count
+         Sort Key: remote_scan.count DESC, remote_scan.l_orderkey DESC
+         ->  Custom Scan (Citus Task-Tracker)
+               Output: remote_scan.l_orderkey, remote_scan.count
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_partkey))
+                           ->  Sort
                                  Output: l_orderkey, (count(DISTINCT l_partkey))
-                                 ->  Sort
-                                       Output: l_orderkey, (count(DISTINCT l_partkey))
-                                       Sort Key: (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey DESC
-                                       ->  GroupAggregate
-                                             Output: l_orderkey, count(DISTINCT l_partkey)
-                                             Group Key: lineitem_hash.l_orderkey
-                                             ->  Index Scan Backward using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
-                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(24 rows)
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey DESC
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_partkey)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan Backward using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(21 rows)
 
 -- it is also supported if there is no grouping or grouping is on non-partition field
 SELECT
@@ -206,33 +203,30 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 3 DESC, 2 DESC, 1
 	LIMIT 10;
-                                                                                                                              QUERY PLAN                                                                                                                              
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN                                                                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
-   Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
+   Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
    ->  Sort
-         Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
-         Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)) DESC, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
-         ->  HashAggregate
-               Output: remote_scan.l_orderkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint), COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)
-               Group Key: remote_scan.l_orderkey
-               ->  Custom Scan (Citus Task-Tracker)
-                     Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
-                     Task Count: 8
-                     Tasks Shown: One of 8
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
+         Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+         Sort Key: remote_scan.count_1 DESC, remote_scan.count DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Task-Tracker)
+               Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
+                           ->  Sort
                                  Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
-                                 ->  Sort
-                                       Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
-                                       Sort Key: (count(DISTINCT lineitem_hash.l_shipmode)) DESC, (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey
-                                       ->  GroupAggregate
-                                             Output: l_orderkey, count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
-                                             Group Key: lineitem_hash.l_orderkey
-                                             ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
-                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(24 rows)
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_shipmode)) DESC, (count(DISTINCT lineitem_hash.l_partkey)) DESC, lineitem_hash.l_orderkey
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(21 rows)
 
 -- partition/non-partition column count distinct no grouping
 SELECT
@@ -490,33 +484,30 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 3 DESC, 1
 	LIMIT 10;
-                                                                                                                              QUERY PLAN                                                                                                                              
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN                                                                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
-   Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
+   Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
    ->  Sort
-         Output: remote_scan.l_orderkey, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint))
-         Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)) DESC, (COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)) DESC, remote_scan.l_orderkey
-         ->  HashAggregate
-               Output: remote_scan.l_orderkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint), COALESCE((pg_catalog.sum(remote_scan.count_1))::bigint, '0'::bigint)
-               Group Key: remote_scan.l_orderkey
-               ->  Custom Scan (Citus Task-Tracker)
-                     Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
-                     Task Count: 8
-                     Tasks Shown: One of 8
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
+         Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+         Sort Key: remote_scan.count DESC, remote_scan.count_1 DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Task-Tracker)
+               Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
+               Task Count: 8
+               Tasks Shown: One of 8
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
+                           ->  Sort
                                  Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
-                                 ->  Sort
-                                       Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
-                                       Sort Key: (count(DISTINCT lineitem_hash.l_suppkey) FILTER (WHERE (lineitem_hash.l_shipmode = 'AIR'::bpchar))) DESC, (count(DISTINCT lineitem_hash.l_suppkey)) DESC, lineitem_hash.l_orderkey
-                                       ->  GroupAggregate
-                                             Output: l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar)), count(DISTINCT l_suppkey)
-                                             Group Key: lineitem_hash.l_orderkey
-                                             ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
-                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(24 rows)
+                                 Sort Key: (count(DISTINCT lineitem_hash.l_suppkey) FILTER (WHERE (lineitem_hash.l_shipmode = 'AIR'::bpchar))) DESC, (count(DISTINCT lineitem_hash.l_suppkey)) DESC, lineitem_hash.l_orderkey
+                                 ->  GroupAggregate
+                                       Output: l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar)), count(DISTINCT l_suppkey)
+                                       Group Key: lineitem_hash.l_orderkey
+                                       ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(21 rows)
 
 -- group by on non-partition column
 SELECT
@@ -922,7 +913,7 @@ SELECT *
 -- distinct on non-var (type cast/field select) columns are also
 -- supported if grouped on distribution column
 -- random is added to prevent flattening by postgresql
-SELECT 
+SELECT
 	l_orderkey, count(a::int), count(distinct a::int)
 	FROM (
 		SELECT l_orderkey, l_orderkey * 1.5 a, random() b

@@ -108,34 +108,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360615 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360616 daily_uniques
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360617 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360618 daily_uniques
-(25 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -144,36 +142,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360615 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360616 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360617 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360618 daily_uniques
-(27 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with operator on coordinator query
 SET hll.force_groupagg to OFF;
@@ -183,34 +177,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360615 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360616 daily_uniques
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360617 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360618 daily_uniques
-(25 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -219,36 +211,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360615 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360616 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360617 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360618 daily_uniques
-(27 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with expression on coordinator query
 SET hll.force_groupagg to OFF;
@@ -258,34 +246,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360615 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360616 daily_uniques
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360617 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360618 daily_uniques
-(25 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -294,36 +280,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360615 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360616 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360617 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_360618 daily_uniques
-(27 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with having
 SET hll.force_groupagg to OFF;
@@ -333,34 +315,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360615 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360616 daily_uniques
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360617 daily_uniques
-         ->  Task
-               Node: host=localhost port=57638 dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_360618 daily_uniques
-(25 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -370,49 +350,36 @@ FROM
   daily_uniques
 GROUP BY(1)
 HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   Filter: (hll_cardinality(hll_union_agg(remote_scan.worker_column_3)) > '1'::double precision)
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_360615 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_360616 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_360617 daily_uniques
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_360618 daily_uniques
-(40 rows)
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_360615 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_360616 daily_uniques
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_360617 daily_uniques
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_360618 daily_uniques
+(27 rows)
 
 DROP TABLE raw_table;
 DROP TABLE daily_uniques;
