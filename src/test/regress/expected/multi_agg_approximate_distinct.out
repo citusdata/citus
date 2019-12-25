@@ -9,11 +9,6 @@ AS create_cmd FROM pg_available_extensions()
 WHERE name = 'hll'
 \gset
 :create_cmd;
-\c - - - :worker_1_port
-:create_cmd;
-\c - - - :worker_2_port
-:create_cmd;
-\c - - - :master_port
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
@@ -153,14 +148,14 @@ SET search_path TO public;
 -- If we have an order by on count(distinct) that we intend to push down to
 -- worker nodes, we need to error out. Otherwise, we are fine.
 SET citus.limit_clause_row_fetch_count = 1000;
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY count_distinct
 	LIMIT 10;
 ERROR:  cannot approximate count(distinct) and order by it
 HINT:  You might need to disable approximations for either count(distinct) or limit through configuration.
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY total

@@ -150,6 +150,28 @@ SELECT create_distributed_function('last(anyelement)');
 SELECT key, first(val ORDER BY id), last(val ORDER BY id)
 FROM aggdata GROUP BY key ORDER BY key;
 ERROR:  unsupported aggregate function first
+-- However, GROUP BY on distribution column gets pushed down
+SELECT id, first(val ORDER BY key), last(val ORDER BY key)
+FROM aggdata GROUP BY id ORDER BY id;
+ id | first | last 
+----+-------+------
+  1 |     2 |    2
+  2 |       |     
+  3 |     2 |    2
+  4 |     3 |    3
+  5 |     5 |    5
+  6 |     4 |    4
+  7 |       |     
+  8 |       |     
+  9 |       |     
+ 10 |     8 |    8
+ 11 |     0 |    0
+(11 rows)
+
+-- Test that expressions don't slip past. This fails
+SELECT id%5, first(val ORDER BY key), last(val ORDER BY key)
+FROM aggdata GROUP BY id%5 ORDER BY id%5;
+ERROR:  unsupported aggregate function first
 -- test aggregate with stype which is not a by-value datum
 -- also test our handling of the aggregate not existing on workers
 create function sumstring_sfunc(state text, x text)
@@ -165,7 +187,7 @@ create aggregate sumstring(text) (
 );
 select sumstring(valf::text) from aggdata where valf is not null;
 ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 select create_distributed_function('sumstring(text)');
  create_distributed_function 
 -----------------------------

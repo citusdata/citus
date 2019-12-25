@@ -34,25 +34,23 @@ FROM users_table
 GROUP BY user_id
 ORDER BY avg(value_1) DESC
 LIMIT 1;
-                                                           QUERY PLAN                                                           
---------------------------------------------------------------------------------------------------------------------------------
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=0.00..0.00 rows=0 width=0)
    ->  Sort  (cost=0.00..0.00 rows=0 width=0)
-         Sort Key: ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-               Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit  (cost=1.70..1.70 rows=1 width=52)
-                                 ->  Sort  (cost=1.70..1.70 rows=2 width=52)
-                                       Sort Key: (avg(value_1)) DESC
-                                       ->  HashAggregate  (cost=1.66..1.69 rows=2 width=52)
-                                             Group Key: user_id
-                                             ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=8)
-(16 rows)
+         Sort Key: remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit  (cost=1.53..1.53 rows=1 width=36)
+                           ->  Sort  (cost=1.53..1.53 rows=2 width=36)
+                                 Sort Key: (avg(value_1)) DESC
+                                 ->  HashAggregate  (cost=1.50..1.52 rows=2 width=36)
+                                       Group Key: user_id
+                                       ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=8)
+(14 rows)
 
 SELECT user_id, avg(value_1) + 1
 FROM users_table
@@ -98,26 +96,24 @@ ORDER BY 2  DESC;
        1 | 10.2857142857142857
 (6 rows)
 
-EXPLAIN 
+EXPLAIN
 SELECT user_id, avg(value_1) + count(value_2)
 FROM users_table
 GROUP BY user_id
 ORDER BY 2  DESC;
-                                                                                           QUERY PLAN                                                                                            
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: (((pg_catalog.sum(remote_scan."?column?") / pg_catalog.sum(remote_scan."?column?_1")) + (COALESCE((pg_catalog.sum(remote_scan."?column?_2"))::bigint, '0'::bigint))::numeric)) DESC
-   ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-         Group Key: remote_scan.user_id
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  HashAggregate  (cost=1.66..1.68 rows=2 width=28)
-                           Group Key: user_id
-                           ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
-(12 rows)
+   Sort Key: remote_scan."?column?" DESC
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
+               ->  HashAggregate  (cost=1.58..1.61 rows=2 width=36)
+                     Group Key: user_id
+                     ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
+(10 rows)
 
 SELECT user_id, avg(value_1) + count(value_2)
 FROM users_table
@@ -221,25 +217,23 @@ FROM users_table
 GROUP BY user_id
 ORDER BY (10000 / (sum(value_1 + value_2)))  DESC
 LIMIT 2;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: ((10000 / (pg_catalog.sum(remote_scan.worker_column_2))::bigint)) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: ((10000 / sum((value_1 + value_2)))) DESC
-                                       ->  HashAggregate
-                                             Group Key: user_id
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.worker_column_2 DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: ((10000 / sum((value_1 + value_2)))) DESC
+                                 ->  HashAggregate
+                                       Group Key: user_id
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 SELECT 10000 / (sum(value_1 + value_2))
 FROM users_table
@@ -289,25 +283,23 @@ FROM users_table
 GROUP BY user_id
 ORDER BY sum(value_1) DESC
 LIMIT 2;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: ((pg_catalog.sum(remote_scan.worker_column_2))::bigint) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (sum(value_1)) DESC
-                                       ->  HashAggregate
-                                             Group Key: user_id
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.worker_column_2 DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (sum(value_1)) DESC
+                                 ->  HashAggregate
+                                       Group Key: user_id
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
@@ -331,30 +323,28 @@ WHERE ut.user_id = et.user_id and et.value_2 < 5
 GROUP BY ut.user_id
 ORDER BY MAX(et.time), AVG(ut.value_1)
 LIMIT 5;
-                                                                     QUERY PLAN                                                                      
------------------------------------------------------------------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (max(remote_scan.worker_column_4)), ((pg_catalog.sum(remote_scan.worker_column_5) / pg_catalog.sum(remote_scan.worker_column_6)))
-         ->  HashAggregate
-               Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (max(et."time")), (avg(ut.value_1))
-                                       ->  HashAggregate
-                                             Group Key: ut.user_id
-                                             ->  Hash Join
-                                                   Hash Cond: (ut.user_id = et.user_id)
-                                                   ->  Seq Scan on users_table_1400256 ut
-                                                   ->  Hash
-                                                         ->  Seq Scan on events_table_1400260 et
-                                                               Filter: (value_2 < 5)
-(21 rows)
+         Sort Key: remote_scan.worker_column_3, remote_scan.worker_column_4
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (max(et."time")), (avg(ut.value_1))
+                                 ->  HashAggregate
+                                       Group Key: ut.user_id
+                                       ->  Hash Join
+                                             Hash Cond: (ut.user_id = et.user_id)
+                                             ->  Seq Scan on users_table_1400256 ut
+                                             ->  Hash
+                                                   ->  Seq Scan on events_table_1400260 et
+                                                         Filter: (value_2 < 5)
+(19 rows)
 
 SELECT ut.user_id, avg(et.value_2)
 FROM users_table ut, events_table et
@@ -390,30 +380,28 @@ WHERE ut.user_id = et.user_id and et.value_2 < 5
 GROUP BY ut.user_id
 ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 5;
-                                                                                                   QUERY PLAN                                                                                                    
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)), ((pg_catalog.sum(remote_scan.worker_column_3) / pg_catalog.sum(remote_scan.worker_column_4))), remote_scan.user_id DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (count(DISTINCT ut.value_2)), (avg(ut.value_1)), ut.user_id DESC
-                                       ->  GroupAggregate
-                                             Group Key: ut.user_id
-                                             ->  Sort
-                                                   Sort Key: ut.user_id DESC
-                                                   ->  Hash Join
-                                                         Hash Cond: (ut.user_id = et.user_id)
-                                                         ->  Seq Scan on users_table_1400256 ut
-                                                         ->  Hash
-                                                               ->  Seq Scan on events_table_1400260 et
-                                                                     Filter: (value_2 < 5)
-(23 rows)
+         Sort Key: remote_scan.count, remote_scan.worker_column_3, remote_scan.user_id DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (count(DISTINCT ut.value_2)), (avg(ut.value_1)), ut.user_id DESC
+                                 ->  GroupAggregate
+                                       Group Key: ut.user_id
+                                       ->  Sort
+                                             Sort Key: ut.user_id DESC
+                                             ->  Hash Join
+                                                   Hash Cond: (ut.user_id = et.user_id)
+                                                   ->  Seq Scan on users_table_1400256 ut
+                                                   ->  Hash
+                                                         ->  Seq Scan on events_table_1400260 et
+                                                               Filter: (value_2 < 5)
+(21 rows)
 

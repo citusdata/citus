@@ -10,13 +10,6 @@ WHERE name = 'hll'
 \gset
 :create_cmd;
 ERROR:  extension "hll" already exists
-\c - - - :worker_1_port
-:create_cmd;
-ERROR:  extension "hll" already exists
-\c - - - :worker_2_port
-:create_cmd;
-ERROR:  extension "hll" already exists
-\c - - - :master_port
 SET citus.shard_count TO 4;
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);
@@ -432,11 +425,6 @@ AS create_topn FROM pg_available_extensions()
 WHERE name = 'topn'
 \gset
 :create_topn;
-\c - - - :worker_1_port
-:create_topn;
-\c - - - :worker_2_port
-:create_topn;
-\c - - - :master_port
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 SELECT create_distributed_table('customer_reviews', 'user_id');

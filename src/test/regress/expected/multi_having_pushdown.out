@@ -22,27 +22,24 @@ EXPLAIN (COSTS FALSE)
     FROM lineitem_hash
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_orderkey
-         ->  HashAggregate
-               Group Key: remote_scan.l_orderkey
-               Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (sum((l_extendedprice * l_discount))) DESC, l_orderkey
-                                       ->  HashAggregate
-                                             Group Key: l_orderkey
-                                             Filter: (sum(l_quantity) > '24'::numeric)
-                                             ->  Seq Scan on lineitem_hash_590000 lineitem_hash
-(18 rows)
+         Sort Key: remote_scan.revenue DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (sum((l_extendedprice * l_discount))) DESC, l_orderkey
+                                 ->  HashAggregate
+                                       Group Key: l_orderkey
+                                       Filter: (sum(l_quantity) > '24'::numeric)
+                                       ->  Seq Scan on lineitem_hash_590000 lineitem_hash
+(15 rows)
 
 -- but don't push down when table is distributed by append
 EXPLAIN (COSTS FALSE)
@@ -98,27 +95,24 @@ EXPLAIN (COSTS FALSE)
     FROM lineitem_hash
     GROUP BY l_shipmode, l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 3 DESC, 1, 2 LIMIT 3;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_shipmode, remote_scan.l_orderkey
-         ->  HashAggregate
-               Group Key: remote_scan.l_shipmode, remote_scan.l_orderkey
-               Filter: (sum(remote_scan.worker_column_4) > '24'::numeric)
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (sum((l_extendedprice * l_discount))) DESC, l_shipmode, l_orderkey
-                                       ->  HashAggregate
-                                             Group Key: l_shipmode, l_orderkey
-                                             Filter: (sum(l_quantity) > '24'::numeric)
-                                             ->  Seq Scan on lineitem_hash_590000 lineitem_hash
-(18 rows)
+         Sort Key: remote_scan.revenue DESC, remote_scan.l_shipmode, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (sum((l_extendedprice * l_discount))) DESC, l_shipmode, l_orderkey
+                                 ->  HashAggregate
+                                       Group Key: l_shipmode, l_orderkey
+                                       Filter: (sum(l_quantity) > '24'::numeric)
+                                       ->  Seq Scan on lineitem_hash_590000 lineitem_hash
+(15 rows)
 
 -- couple more checks with joins
 EXPLAIN (COSTS FALSE)
@@ -127,31 +121,28 @@ EXPLAIN (COSTS FALSE)
     WHERE o_orderkey = l_orderkey
     GROUP BY l_orderkey, o_orderkey, l_shipmode HAVING sum(l_quantity) > 24
     ORDER BY 1 DESC LIMIT 3;
-                                                            QUERY PLAN                                                             
------------------------------------------------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (sum(remote_scan.revenue)) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3, remote_scan.worker_column_4
-               Filter: (sum(remote_scan.worker_column_5) > '24'::numeric)
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=57637 dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: (sum((lineitem_hash.l_extendedprice * lineitem_hash.l_discount))) DESC
-                                       ->  HashAggregate
-                                             Group Key: lineitem_hash.l_orderkey, orders_hash.o_orderkey, lineitem_hash.l_shipmode
-                                             Filter: (sum(lineitem_hash.l_quantity) > '24'::numeric)
-                                             ->  Hash Join
-                                                   Hash Cond: (orders_hash.o_orderkey = lineitem_hash.l_orderkey)
-                                                   ->  Seq Scan on orders_hash_590004 orders_hash
-                                                   ->  Hash
-                                                         ->  Seq Scan on lineitem_hash_590000 lineitem_hash
-(22 rows)
+         Sort Key: remote_scan.revenue DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (sum((lineitem_hash.l_extendedprice * lineitem_hash.l_discount))) DESC
+                                 ->  HashAggregate
+                                       Group Key: lineitem_hash.l_orderkey, orders_hash.o_orderkey, lineitem_hash.l_shipmode
+                                       Filter: (sum(lineitem_hash.l_quantity) > '24'::numeric)
+                                       ->  Hash Join
+                                             Hash Cond: (orders_hash.o_orderkey = lineitem_hash.l_orderkey)
+                                             ->  Seq Scan on orders_hash_590004 orders_hash
+                                             ->  Hash
+                                                   ->  Seq Scan on lineitem_hash_590000 lineitem_hash
+(19 rows)
 
 EXPLAIN (COSTS FALSE)
     SELECT sum(l_extendedprice * l_discount) as revenue
@@ -183,9 +174,9 @@ EXPLAIN (COSTS FALSE)
 
 DROP TABLE lineitem_hash;
 DROP TABLE orders_hash;
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1
 ORDER BY 1;
  max 
@@ -195,9 +186,9 @@ ORDER BY 1;
    5
 (3 rows)
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 OR count(*) > 10
 ORDER BY 1;
  max 
@@ -208,9 +199,9 @@ ORDER BY 1;
    5
 (4 rows)
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 AND count(*) > 20
 ORDER BY 1;
  max 
@@ -219,9 +210,9 @@ ORDER BY 1;
    5
 (2 rows)
 
-SELECT max(value_1) 
-FROM users_table 
-GROUP BY user_id 
+SELECT max(value_1)
+FROM users_table
+GROUP BY user_id
 HAVING max(value_2) > 0 AND count(*) FILTER (WHERE value_3=2) > 3 AND min(value_2) IN (0,1,2,3);
  max 
 -----
