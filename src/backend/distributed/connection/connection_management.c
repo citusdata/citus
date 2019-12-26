@@ -59,12 +59,14 @@ enum MultiConnectionPhase
 	MULTI_CONNECTION_PHASE_CONNECTED,
 	MULTI_CONNECTION_PHASE_ERROR,
 };
+
 typedef enum MultiConnectionStateChanged
 {
-	MULTI_CONNECTION_STATE_CHANGED_NO_CHANGED,
-	MULTI_CONNECTION_STATE_CHANGED_CHANGED,
-	MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT,
+	MULTI_CONNECTION_STATE_NOT_CHANGED,
+	MULTI_CONNECTION_STATE_NOT_CHANGED_REQIURE_REBUILD,
+	MULTI_CONNECTION_STATE_CHANGED,
 } MultiConnectionStateChanged;
+
 typedef struct MultiConnectionPollState
 {
 	enum MultiConnectionPhase phase;
@@ -520,13 +522,13 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 	if (status == CONNECTION_OK)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_CONNECTED;
-		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
+		return MULTI_CONNECTION_STATE_CHANGED;
 	}
 	else if (status == CONNECTION_BAD)
 	{
 		/* FIXME: retries? */
 		connectionState->phase = MULTI_CONNECTION_PHASE_ERROR;
-		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
+		return MULTI_CONNECTION_STATE_CHANGED;
 	}
 	else
 	{
@@ -538,7 +540,7 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 	if (status == CONNECTION_CHECK_WRITABLE && connectionState->pollmode !=
 		PGRES_POLLING_OK)
 	{
-		return MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT;
+		return MULTI_CONNECTION_STATE_NOT_CHANGED_REQIURE_REBUILD;
 	}
 
 	/*
@@ -547,12 +549,12 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 	if (connectionState->pollmode == PGRES_POLLING_FAILED)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_ERROR;
-		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
+		return MULTI_CONNECTION_STATE_CHANGED;
 	}
 	else if (connectionState->pollmode == PGRES_POLLING_OK)
 	{
 		connectionState->phase = MULTI_CONNECTION_PHASE_CONNECTED;
-		return MULTI_CONNECTION_STATE_CHANGED_CHANGED;
+		return MULTI_CONNECTION_STATE_CHANGED;
 	}
 	else
 	{
@@ -561,8 +563,8 @@ MultiConnectionStatePoll(MultiConnectionPollState *connectionState)
 	}
 
 	return (oldPollmode != connectionState->pollmode) ?
-		   MULTI_CONNECTION_STATE_CHANGED_CHANGED :
-		   MULTI_CONNECTION_STATE_CHANGED_NO_CHANGED;
+		   MULTI_CONNECTION_STATE_CHANGED :
+		   MULTI_CONNECTION_STATE_NOT_CHANGED;
 }
 
 
@@ -780,7 +782,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 			}
 
 			connectionStateChanged = MultiConnectionStatePoll(connectionState);
-			if (connectionStateChanged == MULTI_CONNECTION_STATE_CHANGED_CHANGED)
+			if (connectionStateChanged == MULTI_CONNECTION_STATE_CHANGED)
 			{
 				if (connectionState->phase != MULTI_CONNECTION_PHASE_CONNECTING)
 				{
@@ -806,7 +808,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				}
 			}
 			else if (connectionStateChanged ==
-					 MULTI_CONNECTION_STATE_CHANGED_REBUILD_EVENT)
+					 MULTI_CONNECTION_STATE_NOT_CHANGED_REQIURE_REBUILD)
 			{
 				waitEventSetRebuild = true;
 			}
