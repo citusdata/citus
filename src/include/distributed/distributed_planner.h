@@ -129,6 +129,33 @@ typedef struct RelationRowLock
 } RelationRowLock;
 
 
+typedef struct DistributedPlanningContext
+{
+	/* The parsed query that is given to the planner. It is a slightly modified
+	 * to work with the standard_planner */
+	Query *query;
+
+	/* A copy of the original parsed query that is given to the planner. This
+	 * doesn't contain most of the changes that are made to parse. There's one
+	 * that change that is made for non fast path router queries though, which
+	 * is the assigning of RTE identities using AssignRTEIdentities. This is
+	 * NULL for non distributed plans, since those don't need it. */
+	Query *originalQuery;
+
+	/* the cursor options given to the planner */
+	int cursorOptions;
+
+	/* the ParamListInfo that is given to the planner */
+	ParamListInfo boundParams;
+
+	/* Plan created either by standard_planner or by FastPathPlanner */
+	PlannedStmt *plan;
+
+	/* Our custom restriction context */
+	PlannerRestrictionContext *plannerRestrictionContext;
+} DistributedPlanningContext;
+
+
 extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 										 ParamListInfo boundParams);
 extern List * ExtractRangeTableEntryList(Query *query);
@@ -150,5 +177,8 @@ extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
 extern int32 BlessRecordExpression(Expr *expr);
+extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
+extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
+								  struct DistributedPlan *distributedPlan);
 
 #endif /* DISTRIBUTED_PLANNER_H */
