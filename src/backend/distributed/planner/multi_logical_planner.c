@@ -115,6 +115,11 @@ static MultiJoin * ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *righ
 static MultiNode * ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 										  Var *partitionColumn, JoinType joinType,
 										  List *joinClauses);
+static MultiNode * ApplyCartesianProductReferenceJoin(MultiNode *leftNode,
+													  MultiNode *rightNode,
+													  Var *partitionColumn,
+													  JoinType joinType,
+													  List *joinClauses);
 static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 										 Var *partitionColumn, JoinType joinType,
 										 List *joinClauses);
@@ -1429,27 +1434,6 @@ IsJoinClause(Node *clause)
 {
 	Var *var = NULL;
 
-	if (!IsA(clause, OpExpr))
-	{
-		return false;
-	}
-
-	OpExpr *operatorExpression = castNode(OpExpr, clause);
-	bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
-
-	if (!equalsOperator)
-	{
-		/*
-		 * The single and dual repartition join and local join planners expect the clauses
-		 * to be equi-join to calculate a hash on which to distribute.
-		 *
-		 * In the future we should move this clause to those planners and allow
-		 * non-equi-join's in the reference join and cartesian product. This is tracked in
-		 * https://github.com/citusdata/citus/issues/3198
-		 */
-		return false;
-	}
-
 	/*
 	 * take all column references from the clause, if we find 2 column references from a
 	 * different relation we assume this is a join clause
@@ -1705,7 +1689,7 @@ MultiSelectNode(List *whereClauseList)
 	foreach(whereClauseCell, whereClauseList)
 	{
 		Node *whereClause = (Node *) lfirst(whereClauseCell);
-		if (IsSelectClause(whereClause) || or_clause(whereClause))
+		if (IsSelectClause(whereClause))
 		{
 			selectClauseList = lappend(selectClauseList, whereClause);
 		}
@@ -2043,6 +2027,8 @@ JoinRuleApplyFunction(JoinRuleType ruleType)
 		RuleApplyFunctionArray[SINGLE_RANGE_PARTITION_JOIN] =
 			&ApplySingleRangePartitionJoin;
 		RuleApplyFunctionArray[DUAL_PARTITION_JOIN] = &ApplyDualPartitionJoin;
+		RuleApplyFunctionArray[CARTESIAN_PRODUCT_REFERENCE_JOIN] =
+			&ApplyCartesianProductReferenceJoin;
 		RuleApplyFunctionArray[CARTESIAN_PRODUCT] = &ApplyCartesianProduct;
 
 		ruleApplyFunctionInitialized = true;
@@ -2066,6 +2052,28 @@ ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
 {
 	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
 	joinNode->joinRuleType = REFERENCE_JOIN;
+	joinNode->joinType = joinType;
+	joinNode->joinClauseList = applicableJoinClauses;
+
+	SetLeftChild((MultiBinaryNode *) joinNode, leftNode);
+	SetRightChild((MultiBinaryNode *) joinNode, rightNode);
+
+	return (MultiNode *) joinNode;
+}
+
+
+/*
+ * ApplyCartesianProductReferenceJoin creates a new MultiJoin node that joins
+ * the left and the right node. The new node uses the broadcast join rule to
+ * perform the join.
+ */
+static MultiNode *
+ApplyCartesianProductReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
+								   Var *partitionColumn, JoinType joinType,
+								   List *applicableJoinClauses)
+{
+	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
+	joinNode->joinRuleType = CARTESIAN_PRODUCT_REFERENCE_JOIN;
 	joinNode->joinType = joinType;
 	joinNode->joinClauseList = applicableJoinClauses;
 

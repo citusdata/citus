@@ -40,6 +40,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -3457,6 +3458,28 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 
 
 /*
+ * NodeIsRangeTblRefReferenceTable checks if the node is a RangeTblRef that
+ * points to a reference table in the rangeTableList.
+ */
+static bool
+NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
+{
+	if (!IsA(node, RangeTblRef))
+	{
+		return false;
+	}
+	RangeTblRef *tableRef = castNode(RangeTblRef, node);
+	RangeTblEntry *rangeTableEntry = rt_fetch(tableRef->rtindex, rangeTableList);
+	CitusRTEKind rangeTableType = GetRangeTblKind(rangeTableEntry);
+	if (rangeTableType != CITUS_RTE_RELATION)
+	{
+		return false;
+	}
+	return PartitionMethod(rangeTableEntry->relid) == DISTRIBUTE_BY_NONE;
+}
+
+
+/*
  * JoinSequenceArray walks over the join nodes in the job query and constructs a join
  * sequence containing an entry for each joined table. The function then returns an
  * array of join sequence nodes, in which each node contains the id of a table in the
@@ -3495,19 +3518,26 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 	foreach(joinExprCell, joinExprList)
 	{
 		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinExprCell);
-		RangeTblRef *rightTableRef = (RangeTblRef *) joinExpr->rarg;
+		RangeTblRef *rightTableRef = castNode(RangeTblRef, joinExpr->rarg);
 		uint32 nextRangeTableId = rightTableRef->rtindex;
-		ListCell *nextJoinClauseCell = NULL;
 		Index existingRangeTableId = 0;
 		bool applyJoinPruning = false;
 
 		List *nextJoinClauseList = make_ands_implicit((Expr *) joinExpr->quals);
+		bool leftIsReferenceTable = NodeIsRangeTblRefReferenceTable(joinExpr->larg,
+																	rangeTableList);
+		bool rightIsReferenceTable = NodeIsRangeTblRefReferenceTable(joinExpr->rarg,
+																	 rangeTableList);
+		bool isReferenceJoin = IsSupportedReferenceJoin(joinExpr->jointype,
+														leftIsReferenceTable,
+														rightIsReferenceTable);
 
 		/*
 		 * If next join clause list is empty, the user tried a cartesian product
-		 * between tables. We don't support this functionality, and error out.
+		 * between tables. We don't support this functionality for non
+		 * reference joins, and error out.
 		 */
-		if (nextJoinClauseList == NIL)
+		if (nextJoinClauseList == NIL && !isReferenceJoin)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot perform distributed planning on this query"),
@@ -3518,17 +3548,23 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 		 * We now determine if we can apply join pruning between existing range
 		 * tables and this new one.
 		 */
-		foreach(nextJoinClauseCell, nextJoinClauseList)
+		Node *nextJoinClause = NULL;
+		foreach_ptr(nextJoinClause, nextJoinClauseList)
 		{
-			OpExpr *nextJoinClause = (OpExpr *) lfirst(nextJoinClauseCell);
-
-			if (!IsJoinClause((Node *) nextJoinClause))
+			if (!NodeIsEqualsOpExpr(nextJoinClause))
 			{
 				continue;
 			}
 
-			Var *leftColumn = LeftColumnOrNULL(nextJoinClause);
-			Var *rightColumn = RightColumnOrNULL(nextJoinClause);
+			OpExpr *nextJoinClauseOpExpr = castNode(OpExpr, nextJoinClause);
+
+			if (!IsJoinClause((Node *) nextJoinClauseOpExpr))
+			{
+				continue;
+			}
+
+			Var *leftColumn = LeftColumnOrNULL(nextJoinClauseOpExpr);
+			Var *rightColumn = RightColumnOrNULL(nextJoinClauseOpExpr);
 			if (leftColumn == NULL || rightColumn == NULL)
 			{
 				continue;
@@ -3567,7 +3603,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 			if (leftPartitioned && rightPartitioned)
 			{
 				/* make sure this join clause references only simple columns */
-				CheckJoinBetweenColumns(nextJoinClause);
+				CheckJoinBetweenColumns(nextJoinClauseOpExpr);
 
 				applyJoinPruning = true;
 				break;

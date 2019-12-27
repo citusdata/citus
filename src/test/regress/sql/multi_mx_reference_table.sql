@@ -518,13 +518,15 @@ WHERE
 ORDER BY 1;
 
 
+SET citus.enable_repartition_joins = on;
 SELECT
 	colocated_table_test.value_2
 FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2
-ORDER BY 1;
+ORDER BY colocated_table_test.value_2;
+RESET citus.enable_repartition_joins;
 
 SELECT
 	colocated_table_test.value_2

@@ -27,8 +27,11 @@ FROM
 WHERE t2.y * 2 = a.a
 ORDER BY 1,2,3;
 
--- The join clause is wider than it used to be, causing this query to be recognized by the LogicalPlanner as a repartition join.
--- Unplannable query due to a three-way join which causes no valid path (besides the cartesian product) to be found
+-- The join clause is wider than it used to be, causing this query to be
+-- recognized by the LogicalPlanner as a repartition join.
+-- Due to a three-way join this causes no valid path, besides the cartesian
+-- product on reference tables. This is allowed, so it should be able to be
+-- planned.
 SELECT *
 FROM
     test t1 JOIN test t2 USING (y), -- causes repartition, which makes this not routable or pushdownable
@@ -36,6 +39,18 @@ FROM
     ref b
 WHERE t2.y - a.a - b.b = 0
 ORDER BY 1,2,3;
+
+
+-- The join clause is wider than it used to be, causing this query to be recognized by the LogicalPlanner as a repartition join.
+-- Unplannable query due to a three-way join which causes no valid path to be found
+SELECT *
+FROM
+    test t1 JOIN test t2 USING (y), -- causes repartition, which makes this not routable or pushdownable
+    test a,
+    test b
+WHERE t2.y - a.x - b.x = 0
+ORDER BY 1,2,3;
+
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA expression_reference_join CASCADE;
