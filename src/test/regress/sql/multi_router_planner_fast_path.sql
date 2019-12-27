@@ -635,7 +635,7 @@ CREATE TEMP TABLE temp_articles_hash as
 	WHERE author_id = 1
 	ORDER BY id;
 
--- fast-path router plannable queries may include filter for aggragates
+-- fast-path router plannable queries may include filter for aggregates
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash
 	WHERE author_id = 1;

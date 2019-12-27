@@ -1330,7 +1330,7 @@ CREATE TEMP TABLE temp_articles_hash_mx as
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
--- router plannable queries may include filter for aggragates
+-- router plannable queries may include filter for aggregates
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash_mx
 	WHERE author_id = 1;

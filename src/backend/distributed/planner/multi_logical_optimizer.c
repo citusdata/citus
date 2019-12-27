@@ -206,7 +206,7 @@ static Expr * AddTypeConversion(Node *originalAggregate, Node *newExpression);
 static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties);
-static bool TargetListHasAggragates(List *targetEntryList);
+static bool TargetListHasAggregates(List *targetEntryList);
 static void ProcessTargetListForWorkerQuery(List *targetEntryList,
 											ExtendedOpNodeProperties *
 											extendedOpNodeProperties,
@@ -2176,7 +2176,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool hasDistinctOn = originalOpNode->hasDistinctOn;
 
 	int originalGroupClauseLength = list_length(originalGroupClauseList);
-	bool queryHasAggregates = TargetListHasAggragates(originalTargetEntryList);
+	bool queryHasAggregates = TargetListHasAggregates(originalTargetEntryList);
 
 	/* initialize to default values */
 	memset(&queryTargetList, 0, sizeof(queryTargetList));
@@ -2288,7 +2288,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
  * the worker with two expressions count() and sum(). Thus, a single target entry
  * might end up with multiple expressions in the worker query.
  *
- * The function doesn't change the aggragates in the window functions and sends them
+ * The function doesn't change the aggregates in the window functions and sends them
  * as-is. The reason is that Citus currently only supports pushing down window
  * functions as-is. As we implement pull-to-master window functions, we should
  * revisit here as well.
@@ -2519,9 +2519,9 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
  * Note that even though Citus only pushes down the window functions, it may need to
  * modify the target list of the worker query when the window function refers to
  * an avg(). The reason is that any aggregate which is also referred by other
- * target entries would be mutated by Citus. Thus, we add a copy of the same aggragate
+ * target entries would be mutated by Citus. Thus, we add a copy of the same aggregate
  * to the worker target list to make sure that the window function refers to the
- * non-mutated aggragate.
+ * non-mutated aggregate.
  *
  *     inputs: windowClauseList, originalTargetEntryList
  *     outputs: queryWindowClause, queryTargetList
@@ -2563,8 +2563,8 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 
 		/*
 		 * Note that even Citus does push down the window clauses as-is, we may still need to
-		 * add the generated entries to the target list. The reason is that the same aggragates
-		 * might be referred from another target entry that is a bare aggragate (e.g., no window
+		 * add the generated entries to the target list. The reason is that the same aggregates
+		 * might be referred from another target entry that is a bare aggregate (e.g., no window
 		 * functions), which would have been mutated. For instance, when an average aggregate
 		 * is mutated on the target list, the window function would refer to a sum aggregate,
 		 * which is obviously wrong.
@@ -2651,11 +2651,11 @@ BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionCo
 
 
 /*
- * TargetListHasAggragates returns true if any of the elements in the
- * target list contain aggragates that are not inside the window functions.
+ * TargetListHasAggregates returns true if any of the elements in the
+ * target list contain aggregates that are not inside the window functions.
  */
 static bool
-TargetListHasAggragates(List *targetEntryList)
+TargetListHasAggregates(List *targetEntryList)
 {
 	ListCell *targetEntryCell = NULL;
 
