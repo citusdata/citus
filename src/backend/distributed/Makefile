@@ -62,3 +62,8 @@ check-sql-snapshots:
 		latest_snapshot=$$(ls $$f | { grep -v latest.sql || true; } | sort -V | tail -n 1); \
 		diff -u $$f/latest.sql $$f/$$latest_snapshot; \
 	done'
+
+cleanup-before-install:
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
+
+install: cleanup-before-install
