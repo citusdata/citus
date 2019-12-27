@@ -206,9 +206,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
 		 * of the query tree. Note that we copy the query tree once we're sure it's a
 		 * distributed query.
-		 *
-		 * Since fast-path queries do not through standard planner, we skip unnecessary
-		 * parts in that case.
 		 */
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 		opts.originalQuery = copyObject(parse);
