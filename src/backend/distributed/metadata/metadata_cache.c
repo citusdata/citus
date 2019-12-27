@@ -1101,7 +1101,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	ShardInterval **shardIntervalArray = NULL;
 	ShardInterval **sortedShardIntervalArray = NULL;
 	FmgrInfo *shardIntervalCompareFunction = NULL;
-	FmgrInfo *shardColumnCompareFunction = NULL;
 	Oid columnTypeId = InvalidOid;
 	int32 columnTypeMod = -1;
 	Oid intervalTypeId = InvalidOid;
@@ -1177,21 +1176,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 			 */
 			ResetDistTableCacheEntry(shardEntry->tableEntry);
 		}
-	}
-
-	/* look up value comparison function */
-	if (columnTypeId != InvalidOid)
-	{
-		/* allocate the comparison function in the cache context */
-		MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
-
-		shardColumnCompareFunction = GetFunctionInfo(columnTypeId, BTREE_AM_OID,
-													 BTORDER_PROC);
-		MemoryContextSwitchTo(oldContext);
-	}
-	else
-	{
-		shardColumnCompareFunction = NULL;
 	}
 
 	/* look up interval comparison function */
@@ -1323,7 +1307,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		shardInterval->shardIndex = shardIndex;
 	}
 
-	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
 	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
 }
 

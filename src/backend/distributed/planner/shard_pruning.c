@@ -284,20 +284,6 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 							   "a shard interval comparator")));
 	}
 
-	if (cacheEntry->shardColumnCompareFunction)
-	{
-		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoData(*(FunctionCallInfo) &
-								 context.compareValueFunctionCall,
-								 cacheEntry->shardColumnCompareFunction,
-								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("shard pruning not possible without "
-							   "a partition column comparator")));
-	}
-
 	/* Figure out what we can prune on */
 	PrunableExpressions((Node *) whereClauseList, &context);
 

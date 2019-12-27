@@ -299,8 +299,6 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 
 	GetIntervalTypeInfo(partitionMethod, partitionColumn,
 						&intervalTypeId, &intervalTypeMod);
-	FmgrInfo *shardColumnCompare = GetFunctionInfo(partitionColumn->vartype,
-												   BTREE_AM_OID, BTORDER_PROC);
 	FmgrInfo *shardIntervalCompare = GetFunctionInfo(intervalTypeId,
 													 BTREE_AM_OID, BTORDER_PROC);
 	FmgrInfo *hashFunction = NULL;
@@ -339,7 +337,6 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 	result->partitionMethod = partitionMethod;
 	result->partitionColumn = partitionColumn;
 	result->shardIntervalCompareFunction = shardIntervalCompare;
-	result->shardColumnCompareFunction = shardColumnCompare;
 	result->hashFunction = hashFunction;
 	result->sortedShardIntervalArray =
 		SortShardIntervalArray(shardIntervalArray, partitionCount,
