@@ -123,75 +123,11 @@ static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boun
 static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
 static bool UpdateReferenceTablesWithShard(Node *node, void *context);
-
-static PlannedStmt *
-FastPastDistributedStmt(DistributedStmtOptions *opts, Const *distributionKeyValue)
-{
-	opts->plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
-		true;
-	opts->plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue =
-		distributionKeyValue;
-
-	PlannedStmt *fastPathPlan = FastPathPlanner(opts->originalQuery, opts->parse,
-												opts->boundParams);
-
-	return CreateDistributedPlannedStmt(fastPathPlan, opts);
-}
-
-
-static PlannedStmt *
-NonFastPathDistributedStmt(DistributedStmtOptions *opts,
-						   List *rangeTableList,
-						   int rteIdCounter)
-{
-	/*
-	 * Call into standard_planner because the Citus planner relies on both the
-	 * restriction information per table and parse tree transformations made by
-	 * postgres' planner.
-	 */
-	PlannedStmt *standardPlan = standard_planner(opts->parse, opts->cursorOptions,
-												 opts->boundParams);
-
-	/* may've inlined new relation rtes */
-	rangeTableList = ExtractRangeTableEntryList(opts->parse);
-	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
-
-
-	PlannedStmt *result = CreateDistributedPlannedStmt(standardPlan, opts);
-
-	bool setPartitionedTablesInherited = true;
-	AdjustPartitioningForDistributedPlanning(rangeTableList,
-											 setPartitionedTablesInherited);
-
-	return result;
-}
-
-
-static PlannedStmt *
-NonDistributedStmt(DistributedStmtOptions *opts)
-{
-	PlannedStmt *result = standard_planner(opts->parse, opts->cursorOptions,
-										   opts->boundParams);
-
-	bool hasExternParam = false;
-	DistributedPlan *delegatePlan = TryToDelegateFunctionCall(opts->parse,
-															  &hasExternParam);
-	if (delegatePlan != NULL)
-	{
-		result = FinalizePlan(result, delegatePlan);
-	}
-	else if (hasExternParam)
-	{
-		/*
-		 * As in CreateDistributedPlannedStmt, try dissuade planner when planning
-		 * potentially failed due to unresolved prepared statement parameters.
-		 */
-		result->planTree->total_cost = FLT_MAX / 100000000;
-	}
-
-	return result;
-}
-
+static PlannedStmt * FastPastDistributedStmt(DistributedStmtOptions *opts,
+											 Const *distributionKeyValue);
+static PlannedStmt * NonFastPathDistributedStmt(DistributedStmtOptions *opts,
+												List *rangeTableList, int rteIdCounter);
+static PlannedStmt * NonDistributedStmt(DistributedStmtOptions *opts);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -608,6 +544,87 @@ bool
 IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 {
 	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
+}
+
+
+/*
+ * FastPathDistributedStmt creates a distributed planned statement using the
+ * FastPathPlanner.
+ */
+static PlannedStmt *
+FastPastDistributedStmt(DistributedStmtOptions *opts, Const *distributionKeyValue)
+{
+	opts->plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
+		true;
+	opts->plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue =
+		distributionKeyValue;
+
+	PlannedStmt *fastPathPlan = FastPathPlanner(opts->originalQuery, opts->parse,
+												opts->boundParams);
+
+	return CreateDistributedPlannedStmt(fastPathPlan, opts);
+}
+
+
+/*
+ * NonFastPathDistributedStmt creates a distributed planned statement using the
+ * PG planner.
+ */
+static PlannedStmt *
+NonFastPathDistributedStmt(DistributedStmtOptions *opts,
+						   List *rangeTableList,
+						   int rteIdCounter)
+{
+	/*
+	 * Call into standard_planner because the Citus planner relies on both the
+	 * restriction information per table and parse tree transformations made by
+	 * postgres' planner.
+	 */
+	PlannedStmt *standardPlan = standard_planner(opts->parse, opts->cursorOptions,
+												 opts->boundParams);
+
+	/* may've inlined new relation rtes */
+	rangeTableList = ExtractRangeTableEntryList(opts->parse);
+	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+
+
+	PlannedStmt *result = CreateDistributedPlannedStmt(standardPlan, opts);
+
+	bool setPartitionedTablesInherited = true;
+	AdjustPartitioningForDistributedPlanning(rangeTableList,
+											 setPartitionedTablesInherited);
+
+	return result;
+}
+
+
+/*
+ * NonDistributedStmt creates a normal (non-distributed) planned statement
+ * using the PG planner.
+ */
+static PlannedStmt *
+NonDistributedStmt(DistributedStmtOptions *opts)
+{
+	PlannedStmt *result = standard_planner(opts->parse, opts->cursorOptions,
+										   opts->boundParams);
+
+	bool hasExternParam = false;
+	DistributedPlan *delegatePlan = TryToDelegateFunctionCall(opts->parse,
+															  &hasExternParam);
+	if (delegatePlan != NULL)
+	{
+		result = FinalizePlan(result, delegatePlan);
+	}
+	else if (hasExternParam)
+	{
+		/*
+		 * As in CreateDistributedPlannedStmt, try dissuade planner when planning
+		 * potentially failed due to unresolved prepared statement parameters.
+		 */
+		result->planTree->total_cost = FLT_MAX / 100000000;
+	}
+
+	return result;
 }
 
 
