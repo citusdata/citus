@@ -834,12 +834,11 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch intermediate "
-							   "results",
+		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch intermediate results",
 							   remoteHost, remotePort)));
 	}
 
-	RemoteTransactionBegin(connection);
+	RemoteTransactionBeginIfNecessary(connection);
 
 	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
@@ -847,9 +846,6 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 
 		totalBytesWritten += FetchRemoteIntermediateResult(connection, resultId);
 	}
-
-	RemoteTransactionCommit(connection);
-	CloseConnection(connection);
 
 	PG_RETURN_INT64(totalBytesWritten);
 }

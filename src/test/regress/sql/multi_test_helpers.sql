@@ -124,3 +124,20 @@ WITH dist_node_summary AS (
 SELECT dist_node_check.matches AND dist_placement_check.matches
 FROM dist_node_check CROSS JOIN dist_placement_check
 $$;
+
+--
+-- Procedure for creating shards for range partitioned distributed table.
+--
+CREATE OR REPLACE PROCEDURE create_range_partitioned_shards(rel regclass, minvalues text[], maxvalues text[])
+AS $$
+DECLARE
+  new_shardid bigint;
+  idx int;
+BEGIN
+  FOR idx IN SELECT * FROM generate_series(1, array_length(minvalues, 1))
+  LOOP
+    SELECT master_create_empty_shard(rel::text) INTO new_shardid;
+    UPDATE pg_dist_shard SET shardminvalue=minvalues[idx], shardmaxvalue=maxvalues[idx] WHERE shardid=new_shardid;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
