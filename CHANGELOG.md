@@ -1,3 +1,7 @@
+### citus v9.1.2 (December 30, 2019) ###
+
+* Fixes a bug that prevents installation from source
+
 ### citus v9.1.1 (December 18, 2019) ###
 
 * Fixes a bug causing SQL-executing UDFs to crash when passing in DDL
