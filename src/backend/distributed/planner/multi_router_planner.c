@@ -1599,7 +1599,8 @@ CreateTask(TaskType taskType)
 	task->taskType = taskType;
 	task->jobId = INVALID_JOB_ID;
 	task->taskId = INVALID_TASK_ID;
-	task->queryString = NULL;
+	task->query = NULL;
+	task->queryStringLazy = NULL;
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
 	task->dependentTaskList = NIL;
@@ -1842,26 +1843,17 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(SELECT_TASK);
-	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
 
 	/*
-	 * For performance reasons, we skip generating the queryString for local
-	 * fast path queries. With this, we can avoid deparsing during the execution
-	 * as well.
+	 * For performance reasons, we skip generating the queryString. For local
+	 * execution this is not needed, so we wait until the executor determines
+	 * that the query cannot be executed locally.
 	 */
-	if (localFastPathQuery)
-	{
-		queryString = NULL;
-	}
-	else
-	{
-		pg_get_query_def(query, queryString);
-	}
-
-	task->queryString = queryString ? queryString->data : NULL;
+	task->query = copyObject(query);
+	task->queryStringLazy = NULL;
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->taskPlacementList = placementList;
@@ -1922,7 +1914,6 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(MODIFY_TASK);
-	StringInfo queryString = makeStringInfo();
 	List *rangeTableList = NIL;
 
 	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
@@ -1940,21 +1931,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 							   "and modify a reference table")));
 	}
 
-	/*
-	 * For performance reasons, we skip generating the queryString for local
-	 * fast path queries. With this, we can avoid deparsing during the execution
-	 * as well.
-	 */
-	if (localFastPathQuery)
-	{
-		queryString = NULL;
-	}
-	else
-	{
-		pg_get_query_def(query, queryString);
-	}
-
-	task->queryString = queryString ? queryString->data : NULL;
+	task->query = copyObject(query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->taskPlacementList = placementList;

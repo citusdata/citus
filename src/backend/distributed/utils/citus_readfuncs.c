@@ -377,7 +377,7 @@ ReadTask(READFUNC_ARGS)
 	READ_ENUM_FIELD(taskType, TaskType);
 	READ_UINT64_FIELD(jobId);
 	READ_UINT_FIELD(taskId);
-	READ_STRING_FIELD(queryString);
+	READ_STRING_FIELD(queryStringLazy);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);
 	READ_NODE_FIELD(dependentTaskList);
@@ -392,6 +392,7 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(relationRowLockList);
 	READ_NODE_FIELD(rowValuesLists);
 	READ_BOOL_FIELD(partiallyLocalOrRemote);
+	READ_NODE_FIELD(query);
 
 	READ_DONE();
 }

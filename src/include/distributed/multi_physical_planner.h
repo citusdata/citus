@@ -181,7 +181,7 @@ typedef struct Task
 	TaskType taskType;
 	uint64 jobId;
 	uint32 taskId;
-	char *queryString;
+	char *queryStringLazy;
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
 	List *dependentTaskList;     /* only applies to compute tasks */
@@ -222,6 +222,7 @@ typedef struct Task
 	 * the task splitted into local and remote tasks.
 	 */
 	bool partiallyLocalOrRemote;
+	Query *query;
 } Task;
 
 

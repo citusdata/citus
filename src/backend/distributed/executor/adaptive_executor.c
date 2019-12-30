@@ -136,6 +136,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -963,21 +964,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, Query *jobQuery, List *taskL
 
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,
 								   &execution->remoteTaskList);
-	}
-	else if (jobQuery && list_length(execution->tasksToExecute) == 1)
-	{
-		Task *task = (Task *) linitial(execution->tasksToExecute);
-
-		if (TaskAccessesLocalNode(task))
-		{
-			/*
-			 * For performance reasons, the queryString is not generated for
-			 * local-fast path queries during the planning. However, at this
-			 * point the executor decided that the task cannot be executed locally.
-			 * So, generate the queryString.
-			 */
-			GenerateShardQueryStringIfMissing(jobQuery, task);
-		}
 	}
 
 	return execution;
@@ -3146,7 +3132,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-	char *queryString = task->queryString;
+	const char *queryString = TaskQueryString(task);
 	int querySent = 0;
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=

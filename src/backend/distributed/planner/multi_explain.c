@@ -25,6 +25,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
@@ -382,7 +383,7 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(task->queryString, es);
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
