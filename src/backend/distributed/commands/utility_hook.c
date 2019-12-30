@@ -1269,8 +1269,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
-		task->queryStringLazy = applyCommand->data;
+		task->queryString = applyCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -1305,7 +1304,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
-	task->queryStringLazy = concatenatedCommands;
+	task->queryString = concatenatedCommands;
 
 	foreach(workerNodeCell, workerNodes)
 	{

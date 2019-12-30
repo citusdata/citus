@@ -116,8 +116,7 @@ TruncateTaskList(Oid relationId)
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
-		task->queryStringLazy = shardQueryString->data;
+		task->queryString = shardQueryString->data;
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;

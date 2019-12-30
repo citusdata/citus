@@ -521,8 +521,7 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		task->queryString = pstrdup(ddlString.data);
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -567,8 +566,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		task->queryString = pstrdup(ddlString.data);
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -898,8 +896,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		task->queryString = pstrdup(ddlString.data);
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;

@@ -246,7 +246,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskType);
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
-	COPY_STRING_FIELD(queryStringLazy);
+	COPY_STRING_FIELD(queryString);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);
 	COPY_NODE_FIELD(dependentTaskList);
@@ -261,7 +261,6 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
-	COPY_NODE_FIELD(query);
 }
 
 
