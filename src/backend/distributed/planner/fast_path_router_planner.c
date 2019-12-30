@@ -35,6 +35,7 @@
 #include "postgres.h"
 
 #include "distributed/distributed_planner.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/multi_physical_planner.h" /* only to use some utility functions */
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
@@ -171,9 +172,9 @@ FastPathRouterQuery(Query *query)
 		return false;
 	}
 
-	if (!(query->commandType == CMD_SELECT || query->commandType == CMD_UPDATE ||
-		  query->commandType == CMD_DELETE))
+	if (query->commandType == CMD_INSERT && CheckInsertSelectQuery(query))
 	{
+		/* we don't support INSERT..SELECT in the fast-path */
 		return false;
 	}
 

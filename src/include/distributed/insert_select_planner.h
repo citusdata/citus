@@ -24,6 +24,7 @@
 
 
 extern bool InsertSelectIntoDistributedTable(Query *query);
+extern bool CheckInsertSelectQuery(Query *query);
 extern bool InsertSelectIntoLocalTable(Query *query);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,

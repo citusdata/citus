@@ -223,6 +223,9 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	}
 	else
 	{
+		/* all INSERTs are fast path queries */
+		Assert(FastPathRouterQuery(originalQuery));
+
 		job = RouterInsertJob(originalQuery, query, &distributedPlan->planningError);
 	}
 
