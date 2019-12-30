@@ -153,6 +153,7 @@ INSERT INTO upsert_test_2 (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_
 -- this errors out since there is no unique constraint on partition key
 INSERT INTO upsert_test_2 (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
+CONTEXT:  while executing command on localhost:57637
 -- create another table
 CREATE TABLE upsert_test_3
 (
@@ -171,6 +172,7 @@ SELECT create_distributed_table('upsert_test_3', 'part_key', 'hash');
 -- since there are no unique indexes, error-out
 INSERT INTO upsert_test_3 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET count = upsert_test_3.count + 1;
 ERROR:  there is no unique or exclusion constraint matching the ON CONFLICT specification
+CONTEXT:  while executing command on localhost:57637
 -- create another table
 CREATE TABLE upsert_test_4
 (
