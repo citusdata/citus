@@ -101,3 +101,10 @@ SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010/task_801107');
 ERROR:  could not stat file "base/pgsql_job_cache/job_401010/task_801107": No such file or directory
 SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010');
 ERROR:  could not stat file "base/pgsql_job_cache/job_401010": No such file or directory
+-- Also clean up worker_cleanup_job_schema_cache job
+SELECT task_tracker_cleanup_job(2);
+ task_tracker_cleanup_job 
+--------------------------
+ 
+(1 row)
+

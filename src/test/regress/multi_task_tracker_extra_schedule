@@ -110,3 +110,7 @@ test: multi_drop_extension
 # ----------
 test: multi_schema_support
 
+# ----------
+# test that no tests leaked intermediate results. This should always be last
+# ----------
+test: ensure_no_intermediate_data_leak
