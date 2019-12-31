@@ -95,6 +95,7 @@
 #include "optimizer/planner.h"
 #endif
 #include "parser/parsetree.h"
+#include "rewrite/rewriteHandler.h"
 #include "nodes/params.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
@@ -178,6 +179,16 @@ LocalTaskPlannedStmt(Query *workerJobQuery, Task *task, ParamListInfo boundParam
 	if (task->queryString == NULL)
 	{
 		ReplaceShardReferencesWalker((Node *) shardQuery, task);
+
+#if PG_VERSION_NUM < 120000
+		AcquireRewriteLocks(shardQuery, true, false);
+#else
+
+		/*
+		 * We acquire the required locks for PG12+ inside
+		 * ReplaceShardReferencesWalker.
+		 */
+#endif
 	}
 	else
 	{
@@ -214,7 +225,9 @@ LocalTaskPlannedStmt(Query *workerJobQuery, Task *task, ParamListInfo boundParam
 
 /*
  * ReplaceShardReferencesWalker update RTE_RELATIONs that are the distributed
- * relations to RTE_RELATIONs that are the local shards.
+ * relations to RTE_RELATIONs that are the local shards. In PG12+ we acquire
+ * the required locks on the local shards when we replace them, for PG11 these
+ * locks should be taken manually.
  */
 static bool
 ReplaceShardReferencesWalker(Node *node, Task *task)
@@ -238,6 +251,15 @@ ReplaceShardReferencesWalker(Node *node, Task *task)
 			AppendShardIdToName(&generatedRelationName, relationShard->shardId);
 
 			rangeTableEntry->relid = get_relname_relid(generatedRelationName, schemaOid);
+#if PG_VERSION_NUM >= 120000
+			LockRelationOid(rangeTableEntry->relid, rangeTableEntry->rellockmode);
+#else
+
+			/*
+			 * We acquire the required locks for PG11 outside this function
+			 * using AcquireRewriteLocks.
+			 */
+#endif
 		}
 
 		/* caller will descend into range table entry */
