@@ -238,6 +238,16 @@ ReplaceShardReferencesWalker(Node *node, Task *task)
 			AppendShardIdToName(&generatedRelationName, relationShard->shardId);
 
 			rangeTableEntry->relid = get_relname_relid(generatedRelationName, schemaOid);
+#if PG_VERSION_NUM >= 120000
+			LockRelationOid(rangeTableEntry->relid, rangeTableEntry->rellockmode);
+#else
+
+			/*
+			 * TODO: We probably also need to lock for PG11, but it doesn't
+			 * have rellockmode so we have to figure out the right lock in some
+			 * way.
+			 */
+#endif
 		}
 
 		/* caller will descend into range table entry */
