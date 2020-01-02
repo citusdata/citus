@@ -153,16 +153,18 @@ INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOT
 -- though going through distributed execution
 EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
 
--- TODO: Fix #2922
--- EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
 
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
 
--- TODO: Fix #2922
--- EXPLAIN ANALYZE DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-
--- show that EXPLAIN ANALYZE deleted the row
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+-- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
+SELECT * FROM second_distributed_table WHERE key = 1 ORDER BY 1,2;
+-- Put rows back for other tests
+INSERT INTO distributed_table VALUES (1, '22', 20);
+INSERT INTO second_distributed_table VALUES (1, '1');
+
 
 -- copy always happens via distributed execution irrespective of the
 -- shards that are accessed
@@ -209,6 +211,7 @@ ROLLBACK;
 -- make sure that everything is rollbacked
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 SELECT count(*) FROM second_distributed_table;
+SELECT * FROM second_distributed_table;
 
 -- very simple examples, an SELECTs should see the modifications
 -- that has done before
