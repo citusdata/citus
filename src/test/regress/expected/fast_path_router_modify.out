@@ -2,8 +2,8 @@ CREATE SCHEMA fast_path_router_modify;
 SET search_path TO fast_path_router_modify;
 SET citus.next_shard_id TO 1840000;
 -- all the tests in this file is intended for testing fast-path
--- router planner, so we're explicitly enabling itin this file. 
--- We've bunch of other tests that triggers non-fast-path-router 
+-- router planner, so we're explicitly enabling itin this file.
+-- We've bunch of other tests that triggers non-fast-path-router
 -- planner (note this is already true by default)
 SET citus.enable_fast_path_router_planner TO true;
 SET citus.shard_replication_factor TO 1;
@@ -105,26 +105,46 @@ ERROR:  modifying the partition value of rows is not allowed
 UPDATE modify_fast_path SET key = 2::numeric WHERE key = 1;
 DEBUG:  modifying the partition value of rows is not allowed
 ERROR:  modifying the partition value of rows is not allowed
--- returning is not supported via fast-path
+-- returning is supported via fast-path
+INSERT INTO modify_fast_path (key, value_1) VALUES (1,1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  key | value_1 | value_2 
 -----+---------+---------
-(0 rows)
+   1 |       1 | 
+(1 row)
+
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+DELETE FROM modify_fast_path WHERE key = 2 RETURNING value_1 * 15, value_1::numeric * 16;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+ ?column? | ?column? 
+----------+----------
+       15 |       16
+(1 row)
 
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
 DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
-DEBUG:  generating subplan 18_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan 21_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-DEBUG:  generating subplan 18_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
+DEBUG:  generating subplan 21_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
+DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  key | value_1 | value_2 
@@ -193,12 +213,12 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 -- joins are not supported via fast-path
-UPDATE modify_fast_path 
-	SET value_1 = 1 
-	FROM modify_fast_path_reference 
-	WHERE 
-		modify_fast_path.key = modify_fast_path_reference.key AND 
-		modify_fast_path.key  = 1 AND 
+UPDATE modify_fast_path
+	SET value_1 = 1
+	FROM modify_fast_path_reference
+	WHERE
+		modify_fast_path.key = modify_fast_path_reference.key AND
+		modify_fast_path.key  = 1 AND
 		modify_fast_path_reference.key = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

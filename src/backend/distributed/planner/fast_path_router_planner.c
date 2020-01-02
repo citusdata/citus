@@ -181,9 +181,9 @@ FastPathRouterQuery(Query *query)
 	 * We want to deal with only very simple queries. Some of the
 	 * checks might be too restrictive, still we prefer this way.
 	 */
-	if (query->cteList != NIL || query->returningList != NIL ||
-		query->hasSubLinks || query->setOperations != NULL ||
-		query->hasTargetSRFs || query->hasModifyingCTE)
+	if (query->cteList != NIL || query->hasSubLinks ||
+		query->setOperations != NULL || query->hasTargetSRFs ||
+		query->hasModifyingCTE)
 	{
 		return false;
 	}
