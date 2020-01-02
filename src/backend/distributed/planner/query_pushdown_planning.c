@@ -596,7 +596,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "complex joins are only supported when all distributed tables are "
-							 "joined on their distribution columns with equal operator",
+							 "co-located and joined on their distribution columns",
 							 NULL, NULL);
 	}
 

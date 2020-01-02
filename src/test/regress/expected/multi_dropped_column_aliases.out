@@ -59,4 +59,4 @@ FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
        test(c_custkey, c_nationkey)
        INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
 LIMIT 10;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns

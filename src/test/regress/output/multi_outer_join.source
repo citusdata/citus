@@ -272,7 +272,7 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)

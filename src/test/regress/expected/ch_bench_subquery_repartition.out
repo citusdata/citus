@@ -116,7 +116,7 @@ select  s_i_id
     where
         s_i_id in (select i_im_id from item)
         AND s_i_id = ol_i_id;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Subquery + repartion is supported when it is a NOT IN query where the subquery
 -- returns unique results
 select  s_i_id
@@ -124,7 +124,7 @@ select  s_i_id
     where
         s_i_id not in (select i_id from item)
         AND s_i_id = ol_i_id;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Subquery + repartion is not supported when it is a NOT IN where the subquery
 -- doesn't return unique results
 select  s_i_id
@@ -132,7 +132,7 @@ select  s_i_id
     where
         s_i_id not in (select i_im_id from item)
         AND s_i_id = ol_i_id;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Actual CHbenCHmark query is supported
 select   su_name, su_address
 from     supplier, nation

@@ -262,7 +262,7 @@ FROM
 	) as foo
 RETURNING *;
 DEBUG:  generating subplan 15_1 for subquery SELECT dept FROM recursive_dml_queries.second_distributed_table
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- again a corrolated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
@@ -292,7 +292,7 @@ FROM
 	) as baz
 	) as foo WHERE second_distributed_table.tenant_id = foo.tenant_id
 RETURNING *;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- we don't support subqueries/CTEs inside VALUES
 INSERT INTO
 	second_distributed_table (tenant_id, dept)

@@ -14,6 +14,13 @@ SELECT create_reference_table('ref');
  
 (1 row)
 
+CREATE TABLE test_not_colocated (LIKE test);
+SELECT create_distributed_table('test_not_colocated', 'x', colocate_with := 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 INSERT INTO test VALUES (1,1), (2,2);
 INSERT INTO ref VALUES (2,2), (3,3);
 -- top-level set operations are supported through recursive planning
@@ -718,7 +725,7 @@ DEBUG:  Plan 126 query after replacing subqueries and CTEs: SELECT u.x, u.y, tes
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
--- distributed table in WHERE clause is recursively planned 
+-- distributed table in WHERE clause is recursively planned
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT x FROM test))) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -854,7 +861,7 @@ DEBUG:  Plan is router executable
      1
 (1 row)
 
--- other agg. distincts are also supported when group by includes partition key 
+-- other agg. distincts are also supported when group by includes partition key
 select avg(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY x) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY x)) as t(x) ORDER BY 1;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -872,7 +879,7 @@ DEBUG:  Plan is router executable
  1.50000000000000000000
 (1 row)
 
--- other agg. distincts are not supported when group by doesn't include partition key 
+-- other agg. distincts are not supported when group by doesn't include partition key
 select count(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY y) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY y)) as t(x) ORDER BY 1;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -881,7 +888,7 @@ DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 -- one of the leaves is a repartition join
 SET citus.enable_repartition_joins TO ON;
 --  repartition is recursively planned before the set operation
-(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 0) ORDER BY 1 DESC; 
+(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 0) ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 0
@@ -1017,7 +1024,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
  2 | 2
 (2 rows)
 
--- this should create lots of recursive calls since both views and set operations lead to recursive plans :) 
+-- this should create lots of recursive calls since both views and set operations lead to recursive plans :)
 ((SELECT x FROM set_view_recursive_second) INTERSECT (SELECT * FROM set_view_recursive)) EXCEPT (SELECT * FROM set_view_pushdown);
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1045,11 +1052,49 @@ DEBUG:  Plan is router executable
 ---
 (0 rows)
 
+-- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
+SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 188_1 for subquery SELECT x, y FROM recursive_union.test
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 188_2 for subquery SELECT x, y FROM recursive_union.test_not_colocated
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 188_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('188_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('188_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  Plan 188 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('188_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ x | y 
+---+---
+ 1 | 1
+ 2 | 2
+(2 rows)
+
+SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 192_1 for subquery SELECT x, y FROM recursive_union.test
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan 192_2 for subquery SELECT x, y FROM recursive_union.test_not_colocated
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 192_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('192_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('192_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  Plan 192 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('192_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ x | y 
+---+---
+ 1 | 1
+ 2 | 2
+(2 rows)
+
 RESET client_min_messages;
 DROP SCHEMA recursive_union CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table test
 drop cascades to table ref
+drop cascades to table test_not_colocated
 drop cascades to view set_view_recursive
 drop cascades to view set_view_pushdown
 drop cascades to view set_view_recursive_second
