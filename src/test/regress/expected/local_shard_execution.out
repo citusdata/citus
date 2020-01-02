@@ -220,8 +220,19 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
                Filter: (age = 20)
 (8 rows)
 
--- TODO: Fix #2922
--- EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
+               Index Cond: (key = 1)
+               Filter: (age = 20)
+(8 rows)
+
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                                                     QUERY PLAN                                                    
 ------------------------------------------------------------------------------------------------------------------
@@ -236,16 +247,38 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                      Filter: (age = 20)
 (9 rows)
 
--- TODO: Fix #2922
--- EXPLAIN ANALYZE DELETE FROM distributed_table WHERE key = 1 AND age = 20;
--- show that EXPLAIN ANALYZE deleted the row
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
+               ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
+                     Index Cond: (key = 1)
+                     Filter: (age = 20)
+(9 rows)
+
+-- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE ((key OPERATOR(pg_catalog.=) 1) AND (age OPERATOR(pg_catalog.=) 20)) ORDER BY key, value, age
  key | value | age 
 -----+-------+-----
-   1 | 22    |  20
-(1 row)
+(0 rows)
 
+SELECT * FROM second_distributed_table WHERE key = 1 ORDER BY 1,2;
+LOG:  executing the command locally: SELECT key, value FROM local_shard_execution.second_distributed_table_1470005 second_distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value
+ key | value 
+-----+-------
+(0 rows)
+
+-- Put rows back for other tests
+INSERT INTO distributed_table VALUES (1, '22', 20);
+LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 (key, value, age) VALUES (1, '22'::text, 20)
+INSERT INTO second_distributed_table VALUES (1, '1');
+LOG:  executing the command locally: INSERT INTO local_shard_execution.second_distributed_table_1470005 (key, value) VALUES (1, '1'::text)
 -- copy always happens via distributed execution irrespective of the
 -- shards that are accessed
 COPY reference_table FROM STDIN;
@@ -317,6 +350,13 @@ SELECT count(*) FROM second_distributed_table;
 -------
      2
 (1 row)
+
+SELECT * FROM second_distributed_table;
+ key | value 
+-----+-------
+   1 | 1
+   6 | '6'
+(2 rows)
 
 -- very simple examples, an SELECTs should see the modifications
 -- that has done before
@@ -646,7 +686,7 @@ WITH local_insert AS (INSERT INTO distributed_table VALUES (1, '11',21) ON CONFL
 distributed_local_mixed AS (SELECT * FROM reference_table WHERE key IN (SELECT key FROM local_insert))
 SELECT * FROM local_insert, distributed_local_mixed;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
-LOG:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('75_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
+LOG:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
  key | value | age | key 
 -----+-------+-----+-----
    1 | 11    |  21 |   1
