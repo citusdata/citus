@@ -70,7 +70,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 selectPartitionColumnTableId);
 static DistributedPlan * CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse);
 static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSelectQuery);
-static bool CheckInsertSelectQuery(Query *query);
 
 
 /*
@@ -129,7 +128,7 @@ InsertSelectIntoLocalTable(Query *query)
  * This function is inspired from getInsertSelectQuery() on
  * rewrite/rewriteManip.c.
  */
-static bool
+bool
 CheckInsertSelectQuery(Query *query)
 {
 	CmdType commandType = query->commandType;
