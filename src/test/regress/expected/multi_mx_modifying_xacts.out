@@ -201,7 +201,7 @@ BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_mx_pkey_1220103"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects_mx WHERE id = 1;
@@ -216,7 +216,7 @@ BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_mx_pkey_1220103"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- data shouldn't have persisted...

@@ -133,8 +133,8 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 -- test inserts
 -- test insert to referencing table while there is NO corresponding value in referenced table
 INSERT INTO referencing_table VALUES(1, 1);
-ERROR:  insert or update on table "referencing_table_1350129" violates foreign key constraint "referencing_table_ref_id_fkey_1350129"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350097".
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350129"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table VALUES(1, 1);
@@ -142,8 +142,8 @@ INSERT INTO referencing_table VALUES(1, 1);
 -- test deletes
 -- test delete from referenced table while there is corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350097" violates foreign key constraint "referencing_table_ref_id_fkey_1350129" on table "referencing_table_1350129"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350129".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350129" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referencing_table WHERE ref_id = 1;
@@ -227,8 +227,8 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350225" violates foreign key constraint "referencing_table_ref_id_fkey_1350257" on table "referencing_table_1350257"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350257".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350257" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
@@ -265,8 +265,8 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350289" violates foreign key constraint "referencing_table_ref_id_fkey_1350321" on table "referencing_table_1350321"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350321".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350321" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -303,8 +303,8 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350353" violates foreign key constraint "referencing_table_ref_id_fkey_1350385" on table "referencing_table_1350385"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350385".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350385" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
@@ -343,8 +343,8 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 UPDATE referenced_table SET test_column = 20 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350417" violates foreign key constraint "referencing_table_ref_id_fkey_1350449" on table "referencing_table_1350449"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350449".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350449" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -404,7 +404,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
-ERROR:  insert or update on table "referencing_table_1350600" violates foreign key constraint "referencing_table_ref_id_fkey_1350600"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350600"
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
@@ -521,8 +521,8 @@ ERROR:  number of referencing and referenced columns for foreign key disagree
 -- test foreign constraint creation while existing tables does not satisfy the constraint
 INSERT INTO referencing_table VALUES(1, 1);
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  insert or update on table "referencing_table_1350628" violates foreign key constraint "test_constraint_1350628"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350624".
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- test foreign constraint with correct conditions
 DELETE FROM referencing_table WHERE ref_id = 1;
@@ -530,8 +530,8 @@ ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id)
 -- test inserts
 -- test insert to referencing table while there is NO corresponding value in referenced table
 INSERT INTO referencing_table VALUES(1, 1);
-ERROR:  insert or update on table "referencing_table_1350628" violates foreign key constraint "test_constraint_1350628"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350624".
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table VALUES(1, 1);
@@ -539,8 +539,8 @@ INSERT INTO referencing_table VALUES(1, 1);
 -- test deletes
 -- test delete from referenced table while there is corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referencing_table WHERE ref_id = 1;
@@ -569,8 +569,8 @@ ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id)
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
@@ -593,8 +593,8 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -615,8 +615,8 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 -- test ON UPDATE NO ACTION + DEFERABLE + INITIALLY DEFERRED
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350628".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
@@ -639,8 +639,8 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE RESTRICT;
 BEGIN;
 UPDATE referenced_table SET test_column = 20 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id, test_column)=(1, 10) is still referenced from table "referencing_table_1350628".
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 10) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -673,7 +673,7 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 -- test MATCH FULL
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH FULL;
 INSERT INTO referencing_table VALUES(null, 2);
-ERROR:  insert or update on table "referencing_table_1350631" violates foreign key constraint "test_constraint_1350631"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350631"
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
@@ -749,7 +749,7 @@ COMMIT;
 -- test insertion to referencing table, we expect that to fail
 INSERT INTO transaction_referencing_table VALUES(1, 1);
 ERROR:  insert or update on table "transaction_referencing_table" violates foreign key constraint "transaction_fk_constraint"
-DETAIL:  Key (ref_id)=(1) is not present in table "transaction_referenced_table".
+DETAIL:  Key (ref_id)=(X) is not present in table "transaction_referenced_table".
 -- proper insertion to both referenced and referencing tables
 INSERT INTO transaction_referenced_table VALUES(1);
 INSERT INTO transaction_referencing_table VALUES(1, 1);

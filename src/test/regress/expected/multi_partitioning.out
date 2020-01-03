@@ -1919,7 +1919,7 @@ INSERT INTO partitioning_test_2010 VALUES (1, '2010-02-01');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
       FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
 ERROR:  insert or update on table "partitioning_test_2010_1660191" violates foreign key constraint "partitioning_reference_fkey_1660179"
-DETAIL:  Key (id)=(1) is not present in table "reference_table_1660177".
+DETAIL:  Key (id)=(X) is not present in table "reference_table_1660177".
 CONTEXT:  while executing command on localhost:xxxxx
 -- Truncate, so attaching again won't fail
 TRUNCATE partitioning_test_2010;

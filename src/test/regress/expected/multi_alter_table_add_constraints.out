@@ -113,7 +113,7 @@ ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
 INSERT INTO unique_test_table VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450035"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 ALTER TABLE unique_test_table DROP CONSTRAINT unn_id;
 -- Insert row which will conflict with the next unique constraint command
@@ -121,7 +121,7 @@ INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 -- Can not create constraint since it conflicts with the existing data
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
 ERROR:  could not create unique index "unn_id_1450035"
-DETAIL:  Key (id)=(1) is duplicated.
+DETAIL:  Key (id)=(X) is duplicated.
 CONTEXT:  while executing command on localhost:xxxxx
 -- Can create unique constraint over multiple columns which must include
 -- distribution column
@@ -147,7 +147,7 @@ ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id UNIQUE(id);
 INSERT INTO unique_test_table_ref VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table_ref VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450066"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 -- We can add unique constraint with multiple columns 
 ALTER TABLE unique_test_table_ref DROP CONSTRAINT unn_id;
@@ -179,7 +179,7 @@ HINT:  Consider using hash partitioning.
 -- Error out. Table can not have two rows with the same id.		
 \COPY unique_test_table_append FROM STDIN DELIMITER AS ',';		
 ERROR:  duplicate key value violates unique constraint "unn_id_1450067"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 DROP TABLE unique_test_table_append;
 -- Check "CHECK CONSTRAINT"
 CREATE TABLE products (

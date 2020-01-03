@@ -484,7 +484,7 @@ BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_pkey_1200003"
-DETAIL:  Key (id)=(1) already exists.
+DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- data shouldn't have persisted...
