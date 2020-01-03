@@ -33,8 +33,10 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	sed -Ef $BASEDIR/normalize.sed < $file1 > "$file1.modified"
+	mv "$file1" "$file1.unmodified"
 	mv "$file1.modified" "$file1"
 	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
+	mv "$file2" "$file2.unmodified"
 	mv "$file2.modified" "$file2"
 	$DIFF -w $args $file1 $file2
 	exitcode=$?
