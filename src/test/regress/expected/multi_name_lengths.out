@@ -111,7 +111,7 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_len
 -- Placeholders for RENAME operations
 \set VERBOSITY TERSE
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
-ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_225002 exceeds 63 characters
+ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx exceeds 63 characters
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
 \set VERBOSITY DEFAULT

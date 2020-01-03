@@ -37,9 +37,9 @@ s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
 # In multi_insert_select_conflict, normalize shard name and constraints
 s/"(target_table_|target_table_|test_ref_table_)[0-9]+"/"\1xxxxxxx"/g
 s/\(col_1\)=\([0-9]+\)/(col_1)=(X)/g
-#
-## In multi_name_lengths, normalize shard names
-#s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
+
+# In multi_name_lengths, normalize shard names
+s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx/g
 #
 ## normalize pkey constraints in multi_insert_select.sql
 #s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
