@@ -56,8 +56,11 @@ UPDATE modify_fast_path SET key = 2::numeric WHERE key = 1;
 -- returning is supported via fast-path
 INSERT INTO modify_fast_path (key, value_1) VALUES (1,1);
 DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
-INSERT INTO modify_fast_path (key, value_1) VALUES (2,1);
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, key;
 DELETE FROM modify_fast_path WHERE key = 2 RETURNING value_1 * 15, value_1::numeric * 16;
+
+-- still, non-immutable functions are not supported
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, random() * key;
 
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
