@@ -91,7 +91,7 @@ ORDER BY
 -- see that we get unique vialitons
 \set VERBOSITY TERSE
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
-ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300004"
+ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_xxxxxxx"
 \set VERBOSITY DEFAULT
 -- stable functions should be allowed
 INSERT INTO raw_events_second (user_id, time)
@@ -238,7 +238,7 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS 
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id OPERATOR(pg_catalog.=) 9) OR (user_id OPERATOR(pg_catalog.=) 16)) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  Plan is router executable
-ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300007"
+ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_xxxxxxx"
 -- now do some aggregations
 INSERT INTO agg_events
 SELECT
@@ -266,7 +266,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  Plan is router executable
-ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
+ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 -- some subquery tests
 INSERT INTO agg_events
             (value_1_agg,
@@ -285,7 +285,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY id ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY id ORDER BY id
 DEBUG:  Plan is router executable
-ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
+ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 -- subquery one more level depth
 INSERT INTO agg_events
             (value_4_agg,
@@ -307,7 +307,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) ORDER BY id
 DEBUG:  Plan is router executable
-ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
+ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 \set VERBOSITY DEFAULT
 -- join between subqueries
 INSERT INTO agg_events
