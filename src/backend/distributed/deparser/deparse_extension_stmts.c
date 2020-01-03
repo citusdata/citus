@@ -68,12 +68,13 @@ GetExtensionOption(List *extensionOptions, const char *defname)
  * CreateExtensionStmt to be sent to worker nodes.
  */
 char *
-DeparseCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt)
+DeparseCreateExtensionStmt(Node *node)
 {
+	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
-	AppendCreateExtensionStmt(&sql, createExtensionStmt);
+	AppendCreateExtensionStmt(&sql, stmt);
 
 	return sql.data;
 }
@@ -141,12 +142,13 @@ AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *createExtensionSt
  * AlterExtensionStmt to be sent to worker nodes.
  */
 char *
-DeparseAlterExtensionStmt(AlterExtensionStmt *alterExtensionStmt)
+DeparseAlterExtensionStmt(Node *node)
 {
+	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
-	AppendAlterExtensionStmt(&sql, alterExtensionStmt);
+	AppendAlterExtensionStmt(&sql, stmt);
 
 	return sql.data;
 }
@@ -184,12 +186,13 @@ AppendAlterExtensionStmt(StringInfo buf, AlterExtensionStmt *alterExtensionStmt)
  * DeparseDropExtensionStmt builds and returns a string representing the DropStmt
  */
 char *
-DeparseDropExtensionStmt(DropStmt *dropStmt)
+DeparseDropExtensionStmt(Node *node)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	AppendDropExtensionStmt(&str, dropStmt);
+	AppendDropExtensionStmt(&str, stmt);
 
 	return str.data;
 }
@@ -252,14 +255,15 @@ AppendExtensionNameList(StringInfo str, List *objects)
  * AlterObjectSchemaStmt (ALTER EXTENSION SET SCHEMA).
  */
 char *
-DeparseAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionSchemaStmt)
+DeparseAlterExtensionSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(alterExtensionSchemaStmt->objectType == OBJECT_EXTENSION);
+	Assert(stmt->objectType == OBJECT_EXTENSION);
 
-	AppendAlterExtensionSchemaStmt(&str, alterExtensionSchemaStmt);
+	AppendAlterExtensionSchemaStmt(&str, stmt);
 
 	return str.data;
 }

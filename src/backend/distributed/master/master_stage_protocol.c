@@ -105,7 +105,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);

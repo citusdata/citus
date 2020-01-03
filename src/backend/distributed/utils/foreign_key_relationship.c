@@ -75,8 +75,8 @@ static ForeignConstraintRelationshipGraph *fConstraintRelationshipGraph = NULL;
 
 static void CreateForeignConstraintRelationshipGraph(void);
 static void PopulateAdjacencyLists(void);
-static int CompareForeignConstraintRelationshipEdges(const void *leftElement, const
-													 void *rightElement);
+static int CompareForeignConstraintRelationshipEdges(const void *leftElement,
+													 const void *rightElement);
 static void AddForeignConstraintRelationshipEdge(Oid referencingOid, Oid referencedOid);
 static ForeignConstraintRelationshipNode * CreateOrFindNode(HTAB *adjacencyLists, Oid
 															relid);
@@ -360,15 +360,13 @@ PopulateAdjacencyLists(void)
  * ForeignConstraintRelationshipEdge using referencing and referenced ids respectively.
  */
 static int
-CompareForeignConstraintRelationshipEdges(const void *leftElement, const
-										  void *rightElement)
+CompareForeignConstraintRelationshipEdges(const void *leftElement,
+										  const void *rightElement)
 {
-	const ForeignConstraintRelationshipEdge *leftEdge = *((const
-														   ForeignConstraintRelationshipEdge
-														   **) leftElement);
-	const ForeignConstraintRelationshipEdge *rightEdge = *((const
-															ForeignConstraintRelationshipEdge
-															**) rightElement);
+	const ForeignConstraintRelationshipEdge *leftEdge =
+		*((const ForeignConstraintRelationshipEdge **) leftElement);
+	const ForeignConstraintRelationshipEdge *rightEdge =
+		*((const ForeignConstraintRelationshipEdge **) rightElement);
 
 	int referencingDiff = leftEdge->referencingRelationOID -
 						  rightEdge->referencingRelationOID;

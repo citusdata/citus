@@ -62,8 +62,9 @@ static void AppendAlterTypeOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
  * CompositeTypeStmt for application on a remote server.
  */
 char *
-DeparseCompositeTypeStmt(CompositeTypeStmt *stmt)
+DeparseCompositeTypeStmt(Node *node)
 {
+	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
@@ -74,8 +75,9 @@ DeparseCompositeTypeStmt(CompositeTypeStmt *stmt)
 
 
 char *
-DeparseCreateEnumStmt(CreateEnumStmt *stmt)
+DeparseCreateEnumStmt(Node *node)
 {
+	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
@@ -86,8 +88,9 @@ DeparseCreateEnumStmt(CreateEnumStmt *stmt)
 
 
 char *
-DeparseAlterEnumStmt(AlterEnumStmt *stmt)
+DeparseAlterEnumStmt(Node *node)
 {
+	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	StringInfoData sql = { 0 };
 	initStringInfo(&sql);
 
@@ -98,8 +101,9 @@ DeparseAlterEnumStmt(AlterEnumStmt *stmt)
 
 
 char *
-DeparseDropTypeStmt(DropStmt *stmt)
+DeparseDropTypeStmt(Node *node)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -112,8 +116,9 @@ DeparseDropTypeStmt(DropStmt *stmt)
 
 
 char *
-DeparseAlterTypeStmt(AlterTableStmt *stmt)
+DeparseAlterTypeStmt(Node *node)
 {
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -395,8 +400,9 @@ AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 
 
 char *
-DeparseRenameTypeStmt(RenameStmt *stmt)
+DeparseRenameTypeStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -419,8 +425,9 @@ AppendRenameTypeStmt(StringInfo buf, RenameStmt *stmt)
 
 
 char *
-DeparseRenameTypeAttributeStmt(RenameStmt *stmt)
+DeparseRenameTypeAttributeStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -452,8 +459,9 @@ AppendRenameTypeAttributeStmt(StringInfo buf, RenameStmt *stmt)
 
 
 char *
-DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
+DeparseAlterTypeSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -477,8 +485,9 @@ AppendAlterTypeSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 
 
 char *
-DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
+DeparseAlterTypeOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 

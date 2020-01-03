@@ -141,7 +141,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -207,7 +207,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -272,7 +272,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make

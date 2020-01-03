@@ -31,8 +31,9 @@ static void AppendNameList(StringInfo buf, List *objects);
  * DeparseDropCollationStmt builds and returns a string representing the DropStmt
  */
 char *
-DeparseDropCollationStmt(DropStmt *stmt)
+DeparseDropCollationStmt(Node *node)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -67,8 +68,9 @@ AppendDropCollationStmt(StringInfo buf, DropStmt *stmt)
  * DeparseRenameCollationStmt builds and returns a string representing the RenameStmt
  */
 char *
-DeparseRenameCollationStmt(RenameStmt *stmt)
+DeparseRenameCollationStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -88,8 +90,8 @@ AppendRenameCollationStmt(StringInfo buf, RenameStmt *stmt)
 {
 	List *names = (List *) stmt->object;
 
-	appendStringInfo(buf, "ALTER COLLATION %s RENAME TO %s;", NameListToQuotedString(
-						 names),
+	appendStringInfo(buf, "ALTER COLLATION %s RENAME TO %s;",
+					 NameListToQuotedString(names),
 					 quote_identifier(stmt->newname));
 }
 
@@ -98,8 +100,9 @@ AppendRenameCollationStmt(StringInfo buf, RenameStmt *stmt)
  * DeparseAlterCollationSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
  */
 char *
-DeparseAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt)
+DeparseAlterCollationSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -130,8 +133,9 @@ AppendAlterCollationSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
  * DeparseAlterCollationOwnerStmt builds and returns a string representing the AlterOwnerStmt
  */
 char *
-DeparseAlterCollationOwnerStmt(AlterOwnerStmt *stmt)
+DeparseAlterCollationOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 

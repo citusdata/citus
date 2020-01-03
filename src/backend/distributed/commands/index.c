@@ -96,7 +96,7 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
 
 
 /*
- * PlanIndexStmt determines whether a given CREATE INDEX statement involves
+ * PreprocessIndexStmt determines whether a given CREATE INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
  * the master node table and creates a DDLJob to encapsulate information needed
@@ -104,8 +104,9 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
+PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 {
+	IndexStmt *createIndexStatement = castNode(IndexStmt, node);
 	List *ddlJobs = NIL;
 
 	/*
@@ -187,7 +188,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 
 
 /*
- * PlanReindexStmt determines whether a given REINDEX statement involves
+ * PreprocessReindexStmt determines whether a given REINDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
  * the master node table and creates a DDLJob to encapsulate information needed
@@ -195,8 +196,9 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
+PreprocessReindexStmt(Node *node, const char *reindexCommand)
 {
+	ReindexStmt *reindexStatement = castNode(ReindexStmt, node);
 	List *ddlJobs = NIL;
 
 	/*
@@ -294,7 +296,7 @@ PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
 
 
 /*
- * PlanDropIndexStmt determines whether a given DROP INDEX statement involves
+ * PreprocessDropIndexStmt determines whether a given DROP INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
  * the master node table and creates a DDLJob to encapsulate information needed
@@ -302,8 +304,9 @@ PlanReindexStmt(ReindexStmt *reindexStatement, const char *reindexCommand)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
+PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 {
+	DropStmt *dropIndexStatement = castNode(DropStmt, node);
 	List *ddlJobs = NIL;
 	ListCell *dropObjectCell = NULL;
 	Oid distributedIndexId = InvalidOid;
@@ -384,24 +387,26 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 
 
 /*
- * PostProcessIndexStmt marks new indexes invalid if they were created using the
+ * PostprocessIndexStmt marks new indexes invalid if they were created using the
  * CONCURRENTLY flag. This (non-transactional) change provides the fallback
  * state if an error is raised, otherwise a sub-sequent change to valid will be
  * committed.
  */
-void
-PostProcessIndexStmt(IndexStmt *indexStmt)
+List *
+PostprocessIndexStmt(Node *node, const char *queryString)
 {
+	IndexStmt *indexStmt = castNode(IndexStmt, node);
+
 	/* we are only processing CONCURRENT index statements */
 	if (!indexStmt->concurrent)
 	{
-		return;
+		return NIL;
 	}
 
 	/* this logic only applies to the coordinator */
 	if (!IsCoordinator())
 	{
-		return;
+		return NIL;
 	}
 
 	/* commit the current transaction and start anew */
@@ -441,6 +446,8 @@ PostProcessIndexStmt(IndexStmt *indexStmt)
 	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
 	heap_freetuple(indexTuple);
 	heap_close(pg_index, RowExclusiveLock);
+
+	return NIL;
 }
 
 
