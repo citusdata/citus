@@ -139,7 +139,10 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *ctx
 												 Const *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *ctx,
 										 List *rangeTableList, int rteIdCounter);
-static PlannedStmt * PlanNonDistributedStmt(DistributedPlanningContext *ctx);
+static PlannedStmt * PlanDelegatedFunctionCall(DistributedPlanningContext *ctx,
+											   DistributedPlan *delegatedPlan);
+static PlannedStmt * PlanNonDistributedStmt(DistributedPlanningContext *ctx,
+											bool hasExternParam);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -255,6 +258,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * planner relies on both the restriction information per table and parse tree
 		 * transformations made by postgres' planner.
 		 */
+		DistributedPlan *delegatedPlan = NULL;
+		bool hasExternParam = false;
 		if (fastPathRouterQuery)
 		{
 			result = PlanFastPathDistributedStmt(&ctx, distributionKeyValue);
@@ -263,9 +268,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		{
 			result = PlanDistributedStmt(&ctx, rangeTableList, rteIdCounter);
 		}
+		else if ((delegatedPlan = TryToDelegateFunctionCall(ctx.parse,
+															&hasExternParam)))
+		{
+			result = PlanDelegatedFunctionCall(&ctx, delegatedPlan);
+		}
 		else
 		{
-			result = PlanNonDistributedStmt(&ctx);
+			result = PlanNonDistributedStmt(&ctx, hasExternParam);
 		}
 	}
 	PG_CATCH();
@@ -608,23 +618,32 @@ PlanDistributedStmt(DistributedPlanningContext *ctx,
 
 
 /*
- * PlanNonDistributedStmt creates a normal (non-distributed) planned statement
- * using the PG planner.
+ * PlanDelegatedFunctionCall creates a plan by delagating the function call to
+ * the worker.
  */
 static PlannedStmt *
-PlanNonDistributedStmt(DistributedPlanningContext *ctx)
+PlanDelegatedFunctionCall(DistributedPlanningContext *ctx, DistributedPlan *delegatedPlan)
 {
 	PlannedStmt *result = standard_planner(ctx->parse, ctx->cursorOptions,
 										   ctx->boundParams);
 
-	bool hasExternParam = false;
-	DistributedPlan *delegatePlan = TryToDelegateFunctionCall(ctx->parse,
-															  &hasExternParam);
-	if (delegatePlan != NULL)
-	{
-		result = FinalizePlan(result, delegatePlan);
-	}
-	else if (hasExternParam)
+	result = FinalizePlan(result, delegatedPlan);
+
+	return result;
+}
+
+
+/*
+ * PlanNonDistributedStmt creates a normal (non-distributed) planned statement
+ * using the PG planner.
+ */
+static PlannedStmt *
+PlanNonDistributedStmt(DistributedPlanningContext *ctx, bool hasExternParam)
+{
+	PlannedStmt *result = standard_planner(ctx->parse, ctx->cursorOptions,
+										   ctx->boundParams);
+
+	if (hasExternParam)
 	{
 		/*
 		 * As in CreateDistributedPlannedStmt, try dissuade planner when planning
