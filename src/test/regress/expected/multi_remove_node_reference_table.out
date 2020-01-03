@@ -18,7 +18,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- remove non-existing node
 SELECT master_remove_node('localhost', 55555);
-ERROR:  node at "localhost:55555" does not exist
+ERROR:  node at "localhost:xxxxx" does not exist
 -- remove a node with no reference tables
 -- verify node exist before removal
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -218,10 +218,10 @@ WHERE
 \c - - - :master_port
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  node at "localhost:57638" does not exist
+ERROR:  node at "localhost:xxxxx" does not exist
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -242,7 +242,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for the next test
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -458,7 +458,7 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -583,7 +583,7 @@ SELECT * FROM remove_node_reference_table;
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -704,7 +704,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -903,8 +903,8 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
-NOTICE:  Replicating reference table "table1" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -1018,8 +1018,8 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
-NOTICE:  Replicating reference table "table1" to the node localhost:57638
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column? 
 ----------
         1

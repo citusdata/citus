@@ -44,7 +44,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-ERROR:  could not establish any connections to the node localhost:9060 after 400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -169,7 +169,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 SELECT count(*) FROM single_replicatated;
-ERROR:  could not establish any connections to the node localhost:9060 after 400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SET citus.force_max_query_parallelization TO OFF;
 -- one similar test, but this time on modification queries
 -- to see that connection establishement failures could
@@ -224,7 +224,7 @@ RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT get_global_active_transactions();
 WARNING:  could not establish connection after 400 ms
-WARNING:  connection error: localhost:9060
+WARNING:  connection error: localhost:xxxxx
  get_global_active_transactions 
 --------------------------------
 (0 rows)

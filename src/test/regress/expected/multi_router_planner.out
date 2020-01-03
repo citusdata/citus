@@ -2402,7 +2402,7 @@ GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 -- we will fail to connect to worker 2, since the user does not exist
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-WARNING:  connection error: localhost:57638
+WARNING:  connection error: localhost:xxxxx
 DETAIL:  FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
@@ -2420,7 +2420,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-WARNING:  connection error: localhost:57638
+WARNING:  connection error: localhost:xxxxx
 DETAIL:  FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (

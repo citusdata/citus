@@ -61,9 +61,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction").kil
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY copy_test, line 1: "0, 0"
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 -- ==== kill the connection when we try to start the COPY ====
 -- the query should abort
@@ -77,7 +77,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY copy_test, line 1: "0, 0"
 -- ==== kill the connection when we first start sending data ====
 -- the query should abort
@@ -88,7 +88,7 @@ SELECT citus.mitmproxy('conn.onCopyData().killall()'); -- raw rows from the clie
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard 100400 on localhost:9060
+ERROR:  failed to COPY to shard 100400 on localhost:xxxxx
 -- ==== kill the connection when the worker confirms it's received the data ====
 -- the query should abort
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").killall()');
@@ -98,7 +98,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard 100400 on localhost:9060
+ERROR:  failed to COPY to shard 100400 on localhost:xxxxx
 -- ==== kill the connection when we try to send COMMIT ====
 -- the query should succeed, and the placement should be marked inactive
 SELECT citus.mitmproxy('conn.allow()');
@@ -129,10 +129,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit transaction on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- the shard is marked invalid
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -219,7 +219,7 @@ SELECT citus.mitmproxy('conn.killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection error: localhost:9060
+WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -250,9 +250,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY copy_test, line 1: "0, 0"
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -280,7 +280,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -305,7 +305,7 @@ SELECT citus.mitmproxy('conn.onCopyData().killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard 100400 on localhost:9060
+ERROR:  failed to COPY to shard 100400 on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -330,10 +330,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit transaction on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  could not commit transaction for shard 100400 on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');
@@ -370,10 +370,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COMMIT").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit transaction on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  could not commit transaction for shard 100400 on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');

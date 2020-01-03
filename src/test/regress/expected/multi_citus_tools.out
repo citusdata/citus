@@ -16,7 +16,7 @@ SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int
 								   false);
  node_name | node_port | success |               result               
 -----------+-----------+---------+------------------------------------
- localhost |       666 | f       | failed to connect to localhost:666
+ localhost |       666 | f       | failed to connect to localhost:xxxxx
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
@@ -24,7 +24,7 @@ SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int
 								   true);
  node_name | node_port | success |               result               
 -----------+-----------+---------+------------------------------------
- localhost |       666 | f       | failed to connect to localhost:666
+ localhost |       666 | f       | failed to connect to localhost:xxxxx
 (1 row)
 
 RESET client_min_messages;

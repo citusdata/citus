@@ -14,7 +14,7 @@ SELECT master_add_node('localhost', 12345, groupid => 0) = :master_nodeid;
 ERROR:  group 0 already has a primary node
 -- start_metadata_sync_to_node() for coordinator should raise a notice
 SELECT start_metadata_sync_to_node('localhost', :master_port);
-NOTICE:  localhost:57636 is the coordinator and already contains metadata, skipping syncing the metadata
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  start_metadata_sync_to_node 
 -----------------------------
  

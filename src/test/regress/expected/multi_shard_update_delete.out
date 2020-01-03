@@ -615,7 +615,7 @@ UPDATE users_test_table as utt
 SET    value_1 = 3
 WHERE value_2 > (SELECT value_3 FROM events_test_table as ett WHERE utt.user_id = ett.user_id);
 ERROR:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- We can not pushdown a query if the target relation is reference table
 UPDATE users_reference_copy_table
 SET    value_2 = 5

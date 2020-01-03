@@ -173,7 +173,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-NOTICE:  Replicating reference table "ref_table" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
  ?column? 
 ----------
@@ -383,7 +383,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -414,8 +414,8 @@ SELECT wait_until_metadata_sync();
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
 -- should error out
 SELECT 1 FROM master_disable_node('localhost', 1);
-ERROR:  Disabling localhost:1 failed
-DETAIL:  connection error: localhost:1
+ERROR:  Disabling localhost:xxxxx failed
+DETAIL:  connection error: localhost:xxxxx
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
@@ -449,7 +449,7 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -481,8 +481,8 @@ SELECT wait_until_metadata_sync();
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
 -- should error out
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
-ERROR:  Disabling localhost:57638 failed
-DETAIL:  connection error: localhost:1
+ERROR:  Disabling localhost:xxxxx failed
+DETAIL:  connection error: localhost:xxxxx
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
@@ -511,7 +511,7 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column? 
 ----------
         1

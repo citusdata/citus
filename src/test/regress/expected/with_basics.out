@@ -100,7 +100,7 @@ WITH cte AS (
 )
 SELECT (SELECT * FROM cte);
 ERROR:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 WITH cte_basic AS (
 	SELECT user_id FROM users_table WHERE user_id = 1
 )

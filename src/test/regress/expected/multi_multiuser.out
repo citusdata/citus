@@ -421,7 +421,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
 SET ROLE usage_access;
 CREATE TYPE usage_access_type AS ENUM ('a', 'b');
@@ -667,14 +667,14 @@ RESET ROLE;
 -- super user should not be able to copy files created by a user
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.10": No such file or directory
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:xxxxx
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.44518": No such file or directory
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:xxxxx
 -- only the user whom created the files should be able to fetch
 SET ROLE full_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);

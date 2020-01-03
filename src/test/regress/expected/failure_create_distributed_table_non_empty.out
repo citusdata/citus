@@ -26,7 +26,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -62,7 +62,7 @@ SELECT create_distributed_table('test_table', 'id');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -125,7 +125,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -190,7 +190,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -211,7 +211,7 @@ SELECT create_distributed_table('test_table', 'id');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -227,7 +227,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 
 SELECT create_distributed_table('test_table', 'id');
 NOTICE:  Copying data from local table...
-ERROR:  failed to COPY to shard 11000016 on localhost:9060
+ERROR:  failed to COPY to shard 11000016 on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -278,7 +278,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
 
 SELECT create_distributed_table('test_table', 'id');
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -467,7 +467,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -514,7 +514,7 @@ SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -555,7 +555,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_apply_shard_ddl_comma
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -593,7 +593,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -661,7 +661,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -726,7 +726,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -747,7 +747,7 @@ SELECT create_distributed_table('test_table', 'id');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -762,7 +762,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  failed to COPY to shard 11000096 on localhost:9060
+ERROR:  failed to COPY to shard 11000096 on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -940,7 +940,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -980,7 +980,7 @@ SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------

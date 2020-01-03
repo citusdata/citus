@@ -109,21 +109,21 @@ ERROR:  could not find valid entry for shard 540005
 SELECT load_shard_placement_array(540001, false);
     load_shard_placement_array     
 -----------------------------------
- {localhost:57637,localhost:57638}
+ {localhost:xxxxx,localhost:xxxxx}
 (1 row)
 
 -- only one of which is finalized
 SELECT load_shard_placement_array(540001, true);
  load_shard_placement_array 
 ----------------------------
- {localhost:57637}
+ {localhost:xxxxx}
 (1 row)
 
 -- should see error for non-existent shard
 SELECT load_shard_placement_array(540001, false);
     load_shard_placement_array     
 -----------------------------------
- {localhost:57637,localhost:57638}
+ {localhost:xxxxx,localhost:xxxxx}
 (1 row)
 
 -- should see column id of 'name'

@@ -234,7 +234,7 @@ step s1-commit:
 	COMMIT;
 
 step s2-remove-node-1: <... completed>
-error in steps s1-commit s2-remove-node-1: ERROR:  node at "localhost:57637" does not exist
+error in steps s1-commit s2-remove-node-1: ERROR:  node at "localhost:xxxxx" does not exist
 step s1-show-nodes: 
 	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 

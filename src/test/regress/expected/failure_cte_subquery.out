@@ -52,7 +52,7 @@ FROM
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- kill at the second copy (pull)
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.events_table_16000002").kill()');
  mitmproxy 
@@ -83,7 +83,7 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo 
 	  WHERE foo.user_id = cte.user_id;
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -117,7 +117,7 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo 
 	  WHERE foo.user_id = cte.user_id;
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -257,7 +257,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
 
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -290,7 +290,7 @@ INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- verify contents are the same
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -373,7 +373,7 @@ BEGIN;
 SET LOCAL citus.multi_shard_modify_mode = 'sequential';
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

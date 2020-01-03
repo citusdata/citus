@@ -74,7 +74,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -99,8 +99,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-ERROR:  failure on connection marked as essential: localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -127,7 +127,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -151,7 +151,7 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard 100404 on localhost:9060
+ERROR:  failed to COPY to shard 100404 on localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -168,7 +168,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(1) FROM copy_test;
-WARNING:  connection error: localhost:9060
+WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -208,10 +208,10 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-ERROR:  failure on connection marked as essential: localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -238,10 +238,10 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-ERROR:  failure on connection marked as essential: localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
@@ -266,10 +266,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit transaction on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;

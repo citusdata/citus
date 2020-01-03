@@ -187,7 +187,7 @@ create aggregate sumstring(text) (
 );
 select sumstring(valf::text) from aggdata where valf is not null;
 ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 select create_distributed_function('sumstring(text)');
  create_distributed_function 
 -----------------------------

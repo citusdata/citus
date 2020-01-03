@@ -486,7 +486,7 @@ ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 2 should fail
 SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_2_port);
 ERROR:  could not open file "base/pgsql_job_cache/10_0_200/squares_1.data": No such file or directory
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK TO SAVEPOINT s1;
 -- still, results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);

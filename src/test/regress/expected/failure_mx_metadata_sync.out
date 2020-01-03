@@ -48,7 +48,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to drop all tables in pg_dist_partition
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
  mitmproxy 
@@ -68,7 +68,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to truncate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
  mitmproxy 
@@ -88,7 +88,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to populate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").cancel(' || :pid || ')');
  mitmproxy 
@@ -108,7 +108,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 -- Verify that coordinator knows worker does not have valid metadata
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
  hasmetadata 
@@ -147,7 +147,7 @@ SELECT create_distributed_table('t2', 'id');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.onParse(query="^INSERT INTO pg_dist_shard").cancel(' || :pid || ')');
  mitmproxy 
 -----------

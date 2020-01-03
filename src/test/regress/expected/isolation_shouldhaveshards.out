@@ -159,7 +159,7 @@ step s2-commit:
 	COMMIT;
 
 step s1-noshards: <... completed>
-error in steps s2-commit s1-noshards: ERROR:  node at "localhost:57637" does not exist
+error in steps s2-commit s1-noshards: ERROR:  node at "localhost:xxxxx" does not exist
 step s1-commit: 
 	COMMIT;
 

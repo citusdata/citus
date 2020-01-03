@@ -286,7 +286,7 @@ NOTICE:  Copying data from local table...
 INSERT INTO collection_users VALUES (1, 1000, 1);
 ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
 DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');
 INSERT INTO collection_users VALUES (5, 1, 2);

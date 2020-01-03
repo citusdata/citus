@@ -153,7 +153,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
 DETAIL:  Key (lab_id, name)=(6, Leslie Lamport) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 ABORT;
 -- SELECTs may occur after a modification: First check that selecting
 -- from the modified node works.
@@ -377,9 +377,9 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  could not commit transaction for shard 1200001 on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
@@ -485,7 +485,7 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_pkey_1200003"
 DETAIL:  Key (id)=(1) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects WHERE id = 1;
@@ -620,7 +620,7 @@ INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
+WARNING:  failed to commit transaction on localhost:xxxxx
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name 
@@ -663,9 +663,9 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  could not commit transaction for shard 1200002 on any active node
 WARNING:  could not commit transaction for shard 1200003 on any active node
 ERROR:  could not commit transaction on any active node
@@ -704,7 +704,7 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  could not commit transaction for shard 1200002 on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
@@ -1177,15 +1177,15 @@ ALTER USER test_user RENAME TO test_user_new;
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 COMMIT;
 -- show that no data go through the table and shard states are good
 SET client_min_messages to 'ERROR';
@@ -1210,8 +1210,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
 -- some placements are invalid before abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1232,8 +1232,8 @@ ORDER BY shardid, nodeport;
 ABORT;
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
  count 
 -------
      0
@@ -1258,8 +1258,8 @@ ORDER BY shardid, nodeport;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
 -- check shard states before commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1297,8 +1297,8 @@ ORDER BY shardid, nodeport;
 
 -- verify data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
  count 
 -------
      2
@@ -1310,7 +1310,7 @@ ALTER USER test_user RENAME TO test_user_new;
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection error: localhost:57638
+ERROR:  connection error: localhost:xxxxx
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;

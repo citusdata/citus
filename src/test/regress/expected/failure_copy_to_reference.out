@@ -35,7 +35,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -63,7 +63,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -122,7 +122,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -178,7 +178,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COPY 3").kill()');
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  failed to COPY to shard 130000 on localhost:9060
+ERROR:  failed to COPY to shard 130000 on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -236,7 +236,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
@@ -265,7 +265,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").kill()');
 
 \copy test_table FROM STDIN DELIMITER ','
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -396,7 +396,7 @@ SET LOCAL client_min_messages TO WARNING;
 \copy test_table FROM STDIN DELIMITER ','
 ROLLBACK;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -429,7 +429,7 @@ SET LOCAL client_min_messages TO WARNING;
 \copy test_table FROM STDIN DELIMITER ','
 ROLLBACK;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------

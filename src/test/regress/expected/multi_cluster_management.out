@@ -121,7 +121,7 @@ INSERT INTO test_reference_table VALUES (1, '1');
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
 SELECT master_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:57638 has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
+NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
  master_disable_node 
 ---------------------
  
@@ -654,7 +654,7 @@ SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', 
 (1 row)
 
 SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
-ERROR:  node at "localhost:2000" does not exist
+ERROR:  node at "localhost:xxxxx" does not exist
 SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
  master_add_secondary_node 
 ---------------------------

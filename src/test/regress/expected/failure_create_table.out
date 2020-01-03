@@ -20,7 +20,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -57,7 +57,7 @@ SELECT create_distributed_table('test_table', 'id');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -89,7 +89,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -120,7 +120,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT worker_apply_shard_ddl_comman
 (1 row)
 
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -154,7 +154,7 @@ BEGIN;
 (1 row)
 
     SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -225,7 +225,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table','id',colocate_with=>'temp_table');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -284,7 +284,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 SELECT create_distributed_table('test_table','id',colocate_with=>'temp_table');
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -347,7 +347,7 @@ SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -384,7 +384,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -463,7 +463,7 @@ SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -496,7 +496,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -533,7 +533,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -615,7 +615,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT master_create_worker_shards('test_table_2', 4, 2);
-ERROR:  connection error: localhost:9060
+ERROR:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -653,7 +653,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^PREPARE TRANSACTION").k
 
 SELECT master_create_worker_shards('test_table_2', 4, 2);
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:9060
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------

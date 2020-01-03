@@ -184,7 +184,7 @@ SELECT create_reference_table('ref_table_2');
 
 -- and add the other node
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table_2" to the node localhost:57638
+NOTICE:  Replicating reference table "ref_table_2" to the node localhost:xxxxx
  ?column? 
 ----------
         1
@@ -365,7 +365,7 @@ BEGIN;
 COMMIT;
 -- add the node back
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "t3" to the node localhost:57638
+NOTICE:  Replicating reference table "t3" to the node localhost:xxxxx
  ?column? 
 ----------
         1
