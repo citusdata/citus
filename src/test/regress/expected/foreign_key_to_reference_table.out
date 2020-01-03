@@ -1196,14 +1196,14 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.refe
  fkey_ref_7000304                                     | fkey_reference_table.referencing_table_7000304             | fkey_reference_table.referenced_table_7000298
  fkey_ref_7000305                                     | fkey_reference_table.referencing_table_7000305             | fkey_reference_table.referenced_table_7000298
  fkey_ref_7000306                                     | fkey_reference_table.referencing_table_7000306             | fkey_reference_table.referenced_table_7000298
- referencing_referencing_table_id_ref_id_fkey_7000307 | fkey_reference_table.referencing_referencing_table_7000307 | fkey_reference_table.referencing_table_7000299
- referencing_referencing_table_id_ref_id_fkey_7000308 | fkey_reference_table.referencing_referencing_table_7000308 | fkey_reference_table.referencing_table_7000300
- referencing_referencing_table_id_ref_id_fkey_7000309 | fkey_reference_table.referencing_referencing_table_7000309 | fkey_reference_table.referencing_table_7000301
- referencing_referencing_table_id_ref_id_fkey_7000310 | fkey_reference_table.referencing_referencing_table_7000310 | fkey_reference_table.referencing_table_7000302
- referencing_referencing_table_id_ref_id_fkey_7000311 | fkey_reference_table.referencing_referencing_table_7000311 | fkey_reference_table.referencing_table_7000303
- referencing_referencing_table_id_ref_id_fkey_7000312 | fkey_reference_table.referencing_referencing_table_7000312 | fkey_reference_table.referencing_table_7000304
- referencing_referencing_table_id_ref_id_fkey_7000313 | fkey_reference_table.referencing_referencing_table_7000313 | fkey_reference_table.referencing_table_7000305
- referencing_referencing_table_id_ref_id_fkey_7000314 | fkey_reference_table.referencing_referencing_table_7000314 | fkey_reference_table.referencing_table_7000306
+ referencing_referencing_table_id_fkey_7000307 | fkey_reference_table.referencing_referencing_table_7000307 | fkey_reference_table.referencing_table_7000299
+ referencing_referencing_table_id_fkey_7000308 | fkey_reference_table.referencing_referencing_table_7000308 | fkey_reference_table.referencing_table_7000300
+ referencing_referencing_table_id_fkey_7000309 | fkey_reference_table.referencing_referencing_table_7000309 | fkey_reference_table.referencing_table_7000301
+ referencing_referencing_table_id_fkey_7000310 | fkey_reference_table.referencing_referencing_table_7000310 | fkey_reference_table.referencing_table_7000302
+ referencing_referencing_table_id_fkey_7000311 | fkey_reference_table.referencing_referencing_table_7000311 | fkey_reference_table.referencing_table_7000303
+ referencing_referencing_table_id_fkey_7000312 | fkey_reference_table.referencing_referencing_table_7000312 | fkey_reference_table.referencing_table_7000304
+ referencing_referencing_table_id_fkey_7000313 | fkey_reference_table.referencing_referencing_table_7000313 | fkey_reference_table.referencing_table_7000305
+ referencing_referencing_table_id_fkey_7000314 | fkey_reference_table.referencing_referencing_table_7000314 | fkey_reference_table.referencing_table_7000306
 (16 rows)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(1,1000) AS f(x);
@@ -1219,7 +1219,7 @@ SELECT max(ref_id) FROM referencing_referencing_table;
 DROP TABLE referenced_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_referencing_table_id_ref_id_fkey on table referencing_referencing_table
+NOTICE:  drop cascades to constraint referencing_referencing_table_id_fkey on table referencing_referencing_table
 DROP TABLE referencing_referencing_table;
 -- test if create_distributed_table works in transactions with some edge cases
 -- the following checks if create_distributed_table works on foreign keys when

@@ -66,15 +66,15 @@ s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
 # Remove trailing whitespace
 s/ *$//g
-#
-## pg12 changes
-#s/Partitioned table "/Table "/g
-#s/\) TABLESPACE pg_default$/\)/g
-#s/invalid input syntax for type /invalid input syntax for /g
-#s/_id_ref_id_fkey/_id_fkey/g
-#s/_ref_id_id_fkey_/_ref_id_fkey_/g
-#s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
-#s/_id_other_column_ref_fkey/_id_fkey/g
+
+# pg12 changes
+s/Partitioned table "/Table "/g
+s/\) TABLESPACE pg_default$/\)/g
+s/invalid input syntax for type /invalid input syntax for /g
+s/_id_ref_id_fkey/_id_fkey/g
+s/_ref_id_id_fkey_/_ref_id_fkey_/g
+s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
+s/_id_other_column_ref_fkey/_id_fkey/g
 #
 ## intermediate_results
 #s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g

@@ -105,7 +105,7 @@ SELECT master_get_table_ddl_events('clustered_table');
 ---------------------------------------------------------------------
  CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)
  ALTER TABLE public.clustered_table OWNER TO postgres
- CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at) TABLESPACE pg_default
+ CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at)
  ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx
 (4 rows)
 

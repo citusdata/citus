@@ -127,7 +127,7 @@ SELECT create_intermediate_result('squares', 'SELECT s, s*s FROM generate_series
 (1 row)
 
 SELECT * FROM read_intermediate_result('squares', 'csv') AS res (x int, x2 int);
-ERROR:  invalid input syntax for type integer: "PGCOPY"
+ERROR:  invalid input syntax for integer: "PGCOPY"
 END;
 -- try a composite type
 CREATE TYPE intermediate_results.square_type AS (x text, x2 int);

@@ -339,7 +339,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
         Constraint        |                                 Definition
 ---------------------------------------------------------------------
- fk_test_2_col1_col2_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+ fk_test_2_col1_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
 (1 row)
 
 \c - - - :master_port

@@ -412,7 +412,7 @@ SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDER BY 1;
 -- create default partition
 CREATE TABLE partitioning_test_default PARTITION OF partitioning_test DEFAULT;
 \d+ partitioning_test
-                       Partitioned table "public.partitioning_test"
+                       Table "public.partitioning_test"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
 ---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              |
