@@ -35,7 +35,7 @@ order by s_i_id;
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
                ->  Distributed Subplan 1_2
@@ -44,13 +44,13 @@ order by s_i_id;
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: stock.s_i_id
                            InitPlan 1 (returns $0)
@@ -81,13 +81,13 @@ order by s_i_id;
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: stock.s_i_id
                            ->  Seq Scan on stock_1640000 stock
@@ -112,13 +112,13 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  Aggregate
                                        ->  Seq Scan on stock_1640000 stock
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: stock.s_i_id
                      ->  Seq Scan on stock_1640000 stock
@@ -142,7 +142,7 @@ order by s_i_id;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
                            Group Key: s.s_i_id
                            ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
@@ -163,7 +163,7 @@ having   (select true);
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
                      Group Key: s.s_i_id
                      ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)

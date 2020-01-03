@@ -53,7 +53,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
          Task Count: 2
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
@@ -61,7 +61,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                            ->  Hash
                                  ->  Seq Scan on orders_290002 orders
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)

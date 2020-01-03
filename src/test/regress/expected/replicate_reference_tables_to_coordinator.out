@@ -45,7 +45,7 @@ EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57636 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on squares_8000000 citus_table_alias  (cost=0.00..41.88 rows=2550 width=8)
                ->  Seq Scan on numbers_8000001 numbers  (cost=0.00..41.88 rows=2550 width=8)
 (7 rows)
@@ -67,7 +67,7 @@ EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57636 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on numbers_8000001 citus_table_alias  (cost=0.00..38.25 rows=753 width=4)
                ->  Seq Scan on squares_8000000 squares  (cost=0.00..38.25 rows=753 width=4)
                      Filter: (a < 3)

@@ -43,7 +43,7 @@ LIMIT 1;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit  (cost=1.53..1.53 rows=1 width=36)
                            ->  Sort  (cost=1.53..1.53 rows=2 width=36)
                                  Sort Key: (avg(value_1)) DESC
@@ -109,7 +109,7 @@ ORDER BY 2  DESC;
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate  (cost=1.58..1.61 rows=2 width=36)
                      Group Key: user_id
                      ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
@@ -226,7 +226,7 @@ LIMIT 2;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: ((10000 / sum((value_1 + value_2)))) DESC
@@ -292,7 +292,7 @@ LIMIT 2;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (sum(value_1)) DESC
@@ -332,7 +332,7 @@ LIMIT 5;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (max(et."time")), (avg(ut.value_1))
@@ -389,7 +389,7 @@ LIMIT 5;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            ->  Sort
                                  Sort Key: (count(DISTINCT ut.value_2)), (avg(ut.value_1)), ut.user_id DESC

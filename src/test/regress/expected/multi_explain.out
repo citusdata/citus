@@ -42,7 +42,7 @@ Sort
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem
@@ -61,7 +61,7 @@ Sort
                     Task Count: 2
                     Tasks Shown: One of 2
                     ->  Task
-                          Node: host=localhost port=57638 dbname=regression
+                          Node: host=localhost port=xxxxx dbname=regression
                           ->  HashAggregate
                                 Group Key: l_quantity
                                 ->  Seq Scan on lineitem_290000 lineitem
@@ -96,7 +96,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                   "Tasks Shown": "One of 2",
                   "Tasks": [
                     {
-                      "Node": "host=localhost port=57638 dbname=regression",
+                      "Node": "host=localhost port=xxxxx dbname=regression",
                       "Remote Plan": [
                         [
                           {
@@ -171,7 +171,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                   <Tasks-Shown>One of 2</Tasks-Shown>
                   <Tasks>
                     <Task>
-                      <Node>host=localhost port=57638 dbname=regression</Node>
+                      <Node>host=localhost port=xxxxx dbname=regression</Node>
                       <Remote-Plan>
                         <explain xmlns="http://www.postgresql.org/2009/explain">
                           <Query>
@@ -240,7 +240,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                 Task Count: 2
                 Tasks Shown: "One of 2"
                 Tasks: 
-                  - Node: "host=localhost port=57638 dbname=regression"
+                  - Node: "host=localhost port=xxxxx dbname=regression"
                     Remote Plan: 
                       - Plan: 
                           Node Type: "Aggregate"
@@ -268,7 +268,7 @@ Sort
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem
@@ -285,7 +285,7 @@ Sort (actual rows=50 loops=1)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
@@ -299,7 +299,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57638 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
                     ->  Seq Scan on public.lineitem_290000 lineitem
@@ -316,7 +316,7 @@ Limit
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  Limit
                           ->  Sort
                                 Sort Key: lineitem.l_quantity
@@ -333,7 +333,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on lineitem_290000 citus_table_alias
               ->  Values Scan on "*VALUES*"
 -- Test update
@@ -345,7 +345,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_290000 lineitem
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
@@ -360,7 +360,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_290000 lineitem (actual rows=0 loops=1)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=0 loops=1)
                     Index Cond: (l_orderkey = 1)
@@ -375,7 +375,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_290000 lineitem
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
@@ -402,7 +402,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
               Index Cond: (l_orderkey = 5)
 SELECT true AS valid FROM explain_xml($$
@@ -419,7 +419,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on lineitem_290000 lineitem
 -- Test having
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
@@ -433,7 +433,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57638 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
                     ->  Seq Scan on public.lineitem_290000 lineitem
@@ -452,7 +452,7 @@ HashAggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57638 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  HashAggregate
                     Output: l_quantity, l_quantity
                     Group Key: lineitem.l_quantity
@@ -489,7 +489,7 @@ Aggregate
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  GroupAggregate
                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
@@ -571,7 +571,7 @@ HashAggregate
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  GroupAggregate
                     Group Key: subquery_top.hasdone
                     ->  Sort
@@ -686,7 +686,7 @@ Sort
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  GroupAggregate
                           Group Key: subquery_top.count_pay
                           ->  Sort
@@ -785,7 +785,7 @@ Limit
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  Limit
                           ->  Sort
                                 Sort Key: (max(users.lastseen)) DESC
@@ -814,7 +814,7 @@ Aggregate
         Task Count: 1
         Tasks Shown: All
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
@@ -832,19 +832,19 @@ Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360041 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360042 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360043 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 EXPLAIN (COSTS FALSE)
@@ -855,12 +855,12 @@ Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360041 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360042 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
@@ -871,19 +871,19 @@ Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_hash_part_360042 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360042 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_hash_part_360043 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360043 lineitem_hash_part
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
@@ -899,12 +899,12 @@ Sort (actual rows=50 loops=1)
               Task Count: 2
               Tasks Shown: All
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290001 lineitem (actual rows=6000 loops=1)
@@ -919,7 +919,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_hash_part_360041 lineitem_hash_part
               ->  Hash Join
                     Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
@@ -935,7 +935,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
               ->  Hash Join
                     Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
@@ -951,7 +951,7 @@ Aggregate
         Task Count: 1
         Tasks Shown: All
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
@@ -1128,7 +1128,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Node: host=localhost port=57638 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  Seq Scan on lineitem_290000 lineitem
 -- ensure EXPLAIN EXECUTE doesn't crash
@@ -1140,7 +1140,7 @@ Aggregate
         Task Count: 1
         Tasks Shown: All
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
@@ -1151,7 +1151,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
 PREPARE real_time_executor_query AS
@@ -1162,7 +1162,7 @@ Aggregate
         Task Count: 1
         Tasks Shown: All
         ->  Task
-              Node: host=localhost port=57637 dbname=regression
+              Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
@@ -1174,7 +1174,7 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57637 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
 -- test explain in a transaction with alter table to test we use right connections
@@ -1194,7 +1194,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
@@ -1211,7 +1211,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57637 dbname=regression
+                    Node: host=localhost port=xxxxx dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
@@ -1271,7 +1271,7 @@ Custom Scan (Citus Adaptive)
                     Task Count: 4
                     Tasks Shown: One of 4
                     ->  Task
-                          Node: host=localhost port=57637 dbname=regression
+                          Node: host=localhost port=xxxxx dbname=regression
                           ->  HashAggregate
                                 Output: l_orderkey
                                 Group Key: lineitem_hash_part.l_orderkey
@@ -1284,7 +1284,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Merge Join
               Output: intermediate_result_1.l_orderkey, intermediate_result.s
               Merge Cond: (intermediate_result.s = intermediate_result_1.l_orderkey)

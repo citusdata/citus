@@ -949,7 +949,7 @@ ORDER BY user_id, avg(value_1) DESC;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  WindowAgg
                            ->  Sort
                                  Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
@@ -1025,7 +1025,7 @@ LIMIT 5;
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  WindowAgg
                                  ->  Sort
                                        Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
@@ -1055,7 +1055,7 @@ LIMIT 5;
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  WindowAgg
                                  ->  Sort
                                        Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
@@ -1085,7 +1085,7 @@ LIMIT 5;
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  WindowAgg
                                  ->  Sort
                                        Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
@@ -1115,7 +1115,7 @@ LIMIT 5;
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  WindowAgg
                                  ->  Sort
                                        Sort Key: users_table.user_id, (sum(users_table.value_2))

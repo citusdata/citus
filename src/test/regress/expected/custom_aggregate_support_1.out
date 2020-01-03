@@ -116,22 +116,22 @@ GROUP BY(1);
          Task Count: 4
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360261 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360262 daily_uniques
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360263 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -154,22 +154,22 @@ GROUP BY(1);
                Task Count: 4
                Tasks Shown: All
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360261 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360262 daily_uniques
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360263 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -191,22 +191,22 @@ GROUP BY(1);
          Task Count: 4
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360261 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360262 daily_uniques
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360263 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -229,22 +229,22 @@ GROUP BY(1);
                Task Count: 4
                Tasks Shown: All
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360261 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360262 daily_uniques
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360263 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -266,22 +266,22 @@ GROUP BY(1);
          Task Count: 4
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360261 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360262 daily_uniques
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360263 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -304,22 +304,22 @@ GROUP BY(1);
                Task Count: 4
                Tasks Shown: All
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360261 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360262 daily_uniques
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360263 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: day
                            ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -341,22 +341,22 @@ GROUP BY(1);
          Task Count: 4
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360261 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360262 daily_uniques
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360263 daily_uniques
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: day
                      ->  Seq Scan on daily_uniques_360264 daily_uniques
@@ -381,7 +381,7 @@ HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
                Task Count: 4
                Tasks Shown: All
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
                            Group Key: day
                            Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
@@ -389,7 +389,7 @@ HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
                                  Sort Key: day
                                  ->  Seq Scan on daily_uniques_360261 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
                            Group Key: day
                            Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
@@ -397,7 +397,7 @@ HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
                                  Sort Key: day
                                  ->  Seq Scan on daily_uniques_360262 daily_uniques
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
                            Group Key: day
                            Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
@@ -405,7 +405,7 @@ HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
                                  Sort Key: day
                                  ->  Seq Scan on daily_uniques_360263 daily_uniques
                ->  Task
-                     Node: host=localhost port=57638 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
                            Group Key: day
                            Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)

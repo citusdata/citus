@@ -1579,7 +1579,7 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Gather
                Workers Planned: 2
                ->  Parallel Hash Join
@@ -1627,7 +1627,7 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Append
                ->  Hash Join
                      Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
@@ -1657,7 +1657,7 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Hash Join
                Hash Cond: (partitioning_hash_join_test.id = partitioning_hash_test.id)
                ->  Append

@@ -217,7 +217,7 @@ EXPLAIN (COSTS FALSE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: l_orderkey
                            Filter: (count(*) > 5)
@@ -245,7 +245,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Group Key: l_orderkey
                                  Filter: (count(*) > 5)
@@ -288,7 +288,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Group Key: l_suppkey, l_linenumber
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -317,7 +317,7 @@ EXPLAIN (COSTS FALSE)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey, l_linenumber
                                              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -365,7 +365,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -396,7 +396,7 @@ EXPLAIN (COSTS FALSE)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
-                                             Node: host=localhost port=57637 dbname=regression
+                                             Node: host=localhost port=xxxxx dbname=regression
                                              ->  HashAggregate
                                                    Group Key: l_suppkey, l_linenumber
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -445,7 +445,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -476,7 +476,7 @@ EXPLAIN (COSTS FALSE)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
-                                             Node: host=localhost port=57637 dbname=regression
+                                             Node: host=localhost port=xxxxx dbname=regression
                                              ->  HashAggregate
                                                    Group Key: l_suppkey, l_linenumber
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -523,7 +523,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -552,7 +552,7 @@ EXPLAIN (COSTS FALSE)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey, l_linenumber
                                              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -599,7 +599,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -630,7 +630,7 @@ EXPLAIN (COSTS FALSE)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
-                                             Node: host=localhost port=57637 dbname=regression
+                                             Node: host=localhost port=xxxxx dbname=regression
                                              ->  HashAggregate
                                                    Group Key: l_suppkey, l_linenumber
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -677,7 +677,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -708,7 +708,7 @@ EXPLAIN (COSTS FALSE)
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
-                                             Node: host=localhost port=57637 dbname=regression
+                                             Node: host=localhost port=xxxxx dbname=regression
                                              ->  HashAggregate
                                                    Group Key: l_suppkey, l_linenumber
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -755,7 +755,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Unique
                                        ->  Group
@@ -786,7 +786,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  Limit
                                        ->  Unique
                                              ->  Group
@@ -848,7 +848,7 @@ EXPLAIN (COSTS FALSE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  GroupAggregate
                            Group Key: l_orderkey
                            ->  Sort
@@ -875,7 +875,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  GroupAggregate
                                  Group Key: l_orderkey
                                  ->  Sort
@@ -916,7 +916,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Group Key: l_suppkey
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -944,7 +944,7 @@ EXPLAIN (COSTS FALSE)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  HashAggregate
                                              Group Key: l_suppkey
                                              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -969,7 +969,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  GroupAggregate
                                  Group Key: l_orderkey
                                  ->  Sort
@@ -997,7 +997,7 @@ EXPLAIN (COSTS FALSE)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  GroupAggregate
                                        Group Key: l_orderkey
                                        ->  Sort
@@ -1046,7 +1046,7 @@ EXPLAIN (COSTS FALSE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: l_partkey
                            ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
@@ -1117,7 +1117,7 @@ EXPLAIN (COSTS FALSE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_partkey, l_suppkey
@@ -1158,7 +1158,7 @@ EXPLAIN (COSTS FALSE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_orderkey
@@ -1213,7 +1213,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Unique
                                        ->  Sort
@@ -1413,7 +1413,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Sort
                                        Sort Key: l_orderkey, l_partkey
@@ -1464,7 +1464,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Sort
                                        Sort Key: lineitem_hash_part.l_orderkey, (count(*))
@@ -1518,7 +1518,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Unique
                                        ->  Sort
@@ -1570,7 +1570,7 @@ EXPLAIN (COSTS FALSE)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
                                  ->  Unique
                                        ->  Sort
