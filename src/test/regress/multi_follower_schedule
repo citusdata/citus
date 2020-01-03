@@ -3,3 +3,6 @@ test: multi_follower_select_statements
 test: multi_follower_dml
 test: multi_follower_configure_followers
 test: multi_follower_task_tracker
+
+# test that no tests leaked intermediate results. This should always be last
+test: ensure_no_intermediate_data_leak

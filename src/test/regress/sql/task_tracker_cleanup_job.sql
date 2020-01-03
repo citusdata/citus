@@ -46,3 +46,6 @@ SELECT task_tracker_task_status(:JobId, :RunningTaskId);
 
 SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010/task_801107');
 SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010');
+
+-- Also clean up worker_cleanup_job_schema_cache job
+SELECT task_tracker_cleanup_job(2);

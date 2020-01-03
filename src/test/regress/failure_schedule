@@ -30,3 +30,6 @@ test: failure_savepoints
 test: failure_multi_row_insert
 test: failure_mx_metadata_sync
 test: failure_connection_establishment
+
+# test that no tests leaked intermediate results. This should always be last
+test: ensure_no_intermediate_data_leak

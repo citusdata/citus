@@ -488,6 +488,7 @@ RESET ROLE;
 
 \c - - - :master_port
 
+SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 
 DROP SCHEMA full_access_user_schema CASCADE;
 DROP TABLE
