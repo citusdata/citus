@@ -46,9 +46,9 @@ s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[
 
 # normalize failed task ids
 s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
-#
-## ignore could not consume warnings
-#/WARNING:  could not consume data from worker node/d
+
+# ignore could not consume warnings
+/WARNING:  could not consume data from worker node/d
 #
 ## ignore WAL warnings
 #/DEBUG: .+creating and filling new WAL file/d
