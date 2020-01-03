@@ -49,9 +49,9 @@ s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
 
 # ignore could not consume warnings
 /WARNING:  could not consume data from worker node/d
-#
-## ignore WAL warnings
-#/DEBUG: .+creating and filling new WAL file/d
+
+# ignore WAL warnings
+/DEBUG: .+creating and filling new WAL file/d
 #
 ## normalize file names for partitioned files
 #s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
