@@ -59,10 +59,10 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
-#
-## Line info varies between versions
-#/^LINE [0-9]+:.*$/d
-#/^ *\^$/d
+
+# Line info varies between versions
+/^LINE [0-9]+:.*$/d
+/^ *\^$/d
 #
 ## Remove trailing whitespace
 #s/ *$//g

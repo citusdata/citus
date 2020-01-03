@@ -112,8 +112,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
 
 VACUUM vacuum_test, other_vacuum_test;
 ERROR:  syntax error at or near ","
-LINE 1: VACUUM vacuum_test, other_vacuum_test;
-                          ^
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
 ---------------------------------------------------------------------
@@ -122,8 +120,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_bac
 
 VACUUM vacuum_test, other_vacuum_test;
 ERROR:  syntax error at or near ","
-LINE 1: VACUUM vacuum_test, other_vacuum_test;
-                          ^
 -- ==== Clean up, we're done here ====
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 

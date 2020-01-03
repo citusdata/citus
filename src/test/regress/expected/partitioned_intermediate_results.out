@@ -176,8 +176,6 @@ SELECT worker_partition_query_result('squares_range',
                                      '{20,40,60,100}'::text[],
                                      true);
 ERROR:  syntax error at or near "SELECxT"
-LINE 1: SELECT worker_partition_query_result('squares_range',
-        ^
 ROLLBACK TO SAVEPOINT s1;
 -- invalid result prefix
 SELECT worker_partition_query_result('squares_range/a/',

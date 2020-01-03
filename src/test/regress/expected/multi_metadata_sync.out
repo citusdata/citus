@@ -739,8 +739,6 @@ DROP INDEX mx_test_schema_2.mx_index_3;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_test_schema_2.mx_index_3'::regclass;
 ERROR:  relation "mx_test_schema_2.mx_index_3" does not exist
-LINE 2:     relid = 'mx_test_schema_2.mx_index_3'::regclass;
-                    ^
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
@@ -1344,14 +1342,10 @@ DROP TABLE mx_ref;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 ERROR:  relation "mx_ref_index" does not exist
-LINE 2:     relid = 'mx_ref_index'::regclass;
-                    ^
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 ERROR:  relation "mx_ref_index" does not exist
-LINE 2:     relid = 'mx_ref_index'::regclass;
-                    ^
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
 ---------------------------------------------------------------------

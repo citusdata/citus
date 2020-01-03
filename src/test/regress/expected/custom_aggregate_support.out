@@ -509,14 +509,10 @@ FROM popular_reviewer
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 ORDER BY 2 DESC, 1;
 ERROR:  set-valued function called in context that cannot accept a set
-LINE 1: SELECT (topn(topn_union_agg(reviewers), 10)).*
-        ^
 SELECT (topn(topn_add_agg(user_id::text), 10)).*
 FROM customer_reviews
 ORDER BY 2 DESC, 1;
 ERROR:  set-valued function called in context that cannot accept a set
-LINE 1: SELECT (topn(topn_add_agg(user_id::text), 10)).*
-        ^
 -- The following is going to be supported after window function support
 SELECT day, (topn(agg, 10)).*
 FROM (

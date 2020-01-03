@@ -255,8 +255,6 @@ WITH top_ten(id, val1) AS (
 )
 SELECT * FROM top_ten ORDER BY user_id DESC;
 ERROR:  column "user_id" does not exist
-LINE 4: SELECT * FROM top_ten ORDER BY user_id DESC;
-                                       ^
 -- verify original name is used if alias is missing
 WITH top_ten(id) AS (
 	SELECT user_id, value_1 FROM users_table ORDER BY value_1 DESC, user_id DESC LIMIT 10

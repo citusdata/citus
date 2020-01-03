@@ -408,8 +408,6 @@ $cmd$);
 SET ROLE usage_access;
 CREATE TABLE full_access_user_schema.t1 (id int);
 ERROR:  permission denied for schema full_access_user_schema
-LINE 1: CREATE TABLE full_access_user_schema.t1 (id int);
-                     ^
 RESET ROLE;
 -- now we create the table for the user
 CREATE TABLE full_access_user_schema.t1 (id int);

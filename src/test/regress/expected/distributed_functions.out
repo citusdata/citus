@@ -495,8 +495,6 @@ SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (sele
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('add_with_param_names(val1 int, int)', 'val1');
 ERROR:  syntax error at or near "int"
-LINE 1: SELECT create_distributed_function('add_with_param_names(val...
-                                           ^
 CONTEXT:  invalid type name "val1 int"
 -- invalid distribution_arg_name
 SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='test');

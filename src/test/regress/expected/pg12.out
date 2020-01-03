@@ -95,8 +95,6 @@ ERROR:  Citus does not support COPY FROM with WHERE
 invalid command \.
 select sum(id), sum(val) from cptest;
 ERROR:  syntax error at or near "1"
-LINE 1: 1,6
-        ^
 -- CTE materialized/not materialized
 CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
 CREATE TABLE single_hash_repartition_second (id int primary key, sum int, avg float);

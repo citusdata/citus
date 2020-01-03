@@ -351,7 +351,5 @@ DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 -- Make sure the shard was dropped
 SELECT 'numbers_8000001'::regclass::oid;
 ERROR:  relation "numbers_8000001" does not exist
-LINE 1: SELECT 'numbers_8000001'::regclass::oid;
-               ^
 SET search_path TO DEFAULT;
 RESET client_min_messages;

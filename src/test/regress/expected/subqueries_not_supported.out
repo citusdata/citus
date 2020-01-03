@@ -27,8 +27,6 @@ SELECT user_id FROM users_table WHERE user_id IN
 	 USING (user_id)
 	 );
 ERROR:  relation "events_table_local" does not exist
-LINE 5:    users_table_local JOIN (SELECT user_id FROM events_table_...
-                                                       ^
 SET client_min_messages TO DEBUG1;
 -- we don't support aggregate distinct if the group by is not on partition key, expect for count distinct
 -- thus baz and bar are recursively planned but not foo

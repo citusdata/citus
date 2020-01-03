@@ -207,8 +207,6 @@ COMMIT;
 SELECT customer_key, c_name, c_address 
        FROM customer_few ORDER BY customer_key LIMIT 5;
 ERROR:  relation "customer_few" does not exist
-LINE 2:        FROM customer_few ORDER BY customer_key LIMIT 5;
-                    ^
 -- Test DECLARE CURSOR .. WITH HOLD without parameters that calls ReScan on the top-level CustomScan
 CREATE TABLE cursor_me (x int, y int);
 SELECT create_distributed_table('cursor_me', 'x');

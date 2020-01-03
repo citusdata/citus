@@ -119,8 +119,6 @@ UPDATE users_test_table SET value_3 = 0;
 END;
 SELECT SUM(value_3) FROM users_copy_table;
 ERROR:  relation "users_copy_table" does not exist
-LINE 1: SELECT SUM(value_3) FROM users_copy_table;
-                                 ^
 -- Run multiple multi shard updates (with parallel executor)
 SET citus.multi_shard_modify_mode to 'parallel';
 UPDATE users_test_table SET value_3 = 5;

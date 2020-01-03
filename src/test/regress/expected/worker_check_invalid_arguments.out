@@ -30,8 +30,6 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Bad_Select_Query_Text,
        				    :Partition_Column_Name, :Partition_Column_Type,
 				    ARRAY['aaa', 'some']::_text);
 ERROR:  relation "bad_table_name" does not exist
-LINE 1: SELECT * FROM bad_table_name
-                      ^
 QUERY:  SELECT * FROM bad_table_name
 -- Check that we fail with bad partition column name
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,

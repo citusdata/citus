@@ -51,8 +51,6 @@ ERROR:  column "bad_column" of relation "table_to_distribute" does not exist
 -- use unrecognized partition type
 SELECT create_distributed_table('table_to_distribute', 'name', 'unrecognized');
 ERROR:  invalid input value for enum citus.distribution_type: "unrecognized"
-LINE 1: ..._distributed_table('table_to_distribute', 'name', 'unrecogni...
-                                                             ^
 -- use a partition column of a type lacking any default operator class
 SELECT create_distributed_table('table_to_distribute', 'json_data', 'hash');
 ERROR:  data type json has no default operator class for specified partition method

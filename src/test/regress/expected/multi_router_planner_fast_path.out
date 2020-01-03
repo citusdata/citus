@@ -674,8 +674,6 @@ SELECT LEFT(title, 1) FROM articles_hash WHERE author_id = 1
 -- top-level union queries are supported through recursive planning
 SET client_min_messages to 'NOTICE';
 ERROR:  syntax error at or near "SET"
-LINE 3: SET client_min_messages to 'NOTICE';
-        ^
 -- unions in subqueries are not supported via fast-path planning
 SELECT * FROM (
 	(SELECT * FROM articles_hash WHERE author_id = 1)

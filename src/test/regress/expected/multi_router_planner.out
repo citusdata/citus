@@ -527,8 +527,6 @@ WITH new_article AS (
 )
 SELECT * FROM new_article;
 ERROR:  WITH clause containing a data-modifying statement must be at the top level
-LINE 2:     WITH nested_cte AS (
-                 ^
 -- Modifying statement in a CTE in subquery is also covered by PostgreSQL
 SELECT * FROM (
     WITH new_article AS (
@@ -537,8 +535,6 @@ SELECT * FROM (
     SELECT * FROM new_article
 ) AS subquery_cte;
 ERROR:  WITH clause containing a data-modifying statement must be at the top level
-LINE 2:     WITH new_article AS (
-                 ^
 -- grouping sets are supported on single shard
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)
