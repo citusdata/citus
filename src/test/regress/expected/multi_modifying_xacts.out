@@ -1489,7 +1489,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 -- because the current implementation of COPY always opens one connection
 -- per placement SELECTs have to use those connections for correctness  
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 1200036, which has been read over multiple connections
+ERROR:  cannot perform DDL on placement xxxxx, which has been read over multiple connections
 END;
 BEGIN;
 -- establish multiple connections to a node
@@ -1507,7 +1507,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 
 -- perform a DDL command on a co-located reference table
 ALTER TABLE usergroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 1200034 since a co-located placement has been read over multiple connections
+ERROR:  cannot perform DDL on placement xxxxx since a co-located placement has been read over multiple connections
 END;
 BEGIN;
 -- make a modification over connection 1
