@@ -156,7 +156,8 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static uint64 GetAnchorShardId(List *relationShardList);
 static List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const **partitionValueConst,
-												  bool *isMultiShardQuery);
+												  bool *isMultiShardQuery,
+												  Const *distributionKeyValue);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
@@ -2043,31 +2044,12 @@ PlanRouterQuery(Query *originalQuery,
 	 */
 	if (fastPathRouterQuery)
 	{
-		List *shardIntervalList = NIL;
 		Const *distributionKeyValue =
 			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
 
-		if (distributionKeyValue)
-		{
-			Oid relationId = ExtractFirstDistributedTableId(originalQuery);
-			DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
-			ShardInterval *shardInterval =
-				FindShardInterval(distributionKeyValue->constvalue, cache);
-
-			shardIntervalList = list_make1(shardInterval);
-
-			if (partitionValueConst != NULL)
-			{
-				/* set the outgoing partition column value if requested */
-				*partitionValueConst = distributionKeyValue;
-			}
-		}
-		else
-		{
-			shardIntervalList =
-				TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
-													&isMultiShardQuery);
-		}
+		List *shardIntervalList =
+			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
+												&isMultiShardQuery, distributionKeyValue);
 
 
 		/*
@@ -2289,15 +2271,27 @@ GetAnchorShardId(List *prunedShardIntervalListList)
  */
 static List *
 TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
-									bool *isMultiShardQuery)
+									bool *isMultiShardQuery, Const *distributionKeyValue)
 {
-	Const *queryPartitionValueConst = NULL;
-
 	Oid relationId = ExtractFirstDistributedTableId(query);
+
+	if (distributionKeyValue)
+	{
+		DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
+		ShardInterval *shardInterval =
+			FindShardInterval(distributionKeyValue->constvalue, cache);
+
+		if (partitionValueConst != NULL)
+		{
+			/* set the outgoing partition column value if requested */
+			*partitionValueConst = distributionKeyValue;
+		}
+		return list_make1(shardInterval);
+	}
+
 	Node *quals = query->jointree->quals;
-
 	int relationIndex = 1;
-
+	Const *queryPartitionValueConst = NULL;
 	List *prunedShardIntervalList =
 		PruneShards(relationId, relationIndex, make_ands_implicit((Expr *) quals),
 					&queryPartitionValueConst);
