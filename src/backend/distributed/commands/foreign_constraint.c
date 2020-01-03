@@ -121,13 +121,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Oid referencingTableId = relation->rd_id;
-	Oid referencedTableId = InvalidOid;
-	uint32 referencedColocationId = INVALID_COLOCATION_ID;
-	bool selfReferencingTable = false;
+	Oid referencingTableId = relation->rd_id;	
 	bool referencingNotReplicated = true;
-
-	if (IsDistributedTable(referencingTableId))
+	bool referencingIsDistributed = IsDistributedTable(referencingTableId);
+		
+	if (referencingIsDistributed)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
 		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
@@ -150,19 +148,24 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		int referencingAttrIndex = -1;
+
 		char referencedDistMethod = 0;
 		Var *referencedDistKey = NULL;
-		int referencingAttrIndex = -1;
 		int referencedAttrIndex = -1;
+		uint32 referencedColocationId = INVALID_COLOCATION_ID;
 
+		/* not a foreign key constraint, skip to next one */
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
 
-		referencedTableId = constraintForm->confrelid;
-		selfReferencingTable = (referencingTableId == referencedTableId);
+		Oid referencedTableId = constraintForm->confrelid;
+
+		bool selfReferencingTable = (referencingTableId == referencedTableId);
 
 		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
 		if (!referencedIsDistributed && !selfReferencingTable)
@@ -190,7 +193,6 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		bool referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
 		bool referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
-
 
 		/*
 		 * We support foreign keys between reference tables. No more checks
