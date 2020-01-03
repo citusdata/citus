@@ -411,7 +411,7 @@ step s2-commit:
     COMMIT;
 
 step s1-insert-table-2: <... completed>
-error in steps s2-commit s1-insert-table-2: ERROR:  insert or update on table "ref_table_2_102048" violates foreign key constraint "ref_table_2_value_fkey_102048"
+error in steps s2-commit s1-insert-table-2: ERROR:  insert or update on table "ref_table_2_xxxxxxx" violates foreign key constraint "ref_table_2_value_fkey_xxxxxxx"
 step s1-commit: 
     COMMIT;
 
@@ -498,7 +498,7 @@ step s2-commit:
     COMMIT;
 
 step s1-insert-table-3: <... completed>
-error in steps s2-commit s1-insert-table-3: ERROR:  insert or update on table "ref_table_3_102058" violates foreign key constraint "ref_table_3_value_fkey_102058"
+error in steps s2-commit s1-insert-table-3: ERROR:  insert or update on table "ref_table_3_xxxxxxx" violates foreign key constraint "ref_table_3_value_fkey_xxxxxxx"
 step s1-commit: 
     COMMIT;
 
