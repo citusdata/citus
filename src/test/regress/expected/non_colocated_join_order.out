@@ -4,18 +4,18 @@
 -- Tests to check placements of shards must be equal to choose local join logic.
 CREATE TABLE test_table_1(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_1', 'id', 'append');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \copy test_table_1 FROM STDIN DELIMITER ','
 \copy test_table_1 FROM STDIN DELIMITER ','
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_2', 'id', 'append');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \copy test_table_2 FROM STDIN DELIMITER ','
@@ -26,7 +26,7 @@ SET client_min_messages to DEBUG1;
 -- local join logic will be triggered.
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 LOG:  join order: [ "test_table_1" ][ local partition join "test_table_2" ]
- count 
+ count
 ---------------------------------------------------------------------
      6
 (1 row)
@@ -42,7 +42,7 @@ SET citus.shard_replication_factor to 1;
 SET citus.enable_repartition_joins to ON;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 LOG:  join order: [ "test_table_1" ][ single range partition join "test_table_2" ]
- count 
+ count
 ---------------------------------------------------------------------
      9
 (1 row)

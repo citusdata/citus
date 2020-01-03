@@ -10,9 +10,9 @@ CREATE TABLE stock (
   s_order_cnt int NOT NULL
 );
 SELECT create_distributed_table('stock','s_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
@@ -24,7 +24,7 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-                                          QUERY PLAN                                           
+                                          QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: s_i_id
@@ -70,7 +70,7 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-                                       QUERY PLAN                                        
+                                       QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: s_i_id
@@ -103,7 +103,7 @@ select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock);
-                                    QUERY PLAN                                     
+                                    QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: s_i_id
@@ -134,7 +134,7 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
-                                           QUERY PLAN                                            
+                                           QUERY PLAN
 ---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: remote_scan.s_i_id
@@ -157,7 +157,7 @@ explain select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true);
-                                        QUERY PLAN                                         
+                                        QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
    Group Key: remote_scan.s_i_id
@@ -180,7 +180,7 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -191,7 +191,7 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       3 |          3
       4 |          4
@@ -203,7 +203,7 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       3 |          3
       4 |          4
@@ -216,7 +216,7 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       1 |          1
       2 |          2
@@ -231,7 +231,7 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -240,7 +240,7 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       1 |          1
       2 |          2
@@ -254,7 +254,7 @@ from     stock s
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -263,7 +263,7 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       1 |          1
       2 |          2
@@ -319,9 +319,9 @@ insert into stock VALUES
 (32, 1, 1, 1, 1, 1, '', '','','','','','','','','','');
 SELECT create_distributed_table('stock','s_w_id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
@@ -339,7 +339,7 @@ having   sum(s_order_cnt) >
         and s_nationkey = n_nationkey
         and n_name = 'GERMANY')
 order by ordercount desc;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
      33 |          1
       1 |          1
@@ -360,7 +360,7 @@ having   sum(s_order_cnt) >
         and s_nationkey = n_nationkey
         and n_name = 'GERMANY')
 order by ordercount desc;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       1 |     100001
 (1 row)

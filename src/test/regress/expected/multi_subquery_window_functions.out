@@ -23,7 +23,7 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
- user_id |              time               | rnk 
+ user_id |              time               | rnk
 ---------------------------------------------------------------------
        2 | Wed Nov 22 20:16:16.614779 2017 |  24
        2 | Wed Nov 22 22:06:12.107108 2017 |  23
@@ -51,7 +51,7 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
- user_id |              time               | rnk 
+ user_id |              time               | rnk
 ---------------------------------------------------------------------
        2 | Wed Nov 22 20:16:16.614779 2017 |  24
        2 | Wed Nov 22 22:06:12.107108 2017 |  23
@@ -79,7 +79,7 @@ ORDER BY
   4 DESC, 3 DESC NULLS LAST, 1 DESC, 2 DESC
 LIMIT
   10;
- user_id |              time               | lag_event_type | row_no 
+ user_id |              time               | lag_event_type | row_no
 ---------------------------------------------------------------------
        2 | Wed Nov 22 20:16:16.614779 2017 |              0 |     24
        2 | Wed Nov 22 22:06:12.107108 2017 |              3 |     23
@@ -110,7 +110,7 @@ ORDER BY
   2 DESC, 1 DESC, 3 DESC
 LIMIT
   10;
- user_id | rnk |     avg_val_2      
+ user_id | rnk |     avg_val_2
 ---------------------------------------------------------------------
        6 |   2 | 2.0000000000000000
        5 |   2 | 2.0909090909090909
@@ -140,7 +140,7 @@ ORDER BY
   3 DESC NULLS LAST, 1 DESC, 2 DESC
 LIMIT
   10;
- min |               min               | lag_event_type | count 
+ min |               min               | lag_event_type | count
 ---------------------------------------------------------------------
    1 | Thu Nov 23 11:09:38.074595 2017 |              6 |     1
    2 | Wed Nov 22 19:00:10.396739 2017 |              5 |     7
@@ -166,7 +166,7 @@ SELECT * FROM
 ) as foo
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
- user_id | lag | rank 
+ user_id | lag | rank
 ---------------------------------------------------------------------
        2 |   2 |  109
        5 |   5 |  105
@@ -195,7 +195,7 @@ SELECT * FROM
 ) as foo
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
- user_id | lag | rank 
+ user_id | lag | rank
 ---------------------------------------------------------------------
        2 |   2 |   73
        4 |   4 |   70
@@ -239,7 +239,7 @@ JOIN
   sub_1.user_id
  ORDER BY 3 DESC, 4 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
- user_id | max | max | max 
+ user_id | max | max | max
 ---------------------------------------------------------------------
        2 |   2 |  73 |  73
        4 |   4 |  70 |  70
@@ -270,7 +270,7 @@ ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-        avg         |           max            | my_rank 
+        avg         |           max            | my_rank
 ---------------------------------------------------------------------
  3.5000000000000000 | Wed Nov 22 00:00:00 2017 |       2
 (1 row)
@@ -296,7 +296,7 @@ ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-        avg         |           max            | my_rank 
+        avg         |           max            | my_rank
 ---------------------------------------------------------------------
  3.7500000000000000 | Wed Nov 22 00:00:00 2017 |       2
  3.3750000000000000 | Thu Nov 23 00:00:00 2017 |       1
@@ -322,7 +322,7 @@ ORDER BY
   2 DESC, 1 DESC
 LIMIT
   10;
-        avg         | my_rank 
+        avg         | my_rank
 ---------------------------------------------------------------------
  3.5000000000000000 |       1
 (1 row)
@@ -346,7 +346,7 @@ ORDER BY
   1, 2, 3 DESC
 LIMIT
   10;
- user_id |           time           | sum 
+ user_id |           time           | sum
 ---------------------------------------------------------------------
        1 | Wed Nov 22 00:00:00 2017 |   1
        1 | Thu Nov 23 00:00:00 2017 |   7
@@ -374,7 +374,7 @@ ORDER BY
   1, 2, 3
 LIMIT
   20;
- user_id | it_name | count 
+ user_id | it_name | count
 ---------------------------------------------------------------------
        2 | User_1  |     2
        3 | User_1  |     6
@@ -395,7 +395,7 @@ ORDER BY
   2 DESC, 1
 LIMIT
   10;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        3 |  44
        5 |  43
@@ -417,7 +417,7 @@ GROUP BY user_id ORDER BY
   2 DESC,1
 LIMIT
   10;
- user_id | max 
+ user_id | max
 ---------------------------------------------------------------------
        3 |  15
        4 |  13
@@ -440,7 +440,7 @@ ORDER BY
   2 DESC, 1
 LIMIT
   10;
- user_id | rank 
+ user_id | rank
 ---------------------------------------------------------------------
        5 |    6
        2 |    5
@@ -462,7 +462,7 @@ ORDER BY
   2 DESC, 1
 LIMIT
   10;
- user_id | rank 
+ user_id | rank
 ---------------------------------------------------------------------
        5 |    6
        2 |    5
@@ -496,7 +496,7 @@ FROM
 GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
- max  
+ max
 ---------------------------------------------------------------------
     5
   3.5
@@ -538,7 +538,7 @@ FROM (
             user_id)) AS ftop
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 | 107
        3 | 101
@@ -568,7 +568,7 @@ ORDER BY
   user_id DESC
 LIMIT
   3;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        4
        3
@@ -592,7 +592,7 @@ GROUP BY
 ORDER BY
   difference DESC, rank DESC, user_id
 LIMIT 20;
- user_id | rank | difference | distinct_users 
+ user_id | rank | difference | distinct_users
 ---------------------------------------------------------------------
        4 |   12 |        306 |              9
        5 |   12 |        136 |              8
@@ -641,7 +641,7 @@ WHERE
 ORDER BY
   abs DESC, user_id
 LIMIT 10;
- user_id | abs 
+ user_id | abs
 ---------------------------------------------------------------------
        6 |   2
        1 |   1
@@ -666,7 +666,7 @@ ORDER BY
   1 DESC
 LIMIT
   5;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        6 |     1
        5 |     1
@@ -709,7 +709,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5;
-                                                                QUERY PLAN                                                                
+                                                                QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    Output: remote_scan.user_id, remote_scan.sum

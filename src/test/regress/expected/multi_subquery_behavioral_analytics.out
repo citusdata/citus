@@ -27,7 +27,7 @@ FROM (
   GROUP BY user_id
 ) q
 ORDER BY 2 DESC, 1;
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        3 |          187
        2 |          180
@@ -75,7 +75,7 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
- user_id | sum | length | hasdone_event  
+ user_id | sum | length | hasdone_event
 ---------------------------------------------------------------------
        1 |  12 |     14 | Has done event
        2 |  20 |     14 | Has done event
@@ -122,7 +122,7 @@ FROM (
 	  GROUP BY  t1.user_id, hasdone_event
 	) t GROUP BY user_id, hasdone_event
 	ORDER BY user_id) u;
- count 
+ count
 ---------------------------------------------------------------------
      3
 (1 row)
@@ -157,7 +157,7 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
- user_id | sum | length | hasdone_event  
+ user_id | sum | length | hasdone_event
 ---------------------------------------------------------------------
        1 |  12 |     14 | Has done event
        2 |  20 |     14 | Has done event
@@ -196,7 +196,7 @@ FROM (
 	  GROUP BY  t1.user_id, hasdone_event
 	) t GROUP BY user_id, hasdone_event
     ORDER BY user_id) u;
- count 
+ count
 ---------------------------------------------------------------------
      3
 (1 row)
@@ -268,7 +268,7 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
- user_id |    event_average    | count_pay 
+ user_id |    event_average    | count_pay
 ---------------------------------------------------------------------
        3 | 19.0000000000000000 |         7
        2 | 12.0000000000000000 |         9
@@ -341,7 +341,7 @@ HAVING
   avg(array_length(events_table, 1)) > 0
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
- user_id |    event_average    | count_pay 
+ user_id |    event_average    | count_pay
 ---------------------------------------------------------------------
        3 | 19.0000000000000000 |         3
        2 | 12.0000000000000000 |         4
@@ -406,7 +406,7 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
- user_id |    event_average    | count_pay 
+ user_id |    event_average    | count_pay
 ---------------------------------------------------------------------
        3 | 12.0000000000000000 |         4
        2 |  9.0000000000000000 |         5
@@ -467,7 +467,7 @@ HAVING
   avg(array_length(events_table, 1)) > 0
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
- user_id |    event_average    | count_pay 
+ user_id |    event_average    | count_pay
 ---------------------------------------------------------------------
        3 | 12.0000000000000000 |         4
        2 |  9.0000000000000000 |         5
@@ -504,7 +504,7 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC, user_id;
- user_id |          user_lastseen          | array_length 
+ user_id |          user_lastseen          | array_length
 ---------------------------------------------------------------------
        2 | Thu Nov 23 11:47:26.900284 2017 |           12
        3 | Thu Nov 23 11:18:53.114408 2017 |           14
@@ -523,7 +523,7 @@ GROUP BY
 ORDER BY
   user_id DESC
   LIMIT 5;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        6
        5
@@ -541,7 +541,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type < 3 AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        6 |       4
        6 |       4
@@ -559,7 +559,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=2 AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 1 DESC, 2 DESC
 LIMIT 3;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        5 |       5
        5 |       5
@@ -578,7 +578,7 @@ GROUP BY
   user_id
 ORDER BY cnt DESC, user_id DESC
 LIMIT 5;
- user_id | cnt 
+ user_id | cnt
 ---------------------------------------------------------------------
        4 |  43
        2 |  37
@@ -596,7 +596,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 2 DESC, 1 DESC
 LIMIT 4;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        5 |       5
        5 |       5
@@ -626,7 +626,7 @@ GROUP BY
 ORDER BY
   1 DESC, 2 DESC
 LIMIT 5;
- user_id |        avg         
+ user_id |        avg
 ---------------------------------------------------------------------
        4 | 2.0000000000000000
        3 | 2.0000000000000000
@@ -648,7 +648,7 @@ SELECT user_id, value_1 from
 ) AS a
 ORDER BY
   user_id ASC, value_1 ASC;
- user_id | value_1 
+ user_id | value_1
 ---------------------------------------------------------------------
        2 |       0
        2 |       2
@@ -669,7 +669,7 @@ SELECT user_id, value_1 from
 ) AS a
 ORDER BY
   user_id ASC, value_1 ASC;
- user_id | value_1 
+ user_id | value_1
 ---------------------------------------------------------------------
        2 |       0
        2 |       2
@@ -697,7 +697,7 @@ WHERE
    	          value_1 = 1 AND value_2 > 2
             )
 ORDER BY 1;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        2
@@ -717,7 +717,7 @@ GROUP BY
   user_id, event_type
 ORDER BY 2 DESC, 1
 LIMIT 3;
- user_id | event_type 
+ user_id | event_type
 ---------------------------------------------------------------------
        1 |          6
        2 |          5
@@ -742,7 +742,7 @@ SELECT user_id FROM
 ) AS a
 ORDER BY
   user_id;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        2
@@ -772,7 +772,7 @@ FROM
     users_table.value_1 < 2;
   -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM assets;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
    732 |     6 | 3.3934426229508197
 (1 row)
@@ -797,7 +797,7 @@ SELECT count(*) FROM
 ) as foo;
 DEBUG:  generating subplan 23_1 for subquery SELECT user_id FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.=) 4)
 DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id FROM public.users_table WHERE (((users_table.value_1 OPERATOR(pg_catalog.=) 1) OR (users_table.value_1 OPERATOR(pg_catalog.=) 3)) AND (NOT (users_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))) GROUP BY users_table.user_id HAVING (count(DISTINCT users_table.value_1) OPERATOR(pg_catalog.=) 2)) foo
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -831,7 +831,7 @@ SELECT subquery_count FROM
     GROUP BY
       a.user_id
     ) AS inner_subquery;
- subquery_count 
+ subquery_count
 ---------------------------------------------------------------------
               1
 (1 row)
@@ -864,7 +864,7 @@ WHERE
   b.user_id IS NULL
 GROUP BY
   a.user_id;
- subquery_count 
+ subquery_count
 ---------------------------------------------------------------------
               1
 (1 row)
@@ -940,7 +940,7 @@ WHERE
 GROUP BY
   e1.user_id
 LIMIT 1;
- user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen 
+ user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen
 ---------------------------------------------------------------------
        1 |               1 |        1 |                   1 |                1 |                 1
 (1 row)
@@ -1005,7 +1005,7 @@ FROM (
 GROUP BY e1.user_id
 ORDER BY 6 DESC  NULLS LAST, 5 DESC  NULLS LAST, 4 DESC  NULLS LAST, 3 DESC  NULLS LAST, 2 DESC  NULLS LAST, 1
 LIMIT 15;
- user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen 
+ user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen
 ---------------------------------------------------------------------
        2 |            1080 |     1080 |                1080 |             1080 |              1080
        3 |             540 |      540 |                 540 |              540 |               540
@@ -1076,7 +1076,7 @@ group by e1.user_id
 HAVING sum(submit_card_info) > 0
 ORDER BY 6 DESC  NULLS LAST, 5 DESC  NULLS LAST, 4 DESC  NULLS LAST, 3 DESC  NULLS LAST, 2 DESC  NULLS LAST, 1
 LIMIT 15;
- user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen 
+ user_id | viewed_homepage | use_demo | entered_credit_card | submit_card_info | see_bought_screen
 ---------------------------------------------------------------------
        2 |            1080 |     1080 |                1080 |             1080 |              1080
        3 |             540 |      540 |                 540 |              540 |               540
@@ -1116,7 +1116,7 @@ GROUP BY
 ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
- user_id |    subquery_avg    
+ user_id |    subquery_avg
 ---------------------------------------------------------------------
        3 | 3.6000000000000000
        5 | 2.1666666666666667
@@ -1153,7 +1153,7 @@ HAVING
 ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
- user_id |    subquery_avg    
+ user_id |    subquery_avg
 ---------------------------------------------------------------------
        3 | 3.6000000000000000
        5 | 2.1666666666666667
@@ -1192,7 +1192,7 @@ GROUP BY
 ORDER BY
   avg(b.value_3) DESC, 2, 1
 LIMIT 5;
- user_id |    subquery_avg    |       avg        
+ user_id |    subquery_avg    |       avg
 ---------------------------------------------------------------------
        1 | 2.3333333333333333 | 3.33333333333333
        4 | 2.6666666666666667 | 2.55555555555556
@@ -1226,7 +1226,7 @@ GROUP BY
 ORDER BY
   4 DESC, 1 DESC, 2 ASC, 3 ASC
 LIMIT 10;
- user_id | value_2 | value_3 | counts 
+ user_id | value_2 | value_3 | counts
 ---------------------------------------------------------------------
        5 |       3 |       4 |    160
        2 |       3 |       5 |    156
@@ -1253,7 +1253,7 @@ GROUP BY
 ORDER BY
   users_count desc, avg_type DESC
 LIMIT 5;
-      avg_type      | users_count 
+      avg_type      | users_count
 ---------------------------------------------------------------------
  2.3750000000000000 |          24
  2.5714285714285714 |          21
@@ -1282,7 +1282,7 @@ FROM events_table
 ORDER BY
   users_count.ct desc, event_type DESC
 LIMIT 5;
- event_type | ct 
+ event_type | ct
 ---------------------------------------------------------------------
           5 | 26
           4 | 26
@@ -1314,7 +1314,7 @@ FROM
 ORDER BY
   total_count DESC, count_1 DESC, 1 DESC
 LIMIT 10;
- user_id | count_1 | total_count 
+ user_id | count_1 | total_count
 ---------------------------------------------------------------------
        2 |      18 |           7
        3 |      17 |           7
@@ -1356,7 +1356,7 @@ WHERE b.user_id IS NOT NULL
 GROUP BY a.user_id
 ORDER BY avg(b.value_3), 2, 1
 LIMIT 5;
- user_id |      subquery_avg      
+ user_id |      subquery_avg
 ---------------------------------------------------------------------
        5 | 0.00000000000000000000
        3 |     2.0000000000000000
@@ -1424,7 +1424,7 @@ GROUP BY
 ORDER BY
   avg(b.value_3), 2, 1
 LIMIT 5;
- user_id |    subquery_avg    
+ user_id |    subquery_avg
 ---------------------------------------------------------------------
        3 | 3.3333333333333333
        5 | 2.2000000000000000
@@ -1462,7 +1462,7 @@ FROM
 ORDER BY
   prob DESC, value_2 DESC, user_id DESC, event_type DESC
 LIMIT 10;
- user_id | event_type 
+ user_id | event_type
 ---------------------------------------------------------------------
        3 |          5
        3 |          4
@@ -1500,7 +1500,7 @@ FROM
 ORDER BY
   prob DESC, event_type DESC, user_id DESC
 LIMIT 10;
- user_id | event_type 
+ user_id | event_type
 ---------------------------------------------------------------------
        3 |          5
        2 |          5
@@ -1546,7 +1546,7 @@ FROM
 ORDER BY
   prob DESC, event_type DESC, user_id DESC
 LIMIT 10;
- user_id | event_type 
+ user_id | event_type
 ---------------------------------------------------------------------
        3 |          5
        2 |          5
@@ -1571,7 +1571,7 @@ SELECT * FROM  run_command_on_workers('CREATE OR REPLACE FUNCTION array_index(AN
         LIMIT 1;
     $$ LANGUAGE sql')
 ORDER BY 1,2;
- nodename  | nodeport | success |     result      
+ nodename  | nodeport | success |     result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | CREATE FUNCTION
  localhost |    57638 | t       | CREATE FUNCTION
@@ -1645,7 +1645,7 @@ AS outer_outer_sub_q
 ORDER BY
   value_3 ASC, user_id DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC, event_type_e DESC
 LIMIT 10;
- user_id_e | event_type_e | value_2 | value_3 | user_id 
+ user_id_e | event_type_e | value_2 | value_3 | user_id
 ---------------------------------------------------------------------
          5 |            5 |       2 |       0 |       5
          5 |            5 |       2 |       0 |       5
@@ -1728,7 +1728,7 @@ FROM
 ORDER BY
 	value_3 ASC, user_id DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC, event_type_e DESC
 LIMIT 10;
- user_id_e | event_type_e | value_2 | value_3 | user_id 
+ user_id_e | event_type_e | value_2 | value_3 | user_id
 ---------------------------------------------------------------------
          5 |            5 |       2 |       0 |       5
          5 |            5 |       2 |       0 |       5
@@ -1745,7 +1745,7 @@ LIMIT 10;
 -- drop created functions
 SELECT * FROM run_command_on_workers('DROP FUNCTION array_index(ANYARRAY, ANYELEMENT)')
 ORDER BY 1,2;
- nodename  | nodeport | success |    result     
+ nodename  | nodeport | success |    result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | DROP FUNCTION
  localhost |    57638 | t       | DROP FUNCTION
@@ -1771,7 +1771,7 @@ FROM (
   ON a.user_id = b.user_id
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
- subquery_count 
+ subquery_count
 ---------------------------------------------------------------------
               1
               1
@@ -1843,7 +1843,7 @@ FROM (
 ORDER BY 2 DESC, 1
 LIMIT 1+1 OFFSET 1::smallint;
 DEBUG:  push down of limit count: 3
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        4 |          184
        2 |          180
@@ -1867,7 +1867,7 @@ FROM (
 ORDER BY 2 DESC, 1
 LIMIT '3' OFFSET 2+1;
 DEBUG:  push down of limit count: 6
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        5 |          156
        6 |           40
@@ -1897,7 +1897,7 @@ FROM (
 ORDER BY 2 DESC, 1
 LIMIT volatile_func_test() + (ROW(1,2,NULL) < ROW(1,3,0))::int OFFSET volatile_func_test() + volatile_func_test();
 DEBUG:  push down of limit count: 4
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        3 |          340
        5 |          312
@@ -1926,7 +1926,7 @@ LIMIT (5 > 4)::int OFFSET
                       ELSE 2
                   END;
 DEBUG:  push down of limit count: 3
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        2 |          180
 (1 row)
@@ -1949,7 +1949,7 @@ FROM (
  LIMIT $1 OFFSET $2;
  EXECUTE parametrized_limit(1,1);
 DEBUG:  push down of limit count: 2
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        4 |          184
 (1 row)
@@ -1971,7 +1971,7 @@ FROM (
  LIMIT 1 OFFSET $1;
  EXECUTE parametrized_offset(1);
 DEBUG:  push down of limit count: 2
- user_id | array_length 
+ user_id | array_length
 ---------------------------------------------------------------------
        4 |          184
 (1 row)
@@ -1992,7 +1992,7 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
     RETURNS NULL ON NULL INPUT;
 
 $f$);
-        run_command_on_workers         
+        run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"CREATE FUNCTION")
  (localhost,57638,t,"CREATE FUNCTION")
@@ -2030,7 +2030,7 @@ FROM
   ON users_table.user_id = temp.user_id
   WHERE
     users_table.value_1 < 3 AND test_join_function_2(users_table.user_id, temp.user_id);
- user_id | value_1 | prob 
+ user_id | value_1 | prob
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -2054,7 +2054,7 @@ FROM
     users_table.value_1 < 3
   ORDER BY 2 DESC, 1 DESC
   LIMIT 10;
- user_id | value_1 |          prob          
+ user_id | value_1 |          prob
 ---------------------------------------------------------------------
        6 |       2 | 0.50000000000000000000
        6 |       2 | 0.50000000000000000000
@@ -2082,7 +2082,7 @@ FROM
     events_table.time > users_table.time AND
     events_table.value_2 IN (0, 4)
   ) as foo;
- count 
+ count
 ---------------------------------------------------------------------
    180
 (1 row)
@@ -2123,7 +2123,7 @@ FROM
   ) as bar
 WHERE foo.event_type > bar.event_type
 AND foo.user_id = bar.user_id;
- count 
+ count
 ---------------------------------------------------------------------
  11971
 (1 row)
@@ -2168,7 +2168,7 @@ FROM
   WHERE temp.value_1 < 3
   ORDER BY 1
   LIMIT 5;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        2
@@ -2194,7 +2194,7 @@ FROM
   WHERE temp.value_1 < 3
   ORDER BY 1, 2
   LIMIT 5;
- user_id | value_1 |          prob          
+ user_id | value_1 |          prob
 ---------------------------------------------------------------------
        1 |       1 | 0.50000000000000000000
        2 |       0 | 0.50000000000000000000
@@ -2219,7 +2219,7 @@ FROM
   ON users_ids.user_id = temp.user_id
   ORDER BY 1,2
   LIMIT 5;
- user_id | value_1 |          prob          
+ user_id | value_1 |          prob
 ---------------------------------------------------------------------
        1 |       1 | 0.50000000000000000000
        2 |       0 | 0.50000000000000000000
@@ -2244,9 +2244,9 @@ FROM
   GROUP BY
     1
   ) AS temp;
- count | avg 
+ count | avg
 ---------------------------------------------------------------------
-     6 |    
+     6 |
 (1 row)
 
 -- Test the case when a subquery has a lateral reference to two levels upper
@@ -2275,7 +2275,7 @@ LATERAL (
 ) b
 ORDER BY user_id, value_2, cnt
 LIMIT 1;
- user_id | value_2 | cnt 
+ user_id | value_2 | cnt
 ---------------------------------------------------------------------
        2 |       0 |   1
 (1 row)
@@ -2286,7 +2286,7 @@ SELECT run_command_on_workers($f$
   DROP FUNCTION test_join_function_2(integer, integer);
 
 $f$);
-       run_command_on_workers        
+       run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"DROP FUNCTION")
  (localhost,57638,t,"DROP FUNCTION")

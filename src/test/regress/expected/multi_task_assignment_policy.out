@@ -29,9 +29,9 @@ SET citus.explain_distributed_queries TO off;
 -- and check that tasks are assigned to worker nodes as expected.
 CREATE TABLE task_assignment_test_table (test_id integer);
 SELECT create_distributed_table('task_assignment_test_table', 'test_id', 'append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Create logical shards with shardids 200, 201, and 202
@@ -73,7 +73,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
@@ -85,7 +85,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
@@ -99,7 +99,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
@@ -111,7 +111,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
@@ -121,9 +121,9 @@ DEBUG:  assigned task to node localhost:xxxxx
 COMMIT;
 CREATE TABLE task_assignment_reference_table (test_id  integer);
 SELECT create_reference_table('task_assignment_reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -135,7 +135,7 @@ EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-                          QUERY PLAN                          
+                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
@@ -145,7 +145,7 @@ EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-                          QUERY PLAN                          
+                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
@@ -156,7 +156,7 @@ EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-                          QUERY PLAN                          
+                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
@@ -166,7 +166,7 @@ EXPLAIN (COSTS FALSE) SELECT * FROM task_assignment_reference_table;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-                          QUERY PLAN                          
+                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
@@ -191,7 +191,7 @@ INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_reference_table;', 'task_assignment_reference_table');
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -210,7 +210,7 @@ INSERT INTO explain_outputs
 -- given that we're in the same transaction, the count should be 2
 -- since there are two different worker nodes
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -223,9 +223,9 @@ TRUNCATE explain_outputs;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE task_assignment_replicated_hash (test_id  integer);
 SELECT create_distributed_table('task_assignment_replicated_hash', 'test_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -237,7 +237,7 @@ INSERT INTO explain_outputs
        SELECT parse_explain_output('EXPLAIN SELECT count(*) FROM task_assignment_replicated_hash;', 'task_assignment_replicated_hash');
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -256,7 +256,7 @@ INSERT INTO explain_outputs
 -- given that we're in the same transaction, the count should be 2
 -- since there are two different worker nodes
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -267,9 +267,9 @@ TRUNCATE explain_outputs;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE task_assignment_nonreplicated_hash (test_id  integer, ref_id integer);
 SELECT create_distributed_table('task_assignment_nonreplicated_hash', 'test_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- run the query two times to make sure that it hits the correct worker every time
@@ -289,7 +289,7 @@ FROM (SELECT * FROM task_assignment_nonreplicated_hash WHERE test_id = 3) AS dis
 $cmd$, 'task_assignment_nonreplicated_hash');
 -- The count should be 1 since the shard exists in only one worker node
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -299,9 +299,9 @@ TRUNCATE explain_outputs;
 -- only contains intermediate results
 CREATE TABLE task_assignment_test_table_2 (test_id integer);
 SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.task_assignment_policy TO 'round-robin';
@@ -318,7 +318,7 @@ $cmd$, 'task_assignment_test_table_2');
 -- The count should be 2 since the intermediate results are processed on
 -- different workers
 SELECT count(DISTINCT value) FROM explain_outputs;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)

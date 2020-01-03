@@ -3,34 +3,34 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-insert s2-vacuum-analyze s1-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_insert_vacuum VALUES(1, 1);
 
-step s2-vacuum-analyze: 
+step s2-vacuum-analyze:
     VACUUM ANALYZE test_insert_vacuum;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 
 starting permutation: s1-begin s1-insert s2-vacuum-full s1-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_insert_vacuum VALUES(1, 1);
 
-step s2-vacuum-full: 
+step s2-vacuum-full:
     VACUUM FULL test_insert_vacuum;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-vacuum-full: <... completed>

@@ -6,9 +6,9 @@ SET citus.replication_model TO 'statement';
 -- This table requires specific settings, create before getting into things
 create table mx_call_dist_table_replica(id int, val int);
 select create_distributed_table('mx_call_dist_table_replica', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
@@ -19,42 +19,42 @@ SET citus.replication_model TO 'streaming';
 --
 create table mx_call_dist_table_1(id int, val int);
 select create_distributed_table('mx_call_dist_table_1', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_1 values (3,1),(4,5),(9,2),(6,5),(3,5);
 create table mx_call_dist_table_2(id int, val int);
 select create_distributed_table('mx_call_dist_table_2', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
 create table mx_call_dist_table_bigint(id bigint, val bigint);
 select create_distributed_table('mx_call_dist_table_bigint', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_ref values (2,7),(1,8),(2,8),(1,8),(2,8);
 create type mx_call_enum as enum ('A', 'S', 'D', 'F');
 create table mx_call_dist_table_enum(id int, key mx_call_enum);
 select create_distributed_table('mx_call_dist_table_enum', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
@@ -87,19 +87,19 @@ BEGIN
 END;$$;
 -- Test that undistributed functions have no issue executing
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
- mx_call_func_custom_types 
+ mx_call_func_custom_types
 ---------------------------------------------------------------------
  (F,S)
 (1 row)
 
 select squares(4);
- squares 
+ squares
 ---------------------------------------------------------------------
  (1,1)
  (2,4)
@@ -109,34 +109,34 @@ select squares(4);
 
 -- Same for unqualified name
 select mx_call_func(2, 0);
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 -- Mark both functions as distributed ...
 select create_distributed_function('mx_call_func(int,int)');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select create_distributed_function('mx_call_func_bigint(bigint,bigint)');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select create_distributed_function('squares(int)');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- We still don't route them to the workers, because they aren't
@@ -150,67 +150,67 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 select multi_mx_function_call_delegation.mx_call_func_bigint(4, 2);
 DEBUG:  function does not have co-located tables
- mx_call_func_bigint 
+ mx_call_func_bigint
 ---------------------------------------------------------------------
                    8
 (1 row)
 
 select mx_call_func_custom_types('S', 'A');
 DEBUG:  function does not have co-located tables
- mx_call_func_custom_types 
+ mx_call_func_custom_types
 ---------------------------------------------------------------------
  (F,S)
 (1 row)
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select colocate_proc_with_table('mx_call_func_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 select mx_call_func_bigint(4, 2);
 DEBUG:  pushing down the function call
- mx_call_func_bigint 
+ mx_call_func_bigint
 ---------------------------------------------------------------------
                    8
 (1 row)
 
 select mx_call_func_custom_types('S', 'A');
 DEBUG:  pushing down the function call
- mx_call_func_custom_types 
+ mx_call_func_custom_types
 ---------------------------------------------------------------------
  (S,S)
 (1 row)
@@ -220,14 +220,14 @@ DEBUG:  pushing down the function call
 ERROR:  input of anonymous composite types is not implemented
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 DEBUG:  pushing down the function call
- mx_call_func_custom_types 
+ mx_call_func_custom_types
 ---------------------------------------------------------------------
  (S,S)
 (1 row)
@@ -242,7 +242,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
@@ -255,7 +255,7 @@ drop table mx_call_dist_table_enum;
 SET client_min_messages TO DEBUG1;
 select mx_call_func_custom_types('S', 'A');
 DEBUG:  function does not have co-located tables
- mx_call_func_custom_types 
+ mx_call_func_custom_types
 ---------------------------------------------------------------------
  (F,S)
 (1 row)
@@ -263,9 +263,9 @@ DEBUG:  function does not have co-located tables
 -- Make sure we do bounds checking on distributed argument index
 -- This also tests that we have cache invalidation for pg_dist_object updates
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, -1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
@@ -276,15 +276,15 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 2);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
@@ -295,16 +295,16 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 -- We don't currently support colocating with reference tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_ref'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
@@ -315,16 +315,16 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 -- We don't currently support colocating with replicated tables
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_replica'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
@@ -335,7 +335,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
@@ -344,9 +344,9 @@ SET client_min_messages TO NOTICE;
 drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
- colocate_proc_with_table 
+ colocate_proc_with_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Test table returning functions.
@@ -365,7 +365,7 @@ BEGIN
 END;$$;
 -- before distribution ...
 select mx_call_func_tbl(10);
- mx_call_func_tbl 
+ mx_call_func_tbl
 ---------------------------------------------------------------------
  (10,-1)
  (11,4)
@@ -375,14 +375,14 @@ select mx_call_func_tbl(10);
 select create_distributed_function('mx_call_func_tbl(int)', '$1', 'mx_call_dist_table_1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func_tbl(20);
 DEBUG:  pushing down the function call
- mx_call_func_tbl 
+ mx_call_func_tbl
 ---------------------------------------------------------------------
  (20,-1)
  (21,4)
@@ -398,9 +398,9 @@ END;$$;
 select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func_raise(2);
@@ -414,9 +414,9 @@ PL/pgSQL function multi_mx_function_call_delegation.mx_call_func_raise(integer) 
 SET client_min_messages TO ERROR;
 CREATE TABLE test (x int primary key);
 SELECT create_distributed_table('test','x');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE OR REPLACE FUNCTION delegated_function(a int)
@@ -431,9 +431,9 @@ BEGIN
 END;
 $function$;
 SELECT create_distributed_function('delegated_function(int)', 'a');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET client_min_messages TO DEBUG1;
@@ -448,7 +448,7 @@ SELECT * FROM test WHERE not exists(
 DEBUG:  not pushing down function calls in CTEs or Subqueries
 DEBUG:  generating subplan 31_1 for subquery SELECT multi_mx_function_call_delegation.delegated_function(4) AS delegated_function
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT x FROM multi_mx_function_call_delegation.test WHERE (NOT (EXISTS (SELECT intermediate_result.delegated_function FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(delegated_function integer))))
- x 
+ x
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -459,7 +459,7 @@ DEBUG:  generating subplan 34_1 for CTE r: SELECT multi_mx_function_call_delegat
 DEBUG:  not pushing down function calls in CTEs or Subqueries
 DEBUG:  generating subplan 34_2 for subquery SELECT (count(*) OPERATOR(pg_catalog.=) 0) FROM (SELECT intermediate_result.delegated_function FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(delegated_function integer)) r
 DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT x FROM multi_mx_function_call_delegation.test WHERE (SELECT intermediate_result."?column?" FROM read_intermediate_result('34_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" boolean))
- x 
+ x
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -472,7 +472,7 @@ DEBUG:  generating subplan 38_1 for CTE r: SELECT multi_mx_function_call_delegat
 DEBUG:  not pushing down function calls in CTEs or Subqueries
 DEBUG:  generating subplan 38_2 for CTE t: SELECT count(*) AS c FROM (SELECT intermediate_result.delegated_function FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(delegated_function integer)) r
 DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT test.x, t.c FROM multi_mx_function_call_delegation.test, (SELECT intermediate_result.c FROM read_intermediate_result('38_2'::text, 'binary'::citus_copy_format) intermediate_result(c bigint)) t WHERE (t.c OPERATOR(pg_catalog.=) 0)
- x | c 
+ x | c
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -488,21 +488,21 @@ DEBUG:  generating subplan 42_2 for CTE s: SELECT multi_mx_function_call_delegat
 DEBUG:  not pushing down function calls in CTEs or Subqueries
 DEBUG:  generating subplan 42_3 for CTE t: SELECT count(*) AS c FROM (SELECT intermediate_result.delegated_function FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(delegated_function integer)) s
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT test.x, r.count, t.c FROM multi_mx_function_call_delegation.test, (SELECT intermediate_result.count FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) r, (SELECT intermediate_result.c FROM read_intermediate_result('42_3'::text, 'binary'::citus_copy_format) intermediate_result(c bigint)) t WHERE (t.c OPERATOR(pg_catalog.=) 0)
- x | count | c 
+ x | count | c
 ---------------------------------------------------------------------
 (0 rows)
 
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select stop_metadata_sync_to_node('localhost', :worker_2_port);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select mx_call_func(2, 0);
@@ -513,22 +513,22 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 47 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('47_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            29
 (1 row)
 
 SET client_min_messages TO NOTICE;
 select start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node 
+ start_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node 
+ start_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- stop_metadata_sync_to_node()/start_metadata_sync_to_node() might make
@@ -546,9 +546,9 @@ CREATE FUNCTION mx_call_add(int, int) RETURNS int
 SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- subquery parameters cannot be pushed down
@@ -560,7 +560,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT (9 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            35
 (1 row)
@@ -574,7 +574,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            27
 (1 row)
@@ -587,13 +587,13 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- y  
+ y
 ---------------------------------------------------------------------
  29
 (1 row)
 
 select mx_call_func(2, 0) from mx_call_dist_table_1;
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
            28
@@ -613,7 +613,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -630,7 +630,7 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_catalog.+) (SELECT intermediate_result.sum FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)))
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_function_call_delegation.mx_call_dist_table_1 t1 join multi_mx_function_call_delegation.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
- mx_call_func | mx_call_func 
+ mx_call_func | mx_call_func
 ---------------------------------------------------------------------
            29 |           27
 (1 row)
@@ -640,7 +640,7 @@ DEBUG:  not pushing down function calls in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT mx_call_func_tbl(40)"
 PL/pgSQL function inline_code_block line 1 at PERFORM
 SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
- id | val 
+ id | val
 ---------------------------------------------------------------------
  40 |  -1
  41 |   4
@@ -650,42 +650,42 @@ SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
 PREPARE call_plan (int, int) AS SELECT mx_call_func($1, $2);
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)
 
 EXECUTE call_plan(2, 0);
 DEBUG:  pushing down the function call
- mx_call_func 
+ mx_call_func
 ---------------------------------------------------------------------
            28
 (1 row)

@@ -13,7 +13,7 @@ FROM (
 ) user_id
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | counter 
+ user_id | counter
 ---------------------------------------------------------------------
        2 |       5
        3 |       5
@@ -31,7 +31,7 @@ FROM (
 ) user_id
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | max 
+ user_id | max
 ---------------------------------------------------------------------
        5 |   5
        1 |   4
@@ -46,7 +46,7 @@ FROM (
 ) user_id
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | counter 
+ user_id | counter
 ---------------------------------------------------------------------
        2 |       5
        3 |       5
@@ -64,7 +64,7 @@ FROM (
 ) user_id
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | counter 
+ user_id | counter
 ---------------------------------------------------------------------
        2 |       5
        2 |       5
@@ -82,7 +82,7 @@ FROM (
 ) user_id
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | counter 
+ user_id | counter
 ---------------------------------------------------------------------
        2 |       5
        2 |       5
@@ -101,7 +101,7 @@ FROM (
 GROUP BY 1
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 |  15
        3 |  15
@@ -120,7 +120,7 @@ FROM (
 GROUP BY 1
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 |  32
        3 |  32
@@ -139,7 +139,7 @@ FROM (
 GROUP BY 1
 ORDER BY 2 DESC,1
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 |  15
        3 |  15
@@ -159,7 +159,7 @@ GROUP BY
   user_id
 --HAVING sum(counter) > 900
 ORDER BY 1,2 DESC LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        1 |   7
        2 |  15
@@ -180,7 +180,7 @@ GROUP BY
   user_id
 --HAVING sum(counter) > 900
 ORDER BY 1,2 DESC LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        1 |   7
        2 |  15
@@ -203,7 +203,7 @@ FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 5 and value_1 < 6 GROUP BY user_id HAVING sum(value_2) > 25
 ) user_id
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
- sum 
+ sum
 ---------------------------------------------------------------------
  141
   94
@@ -225,7 +225,7 @@ FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 5 and value_1 < 6 GROUP BY user_id HAVING sum(value_2) > 25
 ) user_id
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
- sum 
+ sum
 ---------------------------------------------------------------------
  135
   87
@@ -247,7 +247,7 @@ FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 5 and value_1 < 6 GROUP BY user_id HAVING sum(value_2) > 25
 ) user_id
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
- sum 
+ sum
 ---------------------------------------------------------------------
  135
   87
@@ -297,7 +297,7 @@ FROM (
             user_id)) AS ftop
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 | 107
        3 | 101
@@ -348,7 +348,7 @@ FROM (
             user_id)) AS ftop
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 | 107
        3 | 101
@@ -405,7 +405,7 @@ FROM
 ) as final_query
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
+ types | sumofeventtype
 ---------------------------------------------------------------------
      0 |             43
      1 |             42
@@ -456,7 +456,7 @@ FROM
 ) as final_query
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
+ types | sumofeventtype
 ---------------------------------------------------------------------
      0 |             43
      1 |             42
@@ -501,7 +501,7 @@ FROM
          GROUP BY "t1"."user_id") AS t) "q"
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
+ types | sumofeventtype
 ---------------------------------------------------------------------
      0 |             43
      1 |             42
@@ -546,7 +546,7 @@ FROM
         ) AS t) "q"
 ORDER BY 1
 LIMIT 5;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        1
@@ -592,7 +592,7 @@ FROM
          GROUP BY "t1"."user_id") AS t) "q"
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
+ types | sumofeventtype
 ---------------------------------------------------------------------
      0 |             43
      1 |             42
@@ -609,7 +609,7 @@ FROM
     UNION ALL
   (SELECT user_id FROM events_table)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
    202
 (1 row)
@@ -623,7 +623,7 @@ FROM
     UNION ALL
   (SELECT user_id FROM events_reference_table)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
    202
 (1 row)
@@ -639,7 +639,7 @@ FROM
 ) b
 ORDER BY 1 DESC
 LIMIT 5;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        6
        6
@@ -659,7 +659,7 @@ FROM
 ) b
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
- user_id | value_3 
+ user_id | value_3
 ---------------------------------------------------------------------
        6 |       5
        6 |       5
@@ -679,7 +679,7 @@ FROM
 ) b
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | value_3_sum 
+ user_id | value_3_sum
 ---------------------------------------------------------------------
        4 |          65
        4 |          65
@@ -700,7 +700,7 @@ FROM
 GROUP BY 1
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        2 | 119
        4 | 111
@@ -728,7 +728,7 @@ FROM
 ) b
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
- user_id | value_3 
+ user_id | value_3
 ---------------------------------------------------------------------
        6 |       5
        6 |       5
@@ -757,7 +757,7 @@ FROM
 GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
- max 
+ max
 ---------------------------------------------------------------------
    5
    5
@@ -776,7 +776,7 @@ FROM (
 ) user_id
 GROUP BY user_id
 ORDER BY 1,2;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        0 |  31
        1 |  76
@@ -801,7 +801,7 @@ FROM (
     SELECT 2 * user_id, sum(value_2) AS counter FROM users_table where value_1 < 5 and value_1 < 6 GROUP BY user_id HAVING sum(value_2) > 25
 ) user_id
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
- sum 
+ sum
 ---------------------------------------------------------------------
   80
   76
@@ -833,7 +833,7 @@ UNION
   GROUP BY user_id)
 ) as ftop
 ORDER BY 1,2;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        1 |  20
        1 |  62
@@ -891,7 +891,7 @@ UNION
 ) as ftop
 ORDER BY 2, 1
 LIMIT 10;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        6 |  43
        1 |  62
@@ -923,7 +923,7 @@ UNION
 ) ftop
 ORDER BY 2, 1
 LIMIT 10;
- sum  | user_id 
+ sum  | user_id
 ---------------------------------------------------------------------
   300 |       1
  1200 |       2
@@ -948,7 +948,7 @@ UNION
 ) ftop
 ORDER BY 2, 1
 LIMIT 10;
- value_2 | user_id 
+ value_2 | user_id
 ---------------------------------------------------------------------
        0 |       1
        2 |       1
@@ -980,7 +980,7 @@ UNION ALL
 ) ftop
 ORDER BY 2, 1
 LIMIT 10;
- sum  | user_id 
+ sum  | user_id
 ---------------------------------------------------------------------
   300 |       1
   300 |       1
@@ -1003,7 +1003,7 @@ FROM (
 ) user_id
 GROUP BY user_id
 ORDER BY 1,2;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        3 | 101
        4 |  91
@@ -1052,7 +1052,7 @@ FROM (
          GROUP BY
             user_id)) AS ftop
 ORDER BY 1,2;
- user_id | sum 
+ user_id | sum
 ---------------------------------------------------------------------
        1 |  20
        1 |  62
@@ -1083,7 +1083,7 @@ FROM
     UNION ALL
   (SELECT 2 * user_id FROM events_table)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
    202
 (1 row)
@@ -1107,7 +1107,7 @@ FROM
 ) b
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
- user_id | value_3 
+ user_id | value_3
 ---------------------------------------------------------------------
        6 |       5
        6 |       5
@@ -1125,7 +1125,7 @@ FROM
     UNION ALL
   (SELECT users_table.user_id FROM events_table, users_table WHERE events_table.user_id = users_table.user_id)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
   1850
 (1 row)
@@ -1139,7 +1139,7 @@ FROM
     UNION ALL
   (SELECT 1)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
    102
 (1 row)
@@ -1153,7 +1153,7 @@ FROM
     UNION ALL
   (SELECT (random() * 100)::int)
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
    102
 (1 row)
@@ -1177,7 +1177,7 @@ FROM
 ) b
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
- user_id | value_3 
+ user_id | value_3
 ---------------------------------------------------------------------
        6 |       5
        6 |       5
@@ -1229,7 +1229,7 @@ FROM
 ) as final_query
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
+ types | sumofeventtype
 ---------------------------------------------------------------------
      0 |             43
      1 |             42

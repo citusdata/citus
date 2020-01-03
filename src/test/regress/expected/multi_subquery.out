@@ -17,7 +17,7 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-           avg           
+           avg
 ---------------------------------------------------------------------
  142158.8766934673366834
 (1 row)
@@ -44,7 +44,7 @@ FROM
 		l_suppkey) AS order_counts;
 DEBUG:  generating subplan 2_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT avg(order_count) AS avg FROM (SELECT intermediate_result.l_suppkey, intermediate_result.order_count FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(l_suppkey integer, order_count bigint)) order_counts
-        avg         
+        avg
 ---------------------------------------------------------------------
  1.7199369356456930
 (1 row)
@@ -68,7 +68,7 @@ RESET client_min_messages;
 SELECT count(*) FROM (
    SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -89,7 +89,7 @@ DEBUG:  generating subplan 7_2 for subquery SELECT intermediate_result.l_orderke
 DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- count 
+ count
 ---------------------------------------------------------------------
  12001
 (1 row)
@@ -111,7 +111,7 @@ DEBUG:  generating subplan 10_3 for subquery SELECT intermediate_result.l_orderk
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- count 
+ count
 ---------------------------------------------------------------------
  14496
 (1 row)
@@ -123,7 +123,7 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
@@ -150,7 +150,7 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-          avg           
+          avg
 ---------------------------------------------------------------------
  17470.0940725222668915
 (1 row)
@@ -192,7 +192,7 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          39
@@ -218,7 +218,7 @@ WHERE
 	(o_orderkey < l_quantity + 3)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          39
@@ -243,7 +243,7 @@ WHERE
 	(o_orderkey < l_quantity + 3)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          39
@@ -278,7 +278,7 @@ JOIN
 ON (l_orderkey::int8 = o_orderkey::int8)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
       14947
       14947
@@ -314,7 +314,7 @@ WHERE
 	(o_orderkey::int8 < l_quantity::int8 + 3)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          39
@@ -339,7 +339,7 @@ WHERE
 	(o_orderkey::int4 < l_quantity::int8 + 3)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          39
@@ -396,7 +396,7 @@ FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
- user_id | value_1 | value_2 | value_3 
+ user_id | value_1 | value_2 | value_3
 ---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
@@ -411,7 +411,7 @@ FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id > t2.user_id
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
- user_id | value_1 | value_2 | value_3 
+ user_id | value_1 | value_2 | value_3
 ---------------------------------------------------------------------
        6 |       5 |       5 |       3
        5 |       5 |       5 |       3
@@ -433,11 +433,11 @@ FROM events_table t1
 LEFT JOIN users_reference_table t2 ON t1.user_id = (CASE WHEN t2.user_id > 3 THEN 3 ELSE t2.user_id END)
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
- user_id | value_1 | value_2 | value_3 
+ user_id | value_1 | value_2 | value_3
 ---------------------------------------------------------------------
-       6 |         |         |        
-       5 |         |         |        
-       4 |         |         |        
+       6 |         |         |
+       5 |         |         |
+       4 |         |         |
        3 |       5 |       5 |       3
        2 |       4 |       4 |       5
 (5 rows)
@@ -450,7 +450,7 @@ SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
  LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
  ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
- user_id | value_1 | value_2 | value_3 
+ user_id | value_1 | value_2 | value_3
 ---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
@@ -478,7 +478,7 @@ FROM (
 ) lo
 ORDER BY 1, 2, 3
 LIMIT 5;
- user_id | value_1 | event_type 
+ user_id | value_1 | event_type
 ---------------------------------------------------------------------
        1 |       1 |          0
        1 |       1 |          0
@@ -493,7 +493,7 @@ FROM events_table t1
 JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
- user_id | value_1 | value_2 | value_3 
+ user_id | value_1 | value_2 | value_3
 ---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
@@ -513,7 +513,7 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_orderkey DESC
 LIMIT 10;
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
          39
          38
@@ -536,7 +536,7 @@ JOIN
 ON (l_orderkey = o_orderkey)
 WHERE
 	(o_orderkey < l_quantity);
- count 
+ count
 ---------------------------------------------------------------------
     13
 (1 row)
@@ -552,7 +552,7 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_quantity DESC
 LIMIT 10;
- l_quantity 
+ l_quantity
 ---------------------------------------------------------------------
       50.00
       49.00
@@ -577,7 +577,7 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_quantity DESC
 LIMIT 10;
- l_quantity 
+ l_quantity
 ---------------------------------------------------------------------
       50.00
       49.00
@@ -600,7 +600,7 @@ JOIN
 ON (l_orderkey = o_orderkey)
 WHERE
 	(o_orderkey < l_quantity);
- count 
+ count
 ---------------------------------------------------------------------
     25
 (1 row)
@@ -616,7 +616,7 @@ FROM (
 	GROUP BY
 	   l_orderkey
 ) z;
- count 
+ count
 ---------------------------------------------------------------------
      7
 (1 row)
@@ -668,7 +668,7 @@ ORDER BY
 	total_order_count DESC,
 	o_custkey ASC
 LIMIT 10;
- o_custkey | total_order_count 
+ o_custkey | total_order_count
 ---------------------------------------------------------------------
       1462 |                 9
        619 |                 8
@@ -698,7 +698,7 @@ FROM
 WHERE
 	unit_price > 1000 AND
 	unit_price < 10000;
-          avg          
+          avg
 ---------------------------------------------------------------------
  4968.4946466804019323
 (1 row)
@@ -717,7 +717,7 @@ SELECT count(*) FROM
 	) a
 	WHERE l_orderkey = 1
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -730,7 +730,7 @@ SELECT count(*) FROM
 	) a
 	WHERE l_orderkey = 1
 ) b;
- count 
+ count
 ---------------------------------------------------------------------
      6
 (1 row)
@@ -748,7 +748,7 @@ SELECT max(l_orderkey) FROM
 			l_orderkey
   ) z
 ) y;
-  max  
+  max
 ---------------------------------------------------------------------
  14947
 (1 row)
@@ -769,7 +769,7 @@ FROM
       WHERE user_id = 3
       GROUP BY user_id) AS bar
    WHERE foo.user_id = bar.user_id ) AS baz;
- user_id | counter | user_id | counter 
+ user_id | counter | user_id | counter
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -792,7 +792,7 @@ FROM
    WHERE foo.user_id = bar.user_id ) AS baz
 ORDER BY 1,2
 LIMIT 5;
- user_id | counter | user_id | counter 
+ user_id | counter | user_id | counter
 ---------------------------------------------------------------------
        2 |      57 |       2 |      57
 (1 row)
@@ -826,9 +826,9 @@ CREATE TABLE subquery_pruning_varchar_test_table
 );
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- temporarily disable router executor to test pruning behaviour of subquery pushdown
@@ -838,7 +838,7 @@ SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
 DEBUG:  Router planner not enabled.
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -846,7 +846,7 @@ SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
 DEBUG:  Router planner not enabled.
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -879,7 +879,7 @@ SELECT * FROM
 	GROUP BY
 		a_inner)
 AS foo;
- a 
+ a
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -910,7 +910,7 @@ FROM
 	GROUP BY
 		tenant_id,
 		user_id) AS subquery;
-   event_average    
+   event_average
 ---------------------------------------------------------------------
  3.6666666666666667
 (1 row)
@@ -979,7 +979,7 @@ GROUP BY
 	hasdone
 ORDER BY
     event_average DESC;
-   event_average    |       hasdone       
+   event_average    |       hasdone
 ---------------------------------------------------------------------
  4.0000000000000000 | Has not done paying
  2.5000000000000000 | Has done paying
@@ -1055,7 +1055,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-   event_average    | count_pay 
+   event_average    | count_pay
 ---------------------------------------------------------------------
  3.0000000000000000 |         0
 (1 row)
@@ -1112,7 +1112,7 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
- tenant_id | user_id | user_lastseen |        event_array         
+ tenant_id | user_id | user_lastseen |        event_array
 ---------------------------------------------------------------------
          1 |    1003 |    1472807315 | {click,click,click,submit}
          1 |    1002 |    1472807215 | {click,click,submit,pay}

@@ -6,9 +6,9 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE sharded_table ( name text, id bigint );
 SELECT create_distributed_table('sharded_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- COPY out is supported with distributed tables
@@ -35,27 +35,27 @@ PREPARE sharded_update AS UPDATE sharded_table SET name = 'bob' WHERE id = 1;
 PREPARE sharded_delete AS DELETE FROM sharded_table WHERE id = 1;
 PREPARE sharded_query  AS SELECT name FROM sharded_table WHERE id = 1;
 EXECUTE sharded_query;
- name 
+ name
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE sharded_insert;
 EXECUTE sharded_query;
- name 
+ name
 ---------------------------------------------------------------------
  adam
 (1 row)
 
 EXECUTE sharded_update;
 EXECUTE sharded_query;
- name 
+ name
 ---------------------------------------------------------------------
  bob
 (1 row)
 
 EXECUTE sharded_delete;
 EXECUTE sharded_query;
- name 
+ name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -72,22 +72,22 @@ HINT:  Use the DELETE command instead.
 -- lock shard metadata: take some share locks and exclusive locks
 BEGIN;
 SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);
- lock_shard_metadata 
+ lock_shard_metadata
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT lock_shard_metadata(7, ARRAY[999001, 999003, 999004]);
- lock_shard_metadata 
+ lock_shard_metadata
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT locktype, objid, mode, granted
 FROM pg_locks
 WHERE objid IN (999001, 999002, 999003, 999004)
 ORDER BY objid, mode;
- locktype | objid  |     mode      | granted 
+ locktype | objid  |     mode      | granted
 ---------------------------------------------------------------------
  advisory | 999001 | ExclusiveLock | t
  advisory | 999001 | ShareLock     | t
@@ -102,9 +102,9 @@ SELECT lock_shard_metadata(0, ARRAY[990001, 999002]);
 ERROR:  unsupported lockmode 0
 -- lock shard metadata: invalid shard ID
 SELECT lock_shard_metadata(5, ARRAY[0]);
- lock_shard_metadata 
+ lock_shard_metadata
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- lock shard metadata: lock nothing
@@ -113,22 +113,22 @@ ERROR:  no locks specified
 -- lock shard resources: take some share locks and exclusive locks
 BEGIN;
 SELECT lock_shard_resources(5, ARRAY[999001, 999002, 999002]);
- lock_shard_resources 
+ lock_shard_resources
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT lock_shard_resources(7, ARRAY[999001, 999003, 999004]);
- lock_shard_resources 
+ lock_shard_resources
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT locktype, objid, mode, granted
 FROM pg_locks
 WHERE objid IN (999001, 999002, 999003, 999004)
 ORDER BY objid, mode;
- locktype | objid  |     mode      | granted 
+ locktype | objid  |     mode      | granted
 ---------------------------------------------------------------------
  advisory | 999001 | ExclusiveLock | t
  advisory | 999001 | ShareLock     | t
@@ -143,9 +143,9 @@ SELECT lock_shard_resources(0, ARRAY[990001, 999002]);
 ERROR:  unsupported lockmode 0
 -- lock shard metadata: invalid shard ID
 SELECT lock_shard_resources(5, ARRAY[-1]);
- lock_shard_resources 
+ lock_shard_resources
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- lock shard metadata: lock nothing
@@ -159,24 +159,24 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE dustbunnies (id integer, name text, age integer);
 SELECT create_distributed_table('dustbunnies', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- add some data to the distributed table
 \copy dustbunnies (id, name) from stdin with csv
 CREATE TABLE second_dustbunnies(id integer, name text, age integer);
 SELECT master_create_distributed_table('second_dustbunnies', 'id', 'hash');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
- master_create_worker_shards 
+ master_create_worker_shards
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- following approach adapted from PostgreSQL's stats.sql file
@@ -266,20 +266,20 @@ ANALYZE dustbunnies;
 -- verify that the VACUUM and ANALYZE ran
 \c - - - :worker_1_port
 SELECT wait_for_stats();
- wait_for_stats 
+ wait_for_stats
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 REFRESH MATERIALIZED VIEW prevcounts;
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count 
+ pg_stat_get_vacuum_count
 ---------------------------------------------------------------------
                         1
 (1 row)
 
 SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count 
+ pg_stat_get_analyze_count
 ---------------------------------------------------------------------
                          1
 (1 row)
@@ -295,26 +295,26 @@ VACUUM ANALYZE dustbunnies;
 \c - - - :worker_1_port
 SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
- table_rewritten 
+ table_rewritten
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- verify the VACUUM ANALYZE incremented both vacuum and analyze counts
 SELECT wait_for_stats();
- wait_for_stats 
+ wait_for_stats
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count 
+ pg_stat_get_vacuum_count
 ---------------------------------------------------------------------
                         2
 (1 row)
 
 SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count 
+ pg_stat_get_analyze_count
 ---------------------------------------------------------------------
                          2
 (1 row)
@@ -331,7 +331,7 @@ VACUUM (FREEZE) dustbunnies;
 \c - - - :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
- frozen_performed 
+ frozen_performed
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -339,7 +339,7 @@ WHERE oid='dustbunnies_990002'::regclass;
 -- check there are no nulls in either column
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
- attname | null_frac 
+ attname | null_frac
 ---------------------------------------------------------------------
  age     |         1
  id      |         0
@@ -354,7 +354,7 @@ ANALYZE dustbunnies (name);
 \c - - - :worker_1_port
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
- attname | null_frac 
+ attname | null_frac
 ---------------------------------------------------------------------
  age     |         1
  id      |         0
@@ -370,21 +370,21 @@ HINT:  Provide a specific table in order to VACUUM distributed tables.
 VACUUM dustbunnies, second_dustbunnies;
 -- check the current number of vacuum and analyze run on dustbunnies
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"")
  (localhost,57638,t,"")
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,4)
  (localhost,57638,t,4)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,3)
  (localhost,57638,t,3)
@@ -401,21 +401,21 @@ HINT:  Set citus.enable_ddl_propagation to true in order to send targeted ANALYZ
 SET citus.enable_ddl_propagation to DEFAULT;
 -- should not propagate the vacuum and analyze
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"")
  (localhost,57638,t,"")
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,4)
  (localhost,57638,t,4)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers 
+ run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,3)
  (localhost,57638,t,3)
@@ -423,13 +423,13 @@ SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regc
 
 -- test worker_hash
 SELECT worker_hash(123);
- worker_hash 
+ worker_hash
 ---------------------------------------------------------------------
   -205084363
 (1 row)
 
 SELECT worker_hash('1997-08-08'::date);
- worker_hash 
+ worker_hash
 ---------------------------------------------------------------------
   -499701663
 (1 row)
@@ -439,7 +439,7 @@ SELECT worker_hash('(1, 2)');
 ERROR:  cannot find a hash function for the input type
 HINT:  Cast input to a data type with a hash function.
 SELECT worker_hash('(1, 2)'::test_composite_type);
- worker_hash 
+ worker_hash
 ---------------------------------------------------------------------
  -1895345704
 (1 row)
@@ -448,7 +448,7 @@ SELECT citus_truncate_trigger();
 ERROR:  must be called as trigger
 -- confirm that citus_create_restore_point works
 SELECT 1 FROM citus_create_restore_point('regression-test');
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)

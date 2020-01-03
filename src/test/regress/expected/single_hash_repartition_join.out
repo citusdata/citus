@@ -9,28 +9,28 @@ CREATE TABLE single_hash_repartition_second (id int, sum int, avg float);
 CREATE TABLE ref_table (id int, sum int, avg float);
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('single_hash_repartition_first', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('single_hash_repartition_second', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('ref_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.log_multi_join_order TO ON;
 SET client_min_messages TO DEBUG2;
 -- a very basic single hash re-partitioning example
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE
@@ -60,8 +60,8 @@ DETAIL:  Creating dependency on merge taskId 20
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- the same query with the orders of the tables have changed
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_second t1, single_hash_repartition_first t2
 WHERE
@@ -122,8 +122,8 @@ DETAIL:  Creating dependency on merge taskId 20
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
@@ -165,8 +165,8 @@ DETAIL:  Creating dependency on merge taskId 20
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- a more complicated join order, first hash-repartition join, later single hash repartition join
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
@@ -224,8 +224,8 @@ DETAIL:  Creating dependency on merge taskId 20
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- single hash repartitioning is not supported between different column types
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
@@ -248,9 +248,9 @@ ERROR:  cannot perform distributed planning on this query
 DETAIL:  Cartesian products are currently unsupported
 -- single repartition query in CTE
 -- should work fine
-EXPLAIN WITH cte1 AS 
+EXPLAIN WITH cte1 AS
 (
-	SELECT 
+	SELECT
 		t1.id * t2.avg as data
 	FROM
 		single_hash_repartition_first t1, single_hash_repartition_second t2
@@ -294,7 +294,7 @@ DETAIL:  Creating dependency on merge taskId 20
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- two single repartitions
-EXPLAIN SELECT 
+EXPLAIN SELECT
 	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
@@ -344,9 +344,9 @@ DEBUG:  pruning merge fetch taskId 7
 DETAIL:  Creating dependency on merge taskId 24
 ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
--- two single repartitions again, but this 
+-- two single repartitions again, but this
 -- time the columns of the second join is reverted
-EXPLAIN SELECT 
+EXPLAIN SELECT
 	avg(t1.avg + t2.avg)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2, single_hash_repartition_second t3
@@ -404,8 +404,8 @@ HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- the following queries should also be a single hash repartition queries
 -- note that since we've manually updated the metadata without changing the
 -- the corresponding data, the results of the query would be wrong
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE
@@ -437,8 +437,8 @@ HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- the following queries should also be a single hash repartition queries
 -- note that since we've manually updated the metadata without changing the
 -- the corresponding data, the results of the query would be wrong
-EXPLAIN SELECT 
-	count(*) 
+EXPLAIN SELECT
+	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_second t2
 WHERE

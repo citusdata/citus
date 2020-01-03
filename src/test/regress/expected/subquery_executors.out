@@ -6,19 +6,19 @@ SET search_path TO subquery_executor, public;
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 SET client_min_messages TO DEBUG1;
 -- subquery with router planner
-SELECT 
-	count(*) 
+SELECT
+	count(*)
 FROM
 (
 	SELECT value_2 FROM users_table WHERE user_id = 15 OFFSET 0
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table
 ) as bar
-WHERE foo.value_2 = bar.user_id; 
+WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan 2_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -26,66 +26,66 @@ DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT count(*) AS cou
 -- subquery with router but not logical plannable
 -- bar is recursively planned
 SELECT
-	count(*) 
+	count(*)
 FROM
 (
 	SELECT  user_id, sum(value_2) over (partition by user_id) AS counter FROM users_table WHERE user_id = 15
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table
 ) as bar
-WHERE foo.counter = bar.user_id; 
+WHERE foo.counter = bar.user_id;
 DEBUG:  generating subplan 4_1 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) 15)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.counter OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- subquery with real-time query
-SELECT 
-	count(*) 
+SELECT
+	count(*)
 FROM
 (
 	SELECT value_2 FROM users_table WHERE user_id != 15 OFFSET 0
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table
 ) as bar
-WHERE foo.value_2 = bar.user_id; 
+WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan 6_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.<>) 15) OFFSET 0
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
   1612
 (1 row)
 
 -- subquery with repartition query
 SET citus.enable_repartition_joins to ON;
-SELECT 
-	count(*) 
+SELECT
+	count(*)
 FROM
 (
 	SELECT DISTINCT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND users_table.user_id < 2
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table
 ) as bar
-WHERE foo.value_2 = bar.user_id; 
+WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
     58
 (1 row)
 
 -- mixed of all executors (including local execution)
-SELECT 
-	count(*) 
+SELECT
+	count(*)
 FROM
 (
 	SELECT value_2 FROM users_table WHERE user_id = 15 OFFSET 0
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table OFFSET 0
 ) as bar,
@@ -95,51 +95,51 @@ FROM
 (
 	SELECT user_id FROM users_table_local WHERE user_id = 2
 ) baw
-WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id; 
+WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id;
 DEBUG:  generating subplan 10_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
 DEBUG:  generating subplan 10_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
 DEBUG:  generating subplan 10_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  generating subplan 10_4 for subquery SELECT user_id FROM subquery_executor.users_table_local WHERE (user_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) baw WHERE ((foo.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (baz.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (bar.user_id OPERATOR(pg_catalog.=) baw.user_id))
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SET citus.enable_repartition_joins to OFF;
--- final query is router 
-SELECT 
-	count(*) 
+-- final query is router
+SELECT
+	count(*)
 FROM
 (
 	SELECT value_2 FROM users_table WHERE user_id = 1 OFFSET 0
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table  WHERE user_id = 2 OFFSET 0
 ) as bar
-WHERE foo.value_2 = bar.user_id; 
+WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan 14_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
 DEBUG:  generating subplan 14_2 for subquery SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 2) OFFSET 0
 DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
     18
 (1 row)
 
 -- final query is real-time
-SELECT 
-	count(*) 
+SELECT
+	count(*)
 FROM
 (
 	SELECT value_2 FROM users_table WHERE user_id = 1 OFFSET 0
-) as foo, 
+) as foo,
 (
 	SELECT user_id FROM users_table  WHERE user_id != 2
 ) as bar
-WHERE foo.value_2 = bar.user_id; 
+WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan 17_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.<>) 2)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
- count 
+ count
 ---------------------------------------------------------------------
    103
 (1 row)

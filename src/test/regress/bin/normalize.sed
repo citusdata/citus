@@ -63,9 +63,9 @@ s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 # Line info varies between versions
 /^LINE [0-9]+:.*$/d
 /^ *\^$/d
-#
-## Remove trailing whitespace
-#s/ *$//g
+
+# Remove trailing whitespace
+s/ *$//g
 #
 ## pg12 changes
 #s/Partitioned table "/Table "/g

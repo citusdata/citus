@@ -7,24 +7,24 @@ SET citus.next_shard_id TO 1420000;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE test_coloc (id integer, val integer);
 SELECT create_distributed_table('test_coloc', 'id', colocate_with := 'test');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count TO 1;
 CREATE TABLE singleshard (id integer, val integer);
 SELECT create_distributed_table('singleshard', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- turn off propagation to avoid Enterprise processing the following section
@@ -123,34 +123,34 @@ ERROR:  path must be in the pgsql_job_cache directory
 SET ROLE full_access;
 EXECUTE prepare_insert(1);
 EXECUTE prepare_select;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 INSERT INTO test VALUES (2);
 SELECT count(*) FROM test;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(*) FROM test WHERE id = 1;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
 SELECT count(*), min(current_user) FROM test;
- count |     min     
+ count |     min
 ---------------------------------------------------------------------
      2 | full_access
 (1 row)
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -166,23 +166,23 @@ ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 -- create a task that other users should not be able to inspect
 SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
- task_tracker_assign_task 
+ task_tracker_assign_task
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- check read permission
 SET ROLE read_access;
 -- should be allowed to run commands, as the current user
 SELECT result FROM run_command_on_workers($$SELECT current_user$$);
-   result    
+   result
 ---------------------------------------------------------------------
  read_access
  read_access
 (2 rows)
 
 SELECT result FROM run_command_on_placements('test', $$SELECT current_user$$);
-   result    
+   result
 ---------------------------------------------------------------------
  read_access
  read_access
@@ -191,7 +191,7 @@ SELECT result FROM run_command_on_placements('test', $$SELECT current_user$$);
 (4 rows)
 
 SELECT result FROM run_command_on_colocated_placements('test', 'test_coloc', $$SELECT current_user$$);
-   result    
+   result
 ---------------------------------------------------------------------
  read_access
  read_access
@@ -202,7 +202,7 @@ SELECT result FROM run_command_on_colocated_placements('test', 'test_coloc', $$S
 EXECUTE prepare_insert(1);
 ERROR:  permission denied for table test
 EXECUTE prepare_select;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -210,27 +210,27 @@ EXECUTE prepare_select;
 INSERT INTO test VALUES (2);
 ERROR:  permission denied for table test
 SELECT count(*) FROM test;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(*) FROM test WHERE id = 1;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
 SELECT count(*), min(current_user) FROM test;
- count |     min     
+ count |     min
 ---------------------------------------------------------------------
      2 | read_access
 (1 row)
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -250,7 +250,7 @@ ERROR:  must be owner of schema pg_merge_job_0001
 -- should not be allowed to take aggressive locks on table
 BEGIN;
 SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
- lock_relation_if_exists 
+ lock_relation_if_exists
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -285,13 +285,13 @@ RESET citus.task_executor_type;
 -- should be able to use intermediate results as any user
 BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');
- create_intermediate_result 
+ create_intermediate_result
 ---------------------------------------------------------------------
                          10
 (1 row)
 
 SELECT * FROM read_intermediate_result('topten', 'binary'::citus_copy_format) AS res (s int) ORDER BY s;
- s  
+ s
 ---------------------------------------------------------------------
   1
   2
@@ -333,22 +333,22 @@ SET ROLE full_access;
 CREATE TABLE my_table (id integer, val integer);
 RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
-   result    
+   result
 ---------------------------------------------------------------------
  full_access
  full_access
 (2 rows)
 
 SELECT task_tracker_cleanup_job(1);
- task_tracker_cleanup_job 
+ task_tracker_cleanup_job
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- table should be distributable by super user when it has data in there
@@ -358,13 +358,13 @@ INSERT INTO my_table_with_data VALUES (1,2);
 RESET ROLE;
 SELECT create_distributed_table('my_table_with_data', 'id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) FROM my_table_with_data;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -385,9 +385,9 @@ RESET ROLE;
 SET ROLE read_access;
 SELECT create_distributed_table('my_role_table_with_data', 'id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
@@ -395,7 +395,7 @@ RESET ROLE;
 SELECT result FROM run_command_on_workers($cmd$
   SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_role_table_with_data%' LIMIT 1;
 $cmd$);
-  result   
+  result
 ---------------------------------------------------------------------
  some_role
  some_role
@@ -430,48 +430,48 @@ SELECT create_distributed_function('usage_access_func(usage_access_type,int[])')
 ERROR:  must be owner of function usage_access_func
 SET ROLE usage_access;
 SELECT create_distributed_function('usage_access_func(usage_access_type,int[])');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type';
-   typowner   
+   typowner
 ---------------------------------------------------------------------
  usage_access
 (1 row)
 
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
-   proowner   
+   proowner
 ---------------------------------------------------------------------
  usage_access
 (1 row)
 
 SELECT run_command_on_workers($$SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type'$$);
-      run_command_on_workers      
+      run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,usage_access)
  (localhost,57638,t,usage_access)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func'$$);
-      run_command_on_workers      
+      run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,usage_access)
  (localhost,57638,t,usage_access)
 (2 rows)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE colocation_table(id text);
 SELECT create_distributed_table('colocation_table','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- now, make sure that the user can use the function
@@ -480,13 +480,13 @@ BEGIN;
 CREATE FUNCTION usage_access_func_second(key int, variadic v int[]) RETURNS text
     LANGUAGE plpgsql AS 'begin return current_user; end;';
 SELECT create_distributed_function('usage_access_func_second(int,int[])', '$1', colocate_with := 'colocation_table');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT usage_access_func_second(1, 2,3,4,5) FROM full_access_user_schema.t1 LIMIT 1;
- usage_access_func_second 
+ usage_access_func_second
 ---------------------------------------------------------------------
  usage_access
 (1 row)
@@ -498,26 +498,26 @@ CREATE FUNCTION usage_access_func_third(key int, variadic v int[]) RETURNS text
 \c - - - :master_port
 -- show that the current user is a super user
 SELECT usesuper FROM pg_user where usename IN (SELECT current_user);
- usesuper 
+ usesuper
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- superuser creates the distributed function that is owned by a regular user
 SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1', colocate_with := 'colocation_table');
- create_distributed_function 
+ create_distributed_function
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
-   proowner   
+   proowner
 ---------------------------------------------------------------------
  usage_access
 (1 row)
 
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
-      run_command_on_workers      
+      run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,usage_access)
  (localhost,57638,t,usage_access)
@@ -526,24 +526,24 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
 -- we don't want other tests to have metadata synced
 -- that might change the test outputs, so we're just trying to be careful
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- verify the owner of the shards for the distributed tables
@@ -554,7 +554,7 @@ SELECT result FROM run_command_on_workers($cmd$
     AND tablename LIKE 't1_%'
   LIMIT 1;
 $cmd$);
-    result    
+    result
 ---------------------------------------------------------------------
  usage_access
  usage_access
@@ -564,9 +564,9 @@ $cmd$);
 SET ROLE full_access;
 CREATE TABLE full_access_user_schema.t2(id int);
 SELECT create_distributed_table('full_access_user_schema.t2', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
@@ -577,15 +577,15 @@ BEGIN;
 CREATE TABLE full_access_user_schema.r1(id int);
 SET LOCAL citus.shard_count TO 1;
 SELECT create_distributed_table('full_access_user_schema.r1', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT upgrade_to_reference_table('full_access_user_schema.r1');
- upgrade_to_reference_table 
+ upgrade_to_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 COMMIT;
@@ -597,9 +597,9 @@ BEGIN;
 CREATE TABLE full_access_user_schema.r2(id int);
 SET LOCAL citus.shard_count TO 1;
 SELECT create_distributed_table('full_access_user_schema.r2', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 COMMIT;
@@ -611,9 +611,9 @@ ERROR:  must be owner of table r2
 RESET ROLE;
 -- the super user should be able
 SELECT upgrade_to_reference_table('full_access_user_schema.r2');
- upgrade_to_reference_table 
+ upgrade_to_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- verify the owner of the shards for the reference table
@@ -624,7 +624,7 @@ SELECT result FROM run_command_on_workers($cmd$
     AND tablename LIKE 'r2_%'
   LIMIT 1;
 $cmd$);
-   result    
+   result
 ---------------------------------------------------------------------
  full_access
  full_access
@@ -632,9 +632,9 @@ $cmd$);
 
 -- super user should be the only one being able to call worker_cleanup_job_schema_cache
 SELECT worker_cleanup_job_schema_cache();
- worker_cleanup_job_schema_cache 
+ worker_cleanup_job_schema_cache
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET ROLE full_access;
@@ -654,9 +654,9 @@ RESET ROLE;
 \c - - - :worker_1_port
 SET ROLE full_access;
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
- worker_hash_partition_table 
+ worker_hash_partition_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
@@ -676,9 +676,9 @@ ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_0000
 -- only the user whom created the files should be able to fetch
 SET ROLE full_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
- worker_fetch_partition_file 
+ worker_fetch_partition_file
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
@@ -695,9 +695,9 @@ SET ROLE full_access;
 -- user could call worker_merge_files_into_table and store the results in public, which is
 -- not what we want
 SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
- task_tracker_assign_task 
+ task_tracker_assign_task
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 RESET ROLE;
@@ -710,13 +710,13 @@ RESET ROLE;
 -- although it does create the table
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
 WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
- worker_merge_files_into_table 
+ worker_merge_files_into_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -724,13 +724,13 @@ SELECT count(*) FROM pg_merge_job_0042.task_000001;
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
 SET ROLE full_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
- worker_merge_files_into_table 
+ worker_merge_files_into_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count 
+ count
 ---------------------------------------------------------------------
     25
 (1 row)
@@ -752,19 +752,19 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
 WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
- worker_merge_files_and_run_query 
+ worker_merge_files_and_run_query
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -776,9 +776,9 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
- worker_merge_files_and_run_query 
+ worker_merge_files_and_run_query
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test that owner of task cannot execute arbitrary sql
@@ -795,13 +795,13 @@ SELECT worker_merge_files_and_run_query(42, 1,
 ERROR:  permission denied to drop role
 CONTEXT:  SQL statement "DROP USER usage_access"
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count 
+ count
 ---------------------------------------------------------------------
     25
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)

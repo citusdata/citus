@@ -28,9 +28,9 @@ INSERT INTO collections (key, ts, collection_id, value) VALUES (4, '2009-01-01',
 SELECT create_distributed_table('collections', 'key');
 NOTICE:  Copying data from local table...
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- now create partition of a already distributed table
@@ -44,9 +44,9 @@ NOTICE:  Copying data from local table...
 -- finally attach a distributed table to a distributed table
 CREATE TABLE collections_5 AS SELECT * FROM collections LIMIT 0;
 SELECT create_distributed_table('collections_5', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- load some data
@@ -64,7 +64,7 @@ GROUP BY
 	logicalrelid
 ORDER BY
 	1,2;
- logicalrelid  | placement_count 
+ logicalrelid  | placement_count
 ---------------------------------------------------------------------
  collections   |               8
  collections_1 |               8
@@ -81,7 +81,7 @@ FROM
 	pg_dist_partition
 WHERE
 	logicalrelid::text LIKE '%collections%';
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -145,9 +145,9 @@ HINT:  Run the query on the parent table "collections" instead.
 -- foreign key creation is disallowed due to replication factor > 1
 CREATE TABLE fkey_test (key bigint PRIMARY KEY);
 SELECT create_distributed_table('fkey_test', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE
@@ -168,13 +168,13 @@ ALTER TABLE collections DETACH PARTITION collections_6;
 ALTER TABLE collections ATTACH PARTITION collections_6 FOR VALUES IN ( 6 );
 -- read queries works just fine
 SELECT count(*) FROM collections_1 WHERE key = 1;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM collections_1 WHERE key != 1;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -185,9 +185,9 @@ CREATE TABLE collections_agg (
 	sum_value numeric
 );
 SELECT create_distributed_table('collections_agg', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- pushdown roll-up
@@ -212,9 +212,9 @@ CREATE INDEX ON customer_engagements (id, event_id);
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('customer_engagements', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- ingest some data for the tests
@@ -245,14 +245,14 @@ ROLLBACK;
 -- modifications after reparing a shard are fine (will use new metadata)
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
 SELECT * FROM customer_engagements ORDER BY 1,2,3;
- id | event_id | value 
+ id | event_id | value
 ---------------------------------------------------------------------
   1 |        1 |     1
   1 |        2 |     1
@@ -263,14 +263,14 @@ SELECT * FROM customer_engagements ORDER BY 1,2,3;
 ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO customer_engagements VALUES (1, 1);
 SELECT count(*) FROM customer_engagements;
- count 
+ count
 ---------------------------------------------------------------------
      5
 (1 row)

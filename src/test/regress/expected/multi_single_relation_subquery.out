@@ -27,7 +27,7 @@ order by
     total desc,
     number_sum desc
 limit 10;
- number_sum | total |     avg_count      
+ number_sum | total |     avg_count
 ---------------------------------------------------------------------
          10 |   136 | 2.3970588235294118
          11 |    97 | 2.6082474226804124
@@ -65,7 +65,7 @@ order by
     total desc,
     number_sum desc
 limit 10;
- number_sum | total |     avg_count      
+ number_sum | total |     avg_count
 ---------------------------------------------------------------------
          10 |   136 | 2.3970588235294118
          11 |    97 | 2.6082474226804124
@@ -97,7 +97,7 @@ group by
 order by
     avg_count desc, suppkey_bin DESC
 limit 20;
- suppkey_bin |     avg_count      
+ suppkey_bin |     avg_count
 ---------------------------------------------------------------------
           95 | 1.4851485148514851
           90 | 1.4761904761904762
@@ -150,7 +150,7 @@ group by
     total
 order by
     total;
- total |  total_avg_count   
+ total |  total_avg_count
 ---------------------------------------------------------------------
      1 | 4.8000000000000000
      6 | 3.0000000000000000
@@ -174,7 +174,7 @@ from
     group by
         (l_orderkey/4)::int,
         l_suppkey )  as distributed_table;
-          avg           
+          avg
 ---------------------------------------------------------------------
  1.00083402835696413678
 (1 row)
@@ -196,7 +196,7 @@ from
     limit 100) as distributed_table
 group by
     l_suppkey
-    ORDER BY 2 DESC, 1 DESC 
+    ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries with limit are not supported yet
@@ -224,7 +224,7 @@ from
         lineitem
     group by
         l_partkey) as distributed_table;
-          avg           
+          avg
 ---------------------------------------------------------------------
  1.02907126318497555956
 (1 row)
@@ -238,9 +238,9 @@ from
         lineitem
     group by
         l_partkey
-    having 
+    having
         count(distinct l_shipdate) >= 2) as distributed_table;
-        avg         
+        avg
 ---------------------------------------------------------------------
  2.0335365853658537
 (1 row)
@@ -261,7 +261,7 @@ SELECT max(l_suppkey) FROM
             GROUP BY
                 l_suppkey) z
 ) y;
- max  
+ max
 ---------------------------------------------------------------------
  9999
 (1 row)

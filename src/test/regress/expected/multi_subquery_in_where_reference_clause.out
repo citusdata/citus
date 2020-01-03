@@ -1,23 +1,23 @@
 --
 -- queries to test the subquery pushdown on reference tables
 -- subqueries in WHERE with IN operator
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 IN  
-          (SELECT 
-              value_2 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id
           )
 GROUP BY user_id
 ORDER BY user_id
 LIMIT 3;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        2
@@ -26,39 +26,39 @@ LIMIT 3;
 
 -- subqueries in WHERE with NOT EXISTS operator, should work since
 -- reference table in the inner part of the join
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  NOT EXISTS  
-      (SELECT 
-          value_2 
-       FROM 
-          events_reference_table  
-       WHERE 
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_reference_table
+       WHERE
           users_table.user_id = events_reference_table.user_id
       )
 GROUP BY user_id
 ORDER BY user_id
 LIMIT 3;
- user_id 
+ user_id
 ---------------------------------------------------------------------
 (0 rows)
 
--- subqueries in WHERE with NOT EXISTS operator, should not work since 
+-- subqueries in WHERE with NOT EXISTS operator, should not work since
 -- there is a correlated subquery in WHERE clause
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_reference_table
-WHERE 
-  NOT EXISTS  
-      (SELECT 
-          value_2 
-       FROM 
-          events_table  
-       WHERE 
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
@@ -119,7 +119,7 @@ WHERE
       )
 ORDER BY user_id
 LIMIT 3;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        2
        3
@@ -142,7 +142,7 @@ WHERE
       )
 ORDER BY user_id
 LIMIT 3;
- user_id 
+ user_id
 ---------------------------------------------------------------------
        1
        2
@@ -168,23 +168,23 @@ LIMIT 3;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 -- subqueries in WHERE with IN operator without equality
-SELECT 
+SELECT
   users_table.user_id, count(*)
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 IN  
-          (SELECT 
-              value_2 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id > events_reference_table.user_id
           )
 GROUP BY users_table.user_id
 ORDER BY 2 DESC, 1 DESC
 LIMIT 3;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        5 |    26
        4 |    23
@@ -208,7 +208,7 @@ WHERE
 GROUP BY users_table.user_id
 ORDER BY 2 DESC, 1 DESC
 LIMIT 3;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        5 |    26
        4 |    23
@@ -232,7 +232,7 @@ WHERE
 GROUP BY users_table.user_id
 ORDER BY 2 DESC, 1 DESC
 LIMIT 3;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        6 |    10
 (1 row)
@@ -298,7 +298,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        5 |       5
        5 |       5
@@ -368,14 +368,14 @@ ORDER BY 1, 2;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 -- non-partition key equality with reference table
- SELECT 
-  user_id, count(*) 
-FROM 
-  users_table 
-WHERE 
-  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 1 AND value_1 <= 2) 
+ SELECT
+  user_id, count(*)
+FROM
+  users_table
+WHERE
+  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 1 AND value_1 <= 2)
  GROUP BY 1 ORDER BY 2 DESC, 1 DESC LIMIT 5;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        5 |    26
        4 |    23
@@ -385,25 +385,25 @@ WHERE
 (5 rows)
 
 -- non-partition key comparison with reference table
-SELECT 
+SELECT
   user_id, count(*)
-FROM 
+FROM
   events_table as e1
 WHERE
   event_type IN
-            (SELECT 
+            (SELECT
                 event_type
-             FROM 
+             FROM
               events_reference_table as e2
              WHERE
               value_2 = 2 AND
               value_3 > 3 AND
               e1.value_2 > e2.value_2
-            ) 
+            )
 GROUP BY 1
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        2 |     7
        5 |     6
@@ -413,8 +413,8 @@ LIMIT 5;
 (5 rows)
 
 -- subqueries in both WHERE and FROM clauses
--- should work since reference table is on the 
--- inner part of the join 
+-- should work since reference table is on the
+-- inner part of the join
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
@@ -475,7 +475,7 @@ SELECT user_id, value_2 FROM users_table WHERE
     HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        5 |       5
        5 |       5
@@ -485,15 +485,15 @@ ORDER BY 1, 2;
 SET client_min_messages TO DEBUG1;
 -- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT
-  count(*) 
-FROM 
-  users_reference_table 
-WHERE user_id 
+  count(*)
+FROM
+  users_reference_table
+WHERE user_id
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
 DEBUG:  generating subplan 18_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
 DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('18_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
- count 
+ count
 ---------------------------------------------------------------------
     10
 (1 row)
@@ -501,7 +501,7 @@ DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT count(*) AS co
 -- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT count(*)
 FROM
-  (SELECT 
+  (SELECT
       user_id, random() FROM users_reference_table) AS vals
     WHERE vals.user_id NOT IN
     (SELECT users_table.value_2
@@ -509,7 +509,7 @@ FROM
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
 DEBUG:  generating subplan 20_1 for subquery SELECT users_table.value_2 FROM (public.users_table JOIN public.users_reference_table u2 ON ((users_table.value_2 OPERATOR(pg_catalog.=) u2.value_2)))
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_reference_table.user_id, random() AS random FROM public.users_reference_table) vals WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))
- count 
+ count
 ---------------------------------------------------------------------
     10
 (1 row)
@@ -543,28 +543,28 @@ WHERE user_id IN
 ORDER BY 1,2,3
 LIMIT 5;
 DEBUG:  push down of limit count: 5
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
-       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
-       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
-       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
-       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
-       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |
 (5 rows)
 
 SET client_min_messages TO DEFAULT;
 -- not supported since GROUP BY references to an upper level query
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               users_table.user_id
@@ -577,17 +577,17 @@ ERROR:  cannot push down this subquery
 DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
 -- similar query with slightly more complex group by
 -- though the error message is a bit confusing
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               (users_table.user_id * 2)

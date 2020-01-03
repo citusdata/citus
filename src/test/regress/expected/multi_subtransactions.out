@@ -3,9 +3,9 @@ CREATE TABLE artists (
     name text NOT NULL
 );
 SELECT create_distributed_table('artists', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- add some data
@@ -21,7 +21,7 @@ DELETE FROM artists WHERE id=5;
 RELEASE SAVEPOINT s1;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -33,7 +33,7 @@ DELETE FROM artists WHERE id=5;
 ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
- id |   name    
+ id |   name
 ---------------------------------------------------------------------
   5 | Asher Lev
 (1 row)
@@ -48,7 +48,7 @@ INSERT INTO artists VALUES (5, 'Jacob Kahn');
 RELEASE SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
- id |    name    
+ id |    name
 ---------------------------------------------------------------------
   5 | Jacob Kahn
 (1 row)
@@ -63,7 +63,7 @@ DELETE FROM artists WHERE id=5;
 ROLLBACK TO SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
- id |    name    
+ id |    name
 ---------------------------------------------------------------------
   5 | Jacob Kahn
 (1 row)
@@ -81,7 +81,7 @@ ROLLBACK TO SAVEPOINT s0;
 INSERT INTO artists VALUES (6, 'Emily Carr');
 COMMIT;
 SELECT * FROM artists WHERE id=6;
- id |    name    
+ id |    name
 ---------------------------------------------------------------------
   6 | Emily Carr
 (1 row)
@@ -97,7 +97,7 @@ ROLLBACK TO s2;
 RELEASE SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=7;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -131,7 +131,7 @@ ROLLBACK TO s1;
 INSERT INTO artists VALUES (9, 'Mohsen Namjoo');
 COMMIT;
 SELECT * FROM artists WHERE id IN (7, 8, 9) ORDER BY id;
- id |     name      
+ id |     name
 ---------------------------------------------------------------------
   8 | Sogand
   9 | Mohsen Namjoo
@@ -148,7 +148,7 @@ ROLLBACK TO s1;
 INSERT INTO artists VALUES (10, 'Mahmoud Farshchian');
 COMMIT;
 SELECT * FROM artists WHERE id IN (9, 10) ORDER BY id;
- id |        name        
+ id |        name
 ---------------------------------------------------------------------
  10 | Mahmoud Farshchian
 (1 row)
@@ -164,7 +164,7 @@ ROLLBACK TO s1;
 INSERT INTO artists VALUES (11, 'Egon Schiele');
 COMMIT;
 SELECT * FROM artists WHERE id IN (10, 11) ORDER BY id;
- id |     name     
+ id |     name
 ---------------------------------------------------------------------
  11 | Egon Schiele
 (1 row)
@@ -180,7 +180,7 @@ ROLLBACK TO s1;
 INSERT INTO artists VALUES (12, 'Marc Chagall');
 COMMIT;
 SELECT * FROM artists WHERE id IN (11, 12) ORDER BY id;
- id |     name     
+ id |     name
 ---------------------------------------------------------------------
  12 | Marc Chagall
 (1 row)
@@ -191,9 +191,9 @@ create table t2(a int, b int CHECK(b > 0));
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 select create_distributed_table('t1', 'a'),
        create_distributed_table('t2', 'a');
- create_distributed_table | create_distributed_table 
+ create_distributed_table | create_distributed_table
 ---------------------------------------------------------------------
-                          | 
+                          |
 (1 row)
 
 begin;
@@ -236,7 +236,7 @@ with r AS (
 ) insert into t1 select * from r;
 commit;
 select * from t2 order by a, b;
- a | b 
+ a | b
 ---------------------------------------------------------------------
  1 | 4
  2 | 5
@@ -244,7 +244,7 @@ select * from t2 order by a, b;
 (3 rows)
 
 select * from t1 order by a, b;
- a | b 
+ a | b
 ---------------------------------------------------------------------
  1 | 3
  1 | 4
@@ -265,9 +265,9 @@ CREATE TABLE researchers (
 );
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('researchers', 'lab_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Basic rollback and release
@@ -279,7 +279,7 @@ ROLLBACK TO s1;
 RELEASE SAVEPOINT s1;
 COMMIT;
 SELECT * FROM researchers WHERE id in (7, 8);
- id | lab_id |   name    
+ id | lab_id |   name
 ---------------------------------------------------------------------
   7 |      4 | Jan Plaza
 (1 row)
@@ -294,7 +294,7 @@ ROLLBACK TO SAVEPOINT s1;
 INSERT INTO researchers VALUES (12, 10, 'Stephen Kleene');
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -310,7 +310,7 @@ SAVEPOINT s2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -326,7 +326,7 @@ SAVEPOINT s2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -344,7 +344,7 @@ END $$;
 NOTICE:  caught not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -361,7 +361,7 @@ END $$;
 NOTICE:  caught manual plpgsql_error
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -378,7 +378,7 @@ END $$;
 ERROR:  not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name      
+ id | lab_id |      name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
@@ -395,7 +395,7 @@ EXCEPTION
 END $$;
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |       name       
+ id | lab_id |       name
 ---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
  32 |     10 | Raymond Smullyan

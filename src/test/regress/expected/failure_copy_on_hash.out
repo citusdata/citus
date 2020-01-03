@@ -5,9 +5,9 @@ CREATE SCHEMA copy_distributed_table;
 SET search_path TO 'copy_distributed_table';
 SET citus.next_shard_id TO 1710000;
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- With one placement COPY should error out and placement should stay healthy.
@@ -16,23 +16,23 @@ SET citus.shard_count to 4;
 SET citus.max_cached_conns_per_worker to 0;
 CREATE TABLE test_table(id int, value_1 int);
 SELECT create_distributed_table('test_table','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
-CREATE VIEW unhealthy_shard_count AS 
-	SELECT count(*) 
-	FROM pg_dist_shard_placement pdsp 
-	JOIN 
-	pg_dist_shard pds 
-	ON pdsp.shardid=pds.shardid 
+CREATE VIEW unhealthy_shard_count AS
+	SELECT count(*)
+	FROM pg_dist_shard_placement pdsp
+	JOIN
+	pg_dist_shard pds
+	ON pdsp.shardid=pds.shardid
 	WHERE logicalrelid='copy_distributed_table.test_table'::regclass AND shardstate != 1;
 -- Just kill the connection after sending the first query to the worker.
 SELECT citus.mitmproxy('conn.kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
@@ -44,46 +44,46 @@ CONTEXT:  COPY test_table, line 1: "1,2"
 ERROR:  could not connect to any active placements
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- Now, kill the connection while copying the data
 SELECT citus.mitmproxy('conn.onCopyData().kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -91,109 +91,109 @@ SELECT count(*) FROM test_table;
 -- Similar to the above one, but now cancel the connection
 -- instead of killing it.
 SELECT citus.mitmproxy('conn.onCopyData().cancel(' ||  pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- kill the connection after worker sends command complete message
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 1").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- similar to above one, but cancel the connection on command complete
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 1").cancel(' || pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- kill the connection on PREPARE TRANSACTION
 SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -202,27 +202,27 @@ SELECT count(*) FROM test_table;
 SET client_min_messages TO ERROR;
 -- kill on command complete on COMMIT PREPARE, command should succeed
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COMMIT PREPARED").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 SET client_min_messages TO NOTICE;
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
@@ -230,9 +230,9 @@ SELECT count(*) FROM test_table;
 TRUNCATE TABLE test_table;
 -- kill on ROLLBACK, command could be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="ROLLBACK").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -241,19 +241,19 @@ ROLLBACK;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -264,15 +264,15 @@ NOTICE:  drop cascades to view unhealthy_shard_count
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT create_distributed_table('test_table_2','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT citus.mitmproxy('conn.kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
@@ -297,9 +297,9 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 5: "9,10"
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
@@ -308,7 +308,7 @@ SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
 	ON pdsd.shardid = pds.shardid
 	WHERE pds.logicalrelid = 'test_table_2'::regclass
 	ORDER BY shardid, nodeport;
- logicalrelid | shardid | shardstate 
+ logicalrelid | shardid | shardstate
 ---------------------------------------------------------------------
  test_table_2 | 1710004 |          3
  test_table_2 | 1710004 |          1
@@ -324,17 +324,17 @@ SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
 DROP TABLE test_table_2;
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT create_distributed_table('test_table_2','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
--- Kill the connection when we try to start the COPY 
+-- Kill the connection when we try to start the COPY
 -- The query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
@@ -344,9 +344,9 @@ ERROR:  server closed the connection unexpectedly
 CONTEXT:  while executing command on localhost:xxxxx
 COPY test_table_2, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
@@ -355,7 +355,7 @@ SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
 	ON pdsd.shardid = pds.shardid
 	WHERE pds.logicalrelid = 'test_table_2'::regclass
 	ORDER BY shardid, nodeport;
- logicalrelid | shardid | shardstate 
+ logicalrelid | shardid | shardstate
 ---------------------------------------------------------------------
  test_table_2 | 1710008 |          1
  test_table_2 | 1710008 |          1
@@ -371,26 +371,26 @@ SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
 DROP TABLE test_table_2;
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT create_distributed_table('test_table_2','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- When kill on copying data, it will be rollbacked and placements won't be labaled as invalid.
 -- Note that now we sent data to shard xxxxx, yet it is not marked as invalid.
 -- You can check the issue about this behaviour: https://github.com/citusdata/citus/issues/1933
 SELECT citus.mitmproxy('conn.onCopyData().kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
 ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
@@ -399,7 +399,7 @@ SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
 	ON pdsd.shardid = pds.shardid
 	WHERE pds.logicalrelid = 'test_table_2'::regclass
 	ORDER BY shardid, nodeport;
- logicalrelid | shardid | shardstate 
+ logicalrelid | shardid | shardstate
 ---------------------------------------------------------------------
  test_table_2 | 1710012 |          1
  test_table_2 | 1710012 |          1

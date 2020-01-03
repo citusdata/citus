@@ -64,37 +64,37 @@ CREATE OR REPLACE FUNCTION set_local_multi_shard_modify_mode_to_sequential()
 -- disbable 2PC recovery since our tests will check that
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
- pg_reload_conf 
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
 
 CREATE TABLE test_table(a int, b int);
 SELECT create_distributed_table('test_table', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- not useful if not in transaction
 SELECT set_local_multi_shard_modify_mode_to_sequential();
- set_local_multi_shard_modify_mode_to_sequential 
+ set_local_multi_shard_modify_mode_to_sequential
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- we should see #worker transactions
 -- when sequential mode is used
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 ALTER TABLE test_table ADD CONSTRAINT a_check CHECK(a > 0);
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -103,14 +103,14 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 -- when parallel mode is used
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 ALTER TABLE test_table ADD CONSTRAINT b_check CHECK(b > 0);
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -119,14 +119,14 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 ALTER TABLE test_table ADD CONSTRAINT c_check CHECK(a > 0);
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -134,37 +134,37 @@ SELECT no_distributed_2PCs();
 SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 ALTER TABLE test_table ADD CONSTRAINT d_check CHECK(a > 0);
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
 
 CREATE TABLE ref_test(a int);
 SELECT create_reference_table('ref_test');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.multi_shard_commit_protocol TO '1pc';
 -- reference tables should always use 2PC
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX ref_test_seq_index ON ref_test(a);
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -172,14 +172,14 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 -- reference tables should always use 2PC
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX ref_test_seq_index_2 ON ref_test(a);
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -189,37 +189,37 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table_rep_2 (a int);
 SELECT create_distributed_table('test_table_rep_2', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- 1PC should never use 2PC with rep > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX test_table_rep_2_i_1 ON test_table_rep_2(a);
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX test_table_rep_2_i_2 ON test_table_rep_2(a);
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -228,28 +228,28 @@ SELECT no_distributed_2PCs();
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX test_table_rep_2_i_3 ON test_table_rep_2(a);
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 CREATE INDEX test_table_rep_2_i_4 ON test_table_rep_2(a);
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -259,7 +259,7 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -267,7 +267,7 @@ SELECT recover_prepared_transactions();
 CREATE INDEX CONCURRENTLY test_table_rep_2_i_5 ON test_table_rep_2(a);
 -- we shouldn't see any distributed transactions
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -275,7 +275,7 @@ SELECT no_distributed_2PCs();
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -283,7 +283,7 @@ SELECT recover_prepared_transactions();
 CREATE INDEX CONCURRENTLY test_table_rep_2_i_6 ON test_table_rep_2(a);
 -- we shouldn't see any distributed transactions
 SELECT no_distributed_2PCs();
- no_distributed_2pcs 
+ no_distributed_2pcs
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -293,22 +293,22 @@ CREATE TABLE test_seq_truncate (a int);
 INSERT INTO test_seq_truncate SELECT i FROM generate_series(0, 100) i;
 SELECT create_distributed_table('test_seq_truncate', 'a');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- with parallel modification mode, we should see #shards records
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 TRUNCATE test_seq_truncate;
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -316,14 +316,14 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 -- with sequential modification mode, we should see #primary worker records
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 TRUNCATE test_seq_truncate;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -332,36 +332,36 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 CREATE TABLE test_seq_truncate_rep_2 (a int);
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('test_seq_truncate_rep_2', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO test_seq_truncate_rep_2 SELECT i FROM generate_series(0, 100) i;
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 TRUNCATE test_seq_truncate_rep_2;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 TRUNCATE test_seq_truncate_rep_2;
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -371,22 +371,22 @@ CREATE TABLE multi_shard_modify_test (
         t_name varchar(25) not null,
         t_value integer not null);
 SELECT create_distributed_table('multi_shard_modify_test', 't_key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- with parallel modification mode, we should see #shards records
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -394,14 +394,14 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 -- with sequential modification mode, we should see #primary worker records
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 DELETE FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -412,16 +412,16 @@ BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
     -- now switch to sequential mode to enable a successful TRUNCATE
     SELECT set_local_multi_shard_modify_mode_to_sequential();
- set_local_multi_shard_modify_mode_to_sequential 
+ set_local_multi_shard_modify_mode_to_sequential
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     TRUNCATE multi_shard_modify_test;
 COMMIT;
 -- see that all the data successfully removed
 SELECT count(*) FROM multi_shard_modify_test;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -430,28 +430,28 @@ SELECT count(*) FROM multi_shard_modify_test;
 -- with sequential modification mode, we should see #primary worker records
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
 SELECT distributed_2PCs_are_equal_to_placement_count();
- distributed_2pcs_are_equal_to_placement_count 
+ distributed_2pcs_are_equal_to_placement_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -462,16 +462,16 @@ BEGIN;
     INSERT INTO multi_shard_modify_test VALUES (1,'1',1), (2,'2',2), (3,'3',3), (4,'4',4);
     -- now switch to sequential mode to enable a successful INSERT .. SELECT
     SELECT set_local_multi_shard_modify_mode_to_sequential();
- set_local_multi_shard_modify_mode_to_sequential 
+ set_local_multi_shard_modify_mode_to_sequential
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     INSERT INTO multi_shard_modify_test SELECT * FROM multi_shard_modify_test;
 COMMIT;
 -- see that all the data successfully inserted
 SELECT count(*) FROM multi_shard_modify_test;
- count 
+ count
 ---------------------------------------------------------------------
    210
 (1 row)
@@ -479,14 +479,14 @@ SELECT count(*) FROM multi_shard_modify_test;
 ALTER SYSTEM SET citus.recover_2pc_interval TO DEFAULT;
 SET citus.shard_replication_factor TO DEFAULT;
 SELECT pg_reload_conf();
- pg_reload_conf 
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- The following tests are added to test if create_distributed_table honors sequential mode
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -496,16 +496,16 @@ CREATE TABLE test_seq_multi_shard_update(a int, b int);
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_multi_shard_update', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     INSERT INTO test_seq_multi_shard_update VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
     DELETE FROM test_seq_multi_shard_update WHERE b < 2;
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -513,7 +513,7 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 DROP TABLE test_seq_multi_shard_update;
 -- Check if truncate works properly after create_distributed_table in sequential mode
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -522,16 +522,16 @@ CREATE TABLE test_seq_truncate_after_create(a int, b int);
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_truncate_after_create', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     INSERT INTO test_seq_truncate_after_create VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
     TRUNCATE test_seq_truncate_after_create;
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -539,7 +539,7 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 DROP TABLE test_seq_truncate_after_create;
 -- Check if drop table works properly after create_distributed_table in sequential mode
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -548,22 +548,22 @@ CREATE TABLE test_seq_drop_table(a int, b int);
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_drop_table', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     DROP TABLE test_seq_drop_table;
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- Check if copy errors out properly after create_distributed_table in sequential mode
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -572,15 +572,15 @@ CREATE TABLE test_seq_copy(a int, b int);
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_copy', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     \COPY test_seq_copy FROM STDIN DELIMITER AS ',';
 ROLLBACK;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  f
 (1 row)
@@ -588,7 +588,7 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 DROP TABLE test_seq_copy;
 -- Check if DDL + CREATE INDEX works properly after create_distributed_table in sequential mode
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -597,9 +597,9 @@ CREATE TABLE test_seq_ddl_index(a int, b int);
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     SELECT create_distributed_table('test_seq_ddl_index', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     INSERT INTO test_seq_ddl_index VALUES (0, 0), (1, 0), (2, 0), (3, 0), (4, 0);
@@ -607,7 +607,7 @@ BEGIN;
     CREATE INDEX idx ON test_seq_ddl_index(c);
 COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
- distributed_2pcs_are_equal_to_worker_count 
+ distributed_2pcs_are_equal_to_worker_count
 ---------------------------------------------------------------------
  t
 (1 row)

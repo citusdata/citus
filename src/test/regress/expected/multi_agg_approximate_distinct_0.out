@@ -9,14 +9,14 @@ AS create_cmd FROM pg_available_extensions()
 WHERE name = 'hll'
 \gset
 :create_cmd;
- hll_present 
+ hll_present
 ---------------------------------------------------------------------
  f
 (1 row)
 
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
@@ -82,9 +82,9 @@ CREATE TABLE test_count_distinct_schema.nation_hash(
     n_comment varchar(152)
 );
 SELECT create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \copy test_count_distinct_schema.nation_hash FROM STDIN with delimiter '|';
@@ -102,14 +102,14 @@ SET search_path TO public;
 -- If we have an order by on count(distinct) that we intend to push down to
 -- worker nodes, we need to error out. Otherwise, we are fine.
 SET citus.limit_clause_row_fetch_count = 1000;
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY count_distinct
 	LIMIT 10;
 ERROR:  cannot compute count (distinct) approximation
 HINT:  You need to have the hll extension loaded.
-SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
+SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY total
@@ -130,7 +130,7 @@ HINT:  You need to have the hll extension loaded.
 -- Check that we can revert config and disable count(distinct) approximations
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)

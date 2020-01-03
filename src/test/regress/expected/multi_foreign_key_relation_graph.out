@@ -13,81 +13,81 @@ CREATE FUNCTION get_referenced_relation_id_list(Oid)
 -- Simple case with distributed tables
 CREATE TABLE dtt1(id int PRIMARY KEY);
 SELECT create_distributed_table('dtt1','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE dtt2(id int PRIMARY KEY REFERENCES dtt1(id));
 SELECT create_distributed_table('dtt2','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE dtt3(id int PRIMARY KEY REFERENCES dtt2(id));
 SELECT create_distributed_table('dtt3','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt1'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt2'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
 (1 row)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
  dtt2
 (2 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt1'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  dtt2
  dtt3
 (2 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt2'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  dtt3
 (1 row)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 CREATE TABLE dtt4(id int PRIMARY KEY);
 SELECT create_distributed_table('dtt4', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 ALTER TABLE dtt4 ADD CONSTRAINT dtt4_fkey FOREIGN KEY (id) REFERENCES dtt3(id);
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
  dtt2
@@ -95,30 +95,30 @@ SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id
 (3 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt1'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt2'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
 (1 row)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
  dtt2
 (2 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt1'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  dtt2
  dtt3
@@ -126,38 +126,38 @@ SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_
 (3 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt2'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  dtt3
  dtt4
 (2 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  dtt4
 (1 row)
 
 ALTER TABLE dtt4 DROP CONSTRAINT dtt4_fkey;
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  dtt1
  dtt2
 (2 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt3'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('dtt4'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -169,33 +169,33 @@ CREATE TABLE test_3 (id int UNIQUE);
 CREATE TABLE test_4 (id int UNIQUE);
 CREATE TABLE test_5 (id int UNIQUE);
 SELECT create_distributed_Table('test_1', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_Table('test_2', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_Table('test_3', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_Table('test_4', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_Table('test_5', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE VIEW referential_integrity_summary AS
@@ -218,42 +218,42 @@ CREATE VIEW referential_integrity_summary AS
 BEGIN;
     ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
- 3 | test_3     |                       | 
- 4 | test_4     |                       | 
- 5 | test_5     |                       | 
+ 3 | test_3     |                       |
+ 4 | test_4     |                       |
+ 5 | test_5     |                       |
 (5 rows)
 
     ALTER TABLE test_3 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_2(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3}       | 
+ 1 | test_1     | {test_2,test_3}       |
  2 | test_2     | {test_3}              | {test_1}
  3 | test_3     |                       | {test_2,test_1}
- 4 | test_4     |                       | 
- 5 | test_5     |                       | 
+ 4 | test_4     |                       |
+ 5 | test_5     |                       |
 (5 rows)
 
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations  |  referenced_relations  
+ n | table_name | referencing_relations  |  referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4} | 
+ 1 | test_1     | {test_2,test_3,test_4} |
  2 | test_2     | {test_3,test_4}        | {test_1}
  3 | test_3     | {test_4}               | {test_2,test_1}
  4 | test_4     |                        | {test_3,test_2,test_1}
- 5 | test_5     |                        | 
+ 5 | test_5     |                        |
 (5 rows)
 
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name |     referencing_relations     |     referenced_relations      
+ n | table_name |     referencing_relations     |     referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4,test_5} | 
+ 1 | test_1     | {test_2,test_3,test_4,test_5} |
  2 | test_2     | {test_3,test_4,test_5}        | {test_1}
  3 | test_3     | {test_4,test_5}               | {test_2,test_1}
  4 | test_4     | {test_5}                      | {test_3,test_2,test_1}
@@ -265,42 +265,42 @@ ROLLBACK;
 BEGIN;
     ALTER TABLE test_2 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_1(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
- 3 | test_3     |                       | 
- 4 | test_4     |                       | 
- 5 | test_5     |                       | 
+ 3 | test_3     |                       |
+ 4 | test_4     |                       |
+ 5 | test_5     |                       |
 (5 rows)
 
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
- 3 | test_3     | {test_4}              | 
+ 3 | test_3     | {test_4}              |
  4 | test_4     |                       | {test_3}
- 5 | test_5     |                       | 
+ 5 | test_5     |                       |
 (5 rows)
 
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
- 3 | test_3     | {test_4,test_5}       | 
+ 3 | test_3     | {test_4,test_5}       |
  4 | test_4     | {test_5}              | {test_3}
  5 | test_5     |                       | {test_4,test_3}
 (5 rows)
 
     ALTER TABLE test_3 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_2(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name |     referencing_relations     |     referenced_relations      
+ n | table_name |     referencing_relations     |     referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4,test_5} | 
+ 1 | test_1     | {test_2,test_3,test_4,test_5} |
  2 | test_2     | {test_3,test_4,test_5}        | {test_1}
  3 | test_3     | {test_4,test_5}               | {test_2,test_1}
  4 | test_4     | {test_5}                      | {test_3,test_2,test_1}
@@ -315,9 +315,9 @@ BEGIN;
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name |     referencing_relations     |     referenced_relations      
+ n | table_name |     referencing_relations     |     referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4,test_5} | 
+ 1 | test_1     | {test_2,test_3,test_4,test_5} |
  2 | test_2     | {test_3,test_4,test_5}        | {test_1}
  3 | test_3     | {test_4,test_5}               | {test_2,test_1}
  4 | test_4     | {test_5}                      | {test_3,test_2,test_1}
@@ -326,11 +326,11 @@ BEGIN;
 
     ALTER TABLE test_3 DROP CONSTRAINT fkey_1;
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
- 3 | test_3     | {test_4,test_5}       | 
+ 3 | test_3     | {test_4,test_5}       |
  4 | test_4     | {test_5}              | {test_3}
  5 | test_5     |                       | {test_4,test_3}
 (5 rows)
@@ -341,51 +341,51 @@ DROP TABLE test_1, test_2, test_3, test_4, test_5 CASCADE;
 BEGIN;
     CREATE TABLE test_1 (id int UNIQUE);
     SELECT create_distributed_Table('test_1', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     CREATE TABLE test_2 (id int UNIQUE, FOREIGN KEY(id) REFERENCES test_1(id));
     SELECT create_distributed_Table('test_2', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
 (2 rows)
 
     CREATE TABLE test_3 (id int UNIQUE, FOREIGN KEY(id) REFERENCES test_2(id));
     SELECT create_distributed_Table('test_3', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3}       | 
+ 1 | test_1     | {test_2,test_3}       |
  2 | test_2     | {test_3}              | {test_1}
  3 | test_3     |                       | {test_2,test_1}
 (3 rows)
 
     CREATE TABLE test_4 (id int UNIQUE, FOREIGN KEY(id) REFERENCES test_3(id));
     SELECT create_distributed_Table('test_4', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations  |  referenced_relations  
+ n | table_name | referencing_relations  |  referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4} | 
+ 1 | test_1     | {test_2,test_3,test_4} |
  2 | test_2     | {test_3,test_4}        | {test_1}
  3 | test_3     | {test_4}               | {test_2,test_1}
  4 | test_4     |                        | {test_3,test_2,test_1}
@@ -393,15 +393,15 @@ BEGIN;
 
     CREATE TABLE test_5 (id int UNIQUE, FOREIGN KEY(id) REFERENCES test_4(id));
     SELECT create_distributed_Table('test_5', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT * FROM referential_integrity_summary;
- n | table_name |     referencing_relations     |     referenced_relations      
+ n | table_name |     referencing_relations     |     referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4,test_5} | 
+ 1 | test_1     | {test_2,test_3,test_4,test_5} |
  2 | test_2     | {test_3,test_4,test_5}        | {test_1}
  3 | test_3     | {test_4,test_5}               | {test_2,test_1}
  4 | test_4     | {test_5}                      | {test_3,test_2,test_1}
@@ -417,9 +417,9 @@ BEGIN;
     ALTER TABLE test_4 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_3(id);
     ALTER TABLE test_5 ADD CONSTRAINT fkey_1 FOREIGN KEY(id) REFERENCES test_4(id);
     SELECT * FROM referential_integrity_summary;
- n | table_name |     referencing_relations     |     referenced_relations      
+ n | table_name |     referencing_relations     |     referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2,test_3,test_4,test_5} | 
+ 1 | test_1     | {test_2,test_3,test_4,test_5} |
  2 | test_2     | {test_3,test_4,test_5}        | {test_1}
  3 | test_3     | {test_4,test_5}               | {test_2,test_1}
  4 | test_4     | {test_5}                      | {test_3,test_2,test_1}
@@ -431,9 +431,9 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to constraint test_4_id_fkey on table test_4
 drop cascades to constraint fkey_1 on table test_4
     SELECT * FROM referential_integrity_summary;
- n | table_name | referencing_relations | referenced_relations 
+ n | table_name | referencing_relations | referenced_relations
 ---------------------------------------------------------------------
- 1 | test_1     | {test_2}              | 
+ 1 | test_1     | {test_2}              |
  2 | test_2     |                       | {test_1}
 (2 rows)
 
@@ -445,56 +445,56 @@ BEGIN;
     SET search_path TO fkey_graph, fkey_intermediate_schema_1, fkey_intermediate_schema_2;
     CREATE TABLE fkey_intermediate_schema_1.test_6(id int PRIMARY KEY);
     SELECT create_distributed_table('fkey_intermediate_schema_1.test_6', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     CREATE TABLE fkey_intermediate_schema_2.test_7(id int PRIMARY KEY REFERENCES fkey_intermediate_schema_1.test_6(id));
     SELECT create_distributed_table('fkey_intermediate_schema_2.test_7','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     CREATE TABLE fkey_intermediate_schema_1.test_8(id int PRIMARY KEY REFERENCES fkey_intermediate_schema_2.test_7(id));
     SELECT create_distributed_table('fkey_intermediate_schema_1.test_8', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  test_7
  test_8
 (2 rows)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  test_8
 (1 row)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  test_6
 (1 row)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  test_6
  test_7
@@ -505,22 +505,22 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table test_7
 drop cascades to constraint test_8_id_fkey on table test_8
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -531,56 +531,56 @@ BEGIN;
     SET search_path TO fkey_graph, fkey_intermediate_schema_1, fkey_intermediate_schema_2;
     CREATE TABLE fkey_intermediate_schema_1.test_6(id int PRIMARY KEY);
     SELECT create_distributed_table('fkey_intermediate_schema_1.test_6', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     CREATE TABLE fkey_intermediate_schema_2.test_7(id int PRIMARY KEY REFERENCES fkey_intermediate_schema_1.test_6(id));
     SELECT create_distributed_table('fkey_intermediate_schema_2.test_7','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     CREATE TABLE fkey_intermediate_schema_1.test_8(id int PRIMARY KEY REFERENCES fkey_intermediate_schema_2.test_7(id));
     SELECT create_distributed_table('fkey_intermediate_schema_1.test_8', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  test_7
  test_8
 (2 rows)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
  test_8
 (1 row)
 
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_6'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  test_6
 (1 row)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_8'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
  test_6
  test_7
@@ -592,12 +592,12 @@ DETAIL:  drop cascades to table test_6
 drop cascades to constraint test_7_id_fkey on table test_7
 drop cascades to table test_8
     SELECT get_referencing_relation_id_list::regclass FROM get_referencing_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referencing_relation_id_list 
+ get_referencing_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT get_referenced_relation_id_list::regclass FROM get_referenced_relation_id_list('test_7'::regclass) ORDER BY 1;
- get_referenced_relation_id_list 
+ get_referenced_relation_id_list
 ---------------------------------------------------------------------
 (0 rows)
 

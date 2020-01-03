@@ -24,15 +24,15 @@ SELECT citus_add_rebalance_strategy(
         0.5,
         0.2
     );
- citus_add_rebalance_strategy 
+ citus_add_rebalance_strategy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT citus_set_default_rebalance_strategy('custom_strategy');
- citus_set_default_rebalance_strategy 
+ citus_set_default_rebalance_strategy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ENABLE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger;

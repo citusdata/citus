@@ -3,299 +3,299 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-insert-into-select-conflict-update s2-begin s2-update s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	SET citus.shard_replication_factor to 1;
 	BEGIN;
 
-step s1-insert-into-select-conflict-update: 
+step s1-insert-into-select-conflict-update:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
 
-col_1          col_2          
+col_1          col_2
 
-1              1              
-2              2              
-3              3              
-4              4              
-5              5              
-step s2-begin: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-begin:
 	BEGIN;
 
-step s2-update: 
+step s2-update:
 	UPDATE target_table SET col_2 = 5;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-update: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-insert-into-select-conflict-do-nothing s2-begin s2-delete s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	SET citus.shard_replication_factor to 1;
 	BEGIN;
 
-step s1-insert-into-select-conflict-do-nothing: 
+step s1-insert-into-select-conflict-do-nothing:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT DO NOTHING;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-delete: 
+step s2-delete:
 	DELETE FROM target_table;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-delete: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-insert-into-select-conflict-do-nothing s2-begin s2-insert-into-select-conflict-update s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	SET citus.shard_replication_factor to 1;
 	BEGIN;
 
-step s1-insert-into-select-conflict-do-nothing: 
+step s1-insert-into-select-conflict-do-nothing:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT DO NOTHING;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-insert-into-select-conflict-update: 
+step s2-insert-into-select-conflict-update:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-insert-into-select-conflict-update: <... completed>
-col_1          col_2          
+col_1          col_2
 
-1              1              
-2              2              
-3              3              
-4              4              
-5              5              
-step s2-commit: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-insert-into-select-conflict-update s2-begin s2-insert-into-select-conflict-update s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	SET citus.shard_replication_factor to 1;
 	BEGIN;
 
-step s1-insert-into-select-conflict-update: 
+step s1-insert-into-select-conflict-update:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
 
-col_1          col_2          
+col_1          col_2
 
-1              1              
-2              2              
-3              3              
-4              4              
-5              5              
-step s2-begin: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-begin:
 	BEGIN;
 
-step s2-insert-into-select-conflict-update: 
+step s2-insert-into-select-conflict-update:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-insert-into-select-conflict-update: <... completed>
-col_1          col_2          
+col_1          col_2
 
-1              1              
-2              2              
-3              3              
-4              4              
-5              5              
-step s2-commit: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-insert-into-select-conflict-update s2-begin s2-insert-into-select-conflict-do-nothing s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	SET citus.shard_replication_factor to 1;
 	BEGIN;
 
-step s1-insert-into-select-conflict-update: 
+step s1-insert-into-select-conflict-update:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
 
-col_1          col_2          
+col_1          col_2
 
-1              1              
-2              2              
-3              3              
-4              4              
-5              5              
-step s2-begin: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-begin:
 	BEGIN;
 
-step s2-insert-into-select-conflict-do-nothing: 
+step s2-insert-into-select-conflict-do-nothing:
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT DO NOTHING;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-insert-into-select-conflict-do-nothing: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin-replication-factor-2 s1-insert-into-select-conflict-update-replication-factor-2 s2-begin-replication-factor-2 s2-insert-into-select-conflict-update-replication-factor-2 s1-commit s2-commit
 create_distributed_table
 
-               
-step s1-begin-replication-factor-2: 
+
+step s1-begin-replication-factor-2:
 	SET citus.shard_replication_factor to 2;
 	BEGIN;
 
-step s1-insert-into-select-conflict-update-replication-factor-2: 
+step s1-insert-into-select-conflict-update-replication-factor-2:
 	INSERT INTO target_table_2
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
 
-col_1          col_2          col_3          
+col_1          col_2          col_3
 
-1              1                             
-2              2                             
-3              3                             
-4              4                             
-5              5                             
-step s2-begin-replication-factor-2: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-begin-replication-factor-2:
 	SET citus.shard_replication_factor to 2;
 	BEGIN;
 
-step s2-insert-into-select-conflict-update-replication-factor-2: 
+step s2-insert-into-select-conflict-update-replication-factor-2:
 	INSERT INTO target_table_2
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table
 		LIMIT 5
 	) as foo
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-insert-into-select-conflict-update-replication-factor-2: <... completed>
-col_1          col_2          col_3          
+col_1          col_2          col_3
 
-1              1                             
-2              2                             
-3              3                             
-4              4                             
-5              5                             
-step s2-commit: 
+1              1
+2              2
+3              3
+4              4
+5              5
+step s2-commit:
 	COMMIT;
 

@@ -35,7 +35,7 @@ DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
@@ -63,7 +63,7 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
@@ -114,7 +114,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
- count 
+ count
 ---------------------------------------------------------------------
    125
 (1 row)

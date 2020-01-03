@@ -145,75 +145,75 @@ CREATE TABLE supplier (
     PRIMARY KEY ( su_suppkey )
 );
 SELECT create_distributed_table('order_line','ol_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('new_order','no_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('stock','s_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('oorder','o_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('history','h_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('customer','c_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('district','d_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('warehouse','w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('item');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('region');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('nation');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('supplier');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 TRUNCATE order_line, new_order, stock, oorder, history, customer, district, warehouse, item, region, nation, supplier; -- for easy copy in development
@@ -245,7 +245,7 @@ FROM order_line
 WHERE ol_delivery_d > '2007-01-02 00:00:00.000000'
 GROUP BY ol_number
 ORDER BY ol_number;
- ol_number | sum_qty | sum_amount |        avg_qty         |       avg_amount       | count_order 
+ ol_number | sum_qty | sum_amount |        avg_qty         |       avg_amount       | count_order
 ---------------------------------------------------------------------
          0 |       0 |       0.00 | 0.00000000000000000000 | 0.00000000000000000000 |           1
          1 |       1 |       1.00 | 1.00000000000000000000 | 1.00000000000000000000 |           1
@@ -301,10 +301,10 @@ ORDER BY
     n_name,
     su_name,
     i_id;
- su_suppkey |          su_name          |          n_name           | i_id |  i_name  | su_address |    su_phone     |                                              su_comment                                               
+ su_suppkey |          su_name          |          n_name           | i_id |  i_name  | su_address |    su_phone     |                                              su_comment
 ---------------------------------------------------------------------
-          9 | abc                       | Germany                   |    3 | Keyboard | def        | ghi             | jkl                                                                                                  
-          4 | abc                       | The Netherlands           |    2 | Keyboard | def        | ghi             | jkl                                                                                                  
+          9 | abc                       | Germany                   |    3 | Keyboard | def        | ghi             | jkl
+          4 | abc                       | The Netherlands           |    2 | Keyboard | def        | ghi             | jkl
 (2 rows)
 
 -- Query 3
@@ -338,7 +338,7 @@ GROUP BY
 ORDER BY
     revenue DESC,
     o_entry_d;
- ol_o_id | ol_w_id | ol_d_id | revenue |        o_entry_d         
+ ol_o_id | ol_w_id | ol_d_id | revenue |        o_entry_d
 ---------------------------------------------------------------------
       10 |      10 |      10 |   10.00 | Fri Oct 17 00:00:00 2008
        9 |       9 |       9 |    9.00 | Fri Oct 17 00:00:00 2008
@@ -369,7 +369,7 @@ WHERE o_entry_d >= '2007-01-02 00:00:00.000000'
                 AND ol_delivery_d >= o_entry_d)
 GROUP BY o_ol_cnt
 ORDER BY o_ol_cnt;
- o_ol_cnt | order_count 
+ o_ol_cnt | order_count
 ---------------------------------------------------------------------
         1 |          11
 (1 row)
@@ -406,7 +406,7 @@ WHERE c_id = o_c_id
   AND o_entry_d >= '2007-01-02 00:00:00.000000'
 GROUP BY n_name
 ORDER BY revenue DESC;
-          n_name           | revenue 
+          n_name           | revenue
 ---------------------------------------------------------------------
  Germany                   |    3.00
  The Netherlands           |    2.00
@@ -419,7 +419,7 @@ FROM order_line
 WHERE ol_delivery_d >= '1999-01-01 00:00:00.000000'
   AND ol_delivery_d < '2020-01-01 00:00:00.000000'
   AND ol_quantity BETWEEN 1 AND 100000;
- revenue 
+ revenue
 ---------------------------------------------------------------------
    55.00
 (1 row)
@@ -462,7 +462,7 @@ ORDER BY
     su_nationkey,
     cust_nation,
     l_year;
- supp_nation | cust_nation | l_year | revenue 
+ supp_nation | cust_nation | l_year | revenue
 ---------------------------------------------------------------------
            9 | C           |   2008 |    3.00
 (1 row)
@@ -501,7 +501,7 @@ WHERE i_id = s_i_id
   AND i_id = ol_i_id
 GROUP BY extract(YEAR FROM o_entry_d)
 ORDER BY l_year;
- l_year |       mkt_share        
+ l_year |       mkt_share
 ---------------------------------------------------------------------
    2008 | 0.50000000000000000000
 (1 row)
@@ -533,7 +533,7 @@ GROUP BY
 ORDER BY
     n_name,
     l_year DESC;
-          n_name           | l_year | sum_profit 
+          n_name           | l_year | sum_profit
 ---------------------------------------------------------------------
  Germany                   |   2008 |       3.00
  The Netherlands           |   2008 |       2.00
@@ -569,19 +569,19 @@ GROUP BY
     c_phone,
     n_name
 ORDER BY revenue DESC;
- c_id | c_last | revenue |  c_city   |     c_phone      |          n_name           
+ c_id | c_last | revenue |  c_city   |     c_phone      |          n_name
 ---------------------------------------------------------------------
-   10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia                 
-    9 | John   |    9.00 | Some City | +1 000 0000000   | Cambodia                 
-    8 | John   |    8.00 | Some City | +1 000 0000000   | Cambodia                 
-    7 | John   |    7.00 | Some City | +1 000 0000000   | Cambodia                 
-    6 | John   |    6.00 | Some City | +1 000 0000000   | Cambodia                 
-    5 | John   |    5.00 | Some City | +1 000 0000000   | Cambodia                 
-    4 | John   |    4.00 | Some City | +1 000 0000000   | Cambodia                 
-    3 | John   |    3.00 | Some City | +1 000 0000000   | Cambodia                 
-    2 | John   |    2.00 | Some City | +1 000 0000000   | Cambodia                 
-    1 | John   |    1.00 | Some City | +1 000 0000000   | Cambodia                 
-    0 | John   |    0.00 | Some City | +1 000 0000000   | Cambodia                 
+   10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia
+    9 | John   |    9.00 | Some City | +1 000 0000000   | Cambodia
+    8 | John   |    8.00 | Some City | +1 000 0000000   | Cambodia
+    7 | John   |    7.00 | Some City | +1 000 0000000   | Cambodia
+    6 | John   |    6.00 | Some City | +1 000 0000000   | Cambodia
+    5 | John   |    5.00 | Some City | +1 000 0000000   | Cambodia
+    4 | John   |    4.00 | Some City | +1 000 0000000   | Cambodia
+    3 | John   |    3.00 | Some City | +1 000 0000000   | Cambodia
+    2 | John   |    2.00 | Some City | +1 000 0000000   | Cambodia
+    1 | John   |    1.00 | Some City | +1 000 0000000   | Cambodia
+    0 | John   |    0.00 | Some City | +1 000 0000000   | Cambodia
 (11 rows)
 
 -- Query 11
@@ -606,7 +606,7 @@ HAVING sum(s_order_cnt) >
             AND su_nationkey = n_nationkey
             AND n_name = 'Germany')
 ORDER BY ordercount DESC;
- s_i_id | ordercount 
+ s_i_id | ordercount
 ---------------------------------------------------------------------
       3 |          3
 (1 row)
@@ -626,7 +626,7 @@ WHERE ol_w_id = o_w_id
   AND ol_delivery_d < '2020-01-01 00:00:00.000000'
 GROUP BY o_ol_cnt
 ORDER BY o_ol_cnt;
- o_ol_cnt | high_line_count | low_line_count 
+ o_ol_cnt | high_line_count | low_line_count
 ---------------------------------------------------------------------
         1 |               2 |              9
 (1 row)
@@ -649,7 +649,7 @@ GROUP BY c_count
 ORDER BY
     custdist DESC,
     c_count DESC;
- c_count | custdist 
+ c_count | custdist
 ---------------------------------------------------------------------
        0 |        9
        1 |        2
@@ -664,7 +664,7 @@ FROM
 WHERE ol_i_id = i_id
   AND ol_delivery_d >= '2007-01-02 00:00:00.000000'
   AND ol_delivery_d < '2020-01-02 00:00:00.000000';
-     promo_revenue      
+     promo_revenue
 ---------------------------------------------------------------------
  0.00000000000000000000
 (1 row)
@@ -693,7 +693,7 @@ FROM
 WHERE su_suppkey = supplier_no
   AND total_revenue = (SELECT max(total_revenue) FROM revenue)
 ORDER BY su_suppkey;
- su_suppkey |          su_name          | su_address |    su_phone     | total_revenue 
+ su_suppkey |          su_name          | su_address |    su_phone     | total_revenue
 ---------------------------------------------------------------------
           9 | abc                       | def        | ghi             |          3.00
 (1 row)
@@ -718,7 +718,7 @@ GROUP BY
     substr(i_data, 1, 3),
     i_price
 ORDER BY supplier_cnt DESC;
-  i_name  | brand | i_price | supplier_cnt 
+  i_name  | brand | i_price | supplier_cnt
 ---------------------------------------------------------------------
  Keyboard | co    |   50.00 |            3
 (1 row)
@@ -738,7 +738,7 @@ FROM
        AND ol_i_id = i_id
      GROUP BY i_id) t
 WHERE ol_i_id = t.i_id;
-     avg_yearly      
+     avg_yearly
 ---------------------------------------------------------------------
  27.5000000000000000
 (1 row)
@@ -775,7 +775,7 @@ HAVING sum(ol_amount) > 5 -- was 200, but thats too big for the dataset
 ORDER BY
     sum(ol_amount) DESC,
     o_entry_d;
- c_last | o_id |        o_entry_d         | o_ol_cnt |  sum  
+ c_last | o_id |        o_entry_d         | o_ol_cnt |  sum
 ---------------------------------------------------------------------
  John   |   10 | Fri Oct 17 00:00:00 2008 |        1 | 10.00
  John   |    9 | Fri Oct 17 00:00:00 2008 |        1 |  9.00
@@ -808,7 +808,7 @@ WHERE (     ol_i_id = i_id
         AND ol_quantity <= 10
         AND i_price BETWEEN 1 AND 400000
         AND ol_w_id IN (1,5,3));
- revenue 
+ revenue
 ---------------------------------------------------------------------
     7.00
 (1 row)
@@ -837,7 +837,7 @@ WHERE su_suppkey in
   AND su_nationkey = n_nationkey
   AND n_name = 'Germany'
 ORDER BY su_name;
-          su_name          | su_address 
+          su_name          | su_address
 ---------------------------------------------------------------------
  abc                       | def
 (1 row)
@@ -872,7 +872,7 @@ GROUP BY su_name
 ORDER BY
     numwait desc,
     su_name;
- su_name | numwait 
+ su_name | numwait
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -895,7 +895,7 @@ WHERE substr(c_phone,1,1) in ('1','2','3','4','5','6','7')
                     AND o_d_id = c_d_id)
 GROUP BY substr(c_state,1,1)
 ORDER BY substr(c_state,1,1);
- country | numcust | totacctbal 
+ country | numcust | totacctbal
 ---------------------------------------------------------------------
 (0 rows)
 

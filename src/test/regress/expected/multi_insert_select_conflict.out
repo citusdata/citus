@@ -4,51 +4,51 @@ SET citus.next_shard_id TO 1900000;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
 CREATE TABLE source_table_1(col_1 int primary key, col_2 int, col_3 int);
 SELECT create_distributed_table('source_table_1','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_1 VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
 CREATE TABLE source_table_2(col_1 int, col_2 int, col_3 int);
 SELECT create_distributed_table('source_table_2','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
 SET client_min_messages to debug1;
 -- Generate series directly on the coordinator and on conflict do nothing
-INSERT INTO target_table (col_1, col_2) 
-SELECT 
-	s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT
+	s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT DO NOTHING;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Generate series directly on the coordinator and on conflict update the target table
-INSERT INTO target_table (col_1, col_2) 
-SELECT s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Since partition columns do not match, pull the data to the coordinator
 -- and do not change conflicted values
 INSERT INTO target_table
-SELECT 
-	col_2, col_3 
+SELECT
+	col_2, col_3
 FROM
 	source_table_1
 ON CONFLICT DO NOTHING;
@@ -60,8 +60,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
-		col_2, col_3 
+	SELECT
+		col_2, col_3
 	FROM
 		source_table_1
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 RETURNING *
@@ -71,7 +71,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) inserted_table ORDER BY col_1
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     1
      2 |     2
@@ -82,11 +82,11 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 
 -- Subquery should be recursively planned due to the limit and do nothing on conflict
 INSERT INTO target_table
-SELECT 
+SELECT
 	col_1, col_2
 FROM (
-	SELECT 
-		col_1, col_2, col_3 
+	SELECT
+		col_1, col_2, col_3
 	FROM
 		source_table_1
 	LIMIT 5
@@ -101,11 +101,11 @@ DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT col_1, col_2 F
 -- Query is wrapped by CTE to return ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		SELECT 
-			col_1, col_2, col_3 
+		SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table_1
 		LIMIT 5
@@ -119,7 +119,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 16_1 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1 LIMIT 5
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     1
      2 |     2
@@ -131,11 +131,11 @@ DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT col_1, col_2 F
 -- Test with multiple subqueries. Query is wrapped by CTE to return ordered result.
 WITH inserted_table AS (
 	INSERT INTO target_table
-	SELECT 
+	SELECT
 		col_1, col_2
 	FROM (
-		(SELECT 
-			col_1, col_2, col_3 
+		(SELECT
+			col_1, col_2, col_3
 		FROM
 			source_table_1
 		LIMIT 5)
@@ -158,7 +158,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 20_2 for subquery SELECT col_1, col_2, col_3 FROM on_conflict.source_table_2 LIMIT 5
 DEBUG:  generating subplan 20_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
 DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('20_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     0
      2 |     0
@@ -191,7 +191,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  generating subplan 28_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
 DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     2
      2 |     3
@@ -219,7 +219,7 @@ DEBUG:  generating subplan 32_2 for CTE cte_2: SELECT col_1, col_2 FROM on_confl
 DEBUG:  generating subplan 32_3 for subquery SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte UNION SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2
 DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('32_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     2
      2 |     3
@@ -248,7 +248,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  generating subplan 39_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
 DEBUG:  generating subplan 39_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
 DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     2
      2 |     3
@@ -274,13 +274,13 @@ RESET client_min_messages;
 -- Following query is not supported since error checks of the subquery pushdown planner
 -- and insert select planner have not been unified. It should work after unifying them.
 WITH cte AS (
-	SELECT 
+	SELECT
 		col_1, col_2
-   	FROM 
+   	FROM
    		source_table_1
-) 
-INSERT INTO target_table 
-SELECT 
+)
+INSERT INTO target_table
+SELECT
 	source_table_1.col_1,
 	source_table_1.col_2
 FROM cte, source_table_1
@@ -290,9 +290,9 @@ DETAIL:  Select query cannot be pushed down to the worker.
 -- Tests with foreign key to reference table
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO test_ref_table VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
@@ -300,9 +300,9 @@ ALTER TABLE target_table ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES test
 BEGIN;
 	TRUNCATE test_ref_table CASCADE;
 NOTICE:  truncate cascades to table "target_table"
-	INSERT INTO 
-		target_table  
-	SELECT 
+	INSERT INTO
+		target_table
+	SELECT
 		col_2,
 		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
@@ -312,13 +312,13 @@ CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;
-	INSERT INTO 
+	INSERT INTO
 		target_table
-	SELECT 
-		col_2, 
-		col_1 
+	SELECT
+		col_2,
+		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     1
      2 |     1
@@ -333,26 +333,26 @@ ROLLBACK;
 BEGIN;
 	TRUNCATE test_ref_table CASCADE;
 NOTICE:  truncate cascades to table "target_table"
-	INSERT INTO 
+	INSERT INTO
  		source_table_1
-	SELECT 
+	SELECT
 		col_2,
-		col_1 
+		col_1
 	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
- col_1 | col_2 | col_3 
+ col_1 | col_2 | col_3
 ---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;
 BEGIN;
 	DELETE FROM test_ref_table;
-	INSERT INTO 
+	INSERT INTO
  		source_table_1
-	SELECT 
+	SELECT
  		col_2,
  		col_1
  	FROM target_table ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
- col_1 | col_2 | col_3 
+ col_1 | col_2 | col_3
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -360,32 +360,32 @@ ROLLBACK;
 -- INSERT .. SELECT with different column types
 CREATE TABLE source_table_3(col_1 numeric, col_2 numeric, col_3 numeric);
 SELECT create_distributed_table('source_table_3','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_3 VALUES(1,11,1),(2,22,2),(3,33,3),(4,44,4),(5,55,5);
 CREATE TABLE source_table_4(id int, arr_val text[]);
 SELECT create_distributed_table('source_table_4','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_4 VALUES(1, '{"abc","cde","efg"}'), (2, '{"xyz","tvu"}');
 CREATE TABLE target_table_2(id int primary key, arr_val char(10)[]);
 SELECT create_distributed_table('target_table_2','id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO target_table_2 VALUES(1, '{"abc","def","gyx"}');
 SET client_min_messages to debug1;
 INSERT INTO target_table
-SELECT 
-	col_1, col_2 
+SELECT
+	col_1, col_2
 FROM
 	source_table_3
 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
@@ -393,7 +393,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT * FROM target_table ORDER BY 1;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |    11
      2 |    22
@@ -408,13 +408,13 @@ SELECT * FROM target_table ORDER BY 1;
 (10 rows)
 
 INSERT INTO target_table_2
-SELECT 
-	* 
+SELECT
+	*
 FROM
 	source_table_4
 ON CONFLICT DO NOTHING;
 SELECT * FROM target_table_2 ORDER BY 1;
- id |                 arr_val                  
+ id |                 arr_val
 ---------------------------------------------------------------------
   1 | {"abc       ","def       ","gyx       "}
   2 | {"xyz       ","tvu       "}
@@ -426,45 +426,45 @@ SET citus.shard_replication_factor to 2;
 DROP TABLE target_table, source_table_1, source_table_2;
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
 CREATE TABLE source_table_1(col_1 int, col_2 int, col_3 int);
 SELECT create_distributed_table('source_table_1','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_1 VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
 CREATE TABLE source_table_2(col_1 int, col_2 int, col_3 int);
 SELECT create_distributed_table('source_table_2','col_1');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO source_table_2 VALUES(6,6,6),(7,7,7),(8,8,8),(9,9,9),(10,10,10);
 SET client_min_messages to debug1;
 -- Generate series directly on the coordinator and on conflict do nothing
-INSERT INTO target_table (col_1, col_2) 
-SELECT 
-	s, s 
-FROM 
-	generate_series(1,10) s 
+INSERT INTO target_table (col_1, col_2)
+SELECT
+	s, s
+FROM
+	generate_series(1,10) s
 ON CONFLICT DO NOTHING;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Test with multiple subqueries
 INSERT INTO target_table
-SELECT 
+SELECT
 	col_1, col_2
 FROM (
-	(SELECT 
-		col_1, col_2, col_3 
+	(SELECT
+		col_1, col_2, col_3
 	FROM
 		source_table_1
 	LIMIT 5)
@@ -485,7 +485,7 @@ DEBUG:  generating subplan 71_2 for subquery SELECT col_1, col_2, col_3 FROM on_
 DEBUG:  generating subplan 71_3 for subquery SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer) UNION SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)
 DEBUG:  Plan 71 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('71_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) foo
 SELECT * FROM target_table ORDER BY 1;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     0
      2 |     0
@@ -511,7 +511,7 @@ DEBUG:  generating subplan 77_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_
 DEBUG:  generating subplan 77_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
 DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2) citus_insert_select_subquery
 SELECT * FROM target_table ORDER BY 1;
- col_1 | col_2 
+ col_1 | col_2
 ---------------------------------------------------------------------
      1 |     2
      2 |     3

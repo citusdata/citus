@@ -1,783 +1,783 @@
 Parsed test spec with 3 sessions
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-insert s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-insert: 
+
+step s2-insert:
         SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-7              
-step s1-stop-connection: 
+7
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-multi-row s2-start-session-level-connection s2-begin-on-worker s2-insert s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert-multi-row: 
+
+step s1-insert-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60), (7, 70), (8, 80)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-insert: 
+
+step s2-insert:
         SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-9              
-step s1-stop-connection: 
+9
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-insert-multi-row s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-insert-multi-row: 
+
+step s2-insert-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60), (7, 70), (8, 80)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-9              
-step s1-stop-connection: 
+9
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-multi-row s2-start-session-level-connection s2-begin-on-worker s2-insert-multi-row s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert-multi-row: 
+
+step s1-insert-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60), (7, 70), (8, 80)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-insert-multi-row: 
+
+step s2-insert-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60), (7, 70), (8, 80)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-11             
-step s1-stop-connection: 
+11
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-select: 
+
+step s2-select:
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM insert_table WHERE id = 6');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-6              
-step s1-stop-connection: 
+6
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-insert-select s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-insert-select: 
+
+step s2-insert-select:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table SELECT * FROM insert_table');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-11             
-step s1-stop-connection: 
+11
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-update: 
+
+step s2-update:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE insert_table SET value = 65 WHERE id = 6');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-6              
-step s1-stop-connection: 
+6
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-multi-row s2-start-session-level-connection s2-begin-on-worker s2-update-multi-row s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert-multi-row: 
+
+step s1-insert-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60), (7, 70), (8, 80)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-update-multi-row: 
+
+step s2-update-multi-row:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE insert_table SET value = 67 WHERE id IN (6, 7)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-8              
-step s1-stop-connection: 
+8
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-copy: 
+
+step s2-copy:
 	SELECT run_commands_on_session_level_connection_to_node('COPY insert_table FROM PROGRAM ''echo 9, 90 && echo 10, 100''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-8              
-step s1-stop-connection: 
+8
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-truncate: 
+
+step s2-truncate:
 	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE insert_table');
  <waiting ...>
-step s1-commit-worker: 
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
+
 step s2-truncate: <... completed>
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-0              
-step s1-stop-connection: 
+0
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s3-select-count s1-stop-connection s2-stop-connection
-step s1-start-session-level-connection: 
+step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 
-               
-step s1-begin-on-worker: 
+
+step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-insert: 
+
+step s1-insert:
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-start-session-level-connection: 
+
+step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 
-               
-step s2-begin-on-worker: 
+
+step s2-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-select-for-update: 
+
+step s2-select-for-update:
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM insert_table WHERE id = 6 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s1-commit-worker: 
+
+step s1-commit-worker:
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s2-commit-worker: 
+
+step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
-               
-step s3-select-count: 
+
+step s3-select-count:
 	SELECT COUNT(*) FROM insert_table;
 
-count          
+count
 
-6              
-step s1-stop-connection: 
+6
+step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
-step s2-stop-connection: 
+
+step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
-               
+
 restore_isolation_tester_func
 
-               
+

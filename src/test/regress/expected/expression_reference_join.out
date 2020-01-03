@@ -13,16 +13,16 @@ INSERT INTO test VALUES
     (2,2);
 SELECT create_reference_table('ref');
 NOTICE:  Copying data from local table...
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('test', 'x');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- PR 3180 implements expressions in join clauses to reference tables to support CHbenCHmark queries 7/8/9
@@ -33,7 +33,7 @@ FROM
     ref a
 WHERE t2.y * 2 = a.a
 ORDER BY 1,2,3;
- y | x | x | a | b 
+ y | x | x | a | b
 ---------------------------------------------------------------------
  2 | 1 | 1 | 4 | 4
  2 | 1 | 2 | 4 | 4
@@ -53,7 +53,7 @@ FROM
     ref b
 WHERE t2.y - a.a - b.b = 0
 ORDER BY 1,2,3;
- y | x | x | a | b | a | b 
+ y | x | x | a | b | a | b
 ---------------------------------------------------------------------
 (0 rows)
 

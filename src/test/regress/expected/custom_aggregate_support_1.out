@@ -14,47 +14,47 @@ SET citus.shard_count TO 4;
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);
 SELECT create_distributed_table('raw_table', 'user_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('daily_uniques', 'day');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
-INSERT INTO raw_table 
-  SELECT day, user_id % 19 
+INSERT INTO raw_table
+  SELECT day, user_id % 19
   FROM generate_series('2018-05-24'::timestamp, '2018-06-24'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,100) as g(user_id);
-INSERT INTO raw_table 
-  SELECT day, user_id % 13 
-  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day), 
+INSERT INTO raw_table
+  SELECT day, user_id % 13
+  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,100) as g(user_id);
 -- Run hll on raw data
-SELECT hll_cardinality(hll_union_agg(agg)) 
+SELECT hll_cardinality(hll_union_agg(agg))
 FROM (
-  SELECT hll_add_agg(hll_hash_integer(user_id)) AS agg 
+  SELECT hll_add_agg(hll_hash_integer(user_id)) AS agg
   FROM raw_table)a;
- hll_cardinality 
+ hll_cardinality
 ---------------------------------------------------------------------
               19
 (1 row)
 
 -- Aggregate the data into daily_uniques
-INSERT INTO daily_uniques 
-  SELECT day, hll_add_agg(hll_hash_integer(user_id)) 
+INSERT INTO daily_uniques
+  SELECT day, hll_add_agg(hll_hash_integer(user_id))
   FROM raw_table
   GROUP BY 1;
 -- Basic hll_cardinality check on aggregated data
-SELECT day, hll_cardinality(unique_users) 
-FROM daily_uniques 
-WHERE day >= '2018-06-20' and day <= '2018-06-30' 
-ORDER BY 2 DESC,1 
+SELECT day, hll_cardinality(unique_users)
+FROM daily_uniques
+WHERE day >= '2018-06-20' and day <= '2018-06-30'
+ORDER BY 2 DESC,1
 LIMIT 10;
-    day     | hll_cardinality 
+    day     | hll_cardinality
 ---------------------------------------------------------------------
  06-20-2018 |              19
  06-21-2018 |              19
@@ -69,10 +69,10 @@ LIMIT 10;
 (10 rows)
 
 -- Union aggregated data for one week
-SELECT hll_cardinality(hll_union_agg(unique_users)) 
-FROM daily_uniques 
+SELECT hll_cardinality(hll_union_agg(unique_users))
+FROM daily_uniques
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date;
- hll_cardinality 
+ hll_cardinality
 ---------------------------------------------------------------------
               19
 (1 row)
@@ -80,9 +80,9 @@ WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date;
 SELECT EXTRACT(MONTH FROM day) AS month, hll_cardinality(hll_union_agg(unique_users))
 FROM daily_uniques
 WHERE day >= '2018-06-23' AND day <= '2018-07-01'
-GROUP BY 1 
+GROUP BY 1
 ORDER BY 1;
- month | hll_cardinality 
+ month | hll_cardinality
 ---------------------------------------------------------------------
      6 |              19
      7 |              13
@@ -108,7 +108,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
+                               QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
@@ -144,7 +144,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
+                                  QUERY PLAN
 ---------------------------------------------------------------------
  GroupAggregate
    Group Key: remote_scan.day
@@ -183,7 +183,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
+                               QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
@@ -219,7 +219,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
+                                  QUERY PLAN
 ---------------------------------------------------------------------
  GroupAggregate
    Group Key: remote_scan.day
@@ -258,7 +258,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
+                               QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
@@ -294,7 +294,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN                                  
+                                  QUERY PLAN
 ---------------------------------------------------------------------
  GroupAggregate
    Group Key: remote_scan.day
@@ -333,7 +333,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN                               
+                               QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.day
@@ -370,7 +370,7 @@ FROM
   daily_uniques
 GROUP BY(1)
 HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
-                                                QUERY PLAN                                                
+                                                QUERY PLAN
 ---------------------------------------------------------------------
  GroupAggregate
    Group Key: remote_scan.day
@@ -428,33 +428,33 @@ WHERE name = 'topn'
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 SELECT create_distributed_table('customer_reviews', 'user_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('popular_reviewer', 'day');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
-INSERT INTO customer_reviews 
+INSERT INTO customer_reviews
   SELECT day, user_id % 7, review % 5
   FROM generate_series('2018-05-24'::timestamp, '2018-06-24'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,30) as g(user_id), generate_series(0,30) AS r(review);
-INSERT INTO customer_reviews 
+INSERT INTO customer_reviews
   SELECT day, user_id % 13, review % 3
-  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day), 
+  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,30) as g(user_id), generate_series(0,30) AS r(review);
 -- Run topn on raw data
 SELECT (topn(agg, 10)).*
 FROM (
-  SELECT topn_add_agg(user_id::text) AS agg 
+  SELECT topn_add_agg(user_id::text) AS agg
   FROM customer_reviews
   )a
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      7843
  2    |      7843
@@ -469,17 +469,17 @@ ORDER BY 2 DESC, 1;
 (10 rows)
 
 -- Aggregate the data into popular_reviewer
-INSERT INTO popular_reviewer 
+INSERT INTO popular_reviewer
   SELECT day, topn_add_agg(user_id::text)
   FROM customer_reviews
   GROUP BY 1;
 -- Basic topn check on aggregated data
-SELECT day, (topn(reviewers, 10)).* 
-FROM popular_reviewer 
-WHERE day >= '2018-06-20' and day <= '2018-06-30' 
+SELECT day, (topn(reviewers, 10)).*
+FROM popular_reviewer
+WHERE day >= '2018-06-20' and day <= '2018-06-30'
 ORDER BY 3 DESC, 1, 2
 LIMIT 10;
-    day     | item | frequency 
+    day     | item | frequency
 ---------------------------------------------------------------------
  06-20-2018 | 1    |       248
  06-20-2018 | 2    |       248
@@ -494,14 +494,14 @@ LIMIT 10;
 (10 rows)
 
 -- Union aggregated data for one week
-SELECT (topn(agg, 10)).* 
+SELECT (topn(agg, 10)).*
 FROM (
 	SELECT topn_union_agg(reviewers) AS agg
 	FROM popular_reviewer
 	WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 	)a
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      1240
  2    |      1240
@@ -512,7 +512,7 @@ ORDER BY 2 DESC, 1;
  6    |       992
 (7 rows)
 
-SELECT month, (topn(agg, 5)).* 
+SELECT month, (topn(agg, 5)).*
 FROM (
 	SELECT EXTRACT(MONTH FROM day) AS month, topn_union_agg(reviewers) AS agg
 	FROM popular_reviewer
@@ -521,7 +521,7 @@ FROM (
 	ORDER BY 1
 	)a
 ORDER BY 1, 3 DESC, 2;
- month | item | frequency 
+ month | item | frequency
 ---------------------------------------------------------------------
      6 | 1    |      1054
      6 | 2    |      1054
@@ -537,11 +537,11 @@ ORDER BY 1, 3 DESC, 2;
 
 -- TODO the following queries will be supported after we fix #2265
 -- They work for PG9.6 but not for PG10
-SELECT (topn(topn_union_agg(reviewers), 10)).* 
+SELECT (topn(topn_union_agg(reviewers), 10)).*
 FROM popular_reviewer
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      1240
  2    |      1240
@@ -555,7 +555,7 @@ ORDER BY 2 DESC, 1;
 SELECT (topn(topn_add_agg(user_id::text), 10)).*
 FROM customer_reviews
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      7843
  2    |      7843

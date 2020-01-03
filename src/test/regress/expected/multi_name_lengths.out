@@ -9,21 +9,21 @@ CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
 SELECT master_create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345678901234567890', '2', '2');
- master_create_worker_shards 
+ master_create_worker_shards
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
 \dt too_long_*
                                       List of relations
- Schema |                              Name                               | Type  |  Owner   
+ Schema |                              Name                               | Type  |  Owner
 ---------------------------------------------------------------------
  public | too_long_12345678901234567890123456789012345678_e0119164_225000 | table | postgres
  public | too_long_12345678901234567890123456789012345678_e0119164_225001 | table | postgres
@@ -34,23 +34,23 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
 -- Verify that the UDF works and rejects bad arguments.
 SELECT shard_name(NULL, 666666);
- shard_name 
+ shard_name
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT shard_name(0, 666666);
 ERROR:  object_name does not reference a valid relation
 SELECT shard_name('too_long_12345678901234567890123456789012345678901234567890'::regclass, 666666);
-                           shard_name                            
+                           shard_name
 ---------------------------------------------------------------------
  too_long_12345678901234567890123456789012345678_e0119164_666666
 (1 row)
 
 SELECT shard_name('too_long_12345678901234567890123456789012345678901234567890'::regclass, NULL);
- shard_name 
+ shard_name
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT shard_name('too_long_12345678901234567890123456789012345678901234567890'::regclass, -21);
@@ -63,9 +63,9 @@ CREATE TABLE name_lengths (
 	constraint constraint_a UNIQUE (col1)
 	);
 SELECT create_distributed_table('name_lengths', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Verify that we CAN add columns with "too-long names", because
@@ -82,11 +82,11 @@ ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345
 ERROR:  cannot create constraint without a name on a distributed table
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
-                            Column                            |       Type       | Modifiers 
+                            Column                            |       Type       | Modifiers
 ---------------------------------------------------------------------
  int_col_12345678901234567890123456789012345678901234567890   | integer          | default 1
- float_col_12345678901234567890123456789012345678901234567890 | double precision | 
- date_col_12345678901234567890123456789012345678901234567890  | date             | 
+ float_col_12345678901234567890123456789012345678901234567890 | double precision |
+ date_col_12345678901234567890123456789012345678901234567890  | date             |
  col2                                                         | integer          | not null
  col1                                                         | integer          | not null
 (5 rows)
@@ -102,7 +102,7 @@ DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY const
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_lengths_225002'::regclass ORDER BY 1 DESC, 2 DESC;
-                           Constraint                            |                                        Definition                                         
+                           Constraint                            |                                        Definition
 ---------------------------------------------------------------------
  nl_checky_1234567890123456789012345678901234567_b16df46d_225002 | CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '01-01-2014'::date)
 (1 row)
@@ -120,7 +120,7 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
-                             relname                             | Column |  Type   | Definition 
+                             relname                             | Column |  Type   | Definition
 ---------------------------------------------------------------------
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225002 | col2   | integer | col2
@@ -134,7 +134,7 @@ NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901
 \c - - - :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
-                             relname                             | Column |  Type   | Definition 
+                             relname                             | Column |  Type   | Definition
 ---------------------------------------------------------------------
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225002 | col2   | integer | col2
@@ -145,7 +145,7 @@ SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
 \c - - - :master_port
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
--- Verify that distributed tables with too-long names 
+-- Verify that distributed tables with too-long names
 -- for CHECK constraints are no trouble.
 CREATE TABLE sneaky_name_lengths (
 	col1 integer not null,
@@ -154,9 +154,9 @@ CREATE TABLE sneaky_name_lengths (
         CHECK (int_col_12345678901234567890123456789012345678901234567890 > 100)
         );
 SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 DROP TABLE sneaky_name_lengths CASCADE;
@@ -167,39 +167,39 @@ CREATE TABLE sneaky_name_lengths (
         );
 \di public.sneaky_name_lengths*
                                                  List of relations
- Schema |                              Name                               | Type  |  Owner   |        Table        
+ Schema |                              Name                               | Type  |  Owner   |        Table
 ---------------------------------------------------------------------
  public | sneaky_name_lengths_int_col_1234567890123456789012345678901_key | index | postgres | sneaky_name_lengths
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
-                        Constraint                         |                                  Definition                                  
+                        Constraint                         |                                  Definition
 ---------------------------------------------------------------------
  checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
 (1 row)
 
 SELECT master_create_distributed_table('sneaky_name_lengths', 'int_col_123456789012345678901234567890123456789012345678901234', 'hash');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
- master_create_worker_shards 
+ master_create_worker_shards
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
 \di public.sneaky*225006
                                                     List of relations
- Schema |                              Name                               | Type  |  Owner   |           Table            
+ Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
  public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225006 | index | postgres | sneaky_name_lengths_225006
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass ORDER BY 1 DESC, 2 DESC;
-                        Constraint                         |                                  Definition                                  
+                        Constraint                         |                                  Definition
 ---------------------------------------------------------------------
  checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
 (1 row)
@@ -216,15 +216,15 @@ CREATE TABLE sneaky_name_lengths (
         constraint unique_12345678901234567890123456789012345678901234567890 UNIQUE (col1)
         );
 SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
 \di unique*225008
                                                     List of relations
- Schema |                              Name                               | Type  |  Owner   |           Table            
+ Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
  public | unique_1234567890123456789012345678901234567890_a5986f27_225008 | index | postgres | sneaky_name_lengths_225008
 (1 row)
@@ -239,15 +239,15 @@ CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
 SELECT create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
 \dt *225000000000*
                                       List of relations
- Schema |                              Name                               | Type  |  Owner   
+ Schema |                              Name                               | Type  |  Owner
 ---------------------------------------------------------------------
  public | too_long_1234567890123456789012345678901_e0119164_2250000000000 | table | postgres
  public | too_long_1234567890123456789012345678901_e0119164_2250000000001 | table | postgres
@@ -262,16 +262,16 @@ CREATE TABLE U&"elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E
         col1 integer not null PRIMARY KEY,
         col2 integer not null);
 SELECT create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Verify that quoting is used in shard_name
 SELECT shard_name(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass, min(shardid))
 FROM pg_dist_shard
 WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass;
-                    shard_name                     
+                    shard_name
 ---------------------------------------------------------------------
  "elephant_слонслонслонсло_c8b737c2_2250000000002"
 (1 row)
@@ -279,7 +279,7 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
 \c - - - :worker_1_port
 \dt public.elephant_*
                               List of relations
- Schema |                      Name                       | Type  |  Owner   
+ Schema |                      Name                       | Type  |  Owner
 ---------------------------------------------------------------------
  public | elephant_слонслонслонсло_c8b737c2_2250000000002 | table | postgres
  public | elephant_слонслонслонсло_c8b737c2_2250000000003 | table | postgres
@@ -287,7 +287,7 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
 
 \di public.elephant_*
                                                        List of relations
- Schema |                      Name                       | Type  |  Owner   |                      Table                      
+ Schema |                      Name                       | Type  |  Owner   |                      Table
 ---------------------------------------------------------------------
  public | elephant_слонслонслонсло_14d34928_2250000000002 | index | postgres | elephant_слонслонслонсло_c8b737c2_2250000000002
  public | elephant_слонслонслонсло_14d34928_2250000000003 | index | postgres | elephant_слонслонслонсло_c8b737c2_2250000000003
@@ -302,15 +302,15 @@ CREATE TABLE multi_name_lengths.too_long_123456789012345678901234567890123456789
         col1 integer not null,
         col2 integer not null);
 SELECT create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT shard_name('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass, min(shardid))
 FROM pg_dist_shard
 WHERE logicalrelid = 'multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass;
-                                     shard_name                                     
+                                     shard_name
 ---------------------------------------------------------------------
  multi_name_lengths.too_long_1234567890123456789012345678901_e0119164_2250000000004
 (1 row)

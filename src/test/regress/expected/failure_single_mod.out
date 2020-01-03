@@ -1,29 +1,29 @@
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT citus.clear_network_traffic();
- clear_network_traffic 
+ clear_network_traffic
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 2;
 CREATE TABLE mod_test (key int, value text);
 SELECT create_distributed_table('mod_test', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- verify behavior of single INSERT; should mark shard as failed
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO mod_test VALUES (2, 6);
@@ -32,7 +32,7 @@ DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT COUNT(*) FROM mod_test WHERE key=2;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -42,7 +42,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
- placementid 
+ placementid
 ---------------------------------------------------------------------
          125
 (1 row)
@@ -50,16 +50,16 @@ WHERE shardid IN (
 TRUNCATE mod_test;
 -- verify behavior of UPDATE ... RETURNING; should mark as failed
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO mod_test VALUES (2, 6);
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 UPDATE mod_test SET value='ok' WHERE key=2 RETURNING key;
@@ -67,13 +67,13 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key 
+ key
 ---------------------------------------------------------------------
    2
 (1 row)
 
 SELECT COUNT(*) FROM mod_test WHERE value='ok';
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -83,7 +83,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
- placementid 
+ placementid
 ---------------------------------------------------------------------
          125
 (1 row)
@@ -92,9 +92,9 @@ TRUNCATE mod_test;
 -- verify behavior of multi-statement modifications to a single shard
 -- should succeed but mark a placement as failed
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -108,7 +108,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 COMMIT;
 SELECT COUNT(*) FROM mod_test WHERE key=2;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -118,7 +118,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
- placementid 
+ placementid
 ---------------------------------------------------------------------
          125
 (1 row)

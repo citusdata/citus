@@ -3,11 +3,11 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-insert s2-begin s2-update-node-1 s1-abort s2-abort
 create_distributed_table
 
-               
+
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
 step s2-begin: BEGIN;
-step s2-update-node-1: 
+step s2-update-node-1:
     -- update a specific node by address
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10)
       FROM pg_dist_node
@@ -18,21 +18,21 @@ step s1-abort: ABORT;
 step s2-update-node-1: <... completed>
 master_update_node
 
-               
+
 step s2-abort: ABORT;
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-begin s1-insert s2-begin s2-update-node-1-force s2-abort s1-abort
 create_distributed_table
 
-               
+
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
 step s2-begin: BEGIN;
-step s2-update-node-1-force: 
+step s2-update-node-1-force:
     -- update a specific node by address (force)
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10, force => true, lock_cooldown => 100)
       FROM pg_dist_node
@@ -42,7 +42,7 @@ step s2-update-node-1-force:
 step s2-update-node-1-force: <... completed>
 master_update_node
 
-               
+
 step s2-abort: ABORT;
 step s1-abort: ABORT;
 WARNING: this step had a leftover error message
@@ -51,5 +51,5 @@ SSL connection has been closed unexpectedly
 
 master_remove_node
 
-               
-               
+
+

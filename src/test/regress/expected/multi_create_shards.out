@@ -61,14 +61,14 @@ ERROR:  could not identify a hash function for type dummy_type
 DETAIL:  Partition column types must have a hash function defined to use hash partitioning.
 -- distribute table and inspect side effects
 SELECT master_create_distributed_table('table_to_distribute', 'name', 'hash');
- master_create_distributed_table 
+ master_create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT partmethod, partkey FROM pg_dist_partition
 	WHERE logicalrelid = 'table_to_distribute'::regclass;
- partmethod |                                                         partkey                                                          
+ partmethod |                                                         partkey
 ---------------------------------------------------------------------
  h          | {VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
 (1 row)
@@ -85,15 +85,15 @@ ERROR:  replication_factor (3) exceeds number of worker nodes (2)
 HINT:  Add more worker nodes or try again with a lower replication factor.
 -- finally, create shards and inspect metadata
 SELECT master_create_worker_shards('table_to_distribute', 16, 1);
- master_create_worker_shards 
+ master_create_worker_shards
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'table_to_distribute'::regclass
 	ORDER BY (shardminvalue::integer) ASC;
- shardstorage | shardminvalue | shardmaxvalue 
+ shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  t            | -2147483648   | -1879048193
  t            | -1879048192   | -1610612737
@@ -119,13 +119,13 @@ SELECT count(*) AS shard_count,
 	FROM pg_dist_shard
 	WHERE logicalrelid='table_to_distribute'::regclass
 	GROUP BY shard_size;
- shard_count | shard_size 
+ shard_count | shard_size
 ---------------------------------------------------------------------
           16 |  268435455
 (1 row)
 
 SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'table_to_distribute%' AND relkind = 'r';
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -135,16 +135,16 @@ SELECT master_create_worker_shards('table_to_distribute', 16, 1);
 ERROR:  table "table_to_distribute" has already had shards created for it
 -- test list sorting
 SELECT sort_names('sumedh', 'jason', 'ozgun');
- sort_names 
+ sort_names
 ---------------------------------------------------------------------
  jason     +
  ozgun     +
  sumedh    +
- 
+
 (1 row)
 
 SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'throwaway%' AND relkind = 'r';
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -160,15 +160,15 @@ SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass
 	ORDER BY (shardminvalue::integer) ASC;
- shardstorage | shardminvalue | shardmaxvalue 
+ shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  f            | -2147483648   | -1879048193
  f            | -1879048192   | -1610612737
@@ -196,9 +196,9 @@ CREATE TABLE weird_shard_count
 );
 SET citus.shard_count TO 7;
 SELECT create_distributed_table('weird_shard_count', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Citus ensures all shards are roughly the same size
@@ -206,7 +206,7 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 	FROM pg_dist_shard
 	WHERE logicalrelid = 'weird_shard_count'::regclass
 	ORDER BY shardminvalue::integer ASC;
- shard_size 
+ shard_size
 ---------------------------------------------------------------------
   613566755
   613566755

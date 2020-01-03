@@ -3,15 +3,15 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node 
+ start_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node 
+ start_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- create schema to test schema support
@@ -145,9 +145,9 @@ CREATE TABLE nation_hash(
 );
 SET citus.shard_count TO 16;
 SELECT create_distributed_table('nation_hash', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET search_path TO citus_mx_test_schema;
@@ -159,9 +159,9 @@ CREATE TABLE citus_mx_test_schema.nation_hash(
     n_comment varchar(152)
 );
 SELECT create_distributed_table('nation_hash', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE citus_mx_test_schema_join_1.nation_hash (
@@ -171,9 +171,9 @@ CREATE TABLE citus_mx_test_schema_join_1.nation_hash (
     n_comment varchar(152));
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('citus_mx_test_schema_join_1.nation_hash', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE citus_mx_test_schema_join_1.nation_hash_2 (
@@ -182,9 +182,9 @@ CREATE TABLE citus_mx_test_schema_join_1.nation_hash_2 (
     n_regionkey integer not null,
     n_comment varchar(152));
 SELECT create_distributed_table('citus_mx_test_schema_join_1.nation_hash_2', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET search_path TO citus_mx_test_schema_join_2;
@@ -194,9 +194,9 @@ CREATE TABLE nation_hash (
     n_regionkey integer not null,
     n_comment varchar(152));
 SELECT create_distributed_table('nation_hash', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET search_path TO citus_mx_test_schema;
@@ -207,9 +207,9 @@ CREATE TABLE nation_hash_collation_search_path(
     n_comment varchar(152)
 );
 SELECT create_distributed_table('nation_hash_collation_search_path', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \COPY nation_hash_collation_search_path FROM STDIN with delimiter '|';
@@ -221,9 +221,9 @@ CREATE TABLE citus_mx_test_schema.nation_hash_composite_types(
     test_col citus_mx_test_schema.new_composite_type
 );
 SELECT create_distributed_table('citus_mx_test_schema.nation_hash_composite_types', 'n_nationkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- insert some data to verify composite type queries
@@ -252,9 +252,9 @@ CREATE TABLE lineitem_mx (
     PRIMARY KEY(l_orderkey, l_linenumber) );
 SET citus.shard_count TO 16;
 SELECT create_distributed_table('lineitem_mx', 'l_orderkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE INDEX lineitem_mx_time_index ON lineitem_mx (l_shipdate);
@@ -270,9 +270,9 @@ CREATE TABLE orders_mx (
     o_comment varchar(79) not null,
     PRIMARY KEY(o_orderkey) );
 SELECT create_distributed_table('orders_mx', 'o_orderkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE customer_mx (
@@ -285,9 +285,9 @@ CREATE TABLE customer_mx (
     c_mktsegment char(10) not null,
     c_comment varchar(117) not null);
 SELECT create_reference_table('customer_mx');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE nation_mx (
@@ -296,9 +296,9 @@ CREATE TABLE nation_mx (
     n_regionkey integer not null,
     n_comment varchar(152));
 SELECT create_reference_table('nation_mx');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE part_mx (
@@ -312,9 +312,9 @@ CREATE TABLE part_mx (
     p_retailprice decimal(15,2) not null,
     p_comment varchar(23) not null);
 SELECT create_reference_table('part_mx');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE supplier_mx
@@ -328,9 +328,9 @@ CREATE TABLE supplier_mx
     s_comment varchar(101) not null
 );
 SELECT create_reference_table('supplier_mx');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Create test table for ddl
@@ -340,9 +340,9 @@ CREATE TABLE mx_ddl_table (
 );
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('mx_ddl_table', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Load some test data
@@ -358,9 +358,9 @@ CREATE TABLE limit_orders_mx (
 );
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('limit_orders_mx', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test table for modifications
@@ -369,17 +369,17 @@ CREATE TABLE multiple_hash_mx (
     data text NOT NULL
 );
 SELECT create_distributed_table('multiple_hash_mx', 'category');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count TO 4;
 CREATE TABLE app_analytics_events_mx (id bigserial, app_id integer, name text);
 SELECT create_distributed_table('app_analytics_events_mx', 'app_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE researchers_mx (
@@ -389,9 +389,9 @@ CREATE TABLE researchers_mx (
 );
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('researchers_mx', 'lab_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE labs_mx (
@@ -400,9 +400,9 @@ CREATE TABLE labs_mx (
 );
 SET citus.shard_count TO 1;
 SELECT create_distributed_table('labs_mx', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- now, for some special failures...
@@ -411,9 +411,9 @@ CREATE TABLE objects_mx (
     name text NOT NULL
 );
 SELECT create_distributed_table('objects_mx', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE articles_hash_mx (
@@ -426,24 +426,24 @@ CREATE TABLE articles_hash_mx (
 CREATE TABLE articles_single_shard_hash_mx (LIKE articles_hash_mx);
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('articles_hash_mx', 'author_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count TO 1;
 SELECT create_distributed_table('articles_single_shard_hash_mx', 'author_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count TO 4;
 CREATE TABLE company_employees_mx (company_id int, employee_id int, manager_id int);
 SELECT create_distributed_table('company_employees_mx', 'company_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 WITH shard_counts AS (
@@ -452,7 +452,7 @@ WITH shard_counts AS (
 SELECT logicalrelid, colocationid, shard_count, partmethod, repmodel
 FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
-                      logicalrelid                      | colocationid | shard_count | partmethod | repmodel 
+                      logicalrelid                      | colocationid | shard_count | partmethod | repmodel
 ---------------------------------------------------------------------
  citus_mx_test_schema_join_1.nation_hash                |      1390002 |           4 | h          | s
  citus_mx_test_schema_join_1.nation_hash_2              |      1390002 |           4 | h          | s

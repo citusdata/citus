@@ -5,79 +5,79 @@ run_command_on_workers
 
 (localhost,57637,t,"GRANT ROLE")
 (localhost,57638,t,"GRANT ROLE")
-step s1-grant: 
+step s1-grant:
  GRANT ALL ON test_table TO test_user_1;
  SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_1');
  GRANT ALL ON test_table TO test_user_2;
  SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
 
-bool_and       
+bool_and
 
-t              
-bool_and       
+t
+bool_and
 
-t              
-step s1-begin-insert: 
+t
+step s1-begin-insert:
  BEGIN;
  SET ROLE test_user_1;
  INSERT INTO test_table VALUES (100, 100);
 
-step s2-begin-insert: 
+step s2-begin-insert:
  BEGIN;
  SET ROLE test_user_2;
  INSERT INTO test_table VALUES (200, 200);
 
-step s3-as-admin: 
+step s3-as-admin:
  -- Admin should be able to see all transactions
  SELECT count(*) FROM get_all_active_transactions();
  SELECT count(*) FROM get_global_active_transactions();
 
-count          
+count
 
-2              
-count          
+2
+count
 
-4              
-step s3-as-user-1: 
+4
+step s3-as-user-1:
  -- User should only be able to see its own transactions
  SET ROLE test_user_1;
  SELECT count(*) FROM get_all_active_transactions();
  SELECT count(*) FROM get_global_active_transactions();
 
-count          
+count
 
-1              
-count          
+1
+count
 
-2              
-step s3-as-readonly: 
+2
+step s3-as-readonly:
  -- Other user should not see transactions
  SET ROLE test_readonly;
  SELECT count(*) FROM get_all_active_transactions();
  SELECT count(*) FROM get_global_active_transactions();
 
-count          
+count
 
-0              
-count          
+0
+count
 
-0              
-step s3-as-monitor: 
+0
+step s3-as-monitor:
  -- Monitor should see all transactions
  SET ROLE test_monitor;
  SELECT count(*) FROM get_all_active_transactions();
  SELECT count(*) FROM get_global_active_transactions();
 
-count          
+count
 
-2              
-count          
+2
+count
 
-4              
-step s1-commit: 
+4
+step s1-commit:
  COMMIT;
 
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
 run_command_on_workers

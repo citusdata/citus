@@ -8,15 +8,15 @@ SET search_path TO multi_name_resolution;
 create table namenest1 (id integer primary key, user_id integer);
 create table namenest2 (id integer primary key, value_2 integer);
 select * from create_distributed_table('namenest1', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 select * from create_reference_table('namenest2');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT r
@@ -31,7 +31,7 @@ FROM (
 	JOIN namenest2 ON (namenest1.user_id = namenest2.value_2)
 ) AS join_alias(id_deep)
 WHERE bar.id_deep = join_alias.id_deep;
- r 
+ r
 ---------------------------------------------------------------------
 (0 rows)
 

@@ -13,9 +13,9 @@ CREATE TABLE products (
     price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can only add primary key constraint on distribution column (or group of columns
@@ -47,9 +47,9 @@ CREATE TABLE products_ref (
     price numeric
 );
 SELECT create_reference_table('products_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can add PRIMARY KEY to any column
@@ -71,9 +71,9 @@ CREATE TABLE products_append (
     price numeric
 );
 SELECT create_distributed_table('products_append', 'product_no', 'append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can only add primary key constraint on distribution column (or group
@@ -97,9 +97,9 @@ DROP TABLE products_append;
 -- Check "UNIQUE CONSTRAINT"
 CREATE TABLE unique_test_table(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can only add unique constraint on distribution column (or group
@@ -135,21 +135,21 @@ DROP TABLE unique_test_table;
 -- Check "UNIQUE CONSTRAINT" with reference table
 CREATE TABLE unique_test_table_ref(id int, name varchar(20));
 SELECT create_reference_table('unique_test_table_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- We can add unique constraint on any column with reference tables
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_name UNIQUE(name);
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id UNIQUE(id);
--- Error out. Since the table can not have two rows with the same id. 
+-- Error out. Since the table can not have two rows with the same id.
 INSERT INTO unique_test_table_ref VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table_ref VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450066"
 DETAIL:  Key (id)=(X) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
--- We can add unique constraint with multiple columns 
+-- We can add unique constraint with multiple columns
 ALTER TABLE unique_test_table_ref DROP CONSTRAINT unn_id;
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id_name UNIQUE(id,name);
 -- Error out, since two rows can not have the same id or name.
@@ -158,9 +158,9 @@ DROP TABLE unique_test_table_ref;
 -- Check "UNIQUE CONSTRAINT" with append table
 CREATE TABLE unique_test_table_append(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table_append', 'id', 'append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can only add unique constraint on distribution column (or group
@@ -189,15 +189,15 @@ CREATE TABLE products (
     discounted_price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can add column and table check constraints
 ALTER TABLE products ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
--- First and third queries will error out, because of conflicts with p_check and 
+-- First and third queries will error out, because of conflicts with p_check and
 -- p_multi_check, respectively.
 INSERT INTO products VALUES(1, 'product_1', -1, -2);
 ERROR:  new row for relation "products_1450069" violates check constraint "p_check_1450069"
@@ -209,7 +209,7 @@ ERROR:  new row for relation "products_1450069" violates check constraint "p_mul
 DETAIL:  Failing row contains (1, product_1, 2, 3).
 CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE products;
--- Check "CHECK CONSTRAINT" with reference table 
+-- Check "CHECK CONSTRAINT" with reference table
 CREATE TABLE products_ref (
     product_no integer,
     name text,
@@ -217,15 +217,15 @@ CREATE TABLE products_ref (
     discounted_price numeric
 );
 SELECT create_reference_table('products_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can add column and table check constraints
 ALTER TABLE products_ref ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products_ref ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
--- First and third queries will error out, because of conflicts with p_check and 
+-- First and third queries will error out, because of conflicts with p_check and
 -- p_multi_check, respectively.
 INSERT INTO products_ref VALUES(1, 'product_1', -1, -2);
 ERROR:  new row for relation "products_ref_1450100" violates check constraint "p_check_1450100"
@@ -245,9 +245,9 @@ CREATE TABLE products_append (
     discounted_price int
 );
 SELECT create_distributed_table('products_append', 'product_no', 'append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can add column and table check constraints
@@ -265,18 +265,18 @@ CREATE TABLE products (
     price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Can only add exclusion constraint on distribution column (or group of columns
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
-ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =); 
+ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
 ERROR:  cannot create constraint on "products"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
--- We can add composite exclusion 
+-- We can add composite exclusion
 ALTER TABLE products ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
 -- 4th command will error out since it conflicts with exc_pno_name constraint
 INSERT INTO products VALUES(1,'product_1', 5);
@@ -294,13 +294,13 @@ CREATE TABLE products_ref (
     price numeric
 );
 SELECT create_reference_table('products_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- We can add exclusion constraint on any column
-ALTER TABLE products_ref ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =); 
+ALTER TABLE products_ref ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
 -- We can add composite exclusion because none of pair of rows are conflicting
 ALTER TABLE products_ref ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
 -- Third insertion will error out, since it has the same name with second insertion
@@ -318,15 +318,15 @@ CREATE TABLE products_append (
     price numeric
 );
 SELECT create_distributed_table('products_append', 'product_no','append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
--- Can only add exclusion constraint on distribution column (or group of column 
+-- Can only add exclusion constraint on distribution column (or group of column
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
-ALTER TABLE products_append ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =); 
+ALTER TABLE products_append ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
 WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
@@ -348,9 +348,9 @@ CREATE TABLE products (
     price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE products ALTER COLUMN name SET NOT NULL;
@@ -369,9 +369,9 @@ CREATE TABLE products_ref (
     price numeric
 );
 SELECT create_reference_table('products_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE products_ref ALTER COLUMN name SET NOT NULL;
@@ -389,9 +389,9 @@ CREATE TABLE products_append (
     price numeric
 );
 SELECT create_distributed_table('products_append', 'product_no', 'append');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE products_append ALTER COLUMN name SET NOT NULL;
@@ -405,9 +405,9 @@ CREATE TABLE products (
     price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Should error out since add constraint is not the single subcommand
@@ -415,7 +415,7 @@ ALTER TABLE products ADD CONSTRAINT unn_1 UNIQUE(product_no, price), ADD CONSTRA
 ERROR:  cannot execute ADD CONSTRAINT command with other subcommands
 HINT:  You can issue each subcommand separately
 -- Tests for constraints without name
--- Commands below should error out since constraints do not have the name 
+-- Commands below should error out since constraints do not have the name
 ALTER TABLE products ADD UNIQUE(product_no);
 ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE products ADD PRIMARY KEY(product_no);
@@ -430,7 +430,7 @@ ALTER TABLE products ADD CONSTRAINT uniq_product_no EXCLUDE USING btree (product
 ALTER TABLE products DROP CONSTRAINT nonzero_product_no;
 ALTER TABLE products DROP CONSTRAINT uniq_product_no;
 DROP TABLE products;
--- Tests with transactions 
+-- Tests with transactions
 CREATE TABLE products (
     product_no integer,
     name text,
@@ -438,9 +438,9 @@ CREATE TABLE products (
     discounted_price numeric
 );
 SELECT create_distributed_table('products', 'product_no');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -456,15 +456,15 @@ ALTER TABLE products ALTER COLUMN product_no SET NOT NULL;
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 INSERT INTO products VALUES(1,'product_1', 10, 8);
 ROLLBACK;
--- There should be no constraint on master and worker(s) 
+-- There should be no constraint on master and worker(s)
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
- Constraint | Definition 
+ Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
- Constraint | Definition 
+ Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -476,15 +476,15 @@ ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 ROLLBACK;
--- There should be no constraint on master and worker(s) 
+-- There should be no constraint on master and worker(s)
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
- Constraint | Definition 
+ Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
- Constraint | Definition 
+ Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -497,26 +497,26 @@ CREATE TABLE sc1.alter_add_prim_key(x int, y int);
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON sc1.alter_add_prim_key(x);
 ALTER TABLE sc1.alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
 SELECT create_distributed_table('sc1.alter_add_prim_key', 'x');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT (run_command_on_workers($$
-    SELECT  
-        kc.constraint_name 
-    FROM 
+    SELECT
+        kc.constraint_name
+    FROM
         information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
     WHERE
-        kc.table_schema = 'sc1' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%' 
-    ORDER BY 
+        kc.table_schema = 'sc1' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
+    ORDER BY
     1
-    LIMIT 
+    LIMIT
         1;
     $$)).*
-ORDER BY 
+ORDER BY
     1,2,3,4;
- nodename  | nodeport | success |        result        
+ nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | alter_pk_idx_1450234
  localhost |    57638 | t       | alter_pk_idx_1450234
@@ -526,28 +526,28 @@ CREATE SCHEMA sc2;
 CREATE TABLE sc2.alter_add_prim_key(x int, y int);
 SET search_path TO 'sc2';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
 ALTER TABLE alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
 SELECT (run_command_on_workers($$
-    SELECT  
-        kc.constraint_name 
-    FROM 
+    SELECT
+        kc.constraint_name
+    FROM
         information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
     WHERE
         kc.table_schema = 'sc2' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
-    ORDER BY 
+    ORDER BY
     1
-    LIMIT 
+    LIMIT
         1;
     $$)).*
-ORDER BY 
+ORDER BY
     1,2,3,4;
- nodename  | nodeport | success |        result        
+ nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | alter_pk_idx_1450236
  localhost |    57638 | t       | alter_pk_idx_1450236
@@ -560,29 +560,29 @@ INSERT INTO sc3.alter_add_prim_key(x) SELECT generate_series(1,100);
 SET search_path TO 'sc3';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
 NOTICE:  Copying data from local table...
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
 ALTER TABLE alter_add_prim_key ADD CONSTRAINT a_constraint PRIMARY KEY USING INDEX alter_pk_idx;
 NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "alter_pk_idx" to "a_constraint"
 SELECT (run_command_on_workers($$
-    SELECT  
-        kc.constraint_name 
-    FROM 
+    SELECT
+        kc.constraint_name
+    FROM
         information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
     WHERE
         kc.table_schema = 'sc3' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
-    ORDER BY 
+    ORDER BY
     1
-    LIMIT 
+    LIMIT
         1;
     $$)).*
-ORDER BY 
+ORDER BY
     1,2,3,4;
- nodename  | nodeport | success |        result        
+ nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | a_constraint_1450238
  localhost |    57638 | t       | a_constraint_1450238
@@ -590,23 +590,23 @@ ORDER BY
 
 ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;
 SELECT (run_command_on_workers($$
-    SELECT  
-        kc.constraint_name 
-    FROM 
+    SELECT
+        kc.constraint_name
+    FROM
         information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
     WHERE
         kc.table_schema = 'sc3' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
-    ORDER BY 
+    ORDER BY
     1
-    LIMIT 
+    LIMIT
         1;
     $$)).*
-ORDER BY 
+ORDER BY
     1,2,3,4;
- nodename  | nodeport | success | result 
+ nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | 
- localhost |    57638 | t       | 
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
 (2 rows)
 
 SET search_path TO 'public';

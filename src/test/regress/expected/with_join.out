@@ -3,9 +3,9 @@ SET search_path TO with_join, public;
 SET citus.next_shard_id TO 1501000;
 CREATE TABLE with_join.reference_table(user_id int);
 SELECT create_reference_table('with_join.reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO reference_table VALUES (6), (7);
@@ -36,7 +36,7 @@ GROUP BY
   1
 ORDER BY
   2 DESC, 1;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        3 | 30168
        4 | 27768
@@ -72,7 +72,7 @@ GROUP BY
   1
 ORDER BY
   2 DESC, 1;
- user_id | count 
+ user_id | count
 ---------------------------------------------------------------------
        2 | 67507
        4 | 23040
@@ -142,7 +142,7 @@ ORDER BY
   1 DESC
 LIMIT
   5;
- uid 
+ uid
 ---------------------------------------------------------------------
    6
    5
@@ -181,7 +181,7 @@ ORDER BY
   1,2,3
 LIMIT
   5;
- user_id |              time               | event_type 
+ user_id |              time               | event_type
 ---------------------------------------------------------------------
        1 | Wed Nov 22 22:51:43.132261 2017 |          0
        1 | Wed Nov 22 22:51:43.132261 2017 |          0
@@ -204,7 +204,7 @@ ORDER BY
   1,2,3
 LIMIT
   5;
- user_id |              time               | event_type 
+ user_id |              time               | event_type
 ---------------------------------------------------------------------
        1 | Thu Nov 23 09:26:42.145043 2017 |          0
        1 | Thu Nov 23 09:26:42.145043 2017 |          0
@@ -259,10 +259,10 @@ ORDER BY
   user_id
 LIMIT
   5;
- row_number | user_id 
+ row_number | user_id
 ---------------------------------------------------------------------
           2 |       6
-          1 |        
+          1 |
 (2 rows)
 
 -- some more tests for more complex outer-joins
@@ -272,27 +272,27 @@ CREATE TABLE distributed_2 (col1 int, col2 int, distrib_col int);
 CREATE TABLE reference_1 (col1 int, col2 int);
 CREATE TABLE reference_2(col1 int, col2 int);
 SELECT create_distributed_table('distributed_1','distrib_col');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('distributed_2','distrib_col');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('reference_1');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('reference_2');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO distributed_1 SELECT i, i, i FROM generate_series(0,100) i;
@@ -303,7 +303,7 @@ select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join (select distrib_col,count(*) from distributed_2 group by distrib_col) d2 ON d2.distrib_col=d1.distrib_col;
- count 
+ count
 ---------------------------------------------------------------------
   1734
 (1 row)
@@ -313,7 +313,7 @@ select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join d2 ON d2.distrib_col=d1.distrib_col;
- count 
+ count
 ---------------------------------------------------------------------
   1734
 (1 row)
@@ -323,7 +323,7 @@ select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join d2 ON d2.distrib_col=d1.distrib_col;
- count 
+ count
 ---------------------------------------------------------------------
  87584
 (1 row)
@@ -333,7 +333,7 @@ select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join cte_1 ON cte_1.col1=d1.distrib_col;
- count 
+ count
 ---------------------------------------------------------------------
  86181
 (1 row)

@@ -14,15 +14,15 @@ SET citus.shard_count TO 4;
 CREATE TABLE raw_table (day date, user_id int);
 CREATE TABLE daily_uniques(day date, unique_users hll);
 SELECT create_distributed_table('raw_table', 'user_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('daily_uniques', 'day');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO raw_table
@@ -38,7 +38,7 @@ SELECT hll_cardinality(hll_union_agg(agg))
 FROM (
   SELECT hll_add_agg(hll_hash_integer(user_id)) AS agg
   FROM raw_table)a;
- hll_cardinality 
+ hll_cardinality
 ---------------------------------------------------------------------
               19
 (1 row)
@@ -54,7 +54,7 @@ FROM daily_uniques
 WHERE day >= '2018-06-20' and day <= '2018-06-30'
 ORDER BY 2 DESC,1
 LIMIT 10;
-    day     | hll_cardinality 
+    day     | hll_cardinality
 ---------------------------------------------------------------------
  06-20-2018 |              19
  06-21-2018 |              19
@@ -72,7 +72,7 @@ LIMIT 10;
 SELECT hll_cardinality(hll_union_agg(unique_users))
 FROM daily_uniques
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date;
- hll_cardinality 
+ hll_cardinality
 ---------------------------------------------------------------------
               19
 (1 row)
@@ -82,7 +82,7 @@ FROM daily_uniques
 WHERE day >= '2018-06-23' AND day <= '2018-07-01'
 GROUP BY 1
 ORDER BY 1;
- month | hll_cardinality 
+ month | hll_cardinality
 ---------------------------------------------------------------------
      6 |              19
      7 |              13
@@ -108,7 +108,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -142,7 +142,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -177,7 +177,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -211,7 +211,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -246,7 +246,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -280,7 +280,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -315,7 +315,7 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                            QUERY PLAN                            
+                            QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -350,7 +350,7 @@ FROM
   daily_uniques
 GROUP BY(1)
 HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
-                                          QUERY PLAN                                          
+                                          QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -395,15 +395,15 @@ WHERE name = 'topn'
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 SELECT create_distributed_table('customer_reviews', 'user_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('popular_reviewer', 'day');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO customer_reviews
@@ -421,7 +421,7 @@ FROM (
   FROM customer_reviews
   )a
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      7843
  2    |      7843
@@ -446,7 +446,7 @@ FROM popular_reviewer
 WHERE day >= '2018-06-20' and day <= '2018-06-30'
 ORDER BY 3 DESC, 1, 2
 LIMIT 10;
-    day     | item | frequency 
+    day     | item | frequency
 ---------------------------------------------------------------------
  06-20-2018 | 1    |       248
  06-20-2018 | 2    |       248
@@ -468,7 +468,7 @@ FROM (
 	WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 	)a
 ORDER BY 2 DESC, 1;
- item | frequency 
+ item | frequency
 ---------------------------------------------------------------------
  1    |      1240
  2    |      1240
@@ -488,7 +488,7 @@ FROM (
 	ORDER BY 1
 	)a
 ORDER BY 1, 3 DESC, 2;
- month | item | frequency 
+ month | item | frequency
 ---------------------------------------------------------------------
      6 | 1    |      1054
      6 | 2    |      1054

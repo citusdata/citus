@@ -14,7 +14,7 @@ SET client_min_messages to ERROR;
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   false);
- node_name | node_port | success |               result               
+ node_name | node_port | success |               result
 ---------------------------------------------------------------------
  localhost |       666 | f       | failed to connect to localhost:xxxxx
 (1 row)
@@ -22,7 +22,7 @@ SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   true);
- node_name | node_port | success |               result               
+ node_name | node_port | success |               result
 ---------------------------------------------------------------------
  localhost |       666 | f       | failed to connect to localhost:xxxxx
 (1 row)
@@ -37,7 +37,7 @@ SELECT quote_literal(node_name) as node_name, node_port as node_port
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   false);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 0
 (1 row)
@@ -47,7 +47,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select * from pg_dist_shard']::text[],
 								   false);
- node_name | node_port | success |                  result                  
+ node_name | node_port | success |                  result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single column in query target
 (1 row)
@@ -56,7 +56,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   false);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single row in query result
 (1 row)
@@ -67,7 +67,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,1) a',
 								   		 'select a from generate_series(2,2) a']::text[],
 								   false);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 1
  localhost |     57637 | t       | 2
@@ -79,7 +79,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,1) a',
 								   		 'select a from generate_series(1,2) a']::text[],
 								   false);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 1
  localhost |     57637 | f       | expected a single row in query result
@@ -91,7 +91,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,2) a',
 								   		 'select a from generate_series(1,2) a']::text[],
 								   false);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single row in query result
  localhost |     57637 | f       | expected a single row in query result
@@ -103,7 +103,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['create table first_table(a int, b int)',
 								   		 'create table second_table(a int, b int)']::text[],
 								   false);
- node_name | node_port | success |    result    
+ node_name | node_port | success |    result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | CREATE TABLE
  localhost |     57637 | t       | CREATE TABLE
@@ -113,7 +113,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into first_table select a,a from generate_series(1,20) a']::text[],
 								   false);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -121,7 +121,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from first_table']::text[],
 								   false);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 20
 (1 row)
@@ -130,7 +130,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into second_table select * from first_table']::text[],
 								   false);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -138,7 +138,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into second_table select * from first_table']::text[],
 								   false);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -147,7 +147,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
 								   false);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 40
 (1 row)
@@ -162,7 +162,7 @@ SELECT quote_literal(node_name) as node_name, node_port as node_port
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['create index first_table_index on first_table(a)']::text[],
 								   false);
- node_name | node_port | success |    result    
+ node_name | node_port | success |    result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | CREATE INDEX
 (1 row)
@@ -171,7 +171,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table first_table']::text[],
 								   false);
- node_name | node_port | success |   result   
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | DROP TABLE
 (1 row)
@@ -179,7 +179,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table second_table']::text[],
 								   false);
- node_name | node_port | success |   result   
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | DROP TABLE
 (1 row)
@@ -188,7 +188,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
 								   false);
- node_name | node_port | success |                     result                     
+ node_name | node_port | success |                     result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | ERROR:  relation "second_table" does not exist
 (1 row)
@@ -200,7 +200,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   true);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 0
 (1 row)
@@ -210,7 +210,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select * from pg_dist_shard']::text[],
 								   true);
- node_name | node_port | success |                  result                  
+ node_name | node_port | success |                  result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single column in query target
 (1 row)
@@ -219,7 +219,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   true);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single row in query result
 (1 row)
@@ -230,7 +230,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,1) a',
 								   		 'select a from generate_series(2,2) a']::text[],
 								   true);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 1
  localhost |     57637 | t       | 2
@@ -242,7 +242,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,1) a',
 								   		 'select a from generate_series(1,2) a']::text[],
 								   true);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 1
  localhost |     57637 | f       | expected a single row in query result
@@ -254,7 +254,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['select a from generate_series(1,2) a',
 								   		 'select a from generate_series(1,2) a']::text[],
 								   true);
- node_name | node_port | success |                result                 
+ node_name | node_port | success |                result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | expected a single row in query result
  localhost |     57637 | f       | expected a single row in query result
@@ -266,7 +266,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY['create table first_table(a int, b int)',
 								   		 'create table second_table(a int, b int)']::text[],
 								   true);
- node_name | node_port | success |    result    
+ node_name | node_port | success |    result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | CREATE TABLE
  localhost |     57637 | t       | CREATE TABLE
@@ -282,7 +282,7 @@ SELECT quote_literal(node_name) as node_name, node_port as node_port
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into first_table select a,a from generate_series(1,20) a']::text[],
 								   true);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -290,7 +290,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from first_table']::text[],
 								   true);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 20
 (1 row)
@@ -299,7 +299,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into second_table select * from first_table']::text[],
 								   true);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -307,7 +307,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['insert into second_table select * from first_table']::text[],
 								   true);
- node_name | node_port | success |   result    
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | INSERT 0 20
 (1 row)
@@ -316,7 +316,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
 								   true);
- node_name | node_port | success | result 
+ node_name | node_port | success | result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | 40
 (1 row)
@@ -325,7 +325,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['create index first_table_index on first_table(a)']::text[],
 								   true);
- node_name | node_port | success |    result    
+ node_name | node_port | success |    result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | CREATE INDEX
 (1 row)
@@ -334,7 +334,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table first_table']::text[],
 								   true);
- node_name | node_port | success |   result   
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | DROP TABLE
 (1 row)
@@ -342,7 +342,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table second_table']::text[],
 								   true);
- node_name | node_port | success |   result   
+ node_name | node_port | success |   result
 ---------------------------------------------------------------------
  localhost |     57637 | t       | DROP TABLE
 (1 row)
@@ -351,21 +351,21 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
 								   true);
- node_name | node_port | success |                     result                     
+ node_name | node_port | success |                     result
 ---------------------------------------------------------------------
  localhost |     57637 | f       | ERROR:  relation "second_table" does not exist
 (1 row)
 
 -- run_command_on_XXX tests
 SELECT * FROM run_command_on_workers('select 1') ORDER BY 2 ASC;
- nodename  | nodeport | success | result 
+ nodename  | nodeport | success | result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | 1
  localhost |    57638 | t       | 1
 (2 rows)
 
 SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') ORDER BY 2 ASC;
- nodename  | nodeport | success | result 
+ nodename  | nodeport | success | result
 ---------------------------------------------------------------------
  localhost |    57637 | t       | 0
  localhost |    57638 | t       | 0
@@ -375,13 +375,13 @@ SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') O
 SET citus.shard_count TO 5;
 CREATE TABLE check_placements (key int);
 SELECT create_distributed_table('check_placements', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM run_command_on_placements('check_placements', 'select 1');
- nodename  | nodeport | shardid | success | result 
+ nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
  localhost |    57637 | 1240000 | t       | 1
  localhost |    57638 | 1240000 | t       | 1
@@ -398,7 +398,7 @@ SELECT * FROM run_command_on_placements('check_placements', 'select 1');
 UPDATE pg_dist_shard_placement SET shardstate = 3
 	WHERE shardid % 2 = 0 AND nodeport = :worker_1_port;
 SELECT * FROM run_command_on_placements('check_placements', 'select 1');
- nodename  | nodeport | shardid | success | result 
+ nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
  localhost |    57638 | 1240000 | t       | 1
  localhost |    57637 | 1240001 | t       | 1
@@ -413,17 +413,17 @@ DROP TABLE check_placements CASCADE;
 -- make sure run_on_all_colocated_placements correctly detects colocation
 CREATE TABLE check_colocated (key int);
 SELECT create_distributed_table('check_colocated', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count TO 4;
 CREATE TABLE second_table (key int);
 SELECT create_distributed_table('second_table', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
@@ -435,9 +435,9 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 5;
 CREATE TABLE second_table (key int);
 SELECT create_distributed_table('second_table', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
@@ -449,14 +449,14 @@ SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 5;
 CREATE TABLE second_table (key int);
 SELECT create_distributed_table('second_table', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
 												  'select 1');
- nodename  | nodeport | shardid1 | shardid2 | success | result 
+ nodename  | nodeport | shardid1 | shardid2 | success | result
 ---------------------------------------------------------------------
  localhost |    57637 |  1240005 |  1240019 | t       | 1
  localhost |    57638 |  1240005 |  1240019 | t       | 1
@@ -476,13 +476,13 @@ DROP TABLE second_table CASCADE;
 SET citus.shard_count TO 5;
 CREATE TABLE check_shards (key int);
 SELECT create_distributed_table('check_shards', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM run_command_on_shards('check_shards', 'select 1');
- shardid | success | result 
+ shardid | success | result
 ---------------------------------------------------------------------
  1240024 | t       | 1
  1240025 | t       | 1
@@ -494,7 +494,7 @@ SELECT * FROM run_command_on_shards('check_shards', 'select 1');
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid % 2 = 0;
 SELECT * FROM run_command_on_shards('check_shards', 'select 1');
 NOTICE:  some shards do  not have active placements
- shardid | success | result 
+ shardid | success | result
 ---------------------------------------------------------------------
  1240025 | t       | 1
  1240027 | t       | 1

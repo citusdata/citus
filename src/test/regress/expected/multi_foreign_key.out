@@ -7,9 +7,9 @@ SET citus.shard_count TO 32;
 -- create tables
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test foreign constraint creation with not supported parameters
@@ -47,9 +47,9 @@ HINT:  Please change "citus.shard_replication_factor to 1". To learn more about 
 DROP TABLE self_referencing_table;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
 SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE self_referencing_table ADD CONSTRAINT fkey FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id);
@@ -86,14 +86,14 @@ HINT:  Please change "citus.shard_replication_factor to 1". To learn more about 
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- test foreign constraint creation on append and range distributed tables
--- foreign keys are supported either in between distributed tables including the 
+-- foreign keys are supported either in between distributed tables including the
 -- distribution column or from distributed tables to reference tables.
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
@@ -104,9 +104,9 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'range');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int,FOREIGN KEY (id) REFERENCES referenced_table(id));
@@ -119,15 +119,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test inserts
@@ -154,7 +154,7 @@ INSERT INTO referencing_table VALUES(2, 2);
 TRUNCATE referenced_table CASCADE;
 NOTICE:  truncate cascades to table "referencing_table"
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -166,15 +166,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE CASCADE);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- single shard cascading delete
@@ -182,12 +182,12 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -196,7 +196,7 @@ INSERT INTO referenced_table VALUES(2, 2);
 INSERT INTO referencing_table VALUES(2, 2);
 DELETE FROM referenced_table;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -213,15 +213,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
@@ -235,12 +235,12 @@ DELETE FROM referenced_table WHERE id = 1;
 DELETE FROM referencing_table WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -250,15 +250,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE RESTRICT);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
@@ -272,13 +272,13 @@ DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |           1
 (1 row)
@@ -289,15 +289,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE NO ACTION DEFERRABLE INITIALLY DEFERRED);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
@@ -311,13 +311,13 @@ UPDATE referenced_table SET test_column = 10 WHERE id = 1;
 UPDATE referencing_table SET id = 10 WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |          10
 (1 row)
@@ -328,15 +328,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE RESTRICT);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
@@ -350,13 +350,13 @@ UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |           1
 (1 row)
@@ -367,20 +367,20 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
     |      2
 (1 row)
@@ -392,15 +392,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH FULL);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
@@ -408,7 +408,7 @@ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign k
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -419,16 +419,16 @@ DROP TABLE referenced_table;
 SET citus.shard_count TO 4;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- verify that we skip foreign key validation when propagation is turned off
@@ -472,16 +472,16 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash', colocate_with => 'none');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
@@ -493,15 +493,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- columns for the referenced table is empty
@@ -554,12 +554,12 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -577,12 +577,12 @@ DELETE FROM referenced_table WHERE id = 1;
 DELETE FROM referencing_table WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -600,13 +600,13 @@ DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |           1
 (1 row)
@@ -623,13 +623,13 @@ UPDATE referenced_table SET test_column = 10 WHERE id = 1;
 UPDATE referencing_table SET id = 10 WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |          10
 (1 row)
@@ -646,13 +646,13 @@ UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
+ id | test_column
 ---------------------------------------------------------------------
   1 |          10
 (1 row)
@@ -662,7 +662,7 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE;
 INSERT INTO referencing_table VALUES(null, 2);
 SELECT * FROM referencing_table ORDER BY 1,2;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
  10 |      1
     |      2
@@ -677,7 +677,7 @@ ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign k
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
  10 |      1
 (1 row)
@@ -690,15 +690,15 @@ DROP TABLE referenced_table;
 CREATE TABLE cyclic_reference_table1(id int, table2_id int, PRIMARY KEY(id, table2_id));
 CREATE TABLE cyclic_reference_table2(id int, table1_id int, PRIMARY KEY(id, table1_id));
 SELECT create_distributed_table('cyclic_reference_table1', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('cyclic_reference_table2', 'table1_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE cyclic_reference_table1 ADD CONSTRAINT cyclic_constraint1 FOREIGN KEY(id, table2_id) REFERENCES cyclic_reference_table2(table1_id, id) DEFERRABLE INITIALLY DEFERRED;
@@ -715,13 +715,13 @@ INSERT INTO cyclic_reference_table2 VALUES(1, 1);
 COMMIT;
 -- verify that rows are actually inserted
 SELECT * FROM cyclic_reference_table1;
- id | table2_id 
+ id | table2_id
 ---------------------------------------------------------------------
   1 |         1
 (1 row)
 
 SELECT * FROM cyclic_reference_table2;
- id | table1_id 
+ id | table1_id
 ---------------------------------------------------------------------
   1 |         1
 (1 row)
@@ -755,13 +755,13 @@ INSERT INTO transaction_referenced_table VALUES(1);
 INSERT INTO transaction_referencing_table VALUES(1, 1);
 -- verify that rows are actually inserted
 SELECT * FROM transaction_referenced_table;
- id 
+ id
 ---------------------------------------------------------------------
   1
 (1 row)
 
 SELECT * FROM transaction_referencing_table;
- id | ref_id 
+ id | ref_id
 ---------------------------------------------------------------------
   1 |      1
 (1 row)
@@ -778,9 +778,9 @@ CREATE TABLE self_referencing_table1(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_table1(id, other_column)
 );
 SELECT create_distributed_table('self_referencing_table1', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test insertion to self referencing table
@@ -792,7 +792,7 @@ DETAIL:  Key (id, other_column_ref)=(1, 3) is not present in table "self_referen
 CONTEXT:  while executing command on localhost:xxxxx
 -- verify that rows are actually inserted
 SELECT * FROM self_referencing_table1;
- id | other_column | other_column_ref 
+ id | other_column | other_column_ref
 ---------------------------------------------------------------------
   1 |            1 |                1
 (1 row)
@@ -802,9 +802,9 @@ DROP TABLE self_referencing_table1;
 -- test self referencing foreign key with ALTER TABLE
 CREATE TABLE self_referencing_table2(id int, other_column int, other_column_ref int, PRIMARY KEY(id, other_column));
 SELECT create_distributed_table('self_referencing_table2', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE self_referencing_table2 ADD CONSTRAINT self_referencing_fk_constraint FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_table2(id, other_column);
@@ -817,7 +817,7 @@ DETAIL:  Key (id, other_column_ref)=(1, 3) is not present in table "self_referen
 CONTEXT:  while executing command on localhost:xxxxx
 -- verify that rows are actually inserted
 SELECT * FROM self_referencing_table2;
- id | other_column | other_column_ref 
+ id | other_column | other_column_ref
 ---------------------------------------------------------------------
   1 |            1 |                1
 (1 row)
@@ -828,9 +828,9 @@ DROP TABLE self_referencing_table2;
 -- test foreign key creation on CREATE TABLE from reference table
 CREATE TABLE referenced_by_reference_table(id int PRIMARY KEY, other_column int);
 SELECT create_distributed_table('referenced_by_reference_table', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
@@ -841,16 +841,16 @@ DETAIL:  A reference table can only have reference keys to other reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test foreign key creation on CREATE TABLE from reference table to local table
@@ -870,18 +870,18 @@ CREATE TABLE self_referencing_reference_table(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test foreign key creation on ALTER TABLE from reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
@@ -890,9 +890,9 @@ DETAIL:  A reference table can only have reference keys to other reference table
 -- test foreign key creation on ALTER TABLE to reference table
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -900,9 +900,9 @@ ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referenc
 DROP TABLE reference_table_second;
 CREATE TABLE reference_table_second(id int, referencing_column int);
 SELECT create_reference_table('reference_table_second');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -913,9 +913,9 @@ DETAIL:  drop cascades to constraint fk on table references_to_reference_table
 drop cascades to constraint fk on table reference_table_second
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
@@ -930,9 +930,9 @@ CREATE TABLE self_referencing_reference_table(
     PRIMARY KEY(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);

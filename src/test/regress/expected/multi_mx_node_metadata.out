@@ -22,7 +22,7 @@ $$;
 -- add a node to the cluster
 SELECT master_add_node('localhost', :worker_1_port) As nodeid_1 \gset
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57637 | f           | f
 (1 row)
@@ -30,41 +30,41 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 -- create couple of tables
 CREATE TABLE ref_table(a int primary key);
 SELECT create_reference_table('ref_table');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE dist_table_1(a int primary key, b int references ref_table(a));
 SELECT create_distributed_table('dist_table_1', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- update the node
 SELECT 1 FROM master_update_node((SELECT nodeid FROM pg_dist_node),
                                  'localhost', :worker_2_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57638 | f           | f
 (1 row)
 
 -- start syncing metadata to the node
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57638 | t           | t
 (1 row)
@@ -77,19 +77,19 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 -- if the maintenance daemon does the metadata sync too fast.
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57638 | t           | t
 (1 row)
 
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57637 | t           | f
 (1 row)
@@ -98,19 +98,19 @@ END;
 -- wait until maintenance daemon does the next metadata sync, and then
 -- check if metadata is synced again
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | t
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -119,19 +119,19 @@ SELECT verify_metadata('localhost', :worker_1_port);
 -- a unwriteable node.
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    57637 | t           | t
 (1 row)
 
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | nodename  | nodeport | hasmetadata | metadatasynced 
+ nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | localhost |    12345 | t           | f
 (1 row)
@@ -139,32 +139,32 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 END;
 -- maintenace daemon metadata sync should fail, because node is still unwriteable.
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | f
 (1 row)
 
 -- update it back to :worker_1_port, now metadata should be synced
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | t
 (1 row)
@@ -175,7 +175,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
 NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
@@ -183,14 +183,14 @@ SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 -- Create a table with shards on both nodes
 CREATE TABLE dist_table_2(a int);
 SELECT create_distributed_table('dist_table_2', 'a');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO dist_table_2 SELECT i FROM generate_series(1, 100) i;
 SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
- mark_node_readonly 
+ mark_node_readonly
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -198,13 +198,13 @@ SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
 -- Now updating the other node will mark worker 2 as not synced.
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | f
       3 | t           | f
@@ -214,13 +214,13 @@ COMMIT;
 -- worker_2 is out of sync, so further updates aren't sent to it and
 -- we shouldn't see the warnings.
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 23456);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | f
       3 | t           | f
@@ -228,20 +228,20 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 -- Make the node writeable.
 SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
- mark_node_readonly 
+ mark_node_readonly
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Mark the node readonly again, so the following master_update_node warns
 SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
- mark_node_readonly 
+ mark_node_readonly
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -249,46 +249,46 @@ SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
 -- Revert the nodeport of worker 1.
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT count(*) FROM dist_table_2;
- count 
+ count
 ---------------------------------------------------------------------
    100
 (1 row)
 
 END;
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Make the node writeable.
 SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
- mark_node_readonly 
+ mark_node_readonly
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
- verify_metadata | verify_metadata 
+ verify_metadata | verify_metadata
 ---------------------------------------------------------------------
  t               | t
 (1 row)
@@ -298,7 +298,7 @@ SELECT verify_metadata('localhost', :worker_1_port),
 ---------------------------------------------------------------------
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
@@ -306,7 +306,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 ROLLBACK;
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
- verify_metadata | verify_metadata 
+ verify_metadata | verify_metadata
 ---------------------------------------------------------------------
  t               | t
 (1 row)
@@ -316,7 +316,7 @@ SELECT verify_metadata('localhost', :worker_1_port),
 ---------------------------------------------------------------------
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
@@ -324,13 +324,13 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | f
       3 | t           | t
@@ -338,7 +338,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 BEGIN;
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
@@ -346,13 +346,13 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
- nodeid | hasmetadata | metadatasynced 
+ nodeid | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
       2 | t           | t
       3 | t           | t
@@ -360,7 +360,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
- verify_metadata | verify_metadata 
+ verify_metadata | verify_metadata
 ---------------------------------------------------------------------
  t               | t
 (1 row)
@@ -371,26 +371,26 @@ SELECT verify_metadata('localhost', :worker_1_port),
 -- Don't drop the reference table so it has shards on the nodes being disabled
 DROP TABLE dist_table_1, dist_table_2;
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -399,15 +399,15 @@ SELECT verify_metadata('localhost', :worker_1_port);
 -- Test master_disable_node() when the node that is being disabled is actually down
 ---------------------------------------------------------------------
 SELECT master_update_node(:nodeid_2, 'localhost', 1);
- master_update_node 
+ master_update_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- set metadatasynced so we try porpagating metadata changes
@@ -419,44 +419,44 @@ DETAIL:  connection error: localhost:xxxxx
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT 1 FROM master_disable_node('localhost', 1);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT master_update_node(:nodeid_2, 'localhost', :worker_2_port);
- master_update_node 
+ master_update_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -466,15 +466,15 @@ SELECT verify_metadata('localhost', :worker_1_port);
 ---------------------------------------------------------------------
 -- node 1 is down.
 SELECT master_update_node(:nodeid_1, 'localhost', 1);
- master_update_node 
+ master_update_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- set metadatasynced so we try porpagating metadata changes
@@ -486,39 +486,39 @@ DETAIL:  connection error: localhost:xxxxx
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
- stop_metadata_sync_to_node 
+ stop_metadata_sync_to_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- bring up node 1
 SELECT master_update_node(:nodeid_1, 'localhost', :worker_1_port);
- master_update_node 
+ master_update_node
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT wait_until_metadata_sync();
- wait_until_metadata_sync 
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
- verify_metadata 
+ verify_metadata
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -527,7 +527,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 DROP TABLE ref_table;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)

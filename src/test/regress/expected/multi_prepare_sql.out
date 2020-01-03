@@ -2,8 +2,8 @@
 -- MULTI_PREPARE_SQL
 --
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 -- Tests covering PREPARE statements. Many of the queries are
 -- taken from other regression test files and converted into
@@ -103,111 +103,111 @@ SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 -- execute prepared statements
 EXECUTE prepared_test_1;
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
 
 EXECUTE prepared_test_2;
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
 
 EXECUTE prepared_test_3;
- count 
+ count
 ---------------------------------------------------------------------
   1956
 (1 row)
 
 EXECUTE prepared_test_4;
- count 
+ count
 ---------------------------------------------------------------------
   7806
 (1 row)
 
 EXECUTE prepared_test_5;
- count 
+ count
 ---------------------------------------------------------------------
     39
 (1 row)
 
 -- execute prepared statements with different parameters
 EXECUTE prepared_test_6(155);
- count 
+ count
 ---------------------------------------------------------------------
  11813
 (1 row)
 
 EXECUTE prepared_test_6(1555);
- count 
+ count
 ---------------------------------------------------------------------
  10185
 (1 row)
 
 EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
-        supp_nation        |        cust_nation        | l_year |  revenue   
+        supp_nation        |        cust_nation        | l_year |  revenue
 ---------------------------------------------------------------------
  UNITED KINGDOM            | CHINA                     |   1996 | 18560.2200
 (1 row)
 
 EXECUTE prepared_test_7('FRANCE', 'GERMANY');
-        supp_nation        |        cust_nation        | l_year |  revenue  
+        supp_nation        |        cust_nation        | l_year |  revenue
 ---------------------------------------------------------------------
  GERMANY                   | FRANCE                    |   1995 | 2399.2948
 (1 row)
 
 -- now, execute prepared statements with random order
 EXECUTE prepared_test_6(155);
- count 
+ count
 ---------------------------------------------------------------------
  11813
 (1 row)
 
 EXECUTE prepared_test_3;
- count 
+ count
 ---------------------------------------------------------------------
   1956
 (1 row)
 
 EXECUTE prepared_test_7('FRANCE', 'GERMANY');
-        supp_nation        |        cust_nation        | l_year |  revenue  
+        supp_nation        |        cust_nation        | l_year |  revenue
 ---------------------------------------------------------------------
  GERMANY                   | FRANCE                    |   1995 | 2399.2948
 (1 row)
 
 EXECUTE prepared_test_5;
- count 
+ count
 ---------------------------------------------------------------------
     39
 (1 row)
 
 EXECUTE prepared_test_1;
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
 
 EXECUTE prepared_test_6(1555);
- count 
+ count
 ---------------------------------------------------------------------
  10185
 (1 row)
 
 EXECUTE prepared_test_4;
- count 
+ count
 ---------------------------------------------------------------------
   7806
 (1 row)
 
 EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
-        supp_nation        |        cust_nation        | l_year |  revenue   
+        supp_nation        |        cust_nation        | l_year |  revenue
 ---------------------------------------------------------------------
  UNITED KINGDOM            | CHINA                     |   1996 | 18560.2200
 (1 row)
 
 EXECUTE prepared_test_2;
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
@@ -215,7 +215,7 @@ EXECUTE prepared_test_2;
 -- CREATE TABLE ... AS EXECUTE prepared_statement tests
 CREATE TEMP TABLE prepared_sql_test_7 AS EXECUTE prepared_test_7('UNITED KINGDOM', 'CHINA');
 SELECT * from prepared_sql_test_7;
-        supp_nation        |        cust_nation        | l_year |  revenue   
+        supp_nation        |        cust_nation        | l_year |  revenue
 ---------------------------------------------------------------------
  UNITED KINGDOM            | CHINA                     |   1996 | 18560.2200
 (1 row)
@@ -224,26 +224,26 @@ SELECT * from prepared_sql_test_7;
 RESET citus.task_executor_type;
 -- execute prepared statements
 EXECUTE prepared_test_1;
- count 
+ count
 ---------------------------------------------------------------------
   2985
 (1 row)
 
 EXECUTE prepared_test_2;
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
 
 -- execute prepared statements with different parameters
 EXECUTE prepared_test_6(155);
- count 
+ count
 ---------------------------------------------------------------------
  11813
 (1 row)
 
 EXECUTE prepared_test_6(1555);
- count 
+ count
 ---------------------------------------------------------------------
  10185
 (1 row)
@@ -261,9 +261,9 @@ CREATE TABLE router_executor_table (
 );
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('router_executor_table', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test parameterized inserts
@@ -276,7 +276,7 @@ EXECUTE prepared_insert('comment-4', '(4, 40)');
 EXECUTE prepared_insert('comment-5', '(5, 50)');
 EXECUTE prepared_insert('comment-6', '(6, 60)');
 SELECT * FROM router_executor_table ORDER BY comment;
- id |  comment  | stats  
+ id |  comment  | stats
 ---------------------------------------------------------------------
   1 | comment-1 | (1,10)
   1 | comment-2 | (2,20)
@@ -291,37 +291,37 @@ PREPARE prepared_select(integer, integer) AS
 	SELECT count(*) FROM router_executor_table
 		WHERE id = 1 AND stats = ROW($1, $2)::test_composite_type;
 EXECUTE prepared_select(1, 10);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(2, 20);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(3, 30);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(4, 40);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(5, 50);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(6, 60);
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -348,9 +348,9 @@ CREATE TABLE prepare_table (
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('prepare_table','key','hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 PREPARE prepared_no_parameter_insert AS
@@ -400,7 +400,7 @@ EXECUTE prepared_non_partition_parameter_insert(50);
 EXECUTE prepared_non_partition_parameter_insert(60);
 -- check inserted values
 SELECT * FROM prepare_table ORDER BY key, value;
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    0 |    20
@@ -408,24 +408,24 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |    40
    0 |    50
    0 |    60
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
    1 |    10
-   1 |      
+   1 |
    2 |    20
-   2 |      
+   2 |
    3 |    30
-   3 |      
+   3 |
    4 |    40
-   4 |      
+   4 |
    5 |    50
-   5 |      
+   5 |
    6 |    60
-   6 |      
+   6 |
    7 |    70
    8 |    80
    9 |    90
@@ -454,45 +454,45 @@ PREPARE prepared_router_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_router_partition_column_select(1);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    1 |    10
-   1 |      
+   1 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(2);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    2 |    20
-   2 |      
+   2 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(3);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    3 |    30
-   3 |      
+   3 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(4);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    4 |    40
-   4 |      
+   4 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(5);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    5 |    50
-   5 |      
+   5 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(6);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    6 |    60
-   6 |      
+   6 |
 (2 rows)
 
 PREPARE prepared_router_non_partition_column_select(int) AS
@@ -508,37 +508,37 @@ PREPARE prepared_router_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_router_non_partition_column_select(10);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(20);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    20
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(30);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    30
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(40);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    40
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(50);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    50
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(60);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    60
 (1 row)
@@ -556,42 +556,42 @@ PREPARE prepared_real_time_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_real_time_non_partition_column_select(10);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(20);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    20
    2 |    20
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(30);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    30
    3 |    30
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(40);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    40
    4 |    40
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(50);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    50
    5 |    50
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(60);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    60
    6 |    60
@@ -610,56 +610,56 @@ PREPARE prepared_real_time_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_real_time_partition_column_select(1);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
-   1 |      
+   1 |
 (3 rows)
 
 EXECUTE prepared_real_time_partition_column_select(2);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    2 |    20
-   2 |      
+   2 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(3);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    3 |    30
-   3 |      
+   3 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(4);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    4 |    40
-   4 |      
+   4 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(5);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    5 |    50
-   5 |      
+   5 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(6);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    6 |    60
-   6 |      
+   6 |
 (4 rows)
 
 -- check task-tracker executor
@@ -676,42 +676,42 @@ PREPARE prepared_task_tracker_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_task_tracker_non_partition_column_select(10);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(20);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    20
    2 |    20
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(30);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    30
    3 |    30
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(40);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    40
    4 |    40
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(50);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    50
    5 |    50
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(60);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    60
    6 |    60
@@ -730,56 +730,56 @@ PREPARE prepared_task_tracker_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_task_tracker_partition_column_select(1);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
-   1 |      
+   1 |
 (3 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(2);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    2 |    20
-   2 |      
+   2 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(3);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    3 |    30
-   3 |      
+   3 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(4);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    4 |    40
-   4 |      
+   4 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(5);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    5 |    50
-   5 |      
+   5 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(6);
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    10
    1 |    10
    6 |    60
-   6 |      
+   6 |
 (4 rows)
 
 RESET citus.task_executor_type;
@@ -804,7 +804,7 @@ EXECUTE prepared_non_partition_parameter_update(50, 52);
 EXECUTE prepared_non_partition_parameter_update(60, 62);
 -- check after updates
 SELECT * FROM prepare_table ORDER BY key, value;
- key | value 
+ key | value
 ---------------------------------------------------------------------
    0 |    12
    0 |    22
@@ -812,12 +812,12 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |    42
    0 |    52
    0 |    62
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
    1 |    11
    1 |    11
    2 |    21
@@ -852,14 +852,14 @@ EXECUTE prepared_non_partition_parameter_delete(52);
 EXECUTE prepared_non_partition_parameter_delete(62);
 -- check after deletes
 SELECT * FROM prepare_table ORDER BY key, value;
- key | value 
+ key | value
 ---------------------------------------------------------------------
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
 (6 rows)
 
 -- Testing parameters + function evaluation
@@ -870,9 +870,9 @@ CREATE TABLE prepare_func_table (
     value3 timestamptz DEFAULT now()
 );
 SELECT create_distributed_table('prepare_func_table', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- test function evaluation with parameters in an expression
@@ -886,7 +886,7 @@ EXECUTE prepared_function_evaluation_insert(4);
 EXECUTE prepared_function_evaluation_insert(5);
 EXECUTE prepared_function_evaluation_insert(6);
 SELECT key, value1 FROM prepare_func_table ORDER BY key;
- key | value1 
+ key | value1
 ---------------------------------------------------------------------
  2   |      0
  3   |      0
@@ -907,7 +907,7 @@ EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 SELECT key, value2 FROM prepare_func_table;
- key | value2 
+ key | value2
 ---------------------------------------------------------------------
  key | value
  key | value
@@ -924,9 +924,9 @@ CREATE TABLE text_partition_column_table (
     value int
 );
 SELECT create_distributed_table('text_partition_column_table', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 PREPARE prepared_relabel_insert(varchar) AS
@@ -938,7 +938,7 @@ EXECUTE prepared_relabel_insert('test');
 EXECUTE prepared_relabel_insert('test');
 EXECUTE prepared_relabel_insert('test');
 SELECT key, value FROM text_partition_column_table ORDER BY key;
- key  | value 
+ key  | value
 ---------------------------------------------------------------------
  test |     1
  test |     1
@@ -954,7 +954,7 @@ CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$');
 SELECT run_command_on_workers($$
   CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$')
 $$);
-       run_command_on_workers        
+       run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"CREATE DOMAIN")
  (localhost,57638,t,"CREATE DOMAIN")
@@ -965,9 +965,9 @@ CREATE TABLE domain_partition_column_table (
     value int
 );
 SELECT create_distributed_table('domain_partition_column_table', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 PREPARE prepared_coercion_to_domain_insert(text) AS
@@ -979,7 +979,7 @@ EXECUTE prepared_coercion_to_domain_insert('test-4');
 EXECUTE prepared_coercion_to_domain_insert('test-5');
 EXECUTE prepared_coercion_to_domain_insert('test-6');
 SELECT key, value FROM domain_partition_column_table ORDER BY key;
-  key   | value 
+  key   | value
 ---------------------------------------------------------------------
  test-1 |     1
  test-2 |     1
@@ -1001,9 +1001,9 @@ CREATE TABLE http_request (
   response_time_msec INT
 );
 SELECT create_distributed_table('http_request', 'site_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 PREPARE FOO AS INSERT INTO http_request (
@@ -1020,7 +1020,7 @@ EXECUTE foo;
 EXECUTE foo;
 EXECUTE foo;
 SELECT count(distinct ingest_time) FROM http_request WHERE site_id = 1;
- count 
+ count
 ---------------------------------------------------------------------
      6
 (1 row)
@@ -1044,9 +1044,9 @@ CREATE TABLE test_table (test_id integer NOT NULL, data text);
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('test_table', 'test_id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- avoid 9.6+ only context messages
@@ -1054,7 +1054,7 @@ SELECT create_distributed_table('test_table', 'test_id', 'hash');
 --plain statement, needs planning
 SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
 NOTICE:  replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1062,12 +1062,12 @@ NOTICE:  replanning
 PREPARE countsome AS SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
 EXECUTE countsome; -- should indicate planning
 NOTICE:  replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1078,12 +1078,12 @@ WHERE shardid IN (
     AND nodeport = :worker_1_port;
 EXECUTE countsome; -- should indicate replanning
 NOTICE:  replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1093,20 +1093,20 @@ FROM pg_dist_shard_placement
 WHERE shardid IN (
         SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
     AND nodeport = :worker_1_port;
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
- 
+
+
 (2 rows)
 
 EXECUTE countsome; -- should indicate replanning
 NOTICE:  replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
- count 
+ count
 ---------------------------------------------------------------------
 (0 rows)
 

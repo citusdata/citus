@@ -12,7 +12,7 @@ $$;
 -- Check multi_cat_agg() aggregate which is used to implement json_agg()
 SELECT json_cat_agg(i) FROM
 	(VALUES ('[1,{"a":2}]'::json), ('[null]'::json), (NULL), ('["3",5,4]'::json)) AS t(i);
-         json_cat_agg          
+         json_cat_agg
 ---------------------------------------------------------------------
  [1, {"a":2}, null, "3", 5, 4]
 (1 row)
@@ -27,7 +27,7 @@ ERROR:  json_agg with order by is unsupported
 -- Check json_agg() for different data types and LIMIT clauses
 SELECT array_sort(json_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                       array_sort                       
+                       array_sort
 ---------------------------------------------------------------------
  [2132, 15635, 24027, 63700, 67310, 155190]
  [106170]
@@ -43,7 +43,7 @@ SELECT array_sort(json_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(json_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                              array_sort                               
+                              array_sort
 ---------------------------------------------------------------------
  [13309.60, 21168.23, 22824.48, 28955.64, 45983.16, 49620.16]
  [44694.46]
@@ -59,7 +59,7 @@ SELECT array_sort(json_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(json_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                             array_sort                                             
+                                             array_sort
 ---------------------------------------------------------------------
  ["1996-01-29", "1996-01-30", "1996-03-13", "1996-03-30", "1996-04-12", "1996-04-21"]
  ["1997-01-28"]
@@ -75,7 +75,7 @@ SELECT array_sort(json_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(json_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                             array_sort                                             
+                                             array_sort
 ---------------------------------------------------------------------
  ["AIR       ", "FOB       ", "MAIL      ", "MAIL      ", "REG AIR   ", "TRUCK     "]
  ["RAIL      "]
@@ -91,7 +91,7 @@ SELECT array_sort(json_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 
 -- Check that we can execute json_agg() within other functions
 SELECT json_array_length(json_agg(l_orderkey)) FROM lineitem;
- json_array_length 
+ json_array_length
 ---------------------------------------------------------------------
              12000
 (1 row)
@@ -103,7 +103,7 @@ SELECT json_array_length(json_agg(l_orderkey)) FROM lineitem;
 SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(json_agg(l_orderkey)) FROM lineitem
 	WHERE l_quantity < 5 AND l_orderkey > 5500 AND l_orderkey < 9500
 	GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity | count |          avg          |                                                     array_sort                                                     
+ l_quantity | count |          avg          |                                                     array_sort
 ---------------------------------------------------------------------
        1.00 |    17 | 1477.1258823529411765 | [5543, 5633, 5634, 5698, 5766, 5856, 5857, 5986, 8997, 9026, 9158, 9184, 9220, 9222, 9348, 9383, 9476]
        2.00 |    19 | 3078.4242105263157895 | [5506, 5540, 5573, 5669, 5703, 5730, 5798, 5831, 5893, 5920, 5923, 9030, 9058, 9123, 9124, 9188, 9344, 9441, 9476]
@@ -114,7 +114,7 @@ SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(json_agg(l_orderke
 SELECT l_quantity, array_sort(json_agg(extract (month FROM o_orderdate))) AS my_month
 	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                             my_month                             
+ l_quantity |                             my_month
 ---------------------------------------------------------------------
        1.00 | [2, 3, 4, 4, 4, 5, 5, 5, 6, 7, 7, 7, 7, 9, 9, 11, 11]
        2.00 | [1, 3, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8, 10, 10, 11, 11, 11, 12, 12]
@@ -125,7 +125,7 @@ SELECT l_quantity, array_sort(json_agg(extract (month FROM o_orderdate))) AS my_
 SELECT l_quantity, array_sort(json_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE l_quantity < 5
 	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                    array_sort                     
+ l_quantity |                    array_sort
 ---------------------------------------------------------------------
        1.00 | [11269, 11397, 11713, 11715, 11973, 18317, 18445]
        2.00 | [11847, 18061, 18247, 18953]
@@ -136,7 +136,7 @@ SELECT l_quantity, array_sort(json_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE 
 -- Check that we can execute json_agg() with an expression containing NULL values
 SELECT json_agg(case when l_quantity > 20 then l_quantity else NULL end)
 	FROM lineitem WHERE l_orderkey < 5;
-                                            json_agg                                             
+                                            json_agg
 ---------------------------------------------------------------------
  [null, 36.00, null, 28.00, 24.00, 32.00, 38.00, 45.00, 49.00, 27.00, null, 28.00, 26.00, 30.00]
 (1 row)
@@ -144,7 +144,7 @@ SELECT json_agg(case when l_quantity > 20 then l_quantity else NULL end)
 -- Check that we can execute json_agg() with an expression containing different types
 SELECT json_agg(case when l_quantity > 20 then to_json(l_quantity) else '"f"'::json end)
 	FROM lineitem WHERE l_orderkey < 5;
-                                           json_agg                                           
+                                           json_agg
 ---------------------------------------------------------------------
  ["f", 36.00, "f", 28.00, 24.00, 32.00, 38.00, 45.00, 49.00, 27.00, "f", 28.00, 26.00, 30.00]
 (1 row)
@@ -152,7 +152,7 @@ SELECT json_agg(case when l_quantity > 20 then to_json(l_quantity) else '"f"'::j
 -- Check that we can execute json_agg() with an expression containing json arrays
 SELECT json_agg(json_build_array(l_quantity, l_shipdate))
 	FROM lineitem WHERE l_orderkey < 3;
-                                                                             json_agg                                                                             
+                                                                             json_agg
 ---------------------------------------------------------------------
  [[17.00, "1996-03-13"], [36.00, "1996-04-12"], [8.00, "1996-01-29"], [28.00, "1996-04-21"], [24.00, "1996-03-30"], [32.00, "1996-01-30"], [38.00, "1997-01-28"]]
 (1 row)
@@ -160,7 +160,7 @@ SELECT json_agg(json_build_array(l_quantity, l_shipdate))
 -- Check that we can execute json_agg() with an expression containing arrays
 SELECT json_agg(ARRAY[l_quantity, l_orderkey])
 	FROM lineitem WHERE l_orderkey < 3;
-   json_agg   
+   json_agg
 ---------------------------------------------------------------------
  [[17.00,1], +
   [36.00,1], +
@@ -173,8 +173,8 @@ SELECT json_agg(ARRAY[l_quantity, l_orderkey])
 
 -- Check that we return NULL in case there are no input rows to json_agg()
 SELECT json_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
- json_agg 
+ json_agg
 ---------------------------------------------------------------------
- 
+
 (1 row)
 

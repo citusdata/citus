@@ -2,39 +2,39 @@ SET citus.enable_repartition_joins to ON;
 SET citus.task_executor_type to 'task-tracker';
 SET citus.max_intermediate_result_size TO 2;
 -- should fail because the copy size is ~4kB for each cte
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
+)
 SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 2 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
 SET citus.max_intermediate_result_size TO 9;
 -- regular task-tracker CTE should fail
-WITH cte AS 
+WITH cte AS
 (
-	SELECT 
+	SELECT
 		users_table.user_id, users_table.value_1, users_table.value_2
-	FROM 
+	FROM
 		users_table
-		join 
+		join
 		events_table
-	on 
+	on
 		(users_table.value_3=events_table.value_3)
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
-SELECT 
-	cte.user_id, cte2.value_2 
-FROM 
+)
+SELECT
+	cte.user_id, cte2.value_2
+FROM
 	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
-ORDER BY 
-	1,2 
+ORDER BY
+	1,2
 LIMIT 10;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 9 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
@@ -58,7 +58,7 @@ UNION
 UNION
 (select count(*) as c from cte5)
 ) as foo;
- sum 
+ sum
 ---------------------------------------------------------------------
   91
 (1 row)
@@ -117,7 +117,7 @@ WITH cte AS (
 	cte3 AS (
 		SELECT * FROM events_table WHERE event_type = 1
 	)
-	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3) 
+	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3)
 )
 SELECT * FROM cte;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 3 kB)
@@ -178,38 +178,38 @@ cte4 AS (
 )
 SELECT * FROM cte UNION ALL
 SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
-       1 | Wed Nov 22 18:49:42.327403 2017 |       3 |       2 |       1 |        
-       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |        
-       1 | Wed Nov 22 19:07:03.846437 2017 |       1 |       2 |       5 |        
-       1 | Wed Nov 22 20:56:21.122638 2017 |       2 |       4 |       4 |        
-       1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |        
+       1 | Wed Nov 22 18:49:42.327403 2017 |       3 |       2 |       1 |
+       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |
+       1 | Wed Nov 22 19:07:03.846437 2017 |       1 |       2 |       5 |
+       1 | Wed Nov 22 20:56:21.122638 2017 |       2 |       4 |       4 |
+       1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |
 (5 rows)
 
 -- regular task-tracker CTE, should work since -1 disables the limit
-WITH cte AS 
+WITH cte AS
 (
-	SELECT 
+	SELECT
 		users_table.user_id, users_table.value_1, users_table.value_2
-	FROM 
+	FROM
 		users_table
-		join 
+		join
 		events_table
-	on 
+	on
 		(users_table.value_2=events_table.value_2)
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
-SELECT 
-	cte.user_id, cte2.value_2 
-FROM 
+)
+SELECT
+	cte.user_id, cte2.value_2
+FROM
 	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
-ORDER BY 
-	1,2 
+ORDER BY
+	1,2
 LIMIT 10;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        1 |       0
        1 |       0
@@ -224,15 +224,15 @@ LIMIT 10;
 (10 rows)
 
 -- regular real-time CTE fetches around ~4kb data in each subplan
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table
 ),
 cte2 AS (
 	SELECT * FROM events_table
-) 
+)
 SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
- user_id | value_2 
+ user_id | value_2
 ---------------------------------------------------------------------
        1 |       0
        1 |       0
@@ -247,23 +247,23 @@ SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 (10 rows)
 
 -- regular real-time query fetches ~4kB
-WITH cte AS 
+WITH cte AS
 (
 	SELECT * FROM users_table WHERE user_id IN (1,2,3,4,5)
 )
 SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
-       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
-       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
-       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
-       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
-       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
-       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
-       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
-       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
-       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
-       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |
 (10 rows)
 
 -- nested CTEs
@@ -274,15 +274,15 @@ WITH cte AS (
 	cte3 AS (
 		SELECT * FROM events_table
 	)
-	SELECT 
+	SELECT
 		cte2.user_id, cte2.time, cte3.event_type, cte3.value_2, cte3.value_3
-	FROM 
-		cte2, cte3 
-	WHERE 
+	FROM
+		cte2, cte3
+	WHERE
 		cte2.user_id = cte3.user_id AND cte2.user_id = 1
 )
 SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;
- user_id |              time               | event_type | value_2 | value_3 
+ user_id |              time               | event_type | value_2 | value_3
 ---------------------------------------------------------------------
        1 | Wed Nov 22 22:51:43.132261 2017 |          0 |       2 |       0
        1 | Wed Nov 22 22:51:43.132261 2017 |          0 |       5 |       1

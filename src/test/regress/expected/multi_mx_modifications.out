@@ -6,7 +6,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1330000;
 INSERT INTO limit_orders_mx VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32743;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -16,7 +16,7 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32743;
 INSERT INTO limit_orders_mx VALUES (32744, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32744;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -27,14 +27,14 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32744;
 INSERT INTO limit_orders_mx VALUES (32745, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32745;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 -- and see all the inserted rows
 SELECT * FROM limit_orders_mx ORDER BY 1;
-  id   | symbol | bidder_id |        placed_at         | kind | limit_price 
+  id   | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  32743 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
  32744 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
@@ -43,7 +43,7 @@ SELECT * FROM limit_orders_mx ORDER BY 1;
 
 -- basic single-row INSERT with RETURNING
 INSERT INTO limit_orders_mx VALUES (32746, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy', 20.69) RETURNING *;
-  id   | symbol | bidder_id |        placed_at         | kind | limit_price 
+  id   | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  32746 | AAPL   |      9580 | Tue Oct 19 10:23:54 2004 | buy  |       20.69
 (1 row)
@@ -52,7 +52,7 @@ INSERT INTO limit_orders_mx VALUES (32746, 'AAPL', 9580, '2004-10-19 10:23:54', 
 INSERT INTO limit_orders_mx VALUES (12756, 'MSFT', 10959, '2013-05-08 07:29:23', 'sell',
 								 DEFAULT);
 SELECT * FROM limit_orders_mx WHERE id = 12756;
-  id   | symbol | bidder_id |        placed_at         | kind | limit_price 
+  id   | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  12756 | MSFT   |     10959 | Wed May 08 07:29:23 2013 | sell |        0.00
 (1 row)
@@ -61,7 +61,7 @@ SELECT * FROM limit_orders_mx WHERE id = 12756;
 INSERT INTO limit_orders_mx VALUES (430, upper('ibm'), 214, timestamp '2003-01-28 10:31:17' +
 								 interval '5 hours', 'buy', sqrt(2));
 SELECT * FROM limit_orders_mx WHERE id = 430;
- id  | symbol | bidder_id |        placed_at         | kind |   limit_price   
+ id  | symbol | bidder_id |        placed_at         | kind |   limit_price
 ---------------------------------------------------------------------
  430 | IBM    |       214 | Tue Jan 28 15:31:17 2003 | buy  | 1.4142135623731
 (1 row)
@@ -111,27 +111,27 @@ INSERT INTO limit_orders_mx SELECT * FROM deleted_orders;
 -- test simple DELETE
 INSERT INTO limit_orders_mx VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 246;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 DELETE FROM limit_orders_mx WHERE id = 246;
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 246;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 -- test simple DELETE with RETURNING
 DELETE FROM limit_orders_mx WHERE id = 430 RETURNING *;
- id  | symbol | bidder_id |        placed_at         | kind |   limit_price   
+ id  | symbol | bidder_id |        placed_at         | kind |   limit_price
 ---------------------------------------------------------------------
  430 | IBM    |       214 | Tue Jan 28 15:31:17 2003 | buy  | 1.4142135623731
 (1 row)
 
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 430;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -139,14 +139,14 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 430;
 -- DELETE with expression in WHERE clause
 INSERT INTO limit_orders_mx VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 246;
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 DELETE FROM limit_orders_mx WHERE id = (2 * 123);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 246;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -169,14 +169,14 @@ INSERT INTO limit_orders_mx VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'se
 -- simple UPDATE
 UPDATE limit_orders_mx SET symbol = 'GM' WHERE id = 246;
 SELECT symbol FROM limit_orders_mx WHERE id = 246;
- symbol 
+ symbol
 ---------------------------------------------------------------------
  GM
 (1 row)
 
 -- simple UPDATE with RETURNING
 UPDATE limit_orders_mx SET symbol = 'GM' WHERE id = 246 RETURNING *;
- id  | symbol | bidder_id |        placed_at         | kind | limit_price 
+ id  | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  246 | GM     |       162 | Mon Jul 02 16:32:15 2007 | sell |       20.69
 (1 row)
@@ -184,14 +184,14 @@ UPDATE limit_orders_mx SET symbol = 'GM' WHERE id = 246 RETURNING *;
 -- expression UPDATE
 UPDATE limit_orders_mx SET bidder_id = 6 * 3 WHERE id = 246;
 SELECT bidder_id FROM limit_orders_mx WHERE id = 246;
- bidder_id 
+ bidder_id
 ---------------------------------------------------------------------
         18
 (1 row)
 
 -- expression UPDATE with RETURNING
 UPDATE limit_orders_mx SET bidder_id = 6 * 5 WHERE id = 246 RETURNING *;
- id  | symbol | bidder_id |        placed_at         | kind | limit_price 
+ id  | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | sell |       20.69
 (1 row)
@@ -199,14 +199,14 @@ UPDATE limit_orders_mx SET bidder_id = 6 * 5 WHERE id = 246 RETURNING *;
 -- multi-column UPDATE
 UPDATE limit_orders_mx SET (kind, limit_price) = ('buy', DEFAULT) WHERE id = 246;
 SELECT kind, limit_price FROM limit_orders_mx WHERE id = 246;
- kind | limit_price 
+ kind | limit_price
 ---------------------------------------------------------------------
  buy  |        0.00
 (1 row)
 
 -- multi-column UPDATE with RETURNING
 UPDATE limit_orders_mx SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURNING *;
- id  | symbol | bidder_id |        placed_at         | kind | limit_price 
+ id  | symbol | bidder_id |        placed_at         | kind | limit_price
 ---------------------------------------------------------------------
  246 | GM     |        30 | Mon Jul 02 16:32:15 2007 | buy  |         999
 (1 row)
@@ -230,7 +230,7 @@ ERROR:  relation bidders is not distributed
 WITH deleted_orders AS (INSERT INTO limit_orders_mx VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
 UPDATE limit_orders_mx SET symbol = 'GM';
 SELECT symbol, bidder_id FROM limit_orders_mx WHERE id = 246;
- symbol | bidder_id 
+ symbol | bidder_id
 ---------------------------------------------------------------------
  GM     |        30
 (1 row)
@@ -242,14 +242,14 @@ UPDATE limit_orders_mx SET bidder_id = bidder_id + 1 WHERE id = 246;
 -- IMMUTABLE functions are allowed
 UPDATE limit_orders_mx SET symbol = LOWER(symbol) WHERE id = 246;
 SELECT symbol, bidder_id FROM limit_orders_mx WHERE id = 246;
- symbol | bidder_id 
+ symbol | bidder_id
 ---------------------------------------------------------------------
  gm     |       247
 (1 row)
 
 -- IMMUTABLE functions are allowed -- even in returning
 UPDATE limit_orders_mx SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, LOWER(symbol), symbol;
- id  | lower | symbol 
+ id  | lower | symbol
 ---------------------------------------------------------------------
  246 | gm    | GM
 (1 row)
@@ -276,7 +276,7 @@ UPDATE limit_orders_mx
 SET array_of_values = stable_append_mx(array_of_values, 3) WHERE id = 246;
 ERROR:  STABLE functions used in UPDATE queries cannot be called with column references
 SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
- array_of_values 
+ array_of_values
 ---------------------------------------------------------------------
  {1,2}
 (1 row)
@@ -287,7 +287,7 @@ CREATE FUNCTION temp_strict_func(integer,integer) RETURNS integer AS
 UPDATE limit_orders_mx SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
 ERROR:  null value in column "bidder_id" violates not-null constraint
 SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
- array_of_values 
+ array_of_values
 ---------------------------------------------------------------------
  {1,2}
 (1 row)
@@ -311,7 +311,7 @@ INSERT INTO multiple_hash_mx VALUES ('0', '4');
 INSERT INTO multiple_hash_mx VALUES ('0', '5');
 INSERT INTO multiple_hash_mx VALUES ('0', '6');
 UPDATE multiple_hash_mx SET data = data ||'-1' WHERE category = '0' RETURNING *;
- category | data 
+ category | data
 ---------------------------------------------------------------------
  0        | 1-1
  0        | 2-1
@@ -322,7 +322,7 @@ UPDATE multiple_hash_mx SET data = data ||'-1' WHERE category = '0' RETURNING *;
 (6 rows)
 
 DELETE FROM multiple_hash_mx WHERE category = '0' RETURNING *;
- category | data 
+ category | data
 ---------------------------------------------------------------------
  0        | 1-1
  0        | 2-1
@@ -347,7 +347,7 @@ INSERT 0 1
 INSERT INTO multiple_hash_mx VALUES ('2', '3');
 INSERT 0 1
 INSERT INTO multiple_hash_mx VALUES ('2', '3') RETURNING *;
- category | data 
+ category | data
 ---------------------------------------------------------------------
  2        | 3
 (1 row)
@@ -362,7 +362,7 @@ UPDATE multiple_hash_mx SET data = data ||'-2' WHERE category = '1';
 UPDATE 3
 -- three rows, with RETURNING
 UPDATE multiple_hash_mx SET data = data ||'-2' WHERE category = '1' RETURNING category;
- category 
+ category
 ---------------------------------------------------------------------
  1
  1
@@ -372,7 +372,7 @@ UPDATE multiple_hash_mx SET data = data ||'-2' WHERE category = '1' RETURNING ca
 UPDATE 3
 -- check
 SELECT * FROM multiple_hash_mx WHERE category = '1' ORDER BY category, data;
- category |  data   
+ category |  data
 ---------------------------------------------------------------------
  1        | 1-1-2-2
  1        | 2-2-2
@@ -388,7 +388,7 @@ DELETE FROM multiple_hash_mx WHERE category = '2';
 DELETE 3
 -- three rows, with RETURNING
 DELETE FROM multiple_hash_mx WHERE category = '1' RETURNING category;
- category 
+ category
 ---------------------------------------------------------------------
  1
  1
@@ -398,12 +398,12 @@ DELETE FROM multiple_hash_mx WHERE category = '1' RETURNING category;
 DELETE 3
 -- check
 SELECT * FROM multiple_hash_mx WHERE category = '1' ORDER BY category, data;
- category | data 
+ category | data
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM multiple_hash_mx WHERE category = '2' ORDER BY category, data;
- category | data 
+ category | data
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -430,32 +430,32 @@ SELECT minimum_value::bigint AS min_value,
 SELECT last_value FROM app_analytics_events_mx_id_seq \gset
 ALTER SEQUENCE app_analytics_events_mx_id_seq NO MINVALUE NO MAXVALUE;
 SELECT setval('app_analytics_events_mx_id_seq'::regclass, 3940649673949184);
-      setval      
+      setval
 ---------------------------------------------------------------------
  3940649673949184
 (1 row)
 
 INSERT INTO app_analytics_events_mx VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
-        id        
+        id
 ---------------------------------------------------------------------
  3940649673949185
 (1 row)
 
 INSERT INTO app_analytics_events_mx (app_id, name) VALUES (102, 'Wayz') RETURNING id;
-        id        
+        id
 ---------------------------------------------------------------------
  3940649673949186
 (1 row)
 
 INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNING *;
-        id        | app_id | name 
+        id        | app_id | name
 ---------------------------------------------------------------------
  3940649673949187 |    103 | Mynt
 (1 row)
 
 -- clean up
 SELECT setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
-      setval      
+      setval
 ---------------------------------------------------------------------
  4503599627370497
 (1 row)

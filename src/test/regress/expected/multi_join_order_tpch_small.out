@@ -16,7 +16,7 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
@@ -47,7 +47,7 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition join "lineitem" ]
-                                           QUERY PLAN                                           
+                                           QUERY PLAN
 ---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
@@ -90,7 +90,7 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nation" ][ local partition join "lineitem" ]
-                                                                                 QUERY PLAN                                                                                 
+                                                                                 QUERY PLAN
 ---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC
@@ -131,7 +131,7 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ reference join "part" ]
-                              QUERY PLAN                              
+                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)

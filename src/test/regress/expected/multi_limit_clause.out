@@ -3,9 +3,9 @@
 --
 CREATE TABLE lineitem_hash (LIKE lineitem);
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO lineitem_hash SELECT * FROM lineitem;
@@ -17,7 +17,7 @@ SET client_min_messages TO DEBUG1;
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC;
- count_quantity | l_quantity 
+ count_quantity | l_quantity
 ---------------------------------------------------------------------
             219 |      13.00
             222 |      29.00
@@ -55,7 +55,7 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity DESC, l_quantity DESC;
- count_quantity | l_quantity 
+ count_quantity | l_quantity
 ---------------------------------------------------------------------
             273 |      28.00
             264 |      30.00
@@ -93,7 +93,7 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 5;
- count_quantity | l_quantity 
+ count_quantity | l_quantity
 ---------------------------------------------------------------------
             219 |      13.00
             222 |      29.00
@@ -105,7 +105,7 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 10;
- count_quantity | l_quantity 
+ count_quantity | l_quantity
 ---------------------------------------------------------------------
             219 |      13.00
             222 |      29.00
@@ -122,7 +122,7 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity DESC, l_quantity DESC LIMIT 10;
- count_quantity | l_quantity 
+ count_quantity | l_quantity
 ---------------------------------------------------------------------
             273 |      28.00
             264 |      30.00
@@ -139,34 +139,34 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 -- Check that we can handle limits for simple sort clauses. We order by columns
 -- in the first two tests, and then by a simple expression in the last test.
 SELECT min(l_orderkey) FROM  lineitem;
- min 
+ min
 ---------------------------------------------------------------------
    1
 (1 row)
 
 SELECT l_orderkey FROM lineitem ORDER BY l_orderkey ASC LIMIT 1;
 DEBUG:  push down of limit count: 1
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
           1
 (1 row)
 
 SELECT max(l_orderkey) FROM lineitem;
-  max  
+  max
 ---------------------------------------------------------------------
  14947
 (1 row)
 
 SELECT l_orderkey FROM lineitem ORDER BY l_orderkey DESC LIMIT 1;
 DEBUG:  push down of limit count: 1
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
       14947
 (1 row)
 
 SELECT * FROM lineitem ORDER BY l_orderkey DESC, l_linenumber DESC LIMIT 3;
 DEBUG:  push down of limit count: 3
- l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |            l_comment            
+ l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |            l_comment
 ---------------------------------------------------------------------
       14947 |    107098 |      7099 |            2 |      29.00 |        32047.61 |       0.04 |  0.06 | N            | O            | 11-08-1995 | 08-30-1995   | 12-03-1995    | TAKE BACK RETURN          | FOB        | inal sentiments t
       14947 |     31184 |      3688 |            1 |      14.00 |        15612.52 |       0.09 |  0.02 | N            | O            | 11-05-1995 | 09-25-1995   | 11-27-1995    | TAKE BACK RETURN          | RAIL       | bout the even, iro
@@ -174,7 +174,7 @@ DEBUG:  push down of limit count: 3
 (3 rows)
 
 SELECT max(extract(epoch from l_shipdate)) FROM lineitem;
-    max    
+    max
 ---------------------------------------------------------------------
  912124800
 (1 row)
@@ -182,7 +182,7 @@ SELECT max(extract(epoch from l_shipdate)) FROM lineitem;
 SELECT * FROM lineitem
 	ORDER BY extract(epoch from l_shipdate) DESC, l_orderkey DESC LIMIT 3;
 DEBUG:  push down of limit count: 3
- l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |              l_comment               
+ l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |              l_comment
 ---------------------------------------------------------------------
        4678 |     57388 |      9894 |            1 |      35.00 |        47088.30 |       0.04 |  0.08 | N            | O            | 11-27-1998 | 10-02-1998   | 12-17-1998    | TAKE BACK RETURN          | AIR        | he accounts. fluffily bold sheaves b
       12384 |     84161 |      1686 |            5 |       6.00 |         6870.96 |       0.04 |  0.00 | N            | O            | 11-26-1998 | 10-04-1998   | 12-08-1998    | COLLECT COD               | RAIL       | ep blithely. blithely ironic r
@@ -196,7 +196,7 @@ SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity LIMIT 1;
 DEBUG:  push down of limit count: 1
- l_quantity | l_discount |        avg         
+ l_quantity | l_discount |        avg
 ---------------------------------------------------------------------
        1.00 |       0.00 | 99167.304347826087
 (1 row)
@@ -206,7 +206,7 @@ SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity, l_discount LIMIT 1;
 DEBUG:  push down of limit count: 1
- l_quantity | l_discount |        avg         
+ l_quantity | l_discount |        avg
 ---------------------------------------------------------------------
        1.00 |       0.00 | 99167.304347826087
 (1 row)
@@ -218,7 +218,7 @@ SELECT l_orderkey, count(DISTINCT l_partkey)
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey | count 
+ l_orderkey | count
 ---------------------------------------------------------------------
       14885 |     7
       14884 |     7
@@ -232,7 +232,7 @@ SELECT l_orderkey
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey 
+ l_orderkey
 ---------------------------------------------------------------------
           1
           2
@@ -246,7 +246,7 @@ SELECT max(l_orderkey)
 	FROM lineitem_hash
 	GROUP BY l_linestatus
 	ORDER BY 1 DESC LIMIT 2;
-  max  
+  max
 ---------------------------------------------------------------------
  14947
  14916
@@ -257,7 +257,7 @@ SELECT l_orderkey, max(l_shipdate)
 	FROM lineitem
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 LIMIT 5;
- l_orderkey |    max     
+ l_orderkey |    max
 ---------------------------------------------------------------------
        4678 | 11-27-1998
       12384 | 11-26-1998
@@ -273,7 +273,7 @@ SELECT
 	GROUP BY l_linestatus, l_orderkey
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_linestatus | l_orderkey |    max     
+ l_linestatus | l_orderkey |    max
 ---------------------------------------------------------------------
  O            |       4678 | 11-27-1998
  O            |      12384 | 11-26-1998
@@ -288,7 +288,7 @@ SELECT
 	FROM lineitem_hash
 	GROUP BY l_linestatus, l_shipmode
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
- l_linestatus | l_shipmode |    max     
+ l_linestatus | l_shipmode |    max
 ---------------------------------------------------------------------
  O            | AIR        | 11-27-1998
  O            | RAIL       | 11-26-1998
@@ -305,7 +305,7 @@ SELECT
 	ORDER BY l_orderkey, l_linenumber
 	LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey | l_linenumber 
+ l_orderkey | l_linenumber
 ---------------------------------------------------------------------
           1 |            1
           1 |            2
@@ -321,7 +321,7 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
- l_orderkey | l_linenumber 
+ l_orderkey | l_linenumber
 ---------------------------------------------------------------------
           1 |            1
           1 |            2
@@ -340,7 +340,7 @@ SELECT
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey | l_linenumber 
+ l_orderkey | l_linenumber
 ---------------------------------------------------------------------
           1 |            1
           2 |            1
@@ -359,7 +359,7 @@ SELECT
 	GROUP BY l_orderkey, (1+1), l_linenumber
 	ORDER BY l_linenumber, (1+1), l_orderkey
 	LIMIT 5;
- l_orderkey | l_linenumber 
+ l_orderkey | l_linenumber
 ---------------------------------------------------------------------
           1 |            1
           1 |            2
@@ -377,7 +377,7 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_linenumber, l_orderkey
 	LIMIT 5;
- l_orderkey | l_linenumber 
+ l_orderkey | l_linenumber
 ---------------------------------------------------------------------
           1 |            1
           1 |            2
@@ -396,7 +396,7 @@ SELECT
 	ORDER BY l_orderkey + 1
 	LIMIT 5;
 DEBUG:  push down of limit count: 5
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         2
         3
@@ -414,7 +414,7 @@ SELECT
 	GROUP BY l_orderkey + 1
 	ORDER BY l_orderkey + 1 , 2
 	LIMIT 5;
- ?column? | count 
+ ?column? | count
 ---------------------------------------------------------------------
         2 |     6
         3 |     1
@@ -432,7 +432,7 @@ SELECT
 	ORDER BY l_orderkey , 2
 	LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey | count 
+ l_orderkey | count
 ---------------------------------------------------------------------
           1 |     6
           2 |     1
@@ -449,7 +449,7 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1
 	LIMIT 2;
- l_orderkey | count 
+ l_orderkey | count
 ---------------------------------------------------------------------
           7 |     7
           1 |     6
@@ -463,7 +463,7 @@ SELECT
 	ORDER BY l_orderkey , 2
 	LIMIT 5;
 DEBUG:  push down of limit count: 5
- l_orderkey | rank 
+ l_orderkey | rank
 ---------------------------------------------------------------------
           1 |    1
           2 |    1
@@ -482,7 +482,7 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey , 3, 2
 	LIMIT 5;
- l_orderkey | count | rank 
+ l_orderkey | count | rank
 ---------------------------------------------------------------------
           1 |     6 |    1
           2 |     1 |    1
@@ -498,7 +498,7 @@ SELECT
 	GROUP BY l_orderkey, l_linenumber
 	ORDER BY l_orderkey , count(*) OVER (partition by l_orderkey), count(*), l_linenumber
 	LIMIT 5;
- l_orderkey | l_linenumber | count | count 
+ l_orderkey | l_linenumber | count | count
 ---------------------------------------------------------------------
           1 |            1 |     1 |     6
           2 |            1 |     1 |     1
@@ -512,9 +512,9 @@ SELECT
 	DISTINCT ON (RANK() OVER (partition by l_orderkey)) l_orderkey, RANK() OVER (partition by l_orderkey)
 	FROM lineitem_hash
 	GROUP BY l_orderkey
-	ORDER BY 2 DESC, 1 
+	ORDER BY 2 DESC, 1
 	LIMIT 5;
- l_orderkey | rank 
+ l_orderkey | rank
 ---------------------------------------------------------------------
           1 |    1
 (1 row)

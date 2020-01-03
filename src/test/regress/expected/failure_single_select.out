@@ -1,30 +1,30 @@
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT citus.clear_network_traffic();
- clear_network_traffic 
+ clear_network_traffic
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 2;
 CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- put data in shard for which mitm node is first placement
 INSERT INTO select_test VALUES (3, 'test data');
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
@@ -32,7 +32,7 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    3 | test data
 (1 row)
@@ -42,16 +42,16 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    3 | test data
 (1 row)
 
 -- kill after first SELECT; txn should work (though placement marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -61,7 +61,7 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    3 | test data
    3 | more data
@@ -73,7 +73,7 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key |     value      
+ key |     value
 ---------------------------------------------------------------------
    3 | test data
    3 | more data
@@ -91,9 +91,9 @@ TRUNCATE select_test;
 -- put data in shard for which mitm node is first placement
 INSERT INTO select_test VALUES (3, 'test data');
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
@@ -102,9 +102,9 @@ SELECT * FROM select_test WHERE key = 3;
 ERROR:  canceling statement due to user request
 -- cancel after first SELECT; txn should fail and nothing should be marked as invalid
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
@@ -117,7 +117,7 @@ SELECT DISTINCT shardstate FROM  pg_dist_shard_placement
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'select_test'::regclass
 );
- shardstate 
+ shardstate
 ---------------------------------------------------------------------
           1
 (1 row)
@@ -126,15 +126,15 @@ TRUNCATE select_test;
 -- cancel the second query
 -- error after second SELECT; txn should fail
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    3 | more data
 (1 row)
@@ -145,15 +145,15 @@ ERROR:  canceling statement due to user request
 COMMIT;
 -- error after second SELECT; txn should work (though placement marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).reset()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    3 | more data
 (1 row)
@@ -164,7 +164,7 @@ WARNING:  connection error: localhost:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
- key |     value      
+ key |     value
 ---------------------------------------------------------------------
    3 | more data
    3 | even more data
@@ -172,13 +172,13 @@ DETAIL:  server closed the connection unexpectedly
 
 COMMIT;
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(2).kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -195,21 +195,21 @@ SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET citus.max_cached_conns_per_worker TO 1; -- allow connection to be cached
 INSERT INTO select_test VALUES (1, 'test data');
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).kill()');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    1 | test data
 (1 row)
@@ -221,13 +221,13 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 -- now the same test with query cancellation
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
- mitmproxy 
+ mitmproxy
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
- key |   value   
+ key |   value
 ---------------------------------------------------------------------
    1 | test data
 (1 row)

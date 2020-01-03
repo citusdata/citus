@@ -6,29 +6,29 @@ SET citus.next_shard_id TO 430000;
 SET citus.binary_master_copy_format TO 'on';
 SET citus.task_executor_type TO 'task-tracker';
 SELECT count(*) FROM lineitem;
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT l_shipmode FROM lineitem WHERE l_partkey = 67310 OR l_partkey = 155190;
- l_shipmode 
+ l_shipmode
 ---------------------------------------------------------------------
- TRUCK     
- MAIL      
+ TRUCK
+ MAIL
 (2 rows)
 
 RESET citus.task_executor_type;
 SELECT count(*) FROM lineitem;
- count 
+ count
 ---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT l_shipmode FROM lineitem WHERE l_partkey = 67310 OR l_partkey = 155190;
- l_shipmode 
+ l_shipmode
 ---------------------------------------------------------------------
- TRUCK     
- MAIL      
+ TRUCK
+ MAIL
 (2 rows)
 

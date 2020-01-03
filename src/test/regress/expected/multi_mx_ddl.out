@@ -1,6 +1,6 @@
 -- Tests related to distributed DDL commands on mx cluster
 SELECT * FROM mx_ddl_table ORDER BY key;
- key | value 
+ key | value
 ---------------------------------------------------------------------
    1 |    10
    2 |    11
@@ -18,22 +18,22 @@ CREATE INDEX CONCURRENTLY ddl_test_concurrent_index ON mx_ddl_table(value);
 -- ADD COLUMN
 ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
 -- SET DEFAULT
-ALTER TABLE mx_ddl_table ALTER COLUMN version SET DEFAULT 1; 
+ALTER TABLE mx_ddl_table ALTER COLUMN version SET DEFAULT 1;
 UPDATE mx_ddl_table SET version=0.1 WHERE version IS NULL;
 -- SET NOT NULL
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
 -- See that the changes are applied on coordinator, worker tables and shards
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column  |  Type   |     Modifiers      
+ Column  |  Type   |     Modifiers
 ---------------------------------------------------------------------
  key     | integer | not null
- value   | integer | 
+ value   | integer |
  version | integer | not null default 1
 (3 rows)
 
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index';
-          relname          | Column |  Type   | Definition 
+          relname          | Column |  Type   | Definition
 ---------------------------------------------------------------------
  ddl_test_index            | value  | integer | value
  ddl_test_concurrent_index | value  | integer | value
@@ -43,32 +43,32 @@ SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
 -- make sure we don't break the following tests by hiding the shard names
 SET citus.override_table_visibility TO FALSE;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column  |  Type   |     Modifiers      
+ Column  |  Type   |     Modifiers
 ---------------------------------------------------------------------
  key     | integer | not null
- value   | integer | 
+ value   | integer |
  version | integer | not null default 1
 (3 rows)
 
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index';
-          relname          | Column |  Type   | Definition 
+          relname          | Column |  Type   | Definition
 ---------------------------------------------------------------------
  ddl_test_index            | value  | integer | value
  ddl_test_concurrent_index | value  | integer | value
 (2 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
- Column  |  Type   |     Modifiers      
+ Column  |  Type   |     Modifiers
 ---------------------------------------------------------------------
  key     | integer | not null
- value   | integer | 
+ value   | integer |
  version | integer | not null default 1
 (3 rows)
 
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index_1220088';
-              relname              | Column |  Type   | Definition 
+              relname              | Column |  Type   | Definition
 ---------------------------------------------------------------------
  ddl_test_index_1220088            | value  | integer | value
  ddl_test_concurrent_index_1220088 | value  | integer | value
@@ -78,32 +78,32 @@ SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
 -- make sure we don't break the following tests by hiding the shard names
 SET citus.override_table_visibility TO FALSE;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column  |  Type   |     Modifiers      
+ Column  |  Type   |     Modifiers
 ---------------------------------------------------------------------
  key     | integer | not null
- value   | integer | 
+ value   | integer |
  version | integer | not null default 1
 (3 rows)
 
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index';
-          relname          | Column |  Type   | Definition 
+          relname          | Column |  Type   | Definition
 ---------------------------------------------------------------------
  ddl_test_index            | value  | integer | value
  ddl_test_concurrent_index | value  | integer | value
 (2 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220089'::regclass;
- Column  |  Type   |     Modifiers      
+ Column  |  Type   |     Modifiers
 ---------------------------------------------------------------------
  key     | integer | not null
- value   | integer | 
+ value   | integer |
  version | integer | not null default 1
 (3 rows)
 
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index_1220089';
-              relname              | Column |  Type   | Definition 
+              relname              | Column |  Type   | Definition
 ---------------------------------------------------------------------
  ddl_test_index_1220089            | value  | integer | value
  ddl_test_concurrent_index_1220089 | value  | integer | value
@@ -118,7 +118,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version SET DATA TYPE double precision;
 INSERT INTO mx_ddl_table VALUES (78, 83, 2.1);
 \c - - - :worker_1_port
 SELECT * FROM mx_ddl_table ORDER BY key;
- key | value | version 
+ key | value | version
 ---------------------------------------------------------------------
    1 |    10 |       0
    2 |    11 |       0
@@ -146,69 +146,69 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 ALTER TABLE mx_ddl_table DROP COLUMN version;
 -- See that the changes are applied on coordinator, worker tables and shards
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column |  Type   | Modifiers 
+ Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  key    | integer | not null
- value  | integer | 
+ value  | integer |
 (2 rows)
 
 \di ddl_test*_index
           List of relations
- Schema | Name | Type | Owner | Table 
+ Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column |  Type   | Modifiers 
+ Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  key    | integer | not null
- value  | integer | 
+ value  | integer |
 (2 rows)
 
 \di ddl_test*_index
           List of relations
- Schema | Name | Type | Owner | Table 
+ Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
- Column |  Type   | Modifiers 
+ Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  key    | integer | not null
- value  | integer | 
+ value  | integer |
 (2 rows)
 
 \di ddl_test*_index_1220088
           List of relations
- Schema | Name | Type | Owner | Table 
+ Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
- Column |  Type   | Modifiers 
+ Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  key    | integer | not null
- value  | integer | 
+ value  | integer |
 (2 rows)
 
 \di ddl_test*_index
           List of relations
- Schema | Name | Type | Owner | Table 
+ Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220089'::regclass;
- Column |  Type   | Modifiers 
+ Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  key    | integer | not null
- value  | integer | 
+ value  | integer |
 (2 rows)
 
 \di ddl_test*_index_1220089
           List of relations
- Schema | Name | Type | Owner | Table 
+ Schema | Name | Type | Owner | Table
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -222,9 +222,9 @@ SET citus.shard_count TO 4;
 SET citus.replication_model TO streaming;
 CREATE TABLE mx_sequence(key INT, value BIGSERIAL);
 SELECT create_distributed_table('mx_sequence', 'key');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 \c - - - :worker_1_port
@@ -235,7 +235,7 @@ SELECT last_value AS worker_2_lastval FROM mx_sequence_value_seq \gset
 -- don't look at the actual values because they rely on the groupids of the nodes
 -- which can change depending on the tests which have run before this one
 SELECT :worker_1_lastval = :worker_2_lastval;
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
  f
 (1 row)

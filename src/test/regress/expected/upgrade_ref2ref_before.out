@@ -2,30 +2,30 @@ CREATE SCHEMA upgrade_ref2ref;
 SET search_path TO upgrade_ref2ref, public;
 CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 SELECT create_reference_table('ref_table_1');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE ref_table_2(id int PRIMARY KEY, value int REFERENCES ref_table_1(id) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_reference_table('ref_table_2');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE ref_table_3(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_reference_table('ref_table_3');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE dist_table(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_distributed_table('dist_table', 'id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO ref_table_1 SELECT c, c FROM generate_series(1, 5) as c;

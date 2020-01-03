@@ -13,7 +13,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
-    name     
+    name
 ---------------------------------------------------------------------
  John Backus
 (1 row)
@@ -25,7 +25,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 1');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
-         name         
+         name
 ---------------------------------------------------------------------
  John Backus Worker 1
 (1 row)
@@ -37,7 +37,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 2');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
-         name         
+         name
 ---------------------------------------------------------------------
  John Backus Worker 2
 (1 row)
@@ -48,7 +48,7 @@ BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
-     name     
+     name
 ---------------------------------------------------------------------
  Donald Knuth
 (1 row)
@@ -59,7 +59,7 @@ BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
-     name     
+     name
 ---------------------------------------------------------------------
  Donald Knuth
 (1 row)
@@ -70,7 +70,7 @@ BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
-     name     
+     name
 ---------------------------------------------------------------------
  Donald Knuth
 (1 row)
@@ -84,7 +84,7 @@ SAVEPOINT hire_thompson;
 INSERT INTO researchers_mx VALUES (6, 3, 'Ken Thompson');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 3 AND id = 6;
-     name     
+     name
 ---------------------------------------------------------------------
  Ken Thompson
 (1 row)
@@ -108,7 +108,7 @@ INSERT INTO researchers_mx VALUES (8, 4, 'Douglas Engelbart');
 ROLLBACK TO hire_engelbart;
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 4;
-   name   
+   name
 ---------------------------------------------------------------------
  Jim Gray
 (1 row)
@@ -130,7 +130,7 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;;
- id | lab_id |       name        | id |    name    
+ id | lab_id |       name        | id |    name
 ---------------------------------------------------------------------
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (1 row)
@@ -149,7 +149,7 @@ INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;
- id | lab_id |       name        | id |    name    
+ id | lab_id |       name        | id |    name
 ---------------------------------------------------------------------
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
@@ -171,7 +171,7 @@ BEGIN;
 SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -187,7 +187,7 @@ COMMIT;
 BEGIN;
 \copy labs_mx from stdin delimiter ','
 SELECT name FROM labs_mx WHERE id = 10;
-       name       
+       name
 ---------------------------------------------------------------------
  Weyland-Yutani-1
  Weyland-Yutani-2
@@ -205,7 +205,7 @@ DETAIL:  Key (id)=(X) already exists.
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -221,7 +221,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -249,12 +249,12 @@ ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -268,12 +268,12 @@ ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -296,12 +296,12 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -318,12 +318,12 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -348,12 +348,12 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -376,12 +376,12 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -401,12 +401,12 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- no data should persists
 SELECT * FROM objects_mx WHERE id = 1;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
- id | name 
+ id | name
 ---------------------------------------------------------------------
 (0 rows)
 

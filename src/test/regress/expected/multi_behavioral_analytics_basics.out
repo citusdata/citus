@@ -20,7 +20,7 @@ FROM (
 ) q;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      2 |     2 | 1.5000000000000000
 (1 row)
@@ -69,7 +69,7 @@ FROM (
 ) t GROUP BY user_id, hasdone_event;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      4 |     2 | 1.5000000000000000
 (1 row)
@@ -146,7 +146,7 @@ ORDER BY
   count_pay;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      7 |     3 | 1.7142857142857143
 (1 row)
@@ -187,7 +187,7 @@ FROM (
 ORDER BY user_lastseen DESC;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      3 |     3 | 2.0000000000000000
 (1 row)
@@ -206,7 +206,7 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      5 |     5 | 3.8000000000000000
 (1 row)
@@ -227,7 +227,7 @@ GROUP BY user_id
 HAVING count(distinct value_1) >= 2;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
@@ -245,7 +245,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type>1  AND event_type < 5 AND value_3 > 2 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
     20 |     6 | 3.7500000000000000
 (1 row)
@@ -263,7 +263,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=1 AND value_3 > 4 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      4 |     2 | 4.2500000000000000
 (1 row)
@@ -282,7 +282,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=2 AND value_3 > 1 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
     29 |     5 | 3.1034482758620690
 (1 row)
@@ -300,7 +300,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
     11 |     1 | 5.0000000000000000
 (1 row)
@@ -328,7 +328,7 @@ INSERT INTO agg_results(user_id, value_2_agg)
                      HAVING Count(*) > 2);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      4 |     2 | 3.5000000000000000
 (1 row)
@@ -347,7 +347,7 @@ SELECT user_id, value_1 from
 ) as a;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |          avg           
+ count | count |          avg
 ---------------------------------------------------------------------
      1 |     1 | 1.00000000000000000000
 (1 row)
@@ -370,7 +370,7 @@ And user_id in
    And value_2 > 1);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
     11 |     4 | 3.1818181818181818
 (1 row)
@@ -387,7 +387,7 @@ WHERE user_id in (SELECT user_id from events_table WHERE event_type > 3 and even
 GROUP BY user_id, event_type;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
     34 |     6 | 3.4411764705882353
 (1 row)
@@ -409,7 +409,7 @@ where event_type = 4 group by user_id having count(*) > 3
 ) as a;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      4 |     4 | 2.5000000000000000
 (1 row)
@@ -437,7 +437,7 @@ FROM
   WHERE users_table.value_1 < 3;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
   3488 |     6 | 3.5372706422018349
 (1 row)
@@ -461,7 +461,7 @@ FROM
   WHERE temp.value_1 < 3;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
+ count | count |        avg
 ---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
@@ -485,7 +485,7 @@ FROM
   WHERE temp.value_1 < 3
   ORDER BY 1, 2;
 SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
- count | count |        avg         |          avg           
+ count | count |        avg         |          avg
 ---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000 | 0.16666666666666666667
 (1 row)
@@ -508,7 +508,7 @@ FROM
   ON users_ids.user_id = temp.user_id
   ORDER BY 1, 2;
 SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
- count | count |        avg         |          avg           
+ count | count |        avg         |          avg
 ---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000 | 0.16666666666666666667
 (1 row)

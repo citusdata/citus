@@ -5,7 +5,7 @@ SET citus.next_shard_id TO 1220000;
 -- properly.
 SET client_min_messages TO ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
@@ -17,14 +17,14 @@ SET citus.force_max_query_parallelization TO ON;
 -- Disable auto-recovery for the initial tests
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
- pg_reload_conf 
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- Ensure pg_dist_transaction is empty
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -57,25 +57,25 @@ INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit'),
 INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten'),
                                        (0, 'citus_0_should_be_forgotten');
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              6
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -83,13 +83,13 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 -- Confirm that transactions were correctly rolled forward
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
- count 
+ count
 ---------------------------------------------------------------------
      1
 (1 row)
@@ -105,13 +105,13 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 -- there are at least 2 entries
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) >= 2 FROM pg_dist_transaction;
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -119,19 +119,19 @@ SELECT count(*) >= 2 FROM pg_dist_transaction;
 -- create_reference_table should add another 2 recovery records
 CREATE TABLE test_recovery_ref (x text);
 SELECT create_reference_table('test_recovery_ref');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) >= 4 FROM pg_dist_transaction;
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -139,7 +139,7 @@ SELECT recover_prepared_transactions();
 -- plain INSERT does not use 2PC
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -149,7 +149,7 @@ BEGIN;
 ALTER TABLE test_recovery ADD COLUMN y text;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -157,19 +157,19 @@ SELECT count(*) FROM pg_dist_transaction;
 -- Committed DDL commands should write 4 transaction recovery records
 ALTER TABLE test_recovery ADD COLUMN y text;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -179,7 +179,7 @@ BEGIN;
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
@@ -187,13 +187,13 @@ SELECT count(*) FROM pg_dist_transaction;
 -- Committed INSERT..SELECT should write 4 transaction recovery records
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -201,13 +201,13 @@ SELECT recover_prepared_transactions();
 -- Committed INSERT..SELECT via coordinator should write 4 transaction recovery records
 INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -215,13 +215,13 @@ SELECT recover_prepared_transactions();
 -- Committed COPY should write 4 transaction records
 COPY test_recovery (x) FROM STDIN CSV;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -232,9 +232,9 @@ CREATE TABLE test_recovery_single (LIKE test_recovery);
 -- creating distributed table should write 2 transaction recovery records
 -- one connection/transaction per node
 SELECT create_distributed_table('test_recovery_single', 'x');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- Multi-statement transactions should write 2 transaction recovery records
@@ -245,13 +245,13 @@ INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -264,13 +264,13 @@ INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -280,13 +280,13 @@ SELECT recover_prepared_transactions();
 SET citus.force_max_query_parallelization TO OFF;
 BEGIN;
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -295,13 +295,13 @@ INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
+ recover_prepared_transactions
 ---------------------------------------------------------------------
                              0
 (1 row)
@@ -311,13 +311,13 @@ SELECT recover_prepared_transactions();
 SET citus.force_max_query_parallelization TO ON;
 BEGIN;
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
- count 
+ count
 ---------------------------------------------------------------------
      3
 (1 row)
 
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
- count 
+ count
 ---------------------------------------------------------------------
      3
 (1 row)
@@ -326,7 +326,7 @@ INSERT INTO test_recovery_single VALUES ('hello-0');
 INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      2
 (1 row)
@@ -334,27 +334,27 @@ SELECT count(*) FROM pg_dist_transaction;
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
- pg_reload_conf 
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
- pg_sleep 
+ pg_sleep
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
+ count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
- pg_reload_conf 
+ pg_reload_conf
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -363,7 +363,7 @@ DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column? 
+ ?column?
 ---------------------------------------------------------------------
         1
 (1 row)

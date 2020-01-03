@@ -61,33 +61,33 @@ create table supplier (
    PRIMARY KEY ( su_suppkey )
 );
 SELECT create_distributed_table('order_line','ol_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_distributed_table('stock','s_w_id');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('item');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('nation');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SELECT create_reference_table('supplier');
- create_reference_table 
+ create_reference_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO order_line SELECT c, c, c, c, c, NULL, c, c, c, 'abc' FROM generate_series(1, 10) as c;
@@ -102,7 +102,7 @@ select  s_i_id
         s_i_id in (select i_id from item)
         AND s_i_id = ol_i_id
     order by s_i_id;
- s_i_id 
+ s_i_id
 ---------------------------------------------------------------------
       1
       2
@@ -150,7 +150,7 @@ where    su_suppkey in
      and su_nationkey = n_nationkey
      and n_name = 'Germany'
 order by su_name;
- su_name | su_address 
+ su_name | su_address
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -184,7 +184,7 @@ where    s_suppkey in
      and s_nationkey = n_nationkey
      and n_name = 'GERMANY'
 order by s_name;
-          s_name           |              s_address              
+          s_name           |              s_address
 ---------------------------------------------------------------------
  Supplier#000000033        | gfeKpYw3400L0SDywXA6Ya1Qmq1w6YB9f3R
 (1 row)
@@ -205,7 +205,7 @@ where    s_suppkey in
      and s_nationkey = n_nationkey
      and n_name = 'GERMANY'
 order by s_name;
-          s_name           |              s_address              
+          s_name           |              s_address
 ---------------------------------------------------------------------
  Supplier#000000033        | gfeKpYw3400L0SDywXA6Ya1Qmq1w6YB9f3R
  Supplier#000000044        | kERxlLDnlIZJdN66zAPHklyL

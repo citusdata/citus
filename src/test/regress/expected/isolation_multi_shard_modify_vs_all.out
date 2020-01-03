@@ -1,458 +1,458 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-select s1-commit s2-select s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_all_value_1: 
+step s1-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              5              6              7              
-2              12             7              18             
-3              23             8              25             
-4              42             9              23             
-5              35             10             17             
-6              21             11             25             
-7              27             12             18             
-step s1-commit: 
+1              5              6              7
+2              12             7              18
+3              23             8              25
+4              42             9              23
+5              35             10             17
+6              21             11             25
+7              27             12             18
+step s1-commit:
     COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              3              6              7              
-2              3              7              18             
-3              3              8              25             
-4              3              9              23             
-5              3              10             17             
-6              3              11             25             
-7              3              12             18             
-step s2-commit: 
+1              3              6              7
+2              3              7              18
+3              3              8              25
+4              3              9              23
+5              3              10             17
+6              3              11             25
+7              3              12             18
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-update_all_value_1 s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_all_value_1: 
+step s1-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_all_value_1: 
+step s2-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 6;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_all_value_1: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-update_even_concurrently s2-begin s2-update_odd_concurrently s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_even_concurrently: 
+step s1-update_even_concurrently:
 	SET citus.enable_deadlock_prevention TO off;
 	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 0;
 	SET citus.enable_deadlock_prevention TO on;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_odd_concurrently: 
+step s2-update_odd_concurrently:
 	SET citus.enable_deadlock_prevention = off;
 	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 1;
 	SET citus.enable_deadlock_prevention TO on;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-update_even_concurrently s2-begin s2-update_value_1_of_4_or_6_to_4 s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_even_concurrently: 
+step s1-update_even_concurrently:
 	SET citus.enable_deadlock_prevention TO off;
 	UPDATE users_test_table SET value_1 = 3 WHERE user_id % 2 = 0;
 	SET citus.enable_deadlock_prevention TO on;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_value_1_of_4_or_6_to_4: 
+step s2-update_value_1_of_4_or_6_to_4:
 	UPDATE users_test_table SET value_1 = 4 WHERE user_id = 4 or user_id = 6;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_value_1_of_4_or_6_to_4: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s1-update_value_1_of_1_or_3_to_5 s2-begin s2-update_value_1_of_4_or_6_to_4 s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_value_1_of_4_or_6_to_4: 
+step s2-update_value_1_of_4_or_6_to_4:
 	UPDATE users_test_table SET value_1 = 4 WHERE user_id = 4 or user_id = 6;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              5              6              7              
-2              12             7              18             
-3              5              8              25             
-4              4              9              23             
-5              35             10             17             
-6              4              11             25             
-7              27             12             18             
+1              5              6              7
+2              12             7              18
+3              5              8              25
+4              4              9              23
+5              35             10             17
+6              4              11             25
+7              27             12             18
 
 starting permutation: s1-begin s1-update_value_1_of_1_or_3_to_5 s2-begin s2-update_value_1_of_1_or_3_to_8 s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_value_1_of_1_or_3_to_8: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              8              6              7              
-2              12             7              18             
-3              8              8              25             
-4              42             9              23             
-5              35             10             17             
-6              21             11             25             
-7              27             12             18             
+1              8              6              7
+2              12             7              18
+3              8              8              25
+4              42             9              23
+5              35             10             17
+6              21             11             25
+7              27             12             18
 
 starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-insert-to-table s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_all_value_1: 
+step s1-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-insert-to-table: 
+step s2-insert-to-table:
 	INSERT INTO users_test_table VALUES (1,2,3,4);
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              2              3              4              
-1              3              6              7              
-2              3              7              18             
-3              3              8              25             
-4              3              9              23             
-5              3              10             17             
-6              3              11             25             
-7              3              12             18             
+1              2              3              4
+1              3              6              7
+2              3              7              18
+3              3              8              25
+4              3              9              23
+5              3              10             17
+6              3              11             25
+7              3              12             18
 
 starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-insert-into-select s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-update_all_value_1: 
+step s1-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-insert-into-select: 
+step s2-insert-into-select:
 	INSERT INTO users_test_table SELECT * FROM events_test_table;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-insert-into-select: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              3              6              7              
-1              5              7              7              
-2              3              7              18             
-3              3              8              25             
-4              3              9              23             
-5              22             9              25             
-5              3              10             17             
-7              41             10             23             
-6              3              11             25             
-7              3              12             18             
-1              20             12             25             
-3              26             13             18             
-5              17             14             4              
-3              11             78             18             
+1              3              6              7
+1              5              7              7
+2              3              7              18
+3              3              8              25
+4              3              9              23
+5              22             9              25
+5              3              10             17
+7              41             10             23
+6              3              11             25
+7              3              12             18
+1              20             12             25
+3              26             13             18
+5              17             14             4
+3              11             78             18
 
 starting permutation: s1-begin s2-begin s1-update_value_1_of_1_or_3_to_5 s2-update_value_1_of_1_or_3_to_8 s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_value_1_of_1_or_3_to_8: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s2-begin s2-update_value_1_of_1_or_3_to_8 s1-update_value_1_of_2_or_4_to_5 s2-commit s1-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
 
-step s1-update_value_1_of_2_or_4_to_5: 
+step s1-update_value_1_of_2_or_4_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 2 or user_id = 4;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 
 starting permutation: s1-begin s1-change_connection_mode_to_sequential s1-update_all_value_1 s2-begin s2-change_connection_mode_to_sequential s2-update_all_value_1 s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-change_connection_mode_to_sequential: 
+step s1-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s1-update_all_value_1: 
+step s1-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-change_connection_mode_to_sequential: 
+step s2-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-update_all_value_1: 
+step s2-update_all_value_1:
 	UPDATE users_test_table SET value_1 = 6;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_all_value_1: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              6              6              7              
-2              6              7              18             
-3              6              8              25             
-4              6              9              23             
-5              6              10             17             
-6              6              11             25             
-7              6              12             18             
+1              6              6              7
+2              6              7              18
+3              6              8              25
+4              6              9              23
+5              6              10             17
+6              6              11             25
+7              6              12             18
 
 starting permutation: s1-begin s1-change_connection_mode_to_sequential s1-update_value_1_of_1_or_3_to_5 s2-begin s2-change_connection_mode_to_sequential s2-update_value_1_of_1_or_3_to_8 s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-change_connection_mode_to_sequential: 
+step s1-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-change_connection_mode_to_sequential: 
+step s2-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_value_1_of_1_or_3_to_8: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              8              6              7              
-2              12             7              18             
-3              8              8              25             
-4              42             9              23             
-5              35             10             17             
-6              21             11             25             
-7              27             12             18             
+1              8              6              7
+2              12             7              18
+3              8              8              25
+4              42             9              23
+5              35             10             17
+6              21             11             25
+7              27             12             18
 
 starting permutation: s1-begin s1-change_connection_mode_to_sequential s1-update_value_1_of_1_or_3_to_5 s2-begin s2-change_connection_mode_to_sequential s2-update_value_1_of_4_or_6_to_4 s1-commit s2-commit s2-select
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-change_connection_mode_to_sequential: 
+step s1-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-change_connection_mode_to_sequential: 
+step s2-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-update_value_1_of_4_or_6_to_4: 
+step s2-update_value_1_of_4_or_6_to_4:
 	UPDATE users_test_table SET value_1 = 4 WHERE user_id = 4 or user_id = 6;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
-step s2-select: 
+step s2-select:
 	SELECT * FROM users_test_table ORDER BY value_2, value_3;
 
-user_id        value_1        value_2        value_3        
+user_id        value_1        value_2        value_3
 
-1              5              6              7              
-2              12             7              18             
-3              5              8              25             
-4              4              9              23             
-5              35             10             17             
-6              4              11             25             
-7              27             12             18             
+1              5              6              7
+2              12             7              18
+3              5              8              25
+4              4              9              23
+5              35             10             17
+6              4              11             25
+7              27             12             18
 
 starting permutation: s1-begin s2-begin s1-change_connection_mode_to_sequential s2-change_connection_mode_to_sequential s1-update_value_1_of_1_or_3_to_5 s2-update_value_1_of_1_or_3_to_8 s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s1-change_connection_mode_to_sequential: 
+step s1-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-change_connection_mode_to_sequential: 
+step s2-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s1-update_value_1_of_1_or_3_to_5: 
+step s1-update_value_1_of_1_or_3_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update_value_1_of_1_or_3_to_8: <... completed>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-change_connection_mode_to_sequential s2-change_connection_mode_to_sequential s2-update_value_1_of_1_or_3_to_8 s1-update_value_1_of_2_or_4_to_5 s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s1-change_connection_mode_to_sequential: 
+step s1-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-change_connection_mode_to_sequential: 
+step s2-change_connection_mode_to_sequential:
     set citus.multi_shard_modify_mode to 'sequential';
 
-step s2-update_value_1_of_1_or_3_to_8: 
+step s2-update_value_1_of_1_or_3_to_8:
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
 
-step s1-update_value_1_of_2_or_4_to_5: 
+step s1-update_value_1_of_2_or_4_to_5:
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 2 or user_id = 4;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 

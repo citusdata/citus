@@ -225,40 +225,40 @@ t
 EXPLAIN (COSTS FALSE, FORMAT YAML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
-- Plan: 
+- Plan:
     Node Type: "Sort"
     Parallel Aware: false
-    Sort Key: 
+    Sort Key:
       - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
       - "remote_scan.l_quantity"
-    Plans: 
+    Plans:
       - Node Type: "Aggregate"
         Strategy: "Hashed"
         Partial Mode: "Simple"
         Parent Relationship: "Outer"
         Parallel Aware: false
-        Group Key: 
+        Group Key:
           - "remote_scan.l_quantity"
-        Plans: 
+        Plans:
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
             Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
-            Distributed Query: 
-              Job: 
+            Distributed Query:
+              Job:
                 Task Count: 16
                 Tasks Shown: "One of 16"
-                Tasks: 
+                Tasks:
                   - Node: "host=localhost port=xxxxx dbname=regression"
-                    Remote Plan: 
-                      - Plan: 
+                    Remote Plan:
+                      - Plan:
                           Node Type: "Aggregate"
                           Strategy: "Hashed"
                           Partial Mode: "Simple"
                           Parallel Aware: false
-                          Group Key: 
+                          Group Key:
                             - "l_quantity"
-                          Plans: 
+                          Plans:
                             - Node Type: "Seq Scan"
                               Parent Relationship: "Outer"
                               Parallel Aware: false
@@ -799,43 +799,43 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
-- Plan: 
+- Plan:
     Node Type: "Aggregate"
     Strategy: "Plain"
     Partial Mode: "Simple"
     Parallel Aware: false
-    Plans: 
+    Plans:
       - Node Type: "Custom Scan"
         Parent Relationship: "Outer"
         Custom Plan Provider: "Citus Task-Tracker"
         Parallel Aware: false
-        Distributed Query: 
-          Job: 
+        Distributed Query:
+          Job:
             Task Count: 16
             Tasks Shown: "One of 16"
-            Tasks: 
+            Tasks:
               - Node: "host=localhost port=xxxxx dbname=regression"
-                Remote Plan: 
-                  - Plan: 
+                Remote Plan:
+                  - Plan:
                       Node Type: "Aggregate"
                       Strategy: "Plain"
                       Partial Mode: "Simple"
                       Parallel Aware: false
-                      Plans: 
+                      Plans:
                         - Node Type: "Hash Join"
                           Parent Relationship: "Outer"
                           Parallel Aware: false
                           Join Type: "Inner"
                           Inner Unique: false
                           Hash Cond: "(lineitem_mx.l_orderkey = orders_mx.o_orderkey)"
-                          Plans: 
+                          Plans:
                             - Node Type: "Hash Join"
                               Parent Relationship: "Outer"
                               Parallel Aware: false
                               Join Type: "Inner"
                               Inner Unique: false
                               Hash Cond: "(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)"
-                              Plans: 
+                              Plans:
                                 - Node Type: "Seq Scan"
                                   Parent Relationship: "Outer"
                                   Parallel Aware: false
@@ -844,7 +844,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                                 - Node Type: "Hash"
                                   Parent Relationship: "Inner"
                                   Parallel Aware: false
-                                  Plans: 
+                                  Plans:
                                     - Node Type: "Seq Scan"
                                       Parent Relationship: "Outer"
                                       Parallel Aware: false
@@ -853,14 +853,14 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                             - Node Type: "Hash"
                               Parent Relationship: "Inner"
                               Parallel Aware: false
-                              Plans: 
+                              Plans:
                                 - Node Type: "Hash Join"
                                   Parent Relationship: "Outer"
                                   Parallel Aware: false
                                   Join Type: "Inner"
                                   Inner Unique: false
                                   Hash Cond: "(customer_mx.c_custkey = orders_mx.o_custkey)"
-                                  Plans: 
+                                  Plans:
                                     - Node Type: "Seq Scan"
                                       Parent Relationship: "Outer"
                                       Parallel Aware: false
@@ -869,7 +869,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                                     - Node Type: "Hash"
                                       Parent Relationship: "Inner"
                                       Parallel Aware: false
-                                      Plans: 
+                                      Plans:
                                         - Node Type: "Seq Scan"
                                           Parent Relationship: "Outer"
                                           Parallel Aware: false

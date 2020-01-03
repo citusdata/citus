@@ -30,9 +30,9 @@ CREATE TABLE lineitem_hash (
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
@@ -48,9 +48,9 @@ CREATE TABLE orders_hash (
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
 SELECT create_distributed_table('orders_hash', 'o_orderkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 CREATE TABLE customer_hash (
@@ -63,9 +63,9 @@ CREATE TABLE customer_hash (
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
 SELECT create_distributed_table('customer_hash', 'c_custkey');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 SET client_min_messages TO DEBUG2;
@@ -76,7 +76,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
-                             QUERY PLAN                             
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
    explain statements for distributed queries are not enabled
@@ -90,7 +90,7 @@ EXPLAIN SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -103,7 +103,7 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 EXPLAIN SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ single range partition join "lineitem_hash" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -114,7 +114,7 @@ LOG:  join order: [ "orders" ][ single range partition join "lineitem_hash" ]
 EXPLAIN SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -125,7 +125,7 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
 EXPLAIN SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
 LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -137,7 +137,7 @@ LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
 EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -149,7 +149,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition
 EXPLAIN SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
@@ -161,7 +161,7 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
 EXPLAIN SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders_hash" ][ single range partition join "customer_append" ]
-                                QUERY PLAN                                
+                                QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)

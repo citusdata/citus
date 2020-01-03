@@ -15,9 +15,9 @@ CREATE INDEX ON customer_engagements (event_data);
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('customer_engagements', 'id', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- ingest some data for the tests
@@ -27,7 +27,7 @@ INSERT INTO customer_engagements VALUES (1, '03-01-2015', 'third event');
 -- the following queries does the following:
 -- (i)    create a new shard
 -- (ii)   mark the second shard placements as unhealthy
--- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones 
+-- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones
 -- (iv)   do a successful master_copy_shard_placement from the first placement to the second
 -- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
 -- get the newshardid
@@ -50,18 +50,18 @@ ROLLBACK;
 -- modifications after reparing a shard are fine (will use new metadata)
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 ALTER TABLE customer_engagements ADD COLUMN value float;
 ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
@@ -76,16 +76,16 @@ SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'lo
 ERROR:  source placement must be in finalized state
 -- "copy" this shard from the first placement to the second one
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
- master_copy_shard_placement 
+ master_copy_shard_placement
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
 UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid AND groupid = :worker_1_group;
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
- id | created_at |  event_data  
+ id | created_at |  event_data
 ---------------------------------------------------------------------
   1 | 01-01-2015 | first event
   2 | 02-01-2015 | second event
@@ -104,9 +104,9 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('remote_engagements', 'id', 'hash');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- get the newshardid

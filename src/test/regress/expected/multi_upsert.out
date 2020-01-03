@@ -8,9 +8,9 @@ CREATE TABLE upsert_test
 );
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test', 'part_key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- do a regular insert
@@ -26,10 +26,10 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 2,  third_col = 4;
 -- see the results
 SELECT * FROM upsert_test ORDER BY part_key ASC;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |         2 |         4
-        2 |         2 |          
+        2 |         2 |
 (2 rows)
 
 -- do a multi-row DO NOTHING insert
@@ -41,11 +41,11 @@ ON CONFLICT (part_key) DO
 UPDATE SET other_col = EXCLUDED.other_col WHERE upsert_test.part_key != 1;
 -- see the results
 SELECT * FROM upsert_test ORDER BY part_key ASC;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |         2 |         4
-        2 |        20 |          
-        3 |        30 |          
+        2 |        20 |
+        3 |        30 |
 (3 rows)
 
 DELETE FROM upsert_test WHERE part_key = 2;
@@ -55,7 +55,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 	DO UPDATE SET other_col = 30 WHERE upsert_test.other_col = 3;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |         2 |         4
 (1 row)
@@ -65,7 +65,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 	DO UPDATE SET other_col = 30 WHERE upsert_test.other_col = 2;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |        30 |         4
 (1 row)
@@ -78,7 +78,7 @@ INSERT INTO upsert_test (part_key, other_col, third_col) VALUES (1, 1, 100) ON C
 	DO UPDATE SET other_col = EXCLUDED.third_col;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |       100 |         4
 (1 row)
@@ -88,7 +88,7 @@ INSERT INTO upsert_test as ups_test (part_key) VALUES (1)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = ups_test.other_col + 50, third_col = 200;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |       150 |       200
 (1 row)
@@ -99,7 +99,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 		third_col = upsert_test.third_col + (EXCLUDED.part_key + EXCLUDED.other_col) + 670;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |       151 |       872
 (1 row)
@@ -110,7 +110,7 @@ INSERT INTO upsert_test as ups_test (part_key, other_col) VALUES (1, 1) ON CONFL
 		WHERE ups_test.third_col < 1000 + ups_test.other_col;
 -- see the results
 SELECT * FROM upsert_test;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
         1 |         5 |       872
 (1 row)
@@ -119,17 +119,17 @@ SELECT * FROM upsert_test;
 INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
         RETURNING *;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
-        2 |         2 |          
+        2 |         2 |
 (1 row)
 
 INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
         RETURNING *;
- part_key | other_col | third_col 
+ part_key | other_col | third_col
 ---------------------------------------------------------------------
-        2 |         3 |          
+        2 |         3 |
 (1 row)
 
 -- create another table
@@ -142,9 +142,9 @@ CREATE TABLE upsert_test_2
 );
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_2', 'part_key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- now show that Citus works with multiple columns as the PRIMARY KEY, including the partiton key
@@ -163,9 +163,9 @@ CREATE TABLE upsert_test_3
 CREATE INDEX idx_ups_test ON upsert_test_3(part_key);
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_3', 'part_key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- since there are no unique indexes, error-out
@@ -179,9 +179,9 @@ CREATE TABLE upsert_test_4
 );
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_4', 'part_key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 -- a single row insert
@@ -195,7 +195,7 @@ INSERT INTO upsert_test_4 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET coun
 INSERT INTO upsert_test_4 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET count = upsert_test_4.count + 1;
 -- now see the results
 SELECT * FROM upsert_test_4;
- part_key | count 
+ part_key | count
 ---------------------------------------------------------------------
         1 |     6
 (1 row)
@@ -204,9 +204,9 @@ SELECT * FROM upsert_test_4;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE dropcol_distributed(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
 SELECT create_distributed_table('dropcol_distributed', 'key', 'hash');
- create_distributed_table 
+ create_distributed_table
 ---------------------------------------------------------------------
- 
+
 (1 row)
 
 INSERT INTO dropcol_distributed AS dropcol (key, keep1, keep2) VALUES (1, '5', 5) ON CONFLICT(key)
