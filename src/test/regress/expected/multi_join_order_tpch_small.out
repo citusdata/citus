@@ -17,7 +17,7 @@ WHERE
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -48,7 +48,7 @@ ORDER BY
 	o_orderdate;
 LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition join "lineitem" ]
                                            QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -91,7 +91,7 @@ ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nation" ][ local partition join "lineitem" ]
                                                                                  QUERY PLAN                                                                                 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -132,7 +132,7 @@ WHERE
 	);
 LOG:  join order: [ "lineitem" ][ reference join "part" ]
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled

@@ -25,13 +25,13 @@ SELECT citus_add_rebalance_strategy(
         0.2
     );
  citus_add_rebalance_strategy 
-------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus_set_default_rebalance_strategy('custom_strategy');
  citus_set_default_rebalance_strategy 
---------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

@@ -9,19 +9,19 @@ CREATE TABLE test_table_2(id bigint, val1 int);
 CREATE TABLE test_table_3(id int, val1 bigint);
 SELECT create_distributed_table('test_table_1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_3', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -31,7 +31,7 @@ INSERT INTO test_table_3 VALUES(1,1),(3,3),(4,5);
 -- Simple full outer join
 SELECT id FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
  id 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -41,7 +41,7 @@ SELECT id FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
 -- Get all columns as the result of the full join
 SELECT * FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
  id | val1 | val1 
-----+------+------
+---------------------------------------------------------------------
   1 |    1 |    1
   2 |    2 |     
   3 |    3 |    3
@@ -56,7 +56,7 @@ SELECT * FROM
 	USING(id)
 	ORDER BY 1;
  id 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -72,7 +72,7 @@ SELECT * FROM
 	USING(id, val1)
 	ORDER BY 1;
  id | val1 
-----+------
+---------------------------------------------------------------------
   1 |    1
   2 |    2
   3 |    3
@@ -83,7 +83,7 @@ SELECT * FROM
 -- Full join using multiple columns
 SELECT * FROM test_table_1 FULL JOIN test_table_3 USING(id, val1) ORDER BY 1;
  id | val1 
-----+------
+---------------------------------------------------------------------
   1 |    1
   2 |    2
   3 |    3
@@ -98,7 +98,7 @@ GROUP BY id
 ORDER BY 2
 ASC LIMIT 3;
  count | avg_value | not_null 
--------+-----------+----------
+---------------------------------------------------------------------
      1 |         2 | t
      1 |         6 | t
      1 |        12 | t
@@ -109,7 +109,7 @@ FROM test_table_1 FULL JOIN test_table_3 USING(id, val1)
 GROUP BY test_table_1.id
 ORDER BY 1;
  max 
------
+---------------------------------------------------------------------
    1
    2
    3
@@ -122,7 +122,7 @@ FROM test_table_1 LEFT JOIN test_table_3 USING(id, val1)
 GROUP BY test_table_1.id
 ORDER BY 1;
  max 
------
+---------------------------------------------------------------------
    1
    2
    3
@@ -139,7 +139,7 @@ INSERT INTO test_table_3 VALUES(7, NULL);
 -- Get all columns as the result of the full join
 SELECT * FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
  id | val1 | val1 
-----+------+------
+---------------------------------------------------------------------
   1 |    1 |    1
   2 |    2 |     
   3 |    3 |    3
@@ -150,7 +150,7 @@ SELECT * FROM test_table_1 FULL JOIN test_table_3 using(id) ORDER BY 1;
 -- Get the same result (with multiple id)
 SELECT * FROM test_table_1 FULL JOIN test_table_3 ON (test_table_1.id = test_table_3.id) ORDER BY 1;
  id | val1 | id | val1 
-----+------+----+------
+---------------------------------------------------------------------
   1 |    1 |  1 |    1
   2 |    2 |    |     
   3 |    3 |  3 |    3
@@ -161,7 +161,7 @@ SELECT * FROM test_table_1 FULL JOIN test_table_3 ON (test_table_1.id = test_tab
 -- Full join using multiple columns
 SELECT * FROM test_table_1 FULL JOIN test_table_3 USING(id, val1) ORDER BY 1;
  id | val1 
-----+------
+---------------------------------------------------------------------
   1 |    1
   2 |    2
   3 |    3
@@ -179,13 +179,13 @@ CREATE TABLE test_table_1(id int, val1 text);
 CREATE TABLE test_table_2(id int, val1 varchar(30));
 SELECT create_distributed_table('test_table_1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -194,7 +194,7 @@ INSERT INTO test_table_2 VALUES(2,'val_2'),(3,'val_3'),(4,'val_4'), (5, NULL);
 -- Simple full outer join
 SELECT id FROM test_table_1 FULL JOIN test_table_2 using(id) ORDER BY 1;
  id 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -205,7 +205,7 @@ SELECT id FROM test_table_1 FULL JOIN test_table_2 using(id) ORDER BY 1;
 -- Get all columns as the result of the full join
 SELECT * FROM test_table_1 FULL JOIN test_table_2 using(id) ORDER BY 1;
  id | val1  | val1  
-----+-------+-------
+---------------------------------------------------------------------
   1 | val_1 | 
   2 | val_2 | val_2
   3 | val_3 | val_3
@@ -221,7 +221,7 @@ SELECT * FROM
 	USING(id, val1)
 	ORDER BY 1,2;
  id | val1  
-----+-------
+---------------------------------------------------------------------
   1 | val_1
   2 | val_2
   3 | val_3
@@ -235,7 +235,7 @@ SELECT * FROM
 -- Full join using multiple columns
 SELECT * FROM test_table_1 FULL JOIN test_table_2 USING(id, val1) ORDER BY 1,2;
  id | val1  
-----+-------
+---------------------------------------------------------------------
   1 | val_1
   2 | val_2
   3 | val_3

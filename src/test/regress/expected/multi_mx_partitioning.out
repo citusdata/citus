@@ -8,7 +8,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -28,7 +28,7 @@ SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -36,7 +36,7 @@ NOTICE:  Copying data from local table...
 \c - - - :worker_1_port
 SELECT * FROM partitioning_test ORDER BY 1;
  id |    time    
-----+------------
+---------------------------------------------------------------------
   1 | 06-06-2009
   2 | 07-07-2010
   3 | 09-09-2009
@@ -52,7 +52,7 @@ WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')
 ORDER BY 1;
       logicalrelid      
-------------------------
+---------------------------------------------------------------------
  partitioning_test
  partitioning_test_2009
  partitioning_test_2010
@@ -67,7 +67,7 @@ GROUP BY
 ORDER BY
 	1,2;
       logicalrelid      | count 
-------------------------+-------
+---------------------------------------------------------------------
  partitioning_test      |     4
  partitioning_test_2009 |     4
  partitioning_test_2010 |     4
@@ -76,7 +76,7 @@ ORDER BY
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
         inhrelid        
-------------------------
+---------------------------------------------------------------------
  partitioning_test_2009
  partitioning_test_2010
 (2 rows)
@@ -96,7 +96,7 @@ WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2011')
 ORDER BY 1;
       logicalrelid      
-------------------------
+---------------------------------------------------------------------
  partitioning_test
  partitioning_test_2011
 (2 rows)
@@ -110,7 +110,7 @@ GROUP BY
 ORDER BY
 	1,2;
       logicalrelid      | count 
-------------------------+-------
+---------------------------------------------------------------------
  partitioning_test      |     4
  partitioning_test_2011 |     4
 (2 rows)
@@ -118,7 +118,7 @@ ORDER BY
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
         inhrelid        
-------------------------
+---------------------------------------------------------------------
  partitioning_test_2009
  partitioning_test_2010
  partitioning_test_2011
@@ -144,7 +144,7 @@ WHERE
 	logicalrelid IN ('partitioning_test', 'partitioning_test_2012')
 ORDER BY 1;
       logicalrelid      
-------------------------
+---------------------------------------------------------------------
  partitioning_test
  partitioning_test_2012
 (2 rows)
@@ -158,7 +158,7 @@ GROUP BY
 ORDER BY
 	1,2;
       logicalrelid      | count 
-------------------------+-------
+---------------------------------------------------------------------
  partitioning_test      |     4
  partitioning_test_2012 |     4
 (2 rows)
@@ -166,7 +166,7 @@ ORDER BY
 -- see from MX node, see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
  id |    time    
-----+------------
+---------------------------------------------------------------------
   1 | 06-06-2009
   2 | 07-07-2010
   3 | 09-09-2009
@@ -178,7 +178,7 @@ SELECT * FROM partitioning_test ORDER BY 1;
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
         inhrelid        
-------------------------
+---------------------------------------------------------------------
  partitioning_test_2009
  partitioning_test_2010
  partitioning_test_2011
@@ -192,7 +192,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE partitioning_test_2013(id int, time date);
 SELECT create_distributed_table('partitioning_test_2013', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -204,7 +204,7 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2013 FOR VALUES
 \c - - - :worker_1_port
 SELECT * FROM partitioning_test ORDER BY 1;
  id |    time    
-----+------------
+---------------------------------------------------------------------
   1 | 06-06-2009
   2 | 07-07-2010
   3 | 09-09-2009
@@ -218,7 +218,7 @@ SELECT * FROM partitioning_test ORDER BY 1;
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
         inhrelid        
-------------------------
+---------------------------------------------------------------------
  partitioning_test_2009
  partitioning_test_2010
  partitioning_test_2011
@@ -233,7 +233,7 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 \c - - - :worker_1_port
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
         inhrelid        
-------------------------
+---------------------------------------------------------------------
  partitioning_test_2010
  partitioning_test_2011
  partitioning_test_2012
@@ -248,19 +248,19 @@ HINT:  Connect to the coordinator and run it again.
 -- make sure we can repeatedly call start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -279,7 +279,7 @@ SET SEARCH_PATH TO partition_test;
 CREATE TABLE partition_parent_table(a int, b int, c int) PARTITION BY RANGE (b);
 SELECT create_distributed_table('partition_parent_table', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

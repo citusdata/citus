@@ -14,14 +14,14 @@ INSERT INTO test VALUES
 SELECT create_reference_table('ref');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test', 'x');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -34,7 +34,7 @@ FROM
 WHERE t2.y * 2 = a.a
 ORDER BY 1,2,3;
  y | x | x | a | b 
----+---+---+---+---
+---------------------------------------------------------------------
  2 | 1 | 1 | 4 | 4
  2 | 1 | 2 | 4 | 4
  2 | 2 | 1 | 4 | 4
@@ -54,7 +54,7 @@ FROM
 WHERE t2.y - a.a - b.b = 0
 ORDER BY 1,2,3;
  y | x | x | a | b | a | b 
----+---+---+---+---+---+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- The join clause is wider than it used to be, causing this query to be recognized by the LogicalPlanner as a repartition join.

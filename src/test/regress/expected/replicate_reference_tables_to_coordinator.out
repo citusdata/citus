@@ -13,7 +13,7 @@ SET citus.log_local_commands TO ON;
 CREATE TABLE squares(a int, b int);
 SELECT create_reference_table('squares');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -22,7 +22,7 @@ INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 SELECT count(*) FROM squares;
 LOG:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -30,7 +30,7 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM replicate_ref
 CREATE TABLE numbers(a int);
 SELECT create_reference_table('numbers');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -40,7 +40,7 @@ LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.nu
 BEGIN;
 EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
                                           QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
    Task Count: 1
    Tasks Shown: All
@@ -53,7 +53,7 @@ EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
 INSERT INTO squares SELECT a, a*a FROM numbers;
 SELECT * FROM squares WHERE a >= 20 ORDER BY a;
  a  |  b  
-----+-----
+---------------------------------------------------------------------
  20 | 400
  21 | 441
 (2 rows)
@@ -62,7 +62,7 @@ ROLLBACK;
 BEGIN;
 EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
                                           QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
    Task Count: 1
    Tasks Shown: All
@@ -76,7 +76,7 @@ EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
  a  
-----
+---------------------------------------------------------------------
   1
   2
  20
@@ -87,7 +87,7 @@ ROLLBACK;
 -- Make sure we hide shard tables ...
 SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
  citus_table_is_visible 
-------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -96,7 +96,7 @@ CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
 EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
                                   QUERY PLAN                                   
--------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Merge Join  (cost=359.57..860.00 rows=32512 width=8)
    Merge Cond: (local_table.a = numbers_8000001.a)
    ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
@@ -109,7 +109,7 @@ EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
  a  | a  
-----+----
+---------------------------------------------------------------------
  20 | 20
 (1 row)
 
@@ -119,7 +119,7 @@ FROM local_table lt
 JOIN squares sq ON sq.a > lt.a and sq.b > 90
 ORDER BY 1,2,3;
  a | a  |  b  
----+----+-----
+---------------------------------------------------------------------
  2 | 10 | 100
  4 | 10 | 100
  7 | 10 | 100
@@ -159,14 +159,14 @@ CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURA
 PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
 SELECT sum(a) FROM local_table;
  sum 
------
+---------------------------------------------------------------------
   33
 (1 row)
 
 SELECT sum(a) FROM numbers;
 LOG:  executing the command locally: SELECT sum(a) AS sum FROM replicate_ref_to_coordinator.numbers_8000001 numbers
  sum 
------
+---------------------------------------------------------------------
   41
 (1 row)
 
@@ -182,7 +182,7 @@ CREATE SCHEMA s1;
 CREATE TABLE s1.ref(a int);
 SELECT create_reference_table('s1.ref');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -239,14 +239,14 @@ WITH t AS (SELECT *, random() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
  a | a 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- shouldn't plan locally even if distributed table is in CTE or subquery
 CREATE TABLE dist(a int);
 SELECT create_distributed_table('dist', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -275,7 +275,7 @@ EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
        coordinator_plan       
-------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -286,7 +286,7 @@ EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
 $Q$);
                 coordinator_plan                
-------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    ->  Distributed Subplan 24_1
          ->  Seq Scan on local_table
@@ -307,7 +307,7 @@ EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
  plan_is_distributed 
----------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -329,7 +329,7 @@ EXPLAIN (COSTS FALSE)
 SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
 $Q$);
  plan_is_distributed 
----------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -338,7 +338,7 @@ EXPLAIN (COSTS FALSE)
 SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
 $Q$);
  plan_is_distributed 
----------------------
+---------------------------------------------------------------------
  f
 (1 row)
 

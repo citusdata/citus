@@ -6,7 +6,7 @@
 -- test very basic queries
 SELECT * FROM nation_hash ORDER BY n_nationkey LIMIT 4;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
--------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 |  haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -15,7 +15,7 @@ SELECT * FROM nation_hash ORDER BY n_nationkey LIMIT 4;
 
 SELECT * FROM citus_mx_test_schema.nation_hash ORDER BY n_nationkey LIMIT 4;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
--------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 |  haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -31,18 +31,18 @@ DECLARE test_cursor CURSOR FOR
         WHERE n_nationkey = 1;
 FETCH test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH test_cursor;
  n_nationkey | n_name | n_regionkey | n_comment 
--------------+--------+-------------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 FETCH BACKWARD test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -56,18 +56,18 @@ DECLARE test_cursor CURSOR FOR
         WHERE n_nationkey = 1;
 FETCH test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH test_cursor;
  n_nationkey | n_name | n_regionkey | n_comment 
--------------+--------+-------------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 FETCH BACKWARD test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -78,7 +78,7 @@ INSERT INTO citus_mx_test_schema.nation_hash(n_nationkey, n_name, n_regionkey) V
 -- verify insertion
 SELECT * FROM citus_mx_test_schema.nation_hash WHERE n_nationkey = 100;
  n_nationkey |          n_name           | n_regionkey | n_comment 
--------------+---------------------------+-------------+-----------
+---------------------------------------------------------------------
          100 | TURKEY                    |           3 | 
 (1 row)
 
@@ -88,7 +88,7 @@ INSERT INTO nation_hash(n_nationkey, n_name, n_regionkey) VALUES (101, 'GERMANY'
 -- verify insertion
 SELECT * FROM nation_hash WHERE n_nationkey = 101;
  n_nationkey |          n_name           | n_regionkey | n_comment 
--------------+---------------------------+-------------+-----------
+---------------------------------------------------------------------
          101 | GERMANY                   |           3 | 
 (1 row)
 
@@ -98,7 +98,7 @@ SET search_path TO public;
 -- UDF in public, table in a schema other than public, search_path is not set
 SELECT simpleTestFunction(n_nationkey)::int FROM citus_mx_test_schema.nation_hash GROUP BY 1 ORDER BY 1 DESC LIMIT 5;
  simpletestfunction 
---------------------
+---------------------------------------------------------------------
                 152
                 151
                  37
@@ -110,7 +110,7 @@ SELECT simpleTestFunction(n_nationkey)::int FROM citus_mx_test_schema.nation_has
 SET search_path TO citus_mx_test_schema;
 SELECT public.simpleTestFunction(n_nationkey)::int FROM citus_mx_test_schema.nation_hash GROUP BY 1 ORDER BY 1 DESC LIMIT 5;
  simpletestfunction 
---------------------
+---------------------------------------------------------------------
                 152
                 151
                  37
@@ -122,7 +122,7 @@ SELECT public.simpleTestFunction(n_nationkey)::int FROM citus_mx_test_schema.nat
 SET search_path TO public;
 SELECT citus_mx_test_schema.simpleTestFunction2(n_nationkey)::int FROM citus_mx_test_schema.nation_hash  GROUP BY 1 ORDER BY 1 DESC LIMIT 5;
  simpletestfunction2 
----------------------
+---------------------------------------------------------------------
                  152
                  151
                   37
@@ -134,7 +134,7 @@ SELECT citus_mx_test_schema.simpleTestFunction2(n_nationkey)::int FROM citus_mx_
 SET search_path TO citus_mx_test_schema;
 SELECT simpleTestFunction2(n_nationkey)::int FROM nation_hash  GROUP BY 1 ORDER BY 1 DESC LIMIT 5;
  simpletestfunction2 
----------------------
+---------------------------------------------------------------------
                  152
                  151
                   37
@@ -147,7 +147,7 @@ SET search_path TO public;
 -- test with search_path is not set
 SELECT * FROM citus_mx_test_schema.nation_hash  WHERE n_nationkey OPERATOR(citus_mx_test_schema.===) 1;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -155,13 +155,13 @@ SELECT * FROM citus_mx_test_schema.nation_hash  WHERE n_nationkey OPERATOR(citus
 SET search_path TO citus_mx_test_schema;
 SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
--------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -172,7 +172,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
 
 SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY n_comment COLLATE citus_mx_test_schema.english;
                                                   n_comment                                                  
--------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
  haggle. carefully final deposits detect slyly agai
@@ -184,7 +184,7 @@ SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORD
 SET search_path  TO citus_mx_test_schema;
 SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC;
  n_nationkey |          n_name           | n_regionkey |                                                  n_comment                                                  
--------------+---------------------------+-------------+-------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
            5 | ETHIOPIA                  |           0 | ven packages wake quickly. regu
            4 | EGYPT                     |           4 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
            3 | CANADA                    |           1 | eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -195,7 +195,7 @@ SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC;
 
 SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLATE english;
                                                   n_comment                                                  
--------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
  haggle. carefully final deposits detect slyly agai
@@ -206,7 +206,7 @@ SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLA
 
 SELECT * FROM citus_mx_test_schema.nation_hash_composite_types WHERE test_col = '(a,a)'::citus_mx_test_schema.new_composite_type ORDER BY 1::int DESC;
  n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col 
--------------+---------------------------+-------------+----------------------------------------------------+----------
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai | (a,a)
 (1 row)
 
@@ -214,7 +214,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash_composite_types WHERE test_col = 
 SET search_path TO citus_mx_test_schema;
 SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composite_type ORDER BY 1::int DESC;
  n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col 
--------------+---------------------------+-------------+----------------------------------------------------+----------
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai | (a,a)
 (1 row)
 
@@ -229,7 +229,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_nationkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -244,7 +244,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_nationkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -259,7 +259,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_nationkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -274,7 +274,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_nationkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -291,7 +291,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -306,7 +306,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -321,7 +321,7 @@ FROM
 WHERE
     n1.n_nationkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -337,7 +337,7 @@ FROM
 WHERE
     n1.n_regionkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
    125
 (1 row)
 
@@ -352,7 +352,7 @@ FROM
 WHERE
     n1.n_regionkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
    125
 (1 row)
 
@@ -367,7 +367,7 @@ FROM
 WHERE
     n1.n_regionkey = n2.n_regionkey;
  count 
--------
+---------------------------------------------------------------------
    125
 (1 row)
 
@@ -389,7 +389,7 @@ SET search_path TO mx_ddl_schema_1;
 CREATE TABLE table_1 (key int PRIMARY KEY, value text);
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -400,7 +400,7 @@ SET search_path TO mx_ddl_schema_1, mx_ddl_schema_2;
 CREATE TABLE mx_ddl_schema_2.table_2 (key int PRIMARY KEY, value text);
 SELECT create_distributed_table('mx_ddl_schema_2.table_2', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -410,7 +410,7 @@ SET search_path TO "CiTuS.TeAeN";
 CREATE TABLE "TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
 SELECT create_distributed_table('"TeeNTabLE.1!?!"', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

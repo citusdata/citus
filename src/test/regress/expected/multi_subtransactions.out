@@ -4,7 +4,7 @@ CREATE TABLE artists (
 );
 SELECT create_distributed_table('artists', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -22,7 +22,7 @@ RELEASE SAVEPOINT s1;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- ROLLBACK TO SAVEPOINT
@@ -34,7 +34,7 @@ ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
  id |   name    
-----+-----------
+---------------------------------------------------------------------
   5 | Asher Lev
 (1 row)
 
@@ -49,7 +49,7 @@ RELEASE SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
  id |    name    
-----+------------
+---------------------------------------------------------------------
   5 | Jacob Kahn
 (1 row)
 
@@ -64,7 +64,7 @@ ROLLBACK TO SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=5;
  id |    name    
-----+------------
+---------------------------------------------------------------------
   5 | Jacob Kahn
 (1 row)
 
@@ -82,7 +82,7 @@ INSERT INTO artists VALUES (6, 'Emily Carr');
 COMMIT;
 SELECT * FROM artists WHERE id=6;
  id |    name    
-----+------------
+---------------------------------------------------------------------
   6 | Emily Carr
 (1 row)
 
@@ -98,7 +98,7 @@ RELEASE SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=7;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Recover from errors
@@ -132,7 +132,7 @@ INSERT INTO artists VALUES (9, 'Mohsen Namjoo');
 COMMIT;
 SELECT * FROM artists WHERE id IN (7, 8, 9) ORDER BY id;
  id |     name      
-----+---------------
+---------------------------------------------------------------------
   8 | Sogand
   9 | Mohsen Namjoo
 (2 rows)
@@ -149,7 +149,7 @@ INSERT INTO artists VALUES (10, 'Mahmoud Farshchian');
 COMMIT;
 SELECT * FROM artists WHERE id IN (9, 10) ORDER BY id;
  id |        name        
-----+--------------------
+---------------------------------------------------------------------
  10 | Mahmoud Farshchian
 (1 row)
 
@@ -165,7 +165,7 @@ INSERT INTO artists VALUES (11, 'Egon Schiele');
 COMMIT;
 SELECT * FROM artists WHERE id IN (10, 11) ORDER BY id;
  id |     name     
-----+--------------
+---------------------------------------------------------------------
  11 | Egon Schiele
 (1 row)
 
@@ -181,7 +181,7 @@ INSERT INTO artists VALUES (12, 'Marc Chagall');
 COMMIT;
 SELECT * FROM artists WHERE id IN (11, 12) ORDER BY id;
  id |     name     
-----+--------------
+---------------------------------------------------------------------
  12 | Marc Chagall
 (1 row)
 
@@ -192,7 +192,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 select create_distributed_table('t1', 'a'),
        create_distributed_table('t2', 'a');
  create_distributed_table | create_distributed_table 
---------------------------+--------------------------
+---------------------------------------------------------------------
                           | 
 (1 row)
 
@@ -237,7 +237,7 @@ with r AS (
 commit;
 select * from t2 order by a, b;
  a | b 
----+---
+---------------------------------------------------------------------
  1 | 4
  2 | 5
  3 | 6
@@ -245,7 +245,7 @@ select * from t2 order by a, b;
 
 select * from t1 order by a, b;
  a | b 
----+---
+---------------------------------------------------------------------
  1 | 3
  1 | 4
  2 | 4
@@ -266,7 +266,7 @@ CREATE TABLE researchers (
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('researchers', 'lab_id', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -280,7 +280,7 @@ RELEASE SAVEPOINT s1;
 COMMIT;
 SELECT * FROM researchers WHERE id in (7, 8);
  id | lab_id |   name    
-----+--------+-----------
+---------------------------------------------------------------------
   7 |      4 | Jan Plaza
 (1 row)
 
@@ -295,7 +295,7 @@ INSERT INTO researchers VALUES (12, 10, 'Stephen Kleene');
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -311,7 +311,7 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ROLLBACK;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -327,7 +327,7 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -345,7 +345,7 @@ NOTICE:  caught not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -362,7 +362,7 @@ NOTICE:  caught manual plpgsql_error
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -379,7 +379,7 @@ ERROR:  not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |      name      
-----+--------+----------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
 (1 row)
 
@@ -396,7 +396,7 @@ END $$;
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
  id | lab_id |       name       
-----+--------+------------------
+---------------------------------------------------------------------
  12 |     10 | Stephen Kleene
  32 |     10 | Raymond Smullyan
 (2 rows)

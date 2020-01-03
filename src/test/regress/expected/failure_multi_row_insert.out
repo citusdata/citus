@@ -11,7 +11,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -19,13 +19,13 @@ CREATE TABLE distributed_table(key int, value int);
 CREATE TABLE reference_table(value int);
 SELECT create_distributed_table('distributed_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -38,7 +38,7 @@ SELECT create_reference_table('reference_table');
 --  Failure and cancellation on multi-row INSERT that hits the same shard with the same value
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -53,7 +53,7 @@ DETAIL:  server closed the connection unexpectedly
 --  Failure and cancellation on multi-row INSERT that hits the same shard with different values
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -68,7 +68,7 @@ DETAIL:  server closed the connection unexpectedly
 --  Failure and cancellation multi-row INSERT that hits multiple shards in a single worker
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -79,7 +79,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -88,7 +88,7 @@ ERROR:  canceling statement due to user request
 --  Failure and cancellation multi-row INSERT that hits multiple shards in a single worker, happening on the second query
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -99,7 +99,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -108,7 +108,7 @@ ERROR:  canceling statement due to user request
 --  Failure and cancellation multi-row INSERT that hits multiple shards in multiple workers
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -119,7 +119,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -128,7 +128,7 @@ ERROR:  canceling statement due to user request
 -- one test for the reference tables for completeness
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -136,7 +136,7 @@ INSERT INTO reference_table VALUES (1), (2), (3), (4);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -145,7 +145,7 @@ ERROR:  canceling statement due to user request
 -- cancel the second insert over the same connection
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -154,17 +154,17 @@ ERROR:  canceling statement due to user request
 -- we've either failed or cancelled all queries, so should be empty
 SELECT * FROM distributed_table;
  key | value 
------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM reference_table;
  value 
--------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 

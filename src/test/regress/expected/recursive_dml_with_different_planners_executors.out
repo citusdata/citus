@@ -3,21 +3,21 @@ SET search_path TO recursive_dml_with_different_planner_executors, public;
 CREATE TABLE distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE second_distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('second_distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE reference_table (id text, name text);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

@@ -98,7 +98,7 @@ ORDER BY a.attrelid, a.attnum;
 $desc_views$
 );
  run_command_on_master_and_workers 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

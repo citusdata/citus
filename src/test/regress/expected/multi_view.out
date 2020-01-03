@@ -7,13 +7,13 @@
 -- into select, multi row insert via copy commands.
 SELECT count(*) FROM lineitem_hash_part;
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT count(*) FROM orders_hash_part;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -22,14 +22,14 @@ CREATE VIEW priority_orders AS SELECT * FROM orders_hash_part WHERE o_orderprior
 -- aggregate pushdown
 SELECT o_orderpriority, count(*)  FROM priority_orders GROUP BY 1 ORDER BY 2, 1;
  o_orderpriority | count 
------------------+-------
+---------------------------------------------------------------------
  2-HIGH          |   593
  1-URGENT        |   604
 (2 rows)
 
 SELECT o_orderpriority, count(*) FROM orders_hash_part  WHERE o_orderpriority < '3-MEDIUM' GROUP BY 1 ORDER BY 2,1;
  o_orderpriority | count 
------------------+-------
+---------------------------------------------------------------------
  2-HIGH          |   593
  1-URGENT        |   604
 (2 rows)
@@ -37,7 +37,7 @@ SELECT o_orderpriority, count(*) FROM orders_hash_part  WHERE o_orderpriority < 
 -- filters
 SELECT o_orderpriority, count(*) as all, count(*) FILTER (WHERE o_orderstatus ='F') as fullfilled  FROM priority_orders GROUP BY 1 ORDER BY 2, 1;
  o_orderpriority | all | fullfilled 
------------------+-----+------------
+---------------------------------------------------------------------
  2-HIGH          | 593 |        271
  1-URGENT        | 604 |        280
 (2 rows)
@@ -45,7 +45,7 @@ SELECT o_orderpriority, count(*) as all, count(*) FILTER (WHERE o_orderstatus ='
 -- having
 SELECT o_orderdate, count(*) from priority_orders group by 1 having (count(*) > 3)  order by 2 desc, 1 desc;
  o_orderdate | count 
--------------+-------
+---------------------------------------------------------------------
  08-20-1996  |     5
  10-10-1994  |     4
  05-05-1994  |     4
@@ -56,7 +56,7 @@ SELECT o_orderdate, count(*) from priority_orders group by 1 having (count(*) > 
 -- having with filters
 SELECT o_orderdate, count(*) as all, count(*) FILTER(WHERE o_orderstatus = 'F') from priority_orders group by 1 having (count(*) > 3)  order by 2 desc, 1 desc;
  o_orderdate | all | count 
--------------+-----+-------
+---------------------------------------------------------------------
  08-20-1996  |   5 |     0
  10-10-1994  |   4 |     4
  05-05-1994  |   4 |     4
@@ -67,7 +67,7 @@ SELECT o_orderdate, count(*) as all, count(*) FILTER(WHERE o_orderstatus = 'F') 
 -- limit
 SELECT o_orderkey, o_totalprice from orders_hash_part order by 2 desc, 1 asc limit 5 ;
  o_orderkey | o_totalprice 
-------------+--------------
+---------------------------------------------------------------------
        4421 |    401055.62
       10209 |    400191.77
       11142 |    395039.05
@@ -77,14 +77,14 @@ SELECT o_orderkey, o_totalprice from orders_hash_part order by 2 desc, 1 asc lim
 
 SELECT o_orderkey, o_totalprice from priority_orders order by 2 desc, 1 asc limit 1 ;
  o_orderkey | o_totalprice 
-------------+--------------
+---------------------------------------------------------------------
       14179 |    384265.43
 (1 row)
 
 CREATE VIEW priority_lineitem AS SELECT li.* FROM lineitem_hash_part li JOIN priority_orders ON (l_orderkey = o_orderkey);
 SELECT l_orderkey, count(*) FROM priority_lineitem GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 5;
  l_orderkey | count 
-------------+-------
+---------------------------------------------------------------------
           7 |     7
         225 |     7
         226 |     7
@@ -96,28 +96,28 @@ CREATE VIEW air_shipped_lineitems AS SELECT * FROM lineitem_hash_part WHERE l_sh
 -- join between view and table
 SELECT count(*) FROM orders_hash_part join air_shipped_lineitems ON (o_orderkey = l_orderkey);
  count 
--------
+---------------------------------------------------------------------
   1706
 (1 row)
 
 -- join between views
 SELECT count(*) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
  count 
--------
+---------------------------------------------------------------------
    700
 (1 row)
 
 -- count distinct on partition column is supported
 SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
  count 
--------
+---------------------------------------------------------------------
    551
 (1 row)
 
 -- count distinct on non-partition column is supported
 SELECT count(distinct o_orderpriority) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -126,7 +126,7 @@ SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitem
 	ON (o_orderkey = l_orderkey)
 	WHERE (o_orderkey = 231);
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -135,35 +135,35 @@ SELECT distinct(o_orderkey) FROM priority_orders join air_shipped_lineitems
 	ON (o_orderkey = l_orderkey)
 	WHERE (o_orderkey = 231);
  o_orderkey 
-------------
+---------------------------------------------------------------------
         231
 (1 row)
 
 -- left join support depends on flattening of the query
 SELECT o_orderkey, l_orderkey FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey) ORDER BY o_orderkey LIMIT 1;
  o_orderkey | l_orderkey 
-------------+------------
+---------------------------------------------------------------------
           2 |           
 (1 row)
 
 -- however, this works
 SELECT count(*) FROM priority_orders left join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count 
--------
+---------------------------------------------------------------------
    700
 (1 row)
 
 -- view on the inner side is supported
 SELECT count(*) FROM priority_orders right join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count 
--------
+---------------------------------------------------------------------
   1706
 (1 row)
 
 -- view on the outer side is supported
 SELECT count(*) FROM lineitem_hash_part right join priority_orders ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count 
--------
+---------------------------------------------------------------------
    700
 (1 row)
 
@@ -171,7 +171,7 @@ SELECT count(*) FROM lineitem_hash_part right join priority_orders ON (o_orderke
 SELECT o_orderkey, l_linenumber FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey)
 	WHERE o_orderkey = 2;
  o_orderkey | l_linenumber 
-------------+--------------
+---------------------------------------------------------------------
           2 |             
 (1 row)
 
@@ -183,7 +183,7 @@ DEBUG:  generating subplan 22_1 for subquery SELECT lineitem_hash_part.l_orderke
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT priority_orders.o_orderkey, priority_orders.o_custkey, priority_orders.o_orderstatus, priority_orders.o_totalprice, priority_orders.o_orderdate, priority_orders.o_orderpriority, priority_orders.o_clerk, priority_orders.o_shippriority, priority_orders.o_comment, air_shipped_lineitems.l_orderkey, air_shipped_lineitems.l_partkey, air_shipped_lineitems.l_suppkey, air_shipped_lineitems.l_linenumber, air_shipped_lineitems.l_quantity, air_shipped_lineitems.l_extendedprice, air_shipped_lineitems.l_discount, air_shipped_lineitems.l_tax, air_shipped_lineitems.l_returnflag, air_shipped_lineitems.l_linestatus, air_shipped_lineitems.l_shipdate, air_shipped_lineitems.l_commitdate, air_shipped_lineitems.l_receiptdate, air_shipped_lineitems.l_shipinstruct, air_shipped_lineitems.l_shipmode, air_shipped_lineitems.l_comment FROM ((SELECT orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment FROM public.orders_hash_part WHERE (orders_hash_part.o_orderpriority OPERATOR(pg_catalog.<) '3-MEDIUM'::bpchar)) priority_orders JOIN (SELECT intermediate_result.l_orderkey, intermediate_result.l_partkey, intermediate_result.l_suppkey, intermediate_result.l_linenumber, intermediate_result.l_quantity, intermediate_result.l_extendedprice, intermediate_result.l_discount, intermediate_result.l_tax, intermediate_result.l_returnflag, intermediate_result.l_linestatus, intermediate_result.l_shipdate, intermediate_result.l_commitdate, intermediate_result.l_receiptdate, intermediate_result.l_shipinstruct, intermediate_result.l_shipmode, intermediate_result.l_comment FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint, l_partkey integer, l_suppkey integer, l_linenumber integer, l_quantity numeric(15,2), l_extendedprice numeric(15,2), l_discount numeric(15,2), l_tax numeric(15,2), l_returnflag character(1), l_linestatus character(1), l_shipdate date, l_commitdate date, l_receiptdate date, l_shipinstruct character(25), l_shipmode character(10), l_comment character varying(44))) air_shipped_lineitems ON ((priority_orders.o_custkey OPERATOR(pg_catalog.=) air_shipped_lineitems.l_suppkey))) ORDER BY priority_orders.o_orderkey DESC, priority_orders.o_custkey DESC, priority_orders.o_orderpriority DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  o_orderkey | o_custkey | o_orderstatus | o_totalprice | o_orderdate | o_orderpriority |     o_clerk     | o_shippriority |                       o_comment                       | l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |                 l_comment                 
-------------+-----------+---------------+--------------+-------------+-----------------+-----------------+----------------+-------------------------------------------------------+------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+-------------------------------------------
+---------------------------------------------------------------------
       14821 |      1435 | O             |    322002.95 | 06-12-1998  | 2-HIGH          | Clerk#000000630 |              0 | n packages are furiously ironic ideas. d              |       1607 |    118923 |      1435 |            2 |      37.00 |        71851.04 |       0.05 |  0.02 | N            | O            | 02-27-1996 | 02-18-1996   | 03-16-1996    | NONE                      | AIR        | alongside 
       14790 |       613 | O             |    270163.54 | 08-21-1996  | 2-HIGH          | Clerk#000000347 |              0 | p. regular deposits wake. final n                     |       2629 |    123076 |       613 |            2 |      31.00 |        34071.17 |       0.08 |  0.03 | N            | O            | 05-24-1998 | 05-26-1998   | 06-10-1998    | COLLECT COD               | AIR        | ate blithely bold, regular deposits. bold
       14758 |      1225 | F             |     37812.49 | 10-27-1993  | 2-HIGH          | Clerk#000000687 |              0 | ages nag about the furio                              |       9156 |    176190 |      1225 |            2 |      22.00 |        27856.18 |       0.03 |  0.00 | R            | F            | 02-08-1994 | 04-01-1994   | 02-24-1994    | DELIVER IN PERSON         | AIR        | equests dete
@@ -194,7 +194,7 @@ DEBUG:  push down of limit count: 5
 RESET client_min_messages;
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
  count 
--------
+---------------------------------------------------------------------
    192
 (1 row)
 
@@ -212,7 +212,7 @@ SELECT l_suppkey, count(*) FROM
 		FROM lineitem_hash_part WHERE l_shipmode = 'AIR' GROUP BY l_suppkey, l_shipdate) supps
 	GROUP BY l_suppkey ORDER BY 2 DESC, 1 LIMIT 5;
  l_suppkey | count 
------------+-------
+---------------------------------------------------------------------
       7680 |     4
        160 |     3
       1042 |     3
@@ -232,7 +232,7 @@ DETAIL:  Subqueries without group by clause are not supported yet
 CREATE VIEW supp_count_view AS SELECT * FROM (SELECT l_suppkey, count(*) FROM lineitem_hash_part GROUP BY 1) s1;
 SELECT * FROM supp_count_view ORDER BY 2 DESC, 1 LIMIT 10;
  l_suppkey | count 
------------+-------
+---------------------------------------------------------------------
       6104 |     8
       1868 |     6
       5532 |     6
@@ -252,7 +252,7 @@ CREATE VIEW lineitems_by_shipping_method AS
 -- following will be supported via recursive planning
 SELECT * FROM  lineitems_by_shipping_method ORDER BY 1,2 LIMIT 5;
  l_shipmode | cnt  
-------------+------
+---------------------------------------------------------------------
  AIR        | 1706
  FOB        | 1709
  MAIL       | 1739
@@ -270,7 +270,7 @@ CREATE VIEW lineitems_by_orderkey AS
 -- this should work since we're able to push down this query
 SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
  l_orderkey | count 
-------------+-------
+---------------------------------------------------------------------
           7 |     7
          68 |     7
         129 |     7
@@ -286,7 +286,7 @@ SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
 -- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
  l_orderkey | count 
-------------+-------
+---------------------------------------------------------------------
         100 |     5
 (1 row)
 
@@ -304,7 +304,7 @@ CREATE VIEW recent_users AS
 	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC;
 SELECT * FROM recent_users ORDER BY 2 DESC, 1 DESC;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        1 | Thu Nov 23 17:30:34.635085 2017
        3 | Thu Nov 23 17:18:51.048758 2017
        5 | Thu Nov 23 16:48:32.08896 2017
@@ -316,14 +316,14 @@ CREATE VIEW recent_events AS
 	WHERE time > '2017-11-23 16:20:33.264457'::timestamp;
 SELECT count(*) FROM recent_events;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 -- count number of events of recent_users
 SELECT count(*) FROM recent_users ru JOIN events_table et ON (ru.user_id = et.user_id);
  count 
--------
+---------------------------------------------------------------------
     50
 (1 row)
 
@@ -335,7 +335,7 @@ SELECT ru.user_id, count(*)
 	GROUP BY ru.user_id
 	ORDER BY 2 DESC, 1;
  user_id | count 
----------+-------
+---------------------------------------------------------------------
        3 |    21
        1 |    15
        5 |    14
@@ -349,7 +349,7 @@ SELECT ru.user_id, count(*)
 	GROUP BY ru.user_id
 	ORDER BY 2 DESC, 1;
  user_id | count 
----------+-------
+---------------------------------------------------------------------
        3 |    21
        1 |    15
        5 |    14
@@ -365,7 +365,7 @@ SELECT * FROM
 		ORDER BY 2 DESC, 1) s1
 ORDER BY 2 DESC, 1;
  user_id | count 
----------+-------
+---------------------------------------------------------------------
        3 |    21
        1 |    15
        5 |    14
@@ -382,7 +382,7 @@ SELECT * FROM
 		ORDER BY 2 DESC, 1) s1
 ORDER BY 2 DESC, 1;
  user_id | count 
----------+-------
+---------------------------------------------------------------------
        1 |    24
        3 |    23
        5 |     7
@@ -392,7 +392,7 @@ ORDER BY 2 DESC, 1;
 -- recent users who has an event in recent events
 SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROUP BY ru.user_id ORDER BY ru.user_id;
  user_id 
----------
+---------------------------------------------------------------------
        1
        3
 (2 rows)
@@ -404,7 +404,7 @@ SELECT count(*) FROM (
 		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu
 	WHERE recent_user IS NULL;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -413,7 +413,7 @@ SELECT count(*)
 	FROM recent_events re LEFT JOIN recent_users ru ON(ru.user_id = re.user_id)
 	WHERE ru.user_id IS NULL;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -421,7 +421,7 @@ SELECT count(*)
 -- users who has recent activity and they have an entry with value_1 is less than 3
 SELECT ut.* FROM recent_users ru JOIN users_table ut USING (user_id) WHERE ut.value_1 < 3 ORDER BY 1,2;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
+---------------------------------------------------------------------
        1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
        3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |       4 |        
        3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |        
@@ -452,7 +452,7 @@ SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done
 	ON(ru.user_id = et.user_id AND et.event_type = 6)
 	ORDER BY 2 DESC, 1;
  user_id | done_event 
----------+------------
+---------------------------------------------------------------------
        1 | YES
        3 | NO
        5 | NO
@@ -467,7 +467,7 @@ SELECT * FROM
 	) s1
 ORDER BY 2 DESC, 1;
  user_id | done_event 
----------+------------
+---------------------------------------------------------------------
        1 | YES
        3 | NO
        5 | NO
@@ -489,7 +489,7 @@ CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 1 and v
 CREATE VIEW recent_selected_users AS SELECT su.* FROM selected_users su JOIN recent_users ru USING(user_id);
 SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
  user_id 
----------
+---------------------------------------------------------------------
        1
        3
        5
@@ -498,7 +498,7 @@ SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 -- this would be supported when we implement where partition_key in (subquery) support
 SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users) GROUP BY 1,2 ORDER BY 1 DESC,2 DESC LIMIT 5;
  user_id |              time               
----------+---------------------------------
+---------------------------------------------------------------------
        5 | Thu Nov 23 16:11:02.929469 2017
        5 | Thu Nov 23 14:40:40.467511 2017
        5 | Thu Nov 23 14:28:51.833214 2017
@@ -509,7 +509,7 @@ SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user
 -- it is supported when it is a router query
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 1);
  count 
--------
+---------------------------------------------------------------------
     15
 (1 row)
 
@@ -519,7 +519,7 @@ UNION
 (SELECT user_id FROM selected_users)
 ORDER BY 1;
  user_id 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -537,7 +537,7 @@ SELECT *
 	WHERE user_id < 2 AND user_id > 0
 	ORDER BY user_id;
  user_id 
----------
+---------------------------------------------------------------------
        1
 (1 row)
 
@@ -550,7 +550,7 @@ SELECT *
 	WHERE user_id < 2 AND user_id > 0
 	ORDER BY user_id;
  user_id 
----------
+---------------------------------------------------------------------
        1
        1
 (2 rows)
@@ -562,7 +562,7 @@ SELECT count(*)
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -574,7 +574,7 @@ SELECT count(*)
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -589,7 +589,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -603,7 +603,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -612,7 +612,7 @@ SELECT count(*)
 CREATE VIEW distinct_user_with_value_1_3 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 3;
 SELECT * FROM distinct_user_with_value_1_3 ORDER BY user_id;
  user_id 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -626,7 +626,7 @@ SELECT * FROM distinct_user_with_value_1_3 ORDER BY user_id;
 CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 3;
 SELECT * FROM distinct_value_1 ORDER BY 1 DESC LIMIT 5;
  value_1 
----------
+---------------------------------------------------------------------
        5
        4
        3
@@ -639,7 +639,7 @@ CREATE VIEW cte_view_1 AS
 WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4 AND EXISTS (SELECT * FROM c1);
 SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
+---------------------------------------------------------------------
        1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
        2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |       4 |        
        3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |        
@@ -651,7 +651,7 @@ SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
 -- router planner can't detect it
 SELECT * FROM cte_view_1 WHERE user_id = 2 ORDER BY 1,2,3,4,5;
  user_id |              time              | value_1 | value_2 | value_3 | value_4 
----------+--------------------------------+---------+---------+---------+---------
+---------------------------------------------------------------------
        2 | Thu Nov 23 13:52:54.83829 2017 |       3 |       1 |       4 |        
 (1 row)
 
@@ -660,7 +660,7 @@ CREATE VIEW cte_view_2 AS
 WITH c1 AS (SELECT * FROM users_table WHERE user_id = 2) SELECT * FROM c1 WHERE value_1 = 3;
 SELECT * FROM cte_view_2;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
+---------------------------------------------------------------------
        2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
        2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |       4 |        
        2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
@@ -671,20 +671,20 @@ CREATE VIEW router_view AS SELECT * FROM users_table WHERE user_id = 2;
 -- router plannable
 SELECT user_id FROM router_view GROUP BY 1;
  user_id 
----------
+---------------------------------------------------------------------
        2
 (1 row)
 
 -- join a router view
  SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id) ORDER BY 2 LIMIT 3;
  user_id |              time               
----------+---------------------------------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017
 (1 row)
 
  SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id) ORDER BY 2 LIMIT 3;
  user_id |              time               
----------+---------------------------------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017
 (1 row)
 
@@ -697,7 +697,7 @@ CREATE VIEW recent_10_users AS
 -- this is not supported since it has limit in it and subquery_pushdown is not set
 SELECT * FROM recent_10_users;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        1 | Thu Nov 23 17:30:34.635085 2017
        3 | Thu Nov 23 17:18:51.048758 2017
        5 | Thu Nov 23 16:48:32.08896 2017
@@ -719,7 +719,7 @@ DETAIL:  Limit in subquery without limit in the outermost query is unsupported
 -- now both are supported when there is a limit on the outer most query
 SELECT * FROM recent_10_users ORDER BY lastseen DESC LIMIT 10;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        1 | Thu Nov 23 17:30:34.635085 2017
        3 | Thu Nov 23 17:18:51.048758 2017
        5 | Thu Nov 23 16:48:32.08896 2017
@@ -730,7 +730,7 @@ SELECT * FROM recent_10_users ORDER BY lastseen DESC LIMIT 10;
 
 SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
  user_id |              time               | event_type | value_2 | value_3 | value_4 
----------+---------------------------------+------------+---------+---------+---------
+---------------------------------------------------------------------
        1 | Thu Nov 23 21:54:46.924477 2017 |          6 |       4 |       5 |        
        4 | Thu Nov 23 18:10:21.338399 2017 |          1 |       2 |       4 |        
        3 | Thu Nov 23 18:08:26.550729 2017 |          2 |       4 |       3 |        
@@ -748,7 +748,7 @@ VACUUM ANALYZE users_table;
 -- explain tests
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
                                                                  QUERY PLAN                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id
    ->  HashAggregate
@@ -780,7 +780,7 @@ EXPLAIN (COSTS FALSE) SELECT *
 	WHERE user_id < 4 AND user_id > 1
 	ORDER BY user_id;
                                                                    QUERY PLAN                                                                    
--------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id
    ->  Custom Scan (Citus Adaptive)
@@ -808,7 +808,7 @@ EXPLAIN (COSTS FALSE) SELECT *
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
                                                   QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan."time" DESC
@@ -845,7 +845,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
 SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
                                                      QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan."time" DESC
@@ -888,13 +888,13 @@ CREATE TABLE large (id int, tenant_id int);
 CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
 SELECT create_distributed_table('large','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('small','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -912,7 +912,7 @@ ERROR:  cannot modify views over distributed tables
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   2 |         3
   5 |         4
  20 |         2
@@ -926,7 +926,7 @@ INSERT INTO small VALUES(14, 14);
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   2 |         3
   5 |         4
  20 |         2
@@ -940,7 +940,7 @@ INSERT INTO large VALUES(14, 14);
 UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -955,7 +955,7 @@ INSERT INTO large VALUES(14, 14);
 UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -973,14 +973,14 @@ INSERT INTO small VALUES(99, 99);
 -- print the columns from the "view" as well to test "rewrite resjunk" behaviour
 UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
  id | tenant_id | tenant_id 
-----+-----------+-----------
+---------------------------------------------------------------------
  36 |        14 |        14
  36 |        78 |        99
 (2 rows)
 
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -995,7 +995,7 @@ SELECT * FROM large ORDER BY 1, 2;
 -- below statement should not update anything. so it should return empty
 UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
@@ -1004,7 +1004,7 @@ INSERT INTO large VALUES(14, 14);
 DELETE FROM large WHERE id in (SELECT id FROM small_view);
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1023,7 +1023,7 @@ WITH all_small_view_ids AS (SELECT id FROM small_view)
 DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1049,13 +1049,13 @@ CREATE TABLE large_partitioned_p2 PARTITION OF large_partitioned FOR VALUES FROM
 CREATE TABLE large_partitioned_p3 PARTITION OF large_partitioned FOR VALUES FROM (20) TO (100);
 SELECT create_distributed_table('large_partitioned','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('small','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1070,7 +1070,7 @@ ERROR:  cannot modify views over distributed tables
 UPDATE large_partitioned SET id=27 FROM small_view WHERE small_view.tenant_id=large_partitioned.tenant_id;
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   6 |         5
  26 |        32
  27 |         2
@@ -1087,7 +1087,7 @@ INSERT INTO large_partitioned VALUES(14, 14);
 UPDATE large_partitioned SET id=28 FROM small_view WHERE small_view.id=large_partitioned.id and small_view.tenant_id=14 and large_partitioned.tenant_id=14;
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   6 |         5
  26 |        32
  27 |         2
@@ -1104,7 +1104,7 @@ INSERT INTO large_partitioned VALUES(14, 14);
 DELETE FROM large_partitioned WHERE tenant_id in (SELECT tenant_id FROM small_view);
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   6 |         5
  26 |        32
  29 |        15
@@ -1118,7 +1118,7 @@ WITH all_small_view_tenant_ids AS (SELECT tenant_id FROM small_view)
 DELETE FROM large_partitioned WHERE tenant_id in (SELECT * FROM all_small_view_tenant_ids);
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   6 |         5
  26 |        32
  29 |        15
@@ -1135,13 +1135,13 @@ CREATE TABLE large (id int, tenant_id int);
 CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
 SELECT create_distributed_table('large','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('small','tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1152,7 +1152,7 @@ CREATE VIEW small_view AS SELECT id, tenant_id FROM (SELECT *, id*2 FROM small W
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   2 |         3
   5 |         4
  20 |         2
@@ -1166,7 +1166,7 @@ INSERT INTO small VALUES(14, 14);
 UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
   2 |         3
   5 |         4
  20 |         2
@@ -1180,7 +1180,7 @@ INSERT INTO large VALUES(14, 14);
 UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1195,7 +1195,7 @@ INSERT INTO large VALUES(14, 14);
 UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1213,13 +1213,13 @@ INSERT INTO small VALUES(99, 99);
 -- print the columns from the "view" as well to test "rewrite resjunk" behaviour
 UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
  id | tenant_id | tenant_id 
-----+-----------+-----------
+---------------------------------------------------------------------
  36 |        14 |        14
 (1 row)
 
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1234,7 +1234,7 @@ SELECT * FROM large ORDER BY 1, 2;
 -- below statement should not update anything. so it should return empty
 UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- we should still have identical rows for next test statements, then insert a new row to large table
@@ -1243,7 +1243,7 @@ INSERT INTO large VALUES(14, 14);
 DELETE FROM large WHERE id in (SELECT id FROM small_view);
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4
@@ -1262,7 +1262,7 @@ WITH all_small_view_ids AS (SELECT id FROM small_view)
 DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id 
-----+-----------
+---------------------------------------------------------------------
  27 |         2
  27 |         3
  27 |         4

@@ -1,12 +1,12 @@
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.clear_network_traffic();
  clear_network_traffic 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -15,14 +15,14 @@ SET citus.shard_replication_factor = 2;
 CREATE TABLE mod_test (key int, value text);
 SELECT create_distributed_table('mod_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- verify behavior of single INSERT; should mark shard as failed
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -33,7 +33,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT COUNT(*) FROM mod_test WHERE key=2;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -43,7 +43,7 @@ WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
          125
 (1 row)
 
@@ -51,14 +51,14 @@ TRUNCATE mod_test;
 -- verify behavior of UPDATE ... RETURNING; should mark as failed
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO mod_test VALUES (2, 6);
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -68,13 +68,13 @@ DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key 
------
+---------------------------------------------------------------------
    2
 (1 row)
 
 SELECT COUNT(*) FROM mod_test WHERE value='ok';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -84,7 +84,7 @@ WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
          125
 (1 row)
 
@@ -93,7 +93,7 @@ TRUNCATE mod_test;
 -- should succeed but mark a placement as failed
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -109,7 +109,7 @@ DETAIL:  server closed the connection unexpectedly
 COMMIT;
 SELECT COUNT(*) FROM mod_test WHERE key=2;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -119,7 +119,7 @@ WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
          125
 (1 row)
 

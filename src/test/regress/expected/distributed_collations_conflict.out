@@ -1,7 +1,7 @@
 CREATE SCHEMA collation_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA collation_conflict;$$);
        run_command_on_workers        
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
@@ -21,7 +21,7 @@ CREATE COLLATION caseinsensitive (
 CREATE TABLE tblcoll(val text COLLATE caseinsensitive);
 SELECT create_reference_table('tblcoll');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -33,7 +33,7 @@ JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
     collname     |      nspname       | rolname  
------------------+--------------------+----------
+---------------------------------------------------------------------
  caseinsensitive | collation_conflict | postgres
 (1 row)
 
@@ -59,7 +59,7 @@ CREATE COLLATION caseinsensitive (
 CREATE TABLE tblcoll(val text COLLATE caseinsensitive);
 SELECT create_reference_table('tblcoll');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -71,7 +71,7 @@ JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
             collname             |      nspname       | rolname  
----------------------------------+--------------------+----------
+---------------------------------------------------------------------
  caseinsensitive                 | collation_conflict | postgres
  caseinsensitive(citus_backup_0) | collation_conflict | postgres
 (2 rows)
@@ -81,13 +81,13 @@ SET search_path TO collation_conflict;
 -- now test worker_create_or_replace_object directly
 SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
  worker_create_or_replace_object 
----------------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
  worker_create_or_replace_object 
----------------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 

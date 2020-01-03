@@ -29,13 +29,13 @@ CREATE TABLE stock (
 );
 SELECT create_distributed_table('order_line','ol_w_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('stock','s_w_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -113,7 +113,7 @@ DEBUG:  completed cleanup query for job 2
 DEBUG:  completed cleanup query for job 1
 DEBUG:  completed cleanup query for job 1
  l_partkey | o_orderkey | count 
------------+------------+-------
+---------------------------------------------------------------------
         18 |      12005 |     1
         79 |       5121 |     1
         91 |       2883 |     1
@@ -216,7 +216,7 @@ DEBUG:  completed cleanup query for job 4
 DEBUG:  completed cleanup query for job 5
 DEBUG:  completed cleanup query for job 5
  l_partkey | o_orderkey | count 
------------+------------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Check that grouping by primary key allows o_shippriority to be in the target list
@@ -290,7 +290,7 @@ DEBUG:  completed cleanup query for job 7
 DEBUG:  completed cleanup query for job 8
 DEBUG:  completed cleanup query for job 8
  o_orderkey | o_shippriority | count 
-------------+----------------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Check that grouping by primary key allows o_shippriority to be in the target
@@ -366,7 +366,7 @@ DEBUG:  completed cleanup query for job 10
 DEBUG:  completed cleanup query for job 11
 DEBUG:  completed cleanup query for job 11
  o_orderkey | o_shippriority | count 
-------------+----------------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Check that calling any_value manually works as well
@@ -440,7 +440,7 @@ DEBUG:  completed cleanup query for job 13
 DEBUG:  completed cleanup query for job 14
 DEBUG:  completed cleanup query for job 14
  o_orderkey | any_value 
-------------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Check that grouping by primary key allows s_quantity to be in the having
@@ -524,7 +524,7 @@ DEBUG:  completed cleanup query for job 16
 DEBUG:  completed cleanup query for job 17
 DEBUG:  completed cleanup query for job 17
  s_i_id 
---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Reset client logging level to its previous value

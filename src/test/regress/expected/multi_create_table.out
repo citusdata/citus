@@ -30,7 +30,7 @@ WARNING:  table "lineitem" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -51,7 +51,7 @@ WARNING:  table "orders" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -68,7 +68,7 @@ CREATE TABLE orders_reference (
 	PRIMARY KEY(o_orderkey) );
 SELECT create_reference_table('orders_reference');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -83,7 +83,7 @@ CREATE TABLE customer (
 	c_comment varchar(117) not null);
 SELECT create_reference_table('customer');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -98,7 +98,7 @@ CREATE TABLE customer_append (
 	c_comment varchar(117) not null);
 SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -109,7 +109,7 @@ CREATE TABLE nation (
 	n_comment varchar(152));
 SELECT create_reference_table('nation');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -125,7 +125,7 @@ CREATE TABLE part (
 	p_comment varchar(23) not null);
 SELECT create_reference_table('part');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -141,7 +141,7 @@ CREATE TABLE part_append (
 	p_comment varchar(23) not null);
 SELECT create_distributed_table('part_append', 'p_partkey', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -157,7 +157,7 @@ CREATE TABLE supplier
 );
 SELECT create_reference_table('supplier');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -175,7 +175,7 @@ CREATE TABLE supplier_single_shard
 );
 SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -191,13 +191,13 @@ HINT:  Try again after reducing "citus.shard_replication_factor" to one or setti
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('mx_table_test', 'col1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  s
 (1 row)
 
@@ -209,13 +209,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='s_table'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -236,13 +236,13 @@ SELECT create_distributed_table('repmodel_test', 'a', 'append');
 NOTICE:  using statement-based replication
 DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -252,13 +252,13 @@ SELECT create_distributed_table('repmodel_test', 'a', 'range');
 NOTICE:  using statement-based replication
 DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -271,13 +271,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -288,13 +288,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -305,13 +305,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -323,13 +323,13 @@ SELECT create_distributed_table('repmodel_test', 'a', 'append');
 NOTICE:  using statement-based replication
 DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -339,13 +339,13 @@ SELECT create_distributed_table('repmodel_test', 'a', 'range');
 NOTICE:  using statement-based replication
 DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -356,13 +356,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -373,13 +373,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -390,13 +390,13 @@ NOTICE:  using statement-based replication
 DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
 HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  c
 (1 row)
 
@@ -424,13 +424,13 @@ HINT:  Empty your table before distributing it.
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM data_load_test ORDER BY col1;
  col1 | col2  | col3 
-------+-------+------
+---------------------------------------------------------------------
   132 | hello |    1
   243 | world |    2
 (2 rows)
@@ -440,39 +440,39 @@ DROP TABLE data_load_test;
 CREATE TABLE no_shard_test (col1 int, col2 text);
 SELECT create_distributed_table('no_shard_test', 'col1', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM no_shard_test WHERE col1 > 1;
  col1 | col2 
-------+------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE no_shard_test;
 CREATE TABLE no_shard_test (col1 int, col2 text);
 SELECT create_distributed_table('no_shard_test', 'col1', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM no_shard_test WHERE col1 > 1;
  col1 | col2 
-------+------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE no_shard_test;
 CREATE TABLE no_shard_test (col1 int, col2 text);
 SELECT master_create_distributed_table('no_shard_test', 'col1', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM no_shard_test WHERE col1 > 1;
  col1 | col2 
-------+------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE no_shard_test;
@@ -483,7 +483,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -491,7 +491,7 @@ INSERT INTO data_load_test VALUES (243, 'world');
 END;
 SELECT * FROM data_load_test ORDER BY col1;
  col1 | col2  | col3 
-------+-------+------
+---------------------------------------------------------------------
   132 | hello |    1
   243 | world |    2
 (2 rows)
@@ -504,7 +504,7 @@ INSERT INTO data_load_test1 VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test1', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -513,7 +513,7 @@ INSERT INTO data_load_test2 VALUES (132, 'world');
 SELECT create_distributed_table('data_load_test2', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -521,7 +521,7 @@ SELECT a.col2 ||' '|| b.col2
 FROM data_load_test1 a JOIN data_load_test2 b USING (col1)
 WHERE col1 = 132;
   ?column?   
--------------
+---------------------------------------------------------------------
  hello world
 (1 row)
 
@@ -531,7 +531,7 @@ END;
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
  relname 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -542,7 +542,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -556,7 +556,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -569,7 +569,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -584,13 +584,13 @@ ALTER TABLE data_load_test DROP COLUMN col1;
 SELECT create_distributed_table('data_load_test', 'col3');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM data_load_test ORDER BY col2;
  col2  | col3  | CoL4") 
--------+-------+--------
+---------------------------------------------------------------------
  hello | world |       
  world | hello |       
 (2 rows)
@@ -598,7 +598,7 @@ SELECT * FROM data_load_test ORDER BY col2;
 -- make sure the tuple went to the right shard
 SELECT * FROM data_load_test WHERE col3 = 'world';
  col2  | col3  | CoL4") 
--------+-------+--------
+---------------------------------------------------------------------
  hello | world |       
 (1 row)
 
@@ -608,14 +608,14 @@ SET citus.shard_count to 4;
 CREATE TABLE lineitem_hash_part (like lineitem);
 SELECT create_distributed_table('lineitem_hash_part', 'l_orderkey');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE orders_hash_part (like orders);
 SELECT create_distributed_table('orders_hash_part', 'o_orderkey');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -626,13 +626,13 @@ CREATE UNLOGGED TABLE unlogged_table
 );
 SELECT create_distributed_table('unlogged_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM master_get_table_ddl_events('unlogged_table');
                     master_get_table_ddl_events                     
---------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE UNLOGGED TABLE public.unlogged_table (key text, value text)
  ALTER TABLE public.unlogged_table OWNER TO postgres
 (2 rows)
@@ -640,7 +640,7 @@ SELECT * FROM master_get_table_ddl_events('unlogged_table');
 \c - - - :worker_1_port
 SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
  relpersistence 
-----------------
+---------------------------------------------------------------------
  u
  u
  u
@@ -653,7 +653,7 @@ BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
 SELECT create_distributed_table('rollback_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -662,7 +662,7 @@ ROLLBACK;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers 
---------+------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -676,7 +676,7 @@ INSERT INTO rollback_table VALUES(3, 'Name_3');
 SELECT create_distributed_table('rollback_table','id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -685,7 +685,7 @@ ROLLBACK;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers 
---------+------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -693,7 +693,7 @@ BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
 SELECT create_distributed_table('rollback_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -703,7 +703,7 @@ COMMIT;
 -- Check the table is created 
 SELECT count(*) FROM rollback_table;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -712,7 +712,7 @@ BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
 SELECT create_distributed_table('rollback_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -722,7 +722,7 @@ ROLLBACK;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers 
---------+------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -730,14 +730,14 @@ BEGIN;
 CREATE TABLE tt1(id int);
 SELECT create_distributed_table('tt1','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE tt2(id int);
 SELECT create_distributed_table('tt2','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -748,13 +748,13 @@ COMMIT;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360069'::regclass;
  Column |  Type   | Modifiers 
---------+---------+-----------
+---------------------------------------------------------------------
  id     | integer | 
 (1 row)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360073'::regclass;
  Column |  Type   | Modifiers 
---------+---------+-----------
+---------------------------------------------------------------------
  id     | integer | 
 (1 row)
 
@@ -767,13 +767,13 @@ BEGIN;
 CREATE TABLE append_tt1(id int);
 SELECT create_distributed_table('append_tt1','id','append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('append_tt1');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     360077
 (1 row)
 
@@ -782,7 +782,7 @@ ROLLBACK;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360077'::regclass;
  Column |  Type   | Modifiers 
---------+---------+-----------
+---------------------------------------------------------------------
  id     | integer | 
 (1 row)
 
@@ -791,7 +791,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.appen
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE relname LIKE 'public.tt1%');
  Column | Type | Modifiers 
---------+------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -803,14 +803,14 @@ INSERT INTO tt1 VALUES(1);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO tt1 VALUES(2);
 SELECT * FROM tt1 WHERE id = 1;
  id 
-----
+---------------------------------------------------------------------
   1
 (1 row)
 
@@ -819,7 +819,7 @@ COMMIT;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360078'::regclass;
  Column |  Type   | Modifiers 
---------+---------+-----------
+---------------------------------------------------------------------
  id     | integer | 
 (1 row)
 
@@ -829,7 +829,7 @@ BEGIN;
 CREATE TABLE tt1(id int);
 SELECT create_distributed_table('tt1','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -839,7 +839,7 @@ COMMIT;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE  relname LIKE 'tt1%');
  Column | Type | Modifiers 
---------+------+-----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -849,7 +849,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid f
 CREATE TABLE sample_table(id int);
 SELECT create_distributed_table('sample_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -859,7 +859,7 @@ CREATE TABLE stage_table (LIKE sample_table);
 SELECT create_distributed_table('stage_table', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -867,7 +867,7 @@ INSERT INTO sample_table SELECT * FROM stage_table;
 DROP TABLE stage_table;
 SELECT * FROM sample_table WHERE id = 3;
  id 
-----
+---------------------------------------------------------------------
   3
 (1 row)
 
@@ -875,7 +875,7 @@ COMMIT;
 -- Show that rows of sample_table are updated 
 SELECT count(*) FROM sample_table;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -886,7 +886,7 @@ BEGIN;
 CREATE TABLE tt1(id int);
 SELECT create_distributed_table('tt1','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -894,7 +894,7 @@ SELECT create_distributed_table('tt1','id');
 CREATE TABLE tt2(like tt1);
 SELECT create_distributed_table('tt2','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -902,20 +902,20 @@ SELECT create_distributed_table('tt2','id');
 INSERT INTO tt1 SELECT * FROM tt2;
 SELECT * FROM tt1 WHERE id = 3;
  id 
-----
+---------------------------------------------------------------------
   3
 (1 row)
 
 SELECT * FROM tt2 WHERE id = 6;
  id 
-----
+---------------------------------------------------------------------
   6
 (1 row)
 
 END;
 SELECT count(*) FROM tt1;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -930,7 +930,7 @@ insert into sc.ref SELECT s FROM generate_series(0, 100) s;
 SELECT create_reference_table('sc.ref');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -939,7 +939,7 @@ insert into sc.hash SELECT s FROM generate_series(0, 100) s;
 SELECT create_distributed_table('sc.hash', 'a');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -952,7 +952,7 @@ insert into sc2.hash SELECT s FROM generate_series(0, 100) s;
 SELECT create_distributed_table('sc2.hash', 'a');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -961,7 +961,7 @@ insert into sc2.ref SELECT s FROM generate_series(0, 100) s;
 SELECT create_reference_table('sc2.ref');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -977,14 +977,14 @@ CREATE TABLE sc3.alter_replica_table
 ALTER TABLE sc3.alter_replica_table REPLICA IDENTITY USING INDEX alter_replica_table_pkey;
 SELECT create_distributed_table('sc3.alter_replica_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc3' LIMIT 1$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
 (2 rows)
@@ -1002,14 +1002,14 @@ ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX alter_replica_table
 SELECT create_distributed_table('alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc4' LIMIT 1$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
 (2 rows)
@@ -1027,14 +1027,14 @@ ALTER TABLE sc5.alter_replica_table REPLICA IDENTITY FULL;
 SELECT create_distributed_table('sc5.alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc5' LIMIT 1$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,f)
  (localhost,57638,t,f)
 (2 rows)
@@ -1052,14 +1052,14 @@ ALTER TABLE sc6.alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
 SELECT create_distributed_table('sc6.alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc6' LIMIT 1$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
 (2 rows)
@@ -1076,14 +1076,14 @@ ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
 SELECT create_distributed_table('alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='public' LIMIT 1$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
 (2 rows)

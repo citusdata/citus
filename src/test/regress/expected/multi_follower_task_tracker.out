@@ -3,7 +3,7 @@
 CREATE TABLE tab(a int, b int);
 SELECT create_distributed_table('tab', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -13,7 +13,7 @@ INSERT INTO tab (a, b) VALUES (1, 2);
 RESET citus.task_executor_type;
 SELECT * FROM tab;
  a | b 
----+---
+---------------------------------------------------------------------
  1 | 1
  1 | 2
 (2 rows)

@@ -33,7 +33,7 @@ GROUP BY
 ORDER BY
 	l_shipmode;
  l_shipmode | high_line_count | low_line_count 
-------------+-----------------+----------------
+---------------------------------------------------------------------
  MAIL       |              11 |             15
  SHIP       |              11 |             19
 (2 rows)
@@ -70,7 +70,7 @@ GROUP BY
 ORDER BY
 	l_shipmode;
  l_shipmode | high_line_count | low_line_count 
-------------+-----------------+----------------
+---------------------------------------------------------------------
  MAIL       |              11 |             15
  SHIP       |              11 |             19
 (2 rows)
@@ -107,7 +107,7 @@ GROUP BY
 ORDER BY
 	l_shipmode;
  l_shipmode | high_line_count | low_line_count 
-------------+-----------------+----------------
+---------------------------------------------------------------------
  MAIL       |              11 |             15
  SHIP       |              11 |             19
 (2 rows)

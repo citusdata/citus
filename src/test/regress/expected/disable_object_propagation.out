@@ -10,7 +10,7 @@ SET search_path TO disabled_object_propagation;
 CREATE TABLE t1 (a int PRIMARY KEY , b int);
 SELECT create_distributed_table('t1','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -27,14 +27,14 @@ SELECT 1 FROM run_command_on_workers($$
     COMMIT;
 $$);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
         1
 (2 rows)
 
 SELECT create_distributed_table('t2', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -51,14 +51,14 @@ SELECT 1 FROM  run_command_on_workers($$
     COMMIT;
 $$);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
         1
 (2 rows)
 
 SELECT create_distributed_table('t3', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -70,7 +70,7 @@ CREATE TYPE tt3 AS (a int, b int);
 CREATE TABLE t4 (a int PRIMARY KEY, b tt3);
 SELECT create_distributed_table('t4','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -79,7 +79,7 @@ COMMIT;
 -- verify the type is distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -98,7 +98,7 @@ SELECT row(nspname, typname, usename)
  WHERE typname = 'tt3';
 $$);
                       run_command_on_workers                      
-------------------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(disabled_object_propagation,tt3,postgres)")
  (localhost,57638,t,"(disabled_object_propagation,tt3,postgres)")
 (2 rows)
@@ -113,7 +113,7 @@ SELECT run_command_on_workers($$
 GROUP BY pg_type.typname;
 $$);
              run_command_on_workers             
-------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(tt3,""a int4, b int4"")")
  (localhost,57638,t,"(tt3,""a int4, b int4"")")
 (2 rows)

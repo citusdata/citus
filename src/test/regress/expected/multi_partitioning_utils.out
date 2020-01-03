@@ -75,21 +75,21 @@ CREATE TABLE date_partitioned_table(id int, time date) PARTITION BY RANGE (time)
 -- we should be able to get the partitioning information even if there are no partitions
 SELECT generate_partition_information('date_partitioned_table');
  generate_partition_information 
---------------------------------
+---------------------------------------------------------------------
  RANGE ("time")
 (1 row)
 
 -- we should be able to drop and re-create the partitioned table using the command that Citus generate
 SELECT drop_and_recreate_partitioned_table('date_partitioned_table');
  drop_and_recreate_partitioned_table 
--------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- we should also be able to see the PARTITION BY ... for the parent table
 SELECT master_get_table_ddl_events('date_partitioned_table');
                                     master_get_table_ddl_events                                    
----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE TABLE public.date_partitioned_table (id integer, "time" date) PARTITION BY RANGE ("time") 
  ALTER TABLE public.date_partitioned_table OWNER TO postgres
 (2 rows)
@@ -100,20 +100,20 @@ CREATE TABLE date_partition_2007 PARTITION OF date_partitioned_table FOR VALUES 
 -- we should be able to get the partitioning information after the partitions are created
 SELECT generate_partition_information('date_partitioned_table');
  generate_partition_information 
---------------------------------
+---------------------------------------------------------------------
  RANGE ("time")
 (1 row)
 
 -- lets get the attach partition commands
 SELECT generate_alter_table_attach_partition_command('date_partition_2006');
                                               generate_alter_table_attach_partition_command                                              
------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE public.date_partitioned_table ATTACH PARTITION public.date_partition_2006 FOR VALUES FROM ('01-01-2006') TO ('01-01-2007');
 (1 row)
 
 SELECT generate_alter_table_attach_partition_command('date_partition_2007');
                                               generate_alter_table_attach_partition_command                                              
------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE public.date_partitioned_table ATTACH PARTITION public.date_partition_2007 FOR VALUES FROM ('01-01-2007') TO ('01-01-2008');
 (1 row)
 
@@ -121,7 +121,7 @@ SELECT generate_alter_table_attach_partition_command('date_partition_2007');
 \d+ date_partitioned_table
                           Table "public.date_partitioned_table"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              | 
  time   | date    |           |          |         | plain   |              | 
 Partition key: RANGE ("time")
@@ -130,7 +130,7 @@ Partitions: date_partition_2006 FOR VALUES FROM ('01-01-2006') TO ('01-01-2007')
 
 SELECT detach_and_attach_partition('date_partition_2007', 'date_partitioned_table');
  detach_and_attach_partition 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -138,7 +138,7 @@ SELECT detach_and_attach_partition('date_partition_2007', 'date_partitioned_tabl
 \d+ date_partitioned_table
                           Table "public.date_partitioned_table"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              | 
  time   | date    |           |          |         | plain   |              | 
 Partition key: RANGE ("time")
@@ -154,7 +154,7 @@ SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_
 											referenced_shard:=100, referenced_schema_name:='public', 
 											command:='ALTER TABLE date_partitioned_table ATTACH PARTITION date_partition_2007 FOR VALUES FROM (''2007-01-01'') TO (''2008-01-02'')' );
  worker_apply_inter_shard_ddl_command 
---------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -162,7 +162,7 @@ SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_
 \d+ date_partitioned_table_100
                         Table "public.date_partitioned_table_100"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              | 
  time   | date    |           |          |         | plain   |              | 
 Partition key: RANGE ("time")
@@ -171,7 +171,7 @@ Partitions: date_partition_2007_100 FOR VALUES FROM ('01-01-2007') TO ('01-02-20
 -- Citus can also get the DDL events for the partitions as regular tables
 SELECT master_get_table_ddl_events('date_partition_2007_100');
                       master_get_table_ddl_events                      
------------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE TABLE public.date_partition_2007_100 (id integer, "time" date)
  ALTER TABLE public.date_partition_2007_100 OWNER TO postgres
 (2 rows)
@@ -181,7 +181,7 @@ SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_
                       referenced_shard:=100, referenced_schema_name:='public', 
                       command:='ALTER TABLE date_partitioned_table DETACH PARTITION date_partition_2007' );
  worker_apply_inter_shard_ddl_command 
---------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -189,7 +189,7 @@ SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_
 \d+ date_partitioned_table_100
                         Table "public.date_partitioned_table_100"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              | 
  time   | date    |           |          |         | plain   |              | 
 Partition key: RANGE ("time")
@@ -206,14 +206,14 @@ CREATE TABLE partition_child_2_schema.child_2 (id int NOT NULL, time date );
 -- we should be able to get the partitioning information even if there are no partitions
 SELECT generate_partition_information('partition_parent_schema.parent_table');
  generate_partition_information 
---------------------------------
+---------------------------------------------------------------------
  RANGE ("time")
 (1 row)
 
 -- we should be able to drop and re-create the partitioned table using the command that Citus generate
 SELECT drop_and_recreate_partitioned_table('partition_parent_schema.parent_table');
  drop_and_recreate_partitioned_table 
--------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -222,21 +222,21 @@ SET search_path = 'partition_parent_schema';
 ALTER TABLE parent_table ATTACH PARTITION  partition_child_2_schema.child_2 FOR VALUES FROM  ('2006-01-01') TO ('2007-01-01');
 SELECT public.generate_partition_information('parent_table');
  generate_partition_information 
---------------------------------
+---------------------------------------------------------------------
  RANGE ("time")
 (1 row)
 
 -- lets get the attach partition commands
 SELECT public.generate_alter_table_attach_partition_command('partition_child_1_schema.child_1');
                                                     generate_alter_table_attach_partition_command                                                     
-------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE partition_parent_schema.parent_table ATTACH PARTITION partition_child_1_schema.child_1 FOR VALUES FROM ('01-01-2009') TO ('01-02-2010');
 (1 row)
 
 SET search_path = 'partition_child_2_schema';
 SELECT public.generate_alter_table_attach_partition_command('child_2');
                                                     generate_alter_table_attach_partition_command                                                     
-------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE partition_parent_schema.parent_table ATTACH PARTITION partition_child_2_schema.child_2 FOR VALUES FROM ('01-01-2006') TO ('01-01-2007');
 (1 row)
 
@@ -245,7 +245,7 @@ SET search_path = 'partition_parent_schema';
 \d+ parent_table
                        Table "partition_parent_schema.parent_table"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           | not null |         | plain   |              | 
  time   | date    |           |          | now()   | plain   |              | 
 Partition key: RANGE ("time")
@@ -254,7 +254,7 @@ Partitions: partition_child_1_schema.child_1 FOR VALUES FROM ('01-01-2009') TO (
 
 SELECT public.detach_and_attach_partition('partition_child_1_schema.child_1', 'parent_table');
  detach_and_attach_partition 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -262,7 +262,7 @@ SELECT public.detach_and_attach_partition('partition_child_1_schema.child_1', 'p
 \d+ parent_table
                        Table "partition_parent_schema.parent_table"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
---------+---------+-----------+----------+---------+---------+--------------+-------------
+---------------------------------------------------------------------
  id     | integer |           | not null |         | plain   |              | 
  time   | date    |           |          | now()   | plain   |              | 
 Partition key: RANGE ("time")
@@ -279,7 +279,7 @@ ERROR:  "child_1" is not a parent table
 -- now pring the partitions
 SELECT public.print_partitions('parent_table');
  print_partitions 
-------------------
+---------------------------------------------------------------------
  child_1,child_2
 (1 row)
 
@@ -310,20 +310,20 @@ CREATE TABLE multi_column_partition_2(
 -- partitioning information
 SELECT generate_partition_information('multi_column_partitioned');
            generate_partition_information            
------------------------------------------------------
+---------------------------------------------------------------------
  RANGE (a, (((a + b) + 1)), some_function(upper(c)))
 (1 row)
 
 SELECT master_get_table_ddl_events('multi_column_partitioned');
                                                              master_get_table_ddl_events                                                              
-------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE TABLE public.multi_column_partitioned (a integer, b integer, c text) PARTITION BY RANGE (a, (((a + b) + 1)), public.some_function(upper(c))) 
  ALTER TABLE public.multi_column_partitioned OWNER TO postgres
 (2 rows)
 
 SELECT drop_and_recreate_partitioned_table('multi_column_partitioned');
  drop_and_recreate_partitioned_table 
--------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -331,20 +331,20 @@ SELECT drop_and_recreate_partitioned_table('multi_column_partitioned');
 ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_1 FOR VALUES FROM (1, 10, '250') TO (1, 20, '250');
 SELECT generate_alter_table_attach_partition_command('multi_column_partition_1');
                                                  generate_alter_table_attach_partition_command                                                  
-------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE public.multi_column_partitioned ATTACH PARTITION public.multi_column_partition_1 FOR VALUES FROM (1, 10, '250') TO (1, 20, '250');
 (1 row)
 
 ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (MAXVALUE, MAXVALUE, MAXVALUE);
 SELECT generate_alter_table_attach_partition_command('multi_column_partition_2');
                                                            generate_alter_table_attach_partition_command                                                            
---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE public.multi_column_partitioned ATTACH PARTITION public.multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (MAXVALUE, MAXVALUE, MAXVALUE);
 (1 row)
 
 SELECT generate_alter_table_detach_partition_command('multi_column_partition_2');
                               generate_alter_table_detach_partition_command                              
----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE IF EXISTS public.multi_column_partitioned DETACH PARTITION public.multi_column_partition_2;
 (1 row)
 
@@ -352,27 +352,27 @@ SELECT generate_alter_table_detach_partition_command('multi_column_partition_2')
 CREATE TABLE list_partitioned (col1 NUMERIC, col2 NUMERIC, col3 VARCHAR(10)) PARTITION BY LIST (col1) ;
 SELECT generate_partition_information('list_partitioned');
  generate_partition_information 
---------------------------------
+---------------------------------------------------------------------
  LIST (col1)
 (1 row)
 
 SELECT master_get_table_ddl_events('list_partitioned');
                                                master_get_table_ddl_events                                               
--------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE TABLE public.list_partitioned (col1 numeric, col2 numeric, col3 character varying(10)) PARTITION BY LIST (col1) 
  ALTER TABLE public.list_partitioned OWNER TO postgres
 (2 rows)
 
 SELECT drop_and_recreate_partitioned_table('list_partitioned');
  drop_and_recreate_partitioned_table 
--------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE list_partitioned_1 PARTITION OF list_partitioned FOR VALUES IN (100, 101, 102, 103, 104);
 SELECT generate_alter_table_attach_partition_command('list_partitioned_1');
                                            generate_alter_table_attach_partition_command                                           
------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  ALTER TABLE public.list_partitioned ATTACH PARTITION public.list_partitioned_1 FOR VALUES IN ('100', '101', '102', '103', '104');
 (1 row)
 
@@ -388,7 +388,7 @@ CREATE TABLE capitals (
 -- returns true since capitals inherits from cities
 SELECT table_inherits('capitals');
  table_inherits 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -396,14 +396,14 @@ SELECT table_inherits('capitals');
 -- returns false since the hierarcy is formed via partitioning
 SELECT table_inherits('date_partition_2006');
  table_inherits 
-----------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- returns true since cities inherited by capitals
 SELECT table_inherited('cities');
  table_inherited 
------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -411,7 +411,7 @@ SELECT table_inherited('cities');
 -- returns false since the hierarcy is formed via partitioning
 SELECT table_inherited('date_partitioned_table');
  table_inherited 
------------------
+---------------------------------------------------------------------
  f
 (1 row)
 

@@ -37,7 +37,7 @@ ORDER BY
 	revenue DESC
 LIMIT 20;
  c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
        640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
        361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 
@@ -95,7 +95,7 @@ ORDER BY
 	revenue DESC
 LIMIT 20;
  c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
        640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
        361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 
@@ -153,7 +153,7 @@ ORDER BY
 	revenue DESC
 LIMIT 20;
  c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
        640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
        361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 

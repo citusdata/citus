@@ -2,7 +2,7 @@
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -17,21 +17,21 @@ SET citus.writable_standby_coordinator TO on;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM the_table;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
  1 | 2 | 2
 (1 row)
 
 UPDATE the_table SET z = 3 WHERE a = 1;
 SELECT * FROM the_table;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
  1 | 2 | 3
 (1 row)
 
 DELETE FROM the_table WHERE a = 1;
 SELECT * FROM the_table;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- drawing from a sequence is not possible
@@ -48,7 +48,7 @@ SET citus.multi_shard_commit_protocol TO '1pc';
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM the_table ORDER BY a;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
  2 | 3 | 4
  5 | 6 | 7
 (2 rows)
@@ -57,7 +57,7 @@ SELECT * FROM the_table ORDER BY a;
 WITH del AS (DELETE FROM the_table RETURNING *)
 SELECT * FROM del ORDER BY a;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
  2 | 3 | 4
  5 | 6 | 7
 (2 rows)
@@ -66,7 +66,7 @@ SELECT * FROM del ORDER BY a;
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
 SELECT * FROM the_table ORDER BY a;
  a  | b  | z  
-----+----+----
+---------------------------------------------------------------------
  10 | 10 | 10
  11 | 11 | 11
 (2 rows)
@@ -84,7 +84,7 @@ INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 ROLLBACK;
 SELECT * FROM the_table ORDER BY a;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- we should still disallow writes to local tables
@@ -104,7 +104,7 @@ ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
 SELECT * FROM the_table ORDER BY a;
  a | b | z 
----+---+---
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port

@@ -22,7 +22,7 @@ WHERE
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
                                 QUERY PLAN                                
---------------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -53,7 +53,7 @@ ORDER BY
 	o_orderdate;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ]
                                            QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -96,7 +96,7 @@ ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ][ reference join "nation" ]
                                                                                  QUERY PLAN                                                                                 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -137,7 +137,7 @@ WHERE
 	);
 LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ]
                                 QUERY PLAN                                
---------------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -156,7 +156,7 @@ GROUP BY
       l_partkey;
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single range partition join "part_append" ][ single range partition join "customer_append" ]
                                 QUERY PLAN                                
---------------------------------------------------------------------------
+---------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
    Group Key: remote_scan.l_partkey
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)

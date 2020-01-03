@@ -18,7 +18,7 @@ WHERE
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300000 | table1_group1 |    57637 |         1000 |          1
  1300000 | table1_group1 |    57638 |         1000 |          3
  1300001 | table1_group1 |    57637 |         1000 |          1
@@ -40,7 +40,7 @@ ORDER BY s.shardid, sp.nodeport;
 -- repair colocated shards
 SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -54,7 +54,7 @@ WHERE
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300000 | table1_group1 |    57637 |         1000 |          1
  1300000 | table1_group1 |    57638 |         1000 |          1
  1300001 | table1_group1 |    57637 |         1000 |          1
@@ -84,7 +84,7 @@ WHERE
     p.logicalrelid = 'table5_groupX'::regclass
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300016 | table5_groupx |    57637 |            0 |          1
  1300016 | table5_groupx |    57638 |            0 |          3
  1300017 | table5_groupx |    57637 |            0 |          1
@@ -98,7 +98,7 @@ ORDER BY s.shardid, sp.nodeport;
 -- repair NOT colocated shard
 SELECT master_copy_shard_placement(1300016, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -112,7 +112,7 @@ WHERE
     p.logicalrelid = 'table5_groupX'::regclass
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300016 | table5_groupx |    57637 |            0 |          1
  1300016 | table5_groupx |    57638 |            0 |          1
  1300017 | table5_groupx |    57637 |            0 |          1
@@ -134,7 +134,7 @@ WHERE
     p.logicalrelid = 'table6_append'::regclass
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300020 | table6_append |    57637 |            0 |          1
  1300020 | table6_append |    57638 |            0 |          3
  1300021 | table6_append |    57637 |            0 |          1
@@ -144,7 +144,7 @@ ORDER BY s.shardid, sp.nodeport;
 -- repair  shard in append distributed table
 SELECT master_copy_shard_placement(1300020, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -158,7 +158,7 @@ WHERE
     p.logicalrelid = 'table6_append'::regclass
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300020 | table6_append |    57637 |            0 |          1
  1300020 | table6_append |    57638 |            0 |          1
  1300021 | table6_append |    57637 |            0 |          1
@@ -178,7 +178,7 @@ WHERE
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300000 | table1_group1 |    57637 |         1000 |          3
  1300000 | table1_group1 |    57638 |         1000 |          3
  1300001 | table1_group1 |    57637 |         1000 |          1
@@ -210,7 +210,7 @@ WHERE
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
----------+---------------+----------+--------------+------------
+---------------------------------------------------------------------
  1300000 | table1_group1 |    57637 |         1000 |          3
  1300000 | table1_group1 |    57638 |         1000 |          3
  1300001 | table1_group1 |    57637 |         1000 |          1

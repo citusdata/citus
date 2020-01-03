@@ -89,7 +89,7 @@ ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 

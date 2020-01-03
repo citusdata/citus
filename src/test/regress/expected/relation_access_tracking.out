@@ -1,6 +1,6 @@
----
+---------------------------------------------------------------------
 --- tests around access tracking within transaction blocks
----
+---------------------------------------------------------------------
 CREATE SCHEMA access_tracking;
 SET search_path TO 'access_tracking';
 CREATE OR REPLACE FUNCTION relation_select_access_mode(relationId Oid)
@@ -55,42 +55,42 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE table_1 (key int, value int);
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_2 (key int, value int);
 SELECT create_distributed_table('table_2', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_3 (key int, value int);
 SELECT create_distributed_table('table_3', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_4 (key int, value int);
 SELECT create_distributed_table('table_4', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_5 (key int, value int);
 SELECT create_distributed_table('table_5', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_6 (key int, value int);
 SELECT create_reference_Table('table_6');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -105,13 +105,13 @@ BEGIN;
 	CREATE TABLE table_7 (key int, value int);
 	SELECT create_distributed_table('table_7', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_7')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |   ddl_access    
-------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_7    | not_parallel_accessed | not_parallel_accessed | parallel_access
 (1 row)
 
@@ -119,13 +119,13 @@ COMMIT;
 -- outisde the transaction blocks, the function always returns zero
 SELECT count(*) FROM table_1;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -134,45 +134,45 @@ SELECT * FROM relation_acesses WHERE table_name = 'table_1';
 BEGIN;
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	SELECT count(*) FROM table_1 WHERE key = 1;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	SELECT count(*) FROM table_1 WHERE key = 1 OR key = 2;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	INSERT INTO table_1 VALUES (1,1);
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	INSERT INTO table_1 VALUES (1,1), (2,2);
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -180,7 +180,7 @@ BEGIN;
 	-- now see that the other tables are not accessed at all
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |  select_access  |      dml_access       |   ddl_access    
-------------+-----------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | parallel_access
 (1 row)
 
@@ -190,39 +190,39 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM table_1 WHERE key = 1;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	SELECT count(*) FROM table_1 WHERE key = 2;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	INSERT INTO table_1 VALUES (1,1);
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
 	INSERT INTO table_1 VALUES (2,2);
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -232,7 +232,7 @@ BEGIN;
 	ALTER TABLE table_1 ADD CONSTRAINT table_1_u UNIQUE (key);
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |     select_access     |      dml_access       |   ddl_access    
-------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | parallel_access
 (1 row)
 
@@ -248,13 +248,13 @@ BEGIN;
 		table_3.key = table_4.key AND table_4.key = table_5.key AND
 		table_1.key = 1;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 		SELECT * FROM relation_acesses WHERE table_name LIKE 'table_%' ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_3    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -274,13 +274,13 @@ BEGIN;
 	WHERE
 		table_1.key = table_2.key;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 		SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_2    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -297,13 +297,13 @@ BEGIN;
 	WHERE
 		table_1.key = table_2.key;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 		SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -324,13 +324,13 @@ BEGIN;
 			table_3.key = table_4.key AND table_4.key = table_5.key
 	) as foo;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses WHERE table_name LIKE 'table_%' ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_2    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_3    | parallel_access       | not_parallel_accessed | not_parallel_accessed
@@ -348,7 +348,7 @@ BEGIN;
 	UPDATE table_1 SET value = 15;
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
  table_name |  select_access  |   dml_access    |      ddl_access       
-------------+-----------------+-----------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | parallel_access | not_parallel_accessed
 (1 row)
 
@@ -356,7 +356,7 @@ BEGIN;
 	UPDATE table_2 SET value = 15;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access       | parallel_access       | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -369,7 +369,7 @@ BEGIN;
 	WHERE key IN (SELECT key FROM table_2 JOIN table_3 USING (key) WHERE table_2.value = 15);
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2', 'table_3')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | parallel_access       | not_parallel_accessed
  table_2    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_3    | parallel_access | not_parallel_accessed | not_parallel_accessed
@@ -381,7 +381,7 @@ BEGIN;
 	INSERT INTO table_2 SELECT * FROM table_1;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | parallel_access       | not_parallel_accessed
 (2 rows)
@@ -393,7 +393,7 @@ BEGIN;
 	INSERT INTO table_2 SELECT * FROM table_1;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -404,7 +404,7 @@ BEGIN;
 	INSERT INTO table_2 SELECT * FROM table_1 OFFSET 0;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | parallel_access       | not_parallel_accessed
 (2 rows)
@@ -425,13 +425,13 @@ BEGIN;
 			OFFSET 0
 	) as foo;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_2    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -454,7 +454,7 @@ BEGIN;
 	) as foo;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_2    | parallel_access       | not_parallel_accessed | not_parallel_accessed
  table_3    | not_parallel_accessed | parallel_access       | not_parallel_accessed
@@ -480,7 +480,7 @@ BEGIN;
 	) as foo;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_3    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -506,7 +506,7 @@ BEGIN;
 	) AND value IN (SELECT key FROM table_4);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3', 'table_4')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_2    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_3    | parallel_access | parallel_access       | not_parallel_accessed
@@ -522,7 +522,7 @@ BEGIN;
 3	3
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -532,7 +532,7 @@ BEGIN;
 	COPY table_1 FROM STDIN WITH CSV;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |   dml_access    |      ddl_access       
-------------+-----------------------+-----------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | parallel_access | not_parallel_accessed
 (1 row)
 
@@ -542,7 +542,7 @@ BEGIN;
 	COPY table_1 FROM STDIN WITH CSV;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -551,27 +551,27 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM table_6;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6');
  table_name |     select_access      |  dml_access  |  ddl_access  
-------------+------------------------+--------------+--------------
+---------------------------------------------------------------------
  table_6    | reference_table_access | not_accessed | not_accessed
 (1 row)
 
 	UPDATE table_6 SET value = 15;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6');
  table_name |     select_access      |       dml_access       |  ddl_access  
-------------+------------------------+------------------------+--------------
+---------------------------------------------------------------------
  table_6    | reference_table_access | reference_table_access | not_accessed
 (1 row)
 
 	ALTER TABLE table_6 ADD COLUMN x INT;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6');
  table_name |     select_access      |       dml_access       |       ddl_access       
-------------+------------------------+------------------------+------------------------
+---------------------------------------------------------------------
  table_6    | reference_table_access | reference_table_access | reference_table_access
 (1 row)
 
@@ -580,13 +580,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM table_1 JOIN table_6 USING(key);
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6', 'table_1') ORDER BY 1,2;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
  table_6    | parallel_access | not_accessed          | not_accessed
 (2 rows)
@@ -597,7 +597,7 @@ BEGIN;
 	TRUNCATE table_1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |   ddl_access    
-------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | parallel_access
 (1 row)
 
@@ -608,7 +608,7 @@ BEGIN;
 	TRUNCATE table_1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -618,7 +618,7 @@ BEGIN;
 	TRUNCATE table_6;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6')  ORDER BY 1;
  table_name | select_access |  dml_access  |       ddl_access       
-------------+---------------+--------------+------------------------
+---------------------------------------------------------------------
  table_6    | not_accessed  | not_accessed | reference_table_access
 (1 row)
 
@@ -629,7 +629,7 @@ BEGIN;
 	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |   ddl_access    
-------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | parallel_access
  table_2    | not_parallel_accessed | not_parallel_accessed | parallel_access
 (2 rows)
@@ -642,7 +642,7 @@ BEGIN;
 	ALTER TABLE table_2 ADD CONSTRAINT table_2_u FOREIGN KEY (key) REFERENCES table_1(key);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  table_2    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (2 rows)
@@ -651,7 +651,7 @@ ROLLBACK;
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
 SELECT create_distributed_table('partitioning_test', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -660,7 +660,7 @@ BEGIN;
 	CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |   ddl_access    
-------------------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | parallel_access
 (2 rows)
@@ -672,7 +672,7 @@ BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |   ddl_access    
-------------------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | parallel_access
 (2 rows)
@@ -682,7 +682,7 @@ COMMIT;
 CREATE TABLE partitioning_test_2010 AS SELECT * FROM partitioning_test;
 SELECT create_distributed_table('partitioning_test_2010', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -690,7 +690,7 @@ BEGIN;
 	ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010 FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |   ddl_access    
-------------------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | parallel_access
 (2 rows)
@@ -700,13 +700,13 @@ COMMIT;
 BEGIN;
 	SELECT count(*) FROM partitioning_test;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |  select_access  |      dml_access       |      ddl_access       
-------------------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | parallel_access | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | parallel_access | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | parallel_access | not_parallel_accessed | not_parallel_accessed
@@ -718,13 +718,13 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	SELECT count(*) FROM partitioning_test;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -736,7 +736,7 @@ BEGIN;
 	UPDATE partitioning_test SET time = now();
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |  select_access  |   dml_access    |      ddl_access       
-------------------------+-----------------+-----------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | parallel_access | parallel_access | not_parallel_accessed
  partitioning_test_2009 | parallel_access | parallel_access | not_parallel_accessed
  partitioning_test_2010 | parallel_access | parallel_access | not_parallel_accessed
@@ -749,7 +749,7 @@ BEGIN;
 	UPDATE partitioning_test SET time = now();
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -761,7 +761,7 @@ BEGIN;
 	ALTER TABLE partitioning_test ADD COLUMN X INT;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |   ddl_access    
-------------------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | parallel_access
@@ -774,7 +774,7 @@ BEGIN;
 	ALTER TABLE partitioning_test ADD COLUMN X INT;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -785,13 +785,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM partitioning_test_2009;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | parallel_access       | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | parallel_access       | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -803,13 +803,13 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	SELECT count(*) FROM partitioning_test_2009;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -821,7 +821,7 @@ BEGIN;
 	UPDATE partitioning_test_2009 SET time = now();
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | parallel_access       | parallel_access       | not_parallel_accessed
  partitioning_test_2009 | parallel_access       | parallel_access       | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -834,7 +834,7 @@ BEGIN;
 	UPDATE partitioning_test_2009 SET time = now();
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -846,7 +846,7 @@ BEGIN;
 	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | parallel_access
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -859,7 +859,7 @@ BEGIN;
 	CREATE INDEX i1000000 ON partitioning_test_2009 (id);
 	SELECT * FROM relation_acesses  WHERE table_name IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010')  ORDER BY 1;
        table_name       |     select_access     |      dml_access       |      ddl_access       
-------------------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  partitioning_test      | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2009 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
  partitioning_test_2010 | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
@@ -873,7 +873,7 @@ BEGIN;
 NOTICE:  truncate cascades to table "table_2"
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |   ddl_access    
-------------+-----------------------+-----------------------+-----------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | parallel_access
  table_2    | not_parallel_accessed | not_parallel_accessed | parallel_access
 (2 rows)
@@ -884,13 +884,13 @@ BEGIN;
 	WITH cte AS (SELECT count(*) FROM table_1)
 	SELECT * FROM cte;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |  select_access  |      dml_access       |      ddl_access       
-------------+-----------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -901,13 +901,13 @@ BEGIN;
 	WITH cte AS (SELECT count(*) FROM table_1)
 	SELECT * FROM cte;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -917,7 +917,7 @@ BEGIN;
 	WITH cte_1 AS (INSERT INTO table_1 VALUES (1000,1000), (1001, 1001), (1002, 1002) RETURNING *)
 	SELECT * FROM cte_1 ORDER BY 1;
  key  | value 
-------+-------
+---------------------------------------------------------------------
  1000 |  1000
  1001 |  1001
  1002 |  1002
@@ -925,7 +925,7 @@ BEGIN;
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |     select_access     |      dml_access       |      ddl_access       
-------------+-----------------------+-----------------------+-----------------------
+---------------------------------------------------------------------
  table_1    | not_parallel_accessed | not_parallel_accessed | not_parallel_accessed
 (1 row)
 
@@ -935,13 +935,13 @@ BEGIN;
 	WITH cte_1 AS (UPDATE table_1 SET value = 15 RETURNING *)
 	SELECT count(*) FROM cte_1 ORDER BY 1;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |  select_access  |   dml_access    |      ddl_access       
-------------+-----------------+-----------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | parallel_access | not_parallel_accessed
 (1 row)
 
@@ -951,13 +951,13 @@ BEGIN;
 	WITH cte_1 AS (UPDATE table_1 SET value = 15 RETURNING *)
 	SELECT count(*) FROM cte_1 ORDER BY 1;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
  table_name |  select_access  |   dml_access    |      ddl_access       
-------------+-----------------+-----------------+-----------------------
+---------------------------------------------------------------------
  table_1    | parallel_access | parallel_access | not_parallel_accessed
 (1 row)
 
@@ -971,13 +971,13 @@ BEGIN;
 	SELECT create_distributed_table('table_3', 'key');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_3')  ORDER BY 1;
  table_name |     select_access     |   dml_access    |   ddl_access    
-------------+-----------------------+-----------------+-----------------
+---------------------------------------------------------------------
  table_3    | not_parallel_accessed | parallel_access | parallel_access
 (1 row)
 

@@ -5,7 +5,7 @@
 CREATE TABLE test_table_1(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_1', 'id', 'append');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,7 +14,7 @@ SELECT master_create_distributed_table('test_table_1', 'id', 'append');
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_2', 'id', 'append');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -27,7 +27,7 @@ SET client_min_messages to DEBUG1;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 LOG:  join order: [ "test_table_1" ][ local partition join "test_table_2" ]
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -43,7 +43,7 @@ SET citus.enable_repartition_joins to ON;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 LOG:  join order: [ "test_table_1" ][ single range partition join "test_table_2" ]
  count 
--------
+---------------------------------------------------------------------
      9
 (1 row)
 

@@ -11,28 +11,28 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE transitive_reference_table(id int PRIMARY KEY);
 SELECT create_reference_table('transitive_reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE reference_table(id int PRIMARY KEY, value_1 int);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE on_update_fkey_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('on_update_fkey_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE unrelated_dist_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('unrelated_dist_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -48,13 +48,13 @@ SET client_min_messages TO DEBUG1;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -62,13 +62,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -77,31 +77,31 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 15;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 16;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 17;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 18;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -109,31 +109,31 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 15;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 16;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 17;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 18;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -142,7 +142,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -151,7 +151,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -161,7 +161,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -173,7 +173,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -186,7 +186,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -198,7 +198,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -211,7 +211,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -222,7 +222,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -235,7 +235,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -246,7 +246,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -259,13 +259,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -277,13 +277,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -297,13 +297,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -315,13 +315,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM unrelated_dist_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -334,7 +334,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -343,7 +343,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -356,13 +356,13 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -373,13 +373,13 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -391,25 +391,25 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 99;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 199;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 299;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 399;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -420,25 +420,25 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 99;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 199;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 299;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 101 AND id = 399;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -550,7 +550,7 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -561,7 +561,7 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -571,7 +571,7 @@ BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE int;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -580,7 +580,7 @@ BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE int;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -700,20 +700,20 @@ DEBUG:  validating foreign key constraint "fkey"
 	TRUNCATE on_update_fkey_table;
 DEBUG:  building index "on_update_fkey_table_pkey" on table "on_update_fkey_table" serially
 ROLLBACK;
------
+---------------------------------------------------------------------
 --- Now, start testing the other way araound
------
+---------------------------------------------------------------------
 -- case 4.1: SELECT to a dist table is follwed by a SELECT to a reference table
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -721,13 +721,13 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -736,7 +736,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -748,7 +748,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -761,7 +761,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -772,7 +772,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -784,7 +784,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -798,7 +798,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -815,7 +815,7 @@ SET client_min_messages to LOG;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -826,7 +826,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE value_1 = 99;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -839,7 +839,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -849,7 +849,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -864,7 +864,7 @@ BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -873,7 +873,7 @@ BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;
 	SELECT count(*) FROM transitive_reference_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -1034,14 +1034,14 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1055,14 +1055,14 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 	SELECT create_distributed_table('tt4', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1084,21 +1084,21 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE tt4(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES tt4(id));
 	SELECT create_distributed_table('tt4', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES tt4(id));
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1113,14 +1113,14 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1140,14 +1140,14 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1163,14 +1163,14 @@ BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1190,14 +1190,14 @@ BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1212,7 +1212,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
@@ -1244,7 +1244,7 @@ BEGIN;
 	SELECT create_reference_table('test_table_1');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1268,7 +1268,7 @@ BEGIN;
 	SELECT create_reference_table('test_table_1');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1288,13 +1288,13 @@ BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 	SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1303,13 +1303,13 @@ BEGIN;
 	ALTER TABLE test_table_2 ADD CONSTRAINT check_val CHECK (id > 0);
 	SELECT count(*) FROM test_table_2;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM test_table_1;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1328,7 +1328,7 @@ DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "reference_table_p
 DEBUG:  building index "reference_table_pkey" on table "reference_table" serially
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1337,7 +1337,7 @@ DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "distributed_table
 DEBUG:  building index "distributed_table_pkey" on table "distributed_table" serially
 SELECT create_distributed_table('distributed_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1364,7 +1364,7 @@ DEBUG:  Plan 170 query after replacing subqueries and CTEs: DELETE FROM test_fke
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  id | value_1 | id 
-----+---------+----
+---------------------------------------------------------------------
 (0 rows)
 
 -- load some more data for one more test with real-time selects
@@ -1385,7 +1385,7 @@ DEBUG:  Plan 174 query after replacing subqueries and CTEs: SELECT count(*) AS c
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1418,7 +1418,7 @@ DEBUG:  generating subplan 181_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.
 DEBUG:  generating subplan 181_2 for CTE t2: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
 DEBUG:  Plan 181 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM test_fkey_to_ref_in_tx.distributed_table, (SELECT intermediate_result.id FROM read_intermediate_result('181_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t1, (SELECT intermediate_result.id FROM read_intermediate_result('181_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) t2 WHERE ((distributed_table.value_1 OPERATOR(pg_catalog.=) t1.id) AND (distributed_table.value_1 OPERATOR(pg_catalog.=) t2.id))
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1430,7 +1430,7 @@ BEGIN;
 DEBUG:  generating subplan 184_1 for CTE t1: DELETE FROM test_fkey_to_ref_in_tx.distributed_table RETURNING id
 DEBUG:  Plan 184 query after replacing subqueries and CTEs: DELETE FROM test_fkey_to_ref_in_tx.reference_table RETURNING id
  id 
-----
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;

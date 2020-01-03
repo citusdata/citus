@@ -23,7 +23,7 @@ SET citus.shard_count TO 4;
 CREATE TABLE upgrade_reference_table_multiple_shard(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_multiple_shard', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -35,7 +35,7 @@ DROP TABLE upgrade_reference_table_multiple_shard;
 CREATE TABLE upgrade_reference_table_no_shard(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_no_shard', 'column1', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -49,14 +49,14 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_referenced(column1 int PRIMARY KEY);
 SELECT create_distributed_table('upgrade_reference_table_referenced', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE upgrade_reference_table_referencing(column1 int REFERENCES upgrade_reference_table_referenced(column1));
 SELECT create_distributed_table('upgrade_reference_table_referencing', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -75,7 +75,7 @@ DROP TABLE upgrade_reference_table_referenced;
 CREATE TABLE upgrade_reference_table_unhealthy(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_unhealthy', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -92,14 +92,14 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_composite(column1 int, column2 upgrade_test_composite_type);
 SELECT create_distributed_table('upgrade_reference_table_composite', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_composite'::regclass;
 SELECT upgrade_to_reference_table('upgrade_reference_table_composite');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -109,7 +109,7 @@ DROP TYPE upgrade_test_composite_type;
 CREATE TABLE upgrade_reference_table_reference(column1 int);
 SELECT create_reference_table('upgrade_reference_table_reference');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -121,7 +121,7 @@ DROP TABLE upgrade_reference_table_reference;
 CREATE TABLE upgrade_reference_table_append(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_append', 'column1', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -134,7 +134,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  a          | f             |            0 | c
 (1 row)
 
@@ -145,7 +145,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360009 | f                   | f
 (1 row)
 
@@ -156,7 +156,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
@@ -170,13 +170,13 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360009 | f
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_append');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -188,7 +188,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -199,7 +199,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360009 | t                   | t
 (1 row)
 
@@ -210,7 +210,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -224,7 +224,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360009 | t
 (1 row)
 
@@ -233,7 +233,7 @@ DROP TABLE upgrade_reference_table_append;
 CREATE TABLE upgrade_reference_table_one_worker(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_one_worker', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -246,7 +246,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360001 | c
 (1 row)
 
@@ -257,7 +257,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360010 | f                   | f
 (1 row)
 
@@ -268,7 +268,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360001 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -282,13 +282,13 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360010 | f
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_worker');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -300,7 +300,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -311,7 +311,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360010 | t                   | t
 (1 row)
 
@@ -322,7 +322,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -336,7 +336,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360010 | t
 (1 row)
 
@@ -346,7 +346,7 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE upgrade_reference_table_one_unhealthy(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_one_unhealthy', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -360,7 +360,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360002 | c
 (1 row)
 
@@ -371,7 +371,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360011 | f                   | f
 (1 row)
 
@@ -382,7 +382,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360002 |          1 |                 2 |                     23 |                           0
 (1 row)
 
@@ -397,13 +397,13 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360011 | f
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_unhealthy');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -415,7 +415,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -426,7 +426,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360011 | t                   | t
 (1 row)
 
@@ -437,7 +437,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -452,7 +452,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360011 | t
 (1 row)
 
@@ -461,7 +461,7 @@ DROP TABLE upgrade_reference_table_one_unhealthy;
 CREATE TABLE upgrade_reference_table_both_healthy(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_both_healthy', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -473,7 +473,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360003 | c
 (1 row)
 
@@ -484,7 +484,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360012 | f                   | f
 (1 row)
 
@@ -495,7 +495,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360003 |          1 |                 2 |                     23 |                           0
 (1 row)
 
@@ -509,13 +509,13 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1360012
 (1 row)
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_both_healthy');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -527,7 +527,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -538,7 +538,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360012 | t                   | t
 (1 row)
 
@@ -549,7 +549,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -563,7 +563,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360012 | t
 (1 row)
 
@@ -573,7 +573,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_transaction_rollback(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_transaction_rollback', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -586,7 +586,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360004 | c
 (1 row)
 
@@ -597,7 +597,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360013 | f                   | f
 (1 row)
 
@@ -608,7 +608,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -622,14 +622,14 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360013 | f
 (1 row)
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_rollback');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -642,7 +642,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360004 | c
 (1 row)
 
@@ -653,7 +653,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360013 | f                   | f
 (1 row)
 
@@ -664,7 +664,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -678,7 +678,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360013 | f
 (1 row)
 
@@ -688,7 +688,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_transaction_commit(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_transaction_commit', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -701,7 +701,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360004 | c
 (1 row)
 
@@ -712,7 +712,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360014 | f                   | f
 (1 row)
 
@@ -723,7 +723,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360004 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -737,14 +737,14 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360014 | f
 (1 row)
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_commit');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -757,7 +757,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -768,7 +768,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360014 | t                   | t
 (1 row)
 
@@ -779,7 +779,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -793,7 +793,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360014 | t
 (1 row)
 
@@ -802,7 +802,7 @@ ORDER BY shardid;
 \dt upgrade_reference_table_transaction_commit_*
                                List of relations
  Schema |                        Name                        | Type  |  Owner   
---------+----------------------------------------------------+-------+----------
+---------------------------------------------------------------------
  public | upgrade_reference_table_transaction_commit_1360014 | table | postgres
 (1 row)
 
@@ -815,7 +815,7 @@ SET citus.replication_model TO 'streaming';
 CREATE TABLE upgrade_reference_table_mx(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -827,7 +827,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360005 | s
 (1 row)
 
@@ -838,7 +838,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360015 | f                   | f
 (1 row)
 
@@ -849,7 +849,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360005 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -863,7 +863,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1360015
 (1 row)
 
@@ -878,7 +878,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360005 | s
 (1 row)
 
@@ -889,7 +889,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360015 | f                   | f
 (1 row)
 
@@ -900,7 +900,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360005 |          1 |                 1 |                     23 |                           0
 (1 row)
 
@@ -914,7 +914,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360015 | f
 (1 row)
 
@@ -926,7 +926,7 @@ RESET citus.replication_model;
 CREATE TABLE upgrade_reference_table_mx(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -935,7 +935,7 @@ WHERE nodeport = :worker_2_port AND
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='upgrade_reference_table_mx'::regclass);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -947,7 +947,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  h          | f             |      1360006 | c
 (1 row)
 
@@ -958,7 +958,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360016 | f                   | f
 (1 row)
 
@@ -969,7 +969,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
       1360006 |          1 |                 2 |                     23 |                           0
 (1 row)
 
@@ -983,14 +983,14 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1360016
 (1 row)
 
 SET client_min_messages TO WARNING;
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
  upgrade_to_reference_table 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1002,7 +1002,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -1013,7 +1013,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360016 | t                   | t
 (1 row)
 
@@ -1024,7 +1024,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
@@ -1038,7 +1038,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360016 | t
 (1 row)
 
@@ -1051,7 +1051,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
+---------------------------------------------------------------------
  n          | t             |        10004 | t
 (1 row)
 
@@ -1062,7 +1062,7 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1360016 | t                   | t
 (1 row)
 
@@ -1076,7 +1076,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
  shardid | ?column? 
----------+----------
+---------------------------------------------------------------------
  1360016 | t
 (1 row)
 
@@ -1084,7 +1084,7 @@ ORDER BY shardid;
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

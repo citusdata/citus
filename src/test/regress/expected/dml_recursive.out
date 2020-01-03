@@ -4,21 +4,21 @@ SET citus.next_shard_id TO 2370000;
 CREATE TABLE recursive_dml_queries.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_dml_queries.second_distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('second_distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_dml_queries.reference_table (id text, name text);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -55,7 +55,7 @@ RETURNING
 DEBUG:  generating subplan 4_1 for subquery SELECT avg((tenant_id)::integer) AS avg_tenant_id FROM recursive_dml_queries.second_distributed_table
 DEBUG:  Plan 4 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.reference_table SET name = ('new_'::text OPERATOR(pg_catalog.||) reference_table.name) FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) reference_table.id) RETURNING reference_table.name
     name     
--------------
+---------------------------------------------------------------------
  new_user_50
 (1 row)
 
@@ -88,7 +88,7 @@ RETURNING
 DEBUG:  generating subplan 6_1 for subquery SELECT DISTINCT ON (tenant_id) tenant_id, max(dept) AS max_dept FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id)) foo_inner GROUP BY tenant_id ORDER BY tenant_id DESC
 DEBUG:  Plan 6 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.second_distributed_table SET dept = (foo.max_dept OPERATOR(pg_catalog.*) 2) FROM (SELECT intermediate_result.tenant_id, intermediate_result.max_dept FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, max_dept integer)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 2)) RETURNING second_distributed_table.tenant_id, second_distributed_table.dept
  tenant_id | dept 
------------+------
+---------------------------------------------------------------------
  12        |   18
  2         |   18
  22        |   18
@@ -157,7 +157,7 @@ RETURNING
 DEBUG:  generating subplan 11_1 for subquery SELECT avg((id)::integer) AS avg_tenant_id FROM recursive_dml_queries.local_table
 DEBUG:  Plan 11 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = (foo.avg_tenant_id)::integer FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) distributed_table.tenant_id) RETURNING distributed_table.tenant_id, distributed_table.dept, distributed_table.info
  tenant_id | dept |          info          
------------+------+------------------------
+---------------------------------------------------------------------
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
@@ -180,7 +180,7 @@ RETURNING
 DEBUG:  generating subplan 12_1 for subquery SELECT avg((tenant_id)::integer) AS avg_tenant_id FROM (SELECT distributed_table.tenant_id, reference_table.name FROM recursive_dml_queries.distributed_table, recursive_dml_queries.reference_table WHERE ((distributed_table.dept)::text OPERATOR(pg_catalog.=) reference_table.id) ORDER BY reference_table.name DESC, distributed_table.tenant_id DESC) tenant_ids
 DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = (foo.avg_tenant_id)::integer FROM (SELECT intermediate_result.avg_tenant_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_tenant_id numeric)) foo WHERE (((foo.avg_tenant_id)::integer)::text OPERATOR(pg_catalog.=) distributed_table.tenant_id) RETURNING distributed_table.tenant_id, distributed_table.dept, distributed_table.info
  tenant_id | dept |          info          
------------+------+------------------------
+---------------------------------------------------------------------
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
@@ -213,7 +213,7 @@ foo_inner_1 JOIN LATERAL
 ON (foo_inner_2.tenant_id != foo_inner_1.tenant_id)
 ORDER BY foo_inner_1.tenant_id;
  tenant_id 
------------
+---------------------------------------------------------------------
  14
  24
  34

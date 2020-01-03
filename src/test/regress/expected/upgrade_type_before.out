@@ -4,7 +4,7 @@ CREATE TYPE type1 AS (a int, b int);
 CREATE TABLE tt (a int PRIMARY KEY, b type1);
 SELECT create_distributed_table('tt','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

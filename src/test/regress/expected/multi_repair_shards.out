@@ -16,7 +16,7 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('customer_engagements', 'id', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -51,7 +51,7 @@ ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -60,7 +60,7 @@ ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -77,7 +77,7 @@ ERROR:  source placement must be in finalized state
 -- "copy" this shard from the first placement to the second one
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -86,7 +86,7 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid AND grou
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
  id | created_at |  event_data  
-----+------------+--------------
+---------------------------------------------------------------------
   1 | 01-01-2015 | first event
   2 | 02-01-2015 | second event
   1 | 03-01-2015 | third event
@@ -105,7 +105,7 @@ SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('remote_engagements', 'id', 'hash');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

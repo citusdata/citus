@@ -12,7 +12,7 @@ SET citus.max_cached_conns_per_worker TO 0;
 SET citus.force_max_query_parallelization TO on;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -23,7 +23,7 @@ SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
 SELECT create_distributed_table('test_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -39,7 +39,7 @@ CREATE VIEW unhealthy_shard_count AS
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -50,19 +50,19 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -70,7 +70,7 @@ SELECT count(*) FROM test_table;
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -78,26 +78,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -108,26 +108,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -135,26 +135,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test_table").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -165,26 +165,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test_table").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -192,19 +192,19 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -215,26 +215,26 @@ SELECT count(*) FROM test_table;
 -- Note: This is the result of using 1pc and there is no way to recover from it
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      8
 (1 row)
 
@@ -246,26 +246,26 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- should have been applied without any issues since cancel is ignored
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -278,7 +278,7 @@ SET client_min_messages TO WARNING;
 -- should have been committed both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -297,19 +297,19 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -321,26 +321,26 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- case Citus messes up this behaviour
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -350,7 +350,7 @@ CREATE TABLE reference_table(i int UNIQUE);
 INSERT INTO reference_table SELECT x FROM generate_series(1,20) as f(x);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -359,7 +359,7 @@ ALTER TABLE test_table ADD CONSTRAINT foreign_key FOREIGN KEY (value) REFERENCES
 -- still cascaded to referencing table or failed successfuly
 SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -368,25 +368,25 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -394,7 +394,7 @@ SELECT count(*) FROM reference_table;
 -- still cascaded to referencing table or failed successfuly
 SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -402,25 +402,25 @@ TRUNCATE reference_table CASCADE;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -428,7 +428,7 @@ SELECT count(*) FROM reference_table;
 -- rollbacked properly
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -439,25 +439,25 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -465,7 +465,7 @@ SELECT count(*) FROM reference_table;
 -- if the command still cascaded to referencing table or failed successfuly
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -473,25 +473,25 @@ TRUNCATE reference_table CASCADE;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 SELECT count(*) FROM reference_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -500,7 +500,7 @@ SELECT count(*) FROM reference_table;
 -- failed successfuly
 SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -509,25 +509,25 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              1
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -536,7 +536,7 @@ SELECT count(*) FROM test_table;
 -- failed successfuly
 SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -544,25 +544,25 @@ TRUNCATE reference_table CASCADE;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -572,7 +572,7 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -583,19 +583,19 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -603,7 +603,7 @@ SELECT count(*) FROM test_table;
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -611,26 +611,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -641,26 +641,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -668,26 +668,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE truncate_failure.test_table").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -698,26 +698,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE truncate_failure.test_table").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -725,26 +725,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- killing on PREPARE should be fine, everything should be rollbacked
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^PREPARE TRANSACTION").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -753,13 +753,13 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -767,20 +767,20 @@ SELECT * FROM unhealthy_shard_count;
 -- see that the command is rollbacked
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              2
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancelling on PREPARE should be fine, everything should be rollbacked
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^PREPARE TRANSACTION").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -788,13 +788,13 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -802,13 +802,13 @@ SELECT * FROM unhealthy_shard_count;
 -- see that the command is rollbacked
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              1
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -816,27 +816,27 @@ SELECT count(*) FROM test_table;
 -- and all the workers committed
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT PREPARED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- we shouldn't have any prepared transactions in the workers
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -844,14 +844,14 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- kill as soon as the coordinator sends COMMIT
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT PREPARED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -861,13 +861,13 @@ SELECT citus.mitmproxy('conn.allow()');
 -- we expect to see 2 recovered prepared transactions.
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              2
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -877,7 +877,7 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- so the command can be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -886,13 +886,13 @@ TRUNCATE test_table;
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -901,7 +901,7 @@ SELECT count(*) FROM test_table;
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -910,19 +910,19 @@ TRUNCATE test_table;
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -935,7 +935,7 @@ DROP TABLE test_table CASCADE;
 CREATE TABLE test_table (key int, value int);
 SELECT create_distributed_table('test_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -951,7 +951,7 @@ CREATE VIEW unhealthy_shard_count AS
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -962,19 +962,19 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -982,7 +982,7 @@ SELECT count(*) FROM test_table;
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -990,26 +990,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1020,26 +1020,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1047,26 +1047,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- kill as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test_table").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1077,26 +1077,26 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- cancel as soon as the coordinator sends TRUNCATE TABLE command
 SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test_table").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1104,26 +1104,26 @@ TRUNCATE test_table;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
 -- killing on PREPARE should be fine, everything should be rollbacked
 SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1132,13 +1132,13 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1146,13 +1146,13 @@ SELECT * FROM unhealthy_shard_count;
 -- see that the command is rollbacked
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              4
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -1160,33 +1160,33 @@ SELECT count(*) FROM test_table;
 -- and all the workers committed
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT PREPARED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- we shouldn't have any prepared transactions in the workers
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1194,20 +1194,20 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- kill as soon as the coordinator sends COMMIT
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT PREPARED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1218,13 +1218,13 @@ SELECT * FROM unhealthy_shard_count;
 -- transactions.
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              4
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1234,7 +1234,7 @@ INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- so the command can be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1243,19 +1243,19 @@ TRUNCATE test_table;
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 
@@ -1264,7 +1264,7 @@ SELECT count(*) FROM test_table;
 -- should have been rollbacked both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1273,25 +1273,25 @@ TRUNCATE test_table;
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     20
 (1 row)
 

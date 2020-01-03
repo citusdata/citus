@@ -30,7 +30,7 @@ SET citus.explain_distributed_queries TO off;
 CREATE TABLE task_assignment_test_table (test_id integer);
 SELECT create_distributed_table('task_assignment_test_table', 'test_id', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -74,7 +74,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -86,7 +86,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -100,7 +100,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -112,7 +112,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -122,7 +122,7 @@ COMMIT;
 CREATE TABLE task_assignment_reference_table (test_id  integer);
 SELECT create_reference_table('task_assignment_reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -136,7 +136,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
---------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
 (2 rows)
@@ -146,7 +146,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
---------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
 (2 rows)
@@ -157,7 +157,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
---------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
 (2 rows)
@@ -167,7 +167,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
                           QUERY PLAN                          
---------------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
 (2 rows)
@@ -192,7 +192,7 @@ INSERT INTO explain_outputs
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -211,7 +211,7 @@ INSERT INTO explain_outputs
 -- since there are two different worker nodes
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -224,7 +224,7 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE task_assignment_replicated_hash (test_id  integer);
 SELECT create_distributed_table('task_assignment_replicated_hash', 'test_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -238,7 +238,7 @@ INSERT INTO explain_outputs
 -- given that we're in the same transaction, the count should be 1
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -257,7 +257,7 @@ INSERT INTO explain_outputs
 -- since there are two different worker nodes
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -268,7 +268,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE task_assignment_nonreplicated_hash (test_id  integer, ref_id integer);
 SELECT create_distributed_table('task_assignment_nonreplicated_hash', 'test_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -290,7 +290,7 @@ $cmd$, 'task_assignment_nonreplicated_hash');
 -- The count should be 1 since the shard exists in only one worker node
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -300,7 +300,7 @@ TRUNCATE explain_outputs;
 CREATE TABLE task_assignment_test_table_2 (test_id integer);
 SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -319,7 +319,7 @@ $cmd$, 'task_assignment_test_table_2');
 -- different workers
 SELECT count(DISTINCT value) FROM explain_outputs;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 

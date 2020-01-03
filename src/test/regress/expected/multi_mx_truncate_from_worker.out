@@ -8,14 +8,14 @@ SET citus.replication_model TO streaming;
 CREATE TABLE "refer'ence_table"(id int PRIMARY KEY);
 SELECT create_reference_table('refer''ence_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE on_update_fkey_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('on_update_fkey_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -26,7 +26,7 @@ INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000
 TRUNCATE on_update_fkey_table;
 SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -37,13 +37,13 @@ TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM "refer'ence_table";
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -56,7 +56,7 @@ BEGIN;
 	TRUNCATE on_update_fkey_table;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -67,7 +67,7 @@ SET search_path TO 'truncate_from_workers';
 TRUNCATE on_update_fkey_table;
 SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -78,13 +78,13 @@ TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM "refer'ence_table";
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -115,14 +115,14 @@ BEGIN;
 	INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 	TRUNCATE on_update_fkey_table;
 	SELECT count(*) FROM on_update_fkey_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -138,7 +138,7 @@ BEGIN;
 	-- should fail since the schema is not provided
 	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -148,7 +148,7 @@ BEGIN;
 	SET search_path TO 'truncate_from_workers';
 	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -157,7 +157,7 @@ BEGIN;
 	-- should return false since there is no such table
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_tableXXX', 'ACCESS SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -171,62 +171,62 @@ BEGIN;
 	-- test all lock levels
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ROW EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE UPDATE EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'SHARE ROW EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS EXCLUSIVE');
  lock_relation_if_exists 
--------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 	-- see them all
 	SELECT relation::regclass, mode FROM pg_locks WHERE pid = pg_backend_pid() AND relation = 'truncate_from_workers.on_update_fkey_table'::regclass ORDER BY 2 DESC;
                   relation                  |           mode           
---------------------------------------------+--------------------------
+---------------------------------------------------------------------
  truncate_from_workers.on_update_fkey_table | ShareUpdateExclusiveLock
  truncate_from_workers.on_update_fkey_table | ShareRowExclusiveLock
  truncate_from_workers.on_update_fkey_table | ShareLock

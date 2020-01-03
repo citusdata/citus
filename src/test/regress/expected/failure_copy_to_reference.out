@@ -8,14 +8,14 @@ SET citus.next_shard_id TO 130000;
 SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE test_table(id int, value_1 int);
 SELECT create_reference_table('test_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -30,7 +30,7 @@ CREATE VIEW unhealthy_shard_count AS
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -39,26 +39,26 @@ ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -67,26 +67,26 @@ ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -95,26 +95,26 @@ ERROR:  canceling statement due to user request
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- kill as soon as the coordinator sends COPY command
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -126,26 +126,26 @@ CONTEXT:  while executing command on localhost:xxxxx
 COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- cancel as soon as the coordinator sends COPY command
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -154,26 +154,26 @@ ERROR:  canceling statement due to user request
 CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- kill as soon as the worker sends CopyComplete
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COPY 3").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -181,26 +181,26 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COPY 3").kill()');
 ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- cancel as soon as the coordinator sends CopyData
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COPY 3").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -208,19 +208,19 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COPY 3").cancel(' ||  p
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -228,7 +228,7 @@ SELECT count(*) FROM test_table;
 -- the query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -240,26 +240,26 @@ CONTEXT:  while executing command on localhost:xxxxx
 COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- killing on PREPARE should be fine, everything should be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -268,26 +268,26 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- cancelling on PREPARE should be fine, everything should be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -295,19 +295,19 @@ SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").cancel(' ||  
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -315,33 +315,33 @@ SELECT count(*) FROM test_table;
 -- and all the workers committed
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT PREPARED").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- we shouldn't have any prepared transactions in the workers
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -349,14 +349,14 @@ TRUNCATE test_table;
 -- kill as soon as the coordinator sends COMMIT
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -366,19 +366,19 @@ SELECT citus.mitmproxy('conn.allow()');
 -- we expect to see 1 recovered prepared transactions.
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              1
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -387,7 +387,7 @@ TRUNCATE test_table;
 -- sends the ROLLBACK so the command can be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -399,19 +399,19 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -420,7 +420,7 @@ SELECT count(*) FROM test_table;
 -- both on the distributed table and the placements
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -432,25 +432,25 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT * FROM unhealthy_shard_count;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 

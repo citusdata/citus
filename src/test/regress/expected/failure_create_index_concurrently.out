@@ -4,7 +4,7 @@
 -- failure.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,14 +14,14 @@ SET SEARCH_PATH=index_schema;
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_distributed_table('index_test', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- kill the connection when create command is issued
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -31,7 +31,7 @@ DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind 
 HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -39,7 +39,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |     9060 | t       | 0
 (1 row)
 
@@ -47,14 +47,14 @@ DROP TABLE index_test;
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_reference_table('index_test');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- kill the connection when create command is issued
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -64,7 +64,7 @@ DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind 
 HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -72,7 +72,7 @@ DROP TABLE index_test;
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_distributed_table('index_test', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -81,7 +81,7 @@ SELECT create_distributed_table('index_test', 'id');
 -- therefore dump_network_traffic() calls are not made
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -91,7 +91,7 @@ DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind 
 HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -99,14 +99,14 @@ DROP TABLE index_test;
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_reference_table('index_test');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- cancel the connection when create command is issued
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -116,7 +116,7 @@ DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind 
 HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -124,7 +124,7 @@ DROP TABLE index_test;
 CREATE TABLE index_test(id int, value_1 int, value_2 int);
 SELECT create_distributed_table('index_test', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -132,7 +132,7 @@ CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 -- kill the connection when create command is issued
 SELECT citus.mitmproxy('conn.onQuery(query="DROP INDEX CONCURRENTLY").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -142,7 +142,7 @@ DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind 
 HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -150,7 +150,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |     9060 | t       | 4
 (1 row)
 
@@ -161,7 +161,7 @@ NOTICE:  drop cascades to table index_schema.index_test
 SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |     9060 | t       | 0
 (1 row)
 

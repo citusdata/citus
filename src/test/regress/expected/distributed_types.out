@@ -4,7 +4,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers($$CREATE USER typeuser;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -18,14 +18,14 @@ CREATE TYPE tc1 AS (a int, b int);
 CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
 SELECT create_distributed_table('t1','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO t1 VALUES (1, (2,3)::tc1);
 SELECT * FROM t1;
  a |   b   
----+-------
+---------------------------------------------------------------------
  1 | (2,3)
 (1 row)
 
@@ -38,14 +38,14 @@ CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
 CREATE TABLE t2 (a int PRIMARY KEY, b te1);
 SELECT create_distributed_table('t2','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO t2 VALUES (1, 'two');
 SELECT * FROM t2;
  a |  b  
----+-----
+---------------------------------------------------------------------
  1 | two
 (1 row)
 
@@ -56,7 +56,7 @@ ALTER TYPE te1_newname ADD VALUE 'four';
 UPDATE t2 SET b = 'four';
 SELECT * FROM t2;
  a |  b   
----+------
+---------------------------------------------------------------------
  1 | four
 (1 row)
 
@@ -69,14 +69,14 @@ CREATE TYPE tc2 AS (a int, b int);
 CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
 SELECT create_distributed_table('t3','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO t3 VALUES (4, (5,6)::tc2);
 SELECT * FROM t3;
  a |   b   
----+-------
+---------------------------------------------------------------------
  4 | (5,6)
 (1 row)
 
@@ -87,14 +87,14 @@ CREATE TYPE te2 AS ENUM ('yes', 'no');
 CREATE TABLE t4 (a int PRIMARY KEY, b te2);
 SELECT create_distributed_table('t4','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO t4 VALUES (1, 'yes');
 SELECT * FROM t4;
  a |  b  
----+-----
+---------------------------------------------------------------------
  1 | yes
 (1 row)
 
@@ -103,13 +103,13 @@ COMMIT;
 -- verify order of enum labels
 SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'type_tests.te2'::regtype;
  string_agg 
-------------
+---------------------------------------------------------------------
  yes,no
 (1 row)
 
 SELECT run_command_on_workers($$SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'type_tests.te2'::regtype;$$);
     run_command_on_workers    
-------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"yes,no")
  (localhost,57638,t,"yes,no")
 (2 rows)
@@ -125,7 +125,7 @@ RESET citus.enable_ddl_propagation;
 CREATE TABLE t5 (a int PRIMARY KEY, b tc5[], c te3);
 SELECT create_distributed_table('t5','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -145,7 +145,7 @@ INSERT INTO t5 VALUES (1, NULL, 'a', 'd', (1,2,(4,5)::tc6c)::tc6);
 ALTER TYPE tc6 RENAME ATTRIBUTE b TO d;
 SELECT (e::tc6).d FROM t5 ORDER BY 1;
  d 
----
+---------------------------------------------------------------------
  2
 (1 row)
 
@@ -153,13 +153,13 @@ SELECT (e::tc6).d FROM t5 ORDER BY 1;
 ALTER TYPE te4 OWNER TO typeuser;
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te4' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  te4     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te4' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(te4,typeuser)")
  (localhost,57638,t,"(te4,typeuser)")
 (2 rows)
@@ -167,13 +167,13 @@ SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_us
 ALTER TYPE tc6 OWNER TO typeuser;
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc6' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  tc6     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc6' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(tc6,typeuser)")
  (localhost,57638,t,"(tc6,typeuser)")
 (2 rows)
@@ -191,7 +191,7 @@ RESET citus.enable_ddl_propagation;
 CREATE TABLE t6 (a int, b tc8, c te6);
 SELECT create_distributed_table('t6', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -199,52 +199,52 @@ RESET ROLE;
 --  test ownership of all types
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  tc7     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(tc7,typeuser)")
  (localhost,57638,t,"(tc7,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  te5     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(te5,typeuser)")
  (localhost,57638,t,"(te5,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  tc8     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(tc8,typeuser)")
  (localhost,57638,t,"(tc8,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;
  typname | usename  
----------+----------
+---------------------------------------------------------------------
  te6     | typeuser
 (1 row)
 
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;$$);
         run_command_on_workers        
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(te6,typeuser)")
  (localhost,57638,t,"(te6,typeuser)")
 (2 rows)
@@ -258,12 +258,12 @@ NOTICE:  drop cascades to column b of table t5
 -- test if the types are deleted
 SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;
  typname 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"")
  (localhost,57638,t,"")
 (2 rows)
@@ -302,7 +302,7 @@ CREATE TYPE distributed_enum_type AS ENUM ('a', 'c');
 CREATE TABLE type_proc (a int, b distributed_composite_type, c distributed_enum_type);
 SELECT create_distributed_table('type_proc','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -331,13 +331,13 @@ CREATE TYPE feature_flag_enum_type AS ENUM ('a', 'b');
 -- verify types do not exist on workers
 SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -346,19 +346,19 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('
 CREATE TABLE feature_flag_table (a int PRIMARY KEY, b feature_flag_composite_type, c feature_flag_enum_type);
 SELECT create_distributed_table('feature_flag_table','a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,2)
  (localhost,57638,t,2)
 (2 rows)
@@ -369,7 +369,7 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP SCHEMA")
  (localhost,57638,t,"DROP SCHEMA")
 (2 rows)
@@ -377,7 +377,7 @@ SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
 DROP SCHEMA type_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP SCHEMA")
  (localhost,57638,t,"DROP SCHEMA")
 (2 rows)
@@ -385,7 +385,7 @@ SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
 DROP USER typeuser;
 SELECT run_command_on_workers($$DROP USER typeuser;$$);
      run_command_on_workers      
----------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP ROLE")
  (localhost,57638,t,"DROP ROLE")
 (2 rows)

@@ -10,14 +10,14 @@ WHERE name = 'hll'
 \gset
 :create_cmd;
  hll_present 
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -83,7 +83,7 @@ CREATE TABLE test_count_distinct_schema.nation_hash(
 );
 SELECT create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -131,7 +131,7 @@ HINT:  You need to have the hll extension loaded.
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 

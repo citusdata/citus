@@ -6,7 +6,7 @@ CREATE TABLE users_table_local AS SELECT * FROM users_table;
 CREATE TABLE dist_table (id int, value int);
 SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_table');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -48,7 +48,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 3_2 for subquery SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
  count 
--------
+---------------------------------------------------------------------
   1644
 (1 row)
 
@@ -63,7 +63,7 @@ FROM cte1, cte2
 ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type
 LIMIT 5;
  user_id | value_1 | user_id | event_type 
----------+---------+---------+------------
+---------------------------------------------------------------------
        1 |       1 |       1 |          0
        1 |       1 |       1 |          0
        1 |       1 |       1 |          1
@@ -85,7 +85,7 @@ DEBUG:  generating subplan 8_1 for CTE cte1: SELECT user_id, "time", value_1, va
 DEBUG:  generating subplan 8_2 for CTE cte2: SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM subquery_and_ctes.events_table WHERE (user_id OPERATOR(pg_catalog.=) 6)
 DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT cte1.user_id, cte1.value_1, cte2.user_id, cte2.user_id FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte1, (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) cte2 ORDER BY cte1.user_id, cte1.value_1, cte2.user_id, cte2.event_type LIMIT 5
  user_id | value_1 | user_id | user_id 
----------+---------+---------+---------
+---------------------------------------------------------------------
        1 |       1 |       6 |       6
        1 |       1 |       6 |       6
        1 |       1 |       6 |       6
@@ -158,7 +158,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 17_2 for subquery SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('17_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, subquery_and_ctes.events_table WHERE ((foo.user_id OPERATOR(pg_catalog.=) cte.user_id) AND (events_table.user_id OPERATOR(pg_catalog.=) cte.user_id))
  count 
--------
+---------------------------------------------------------------------
  30608
 (1 row)
 
@@ -188,7 +188,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 21_2 for subquery SELECT DISTINCT value_2 FROM subquery_and_ctes.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 1) AND (value_1 OPERATOR(pg_catalog.<=) 20)) ORDER BY value_2 LIMIT 5
 DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT DISTINCT cte.user_id FROM subquery_and_ctes.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id OPERATOR(pg_catalog.=) cte.user_id) AND (users_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))) ORDER BY cte.user_id DESC
  user_id 
----------
+---------------------------------------------------------------------
        4
        3
        2
@@ -218,7 +218,7 @@ DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT dist_cte.user_
 DEBUG:  generating subplan 25_2 for subquery SELECT DISTINCT user_id FROM subquery_and_ctes.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 1) AND (value_1 OPERATOR(pg_catalog.<=) 20))
 DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('25_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) ORDER BY user_id DESC
  user_id 
----------
+---------------------------------------------------------------------
        6
        5
        4
@@ -247,7 +247,7 @@ ORDER BY 1 DESC;
 DEBUG:  generating subplan 29_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  Plan 29 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('29_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo ORDER BY user_id DESC
  user_id 
----------
+---------------------------------------------------------------------
        6
        5
        4
@@ -286,7 +286,7 @@ ORDER BY 1 DESC;
 DEBUG:  generating subplan 31_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id) ORDER BY bar.user_id DESC
  user_id 
----------
+---------------------------------------------------------------------
        6
        5
        4
@@ -341,7 +341,7 @@ DEBUG:  push down of limit count: 2
 DEBUG:  generating subplan 33_3 for subquery SELECT users_table.user_id, some_events.event_type FROM subquery_and_ctes.users_table, (SELECT cte.event_type, cte.user_id FROM (SELECT intermediate_result.event_type, intermediate_result.user_id FROM read_intermediate_result('33_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer, user_id integer)) cte ORDER BY cte.event_type DESC) some_events WHERE ((users_table.user_id OPERATOR(pg_catalog.=) some_events.user_id) AND (some_events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY some_events.event_type, users_table.user_id LIMIT 2
 DEBUG:  Plan 33 query after replacing subqueries and CTEs: SELECT DISTINCT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('33_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('33_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id) ORDER BY bar.user_id DESC LIMIT 5
  user_id 
----------
+---------------------------------------------------------------------
        1
 (1 row)
 
@@ -382,7 +382,7 @@ DEBUG:  generating subplan 37_3 for subquery SELECT DISTINCT cte.user_id FROM su
 DEBUG:  Plan 37 query after replacing subqueries and CTEs: SELECT foo.user_id, events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('37_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, subquery_and_ctes.events_table WHERE (foo.user_id OPERATOR(pg_catalog.=) events_table.value_2) ORDER BY events_table."time" DESC, events_table.user_id DESC, foo.user_id DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  user_id | user_id |              time               | event_type | value_2 | value_3 | value_4 
----------+---------+---------------------------------+------------+---------+---------+---------
+---------------------------------------------------------------------
        4 |       1 | Thu Nov 23 21:54:46.924477 2017 |          6 |       4 |       5 |        
        2 |       4 | Thu Nov 23 18:10:21.338399 2017 |          1 |       2 |       4 |        
        4 |       3 | Thu Nov 23 18:08:26.550729 2017 |          2 |       4 |       3 |        
@@ -433,7 +433,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 42_2 for subquery SELECT DISTINCT users_table.user_id FROM subquery_and_ctes.users_table, subquery_and_ctes.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
  count 
--------
+---------------------------------------------------------------------
    432
 (1 row)
 
@@ -489,7 +489,7 @@ DEBUG:  generating subplan 48_3 for subquery SELECT count(*) AS cnt FROM (SELECT
 DEBUG:  Plan 48 query after replacing subqueries and CTEs: SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('48_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, subquery_and_ctes.users_table WHERE (foo.cnt OPERATOR(pg_catalog.>) users_table.value_2) ORDER BY users_table."time" DESC, foo.cnt DESC, users_table.user_id DESC, users_table.value_1 DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
------+---------+---------------------------------+---------+---------+---------+---------
+---------------------------------------------------------------------
  432 |       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
  432 |       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
  432 |       3 | Thu Nov 23 17:18:51.048758 2017 |       1 |       5 |       5 |        

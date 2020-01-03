@@ -12,7 +12,7 @@ WHERE name = 'hll'
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -20,58 +20,58 @@ SELECT count(distinct l_orderkey) FROM lineitem;
 SET citus.count_distinct_error_rate = 0.1;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2612
 (1 row)
 
 SET citus.count_distinct_error_rate = 0.01;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2967
 (1 row)
 
 -- Check approximate count(distinct) for different data types
 SELECT count(distinct l_partkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
  11654
 (1 row)
 
 SELECT count(distinct l_extendedprice) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
  11691
 (1 row)
 
 SELECT count(distinct l_shipdate) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2483
 (1 row)
 
 SELECT count(distinct l_comment) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
  11788
 (1 row)
 
 -- Check that we can execute approximate count(distinct) on complex expressions
 SELECT count(distinct (l_orderkey * 2 + 1)) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2980
 (1 row)
 
 SELECT count(distinct extract(month from l_shipdate)) AS my_month FROM lineitem;
  my_month 
-----------
+---------------------------------------------------------------------
        12
 (1 row)
 
 SELECT count(distinct l_partkey) / count(distinct l_orderkey) FROM lineitem;
  ?column? 
-----------
+---------------------------------------------------------------------
         3
 (1 row)
 
@@ -80,14 +80,14 @@ SELECT count(distinct l_partkey) / count(distinct l_orderkey) FROM lineitem;
 SELECT count(distinct l_orderkey) FROM lineitem
 	WHERE octet_length(l_comment) + octet_length('randomtext'::text) > 40;
  count 
--------
+---------------------------------------------------------------------
   2355
 (1 row)
 
 SELECT count(DISTINCT l_orderkey) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
  count 
--------
+---------------------------------------------------------------------
    835
 (1 row)
 
@@ -97,7 +97,7 @@ SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM linei
 	ORDER BY distinct_order_count ASC, l_quantity ASC
 	LIMIT 10;
  distinct_order_count | l_quantity 
-----------------------+------------
+---------------------------------------------------------------------
                   210 |      29.00
                   216 |      13.00
                   217 |      16.00
@@ -123,7 +123,7 @@ CREATE TABLE test_count_distinct_schema.nation_hash(
 );
 SELECT create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -132,7 +132,7 @@ SET search_path TO public;
 SET citus.count_distinct_error_rate TO 0.01;
 SELECT COUNT (DISTINCT n_regionkey) FROM test_count_distinct_schema.nation_hash;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -140,7 +140,7 @@ SELECT COUNT (DISTINCT n_regionkey) FROM test_count_distinct_schema.nation_hash;
 SET search_path TO test_count_distinct_schema;
 SELECT COUNT (DISTINCT n_regionkey) FROM nation_hash;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -161,7 +161,7 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 	ORDER BY total
 	LIMIT 10;
  l_returnflag | count_distinct | total 
---------------+----------------+-------
+---------------------------------------------------------------------
  R            |           1103 |  2901
  A            |           1108 |  2944
  N            |           1265 |  6155
@@ -177,7 +177,7 @@ SELECT
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
  l_orderkey | count | count | count 
-------------+-------+-------+-------
+---------------------------------------------------------------------
       12005 |     4 |     4 |     4
        5409 |     4 |     4 |     4
        4964 |     4 |     4 |     4
@@ -194,7 +194,7 @@ SELECT
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 

@@ -13,7 +13,7 @@ WARNING:  table "uniq_cns_append_tables" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -28,7 +28,7 @@ WARNING:  table "excl_cns_append_tables" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -71,7 +71,7 @@ CREATE TABLE pk_on_part_col
 );
 SELECT create_distributed_table('pk_on_part_col', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -82,7 +82,7 @@ CREATE TABLE uq_part_col
 );
 SELECT create_distributed_table('uq_part_col', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -94,7 +94,7 @@ CREATE TABLE uq_two_columns
 );
 SELECT create_distributed_table('uq_two_columns', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -111,7 +111,7 @@ CREATE TABLE ex_on_part_col
 );
 SELECT create_distributed_table('ex_on_part_col', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -128,7 +128,7 @@ CREATE TABLE ex_on_two_columns
 );
 SELECT create_distributed_table('ex_on_two_columns', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -145,7 +145,7 @@ CREATE TABLE ex_on_two_columns_prt
 );
 SELECT create_distributed_table('ex_on_two_columns_prt', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -173,7 +173,7 @@ CREATE TABLE ex_overlaps
 );
 SELECT create_distributed_table('ex_overlaps', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -194,7 +194,7 @@ CREATE TABLE pk_on_part_col_named
 );
 SELECT create_distributed_table('pk_on_part_col_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -205,7 +205,7 @@ CREATE TABLE uq_part_col_named
 );
 SELECT create_distributed_table('uq_part_col_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -217,7 +217,7 @@ CREATE TABLE uq_two_columns_named
 );
 SELECT create_distributed_table('uq_two_columns_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -234,7 +234,7 @@ CREATE TABLE ex_on_part_col_named
 );
 SELECT create_distributed_table('ex_on_part_col_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -251,7 +251,7 @@ CREATE TABLE ex_on_two_columns_named
 );
 SELECT create_distributed_table('ex_on_two_columns_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -270,7 +270,7 @@ CREATE TABLE ex_multiple_excludes
 );
 SELECT create_distributed_table('ex_multiple_excludes', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -300,7 +300,7 @@ CREATE TABLE ex_overlaps_named
 );
 SELECT create_distributed_table('ex_overlaps_named', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -317,7 +317,7 @@ CREATE TABLE uq_range_tables
 );
 SELECT create_distributed_table('uq_range_tables', 'partition_col', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -330,7 +330,7 @@ CREATE TABLE check_example
 );
 SELECT create_distributed_table('check_example', 'partition_col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -338,13 +338,13 @@ SELECT create_distributed_table('check_example', 'partition_col', 'hash');
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'check_example_partition_col_key_365056'::regclass;
     Column     |  Type   |  Definition   
----------------+---------+---------------
+---------------------------------------------------------------------
  partition_col | integer | partition_col
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
              Constraint              |             Definition              
--------------------------------------+-------------------------------------
+---------------------------------------------------------------------
  check_example_other_col_check       | CHECK (other_col >= 100)
  check_example_other_other_col_check | CHECK (abs(other_other_col) >= 100)
 (2 rows)
@@ -376,21 +376,21 @@ SET citus.shard_replication_factor = 1;
 CREATE TABLE raw_table_1 (user_id int, UNIQUE(user_id));
 SELECT create_distributed_table('raw_table_1', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE raw_table_2 (user_id int REFERENCES raw_table_1(user_id), UNIQUE(user_id));
 SELECT create_distributed_table('raw_table_2', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- see that the constraint exists
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
         Constraint        |                      Definition                       
---------------------------+-------------------------------------------------------
+---------------------------------------------------------------------
  raw_table_2_user_id_fkey | FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
 (1 row)
 
@@ -405,7 +405,7 @@ NOTICE:  drop cascades to constraint raw_table_2_user_id_fkey on table raw_table
 -- see that the constraint also dropped
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
  Constraint | Definition 
-------------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 -- drop the table as well

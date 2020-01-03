@@ -4,7 +4,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers($$CREATE USER functionuser;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -131,7 +131,7 @@ SET citus.replication_model TO 'statement';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('statement_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -141,7 +141,7 @@ SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -149,7 +149,7 @@ SELECT create_distributed_table('streaming_table','id');
 -- at the start of the test
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
  bool_or 
----------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -157,21 +157,21 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 -- distribution_argument_index and colocationid
 SELECT create_distributed_function('"add_mi''xed_param_names"(int, int)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
 WHERE objid = 'add_mi''xed_param_names(int, int)'::regprocedure;
  ?column? | ?column? 
-----------+----------
+---------------------------------------------------------------------
  t        | t
 (1 row)
 
 -- also show that we can use the function
 SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_names"(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 5
  localhost |    57638 | t       | 5
 (2 rows)
@@ -180,7 +180,7 @@ SELECT * FROM run_command_on_workers('SELECT function_tests."add_mi''xed_param_n
 -- since the function doesn't have a parameter
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
  bool_or 
----------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -203,52 +203,52 @@ END;
 -- try to co-locate with a table that uses streaming replication
 SELECT create_distributed_function('dup(int)', '$1', colocate_with := 'streaming_table');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.dup(42);') ORDER BY 1,2;
  nodename  | nodeport | success |      result       
------------+----------+---------+-------------------
+---------------------------------------------------------------------
  localhost |    57637 | t       | (42,"42 is text")
  localhost |    57638 | t       | (42,"42 is text")
 (2 rows)
 
 SELECT create_distributed_function('add(int,int)', '$1', colocate_with := 'streaming_table');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 5
  localhost |    57638 | t       | 5
 (2 rows)
 
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- distribute aggregate
 SELECT create_distributed_function('sum2(int)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_function('my_rank("any")');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_function('agg_names(dup_result,dup_result)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -258,21 +258,21 @@ SELECT create_distributed_function('agg_names(dup_result,dup_result)');
 ALTER FUNCTION add(int,int) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) STRICT VOLATILE PARALLEL SAFE;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -280,49 +280,49 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) SET client_min_messages TO warning;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) SET client_min_messages TO error;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) SET client_min_messages TO debug;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) RESET client_min_messages;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) SET "citus.setting;'" TO 'hello '' world';
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) RESET "citus.setting;'";
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 ALTER FUNCTION add(int,int) SET search_path TO 'sch'';ma', public;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -333,7 +333,7 @@ ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed fu
 HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -342,7 +342,7 @@ ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed fu
 HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -351,7 +351,7 @@ ERROR:  unsupported ALTER FUNCTION ... SET ... FROM CURRENT for a distributed fu
 HINT:  SET FROM CURRENT is not supported for distributed functions, instead use the SET ... TO ... syntax with a constant value.
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -359,20 +359,20 @@ SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
 ALTER FUNCTION add(int,int) RENAME TO add2;
 SELECT public.verify_function_is_same_on_workers('function_tests.add2(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success |                                result                                
------------+----------+---------+----------------------------------------------------------------------
+---------------------------------------------------------------------
  localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
  localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add2(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 5
  localhost |    57638 | t       | 5
 (2 rows)
@@ -381,7 +381,7 @@ ALTER FUNCTION add2(int,int) RENAME TO add;
 ALTER AGGREGATE sum2(int) RENAME TO sum27;
 SELECT * FROM run_command_on_workers($$SELECT 1 from pg_proc where proname = 'sum27';$$) ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 1
  localhost |    57638 | t       | 1
 (2 rows)
@@ -391,7 +391,7 @@ ALTER AGGREGATE sum27(int) RENAME TO sum2;
 ALTER FUNCTION add(int,int) OWNER TO functionuser;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -404,7 +404,7 @@ JOIN pg_namespace ON (pg_namespace.oid = pronamespace and nspname = 'function_te
 WHERE proname = 'add';
 $$);
                  run_command_on_workers                  
----------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(functionuser,function_tests,add)")
  (localhost,57638,t,"(functionuser,function_tests,add)")
 (2 rows)
@@ -417,7 +417,7 @@ JOIN pg_namespace ON (pg_namespace.oid = pronamespace and nspname = 'function_te
 WHERE proname = 'sum2';
 $$);
                   run_command_on_workers                  
-----------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"(functionuser,function_tests,sum2)")
  (localhost,57638,t,"(functionuser,function_tests,sum2)")
 (2 rows)
@@ -427,20 +427,20 @@ $$);
 ALTER FUNCTION add(int,int) SET SCHEMA function_tests2;
 SELECT public.verify_function_is_same_on_workers('function_tests2.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success |                                result                                
------------+----------+---------+----------------------------------------------------------------------
+---------------------------------------------------------------------
  localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
  localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests2.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 5
  localhost |    57638 | t       | 5
 (2 rows)
@@ -455,13 +455,13 @@ AS 'select $1 * $2;' -- I know, this is not an add, but the output will tell us 
     RETURNS NULL ON NULL INPUT;
 SELECT public.verify_function_is_same_on_workers('function_tests.add(int,int)');
  verify_function_is_same_on_workers 
-------------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success | result 
------------+----------+---------+--------
+---------------------------------------------------------------------
  localhost |    57637 | t       | 6
  localhost |    57638 | t       | 6
 (2 rows)
@@ -478,7 +478,7 @@ DROP FUNCTION add(int,int);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests.add(2,3);') ORDER BY 1,2;
  nodename  | nodeport | success |                                result                                
------------+----------+---------+----------------------------------------------------------------------
+---------------------------------------------------------------------
  localhost |    57637 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
  localhost |    57638 | f       | ERROR:  function function_tests.add(integer, integer) does not exist
 (2 rows)
@@ -487,7 +487,7 @@ DROP AGGREGATE function_tests2.sum2(int);
 -- call should fail as aggregate should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (select 1 id, 2) subq;') ORDER BY 1,2;
  nodename  | nodeport | success |                            result                             
------------+----------+---------+---------------------------------------------------------------
+---------------------------------------------------------------------
  localhost |    57637 | f       | ERROR:  function function_tests2.sum2(integer) does not exist
  localhost |    57638 | f       | ERROR:  function function_tests2.sum2(integer) does not exist
 (2 rows)
@@ -541,7 +541,7 @@ HINT:  Either provide a valid function argument name or a valid "$paramIndex" to
 BEGIN;
 	SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='val1');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -549,7 +549,7 @@ ROLLBACK;
 -- make sure that none of the nodes have the function because we've rollbacked
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_with_param_names';$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -557,28 +557,28 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_
 -- make sure that none of the active and primary nodes hasmetadata
 select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
  bool_or 
----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='val1');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- make sure that the primary nodes are now metadata synced
 select bool_and(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
  bool_and 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- make sure that both of the nodes have the function because we've succeeded
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_with_param_names';$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1)
  (localhost,57638,t,1)
 (2 rows)
@@ -586,14 +586,14 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add_
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('add_with_param_names(int, int)', distribution_arg_name:='VaL1');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('add_with_param_names(int, int)','$1');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -603,7 +603,7 @@ CREATE TABLE replicated_table_func_test (a int);
 SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -613,7 +613,7 @@ DETAIL:  Citus currently only supports colocating function with distributed tabl
 HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
 SELECT public.wait_until_metadata_sync();
  wait_until_metadata_sync 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -624,13 +624,13 @@ CREATE TABLE replicated_table_func_test_2 (a bigint);
 SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_2', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1', colocate_with:='replicated_table_func_test_2');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -645,7 +645,7 @@ ERROR:  relation replicated_table_func_test_3 is not distributed
 -- a function cannot be colocated with a reference table
 SELECT create_reference_table('replicated_table_func_test_3');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -657,13 +657,13 @@ CREATE TABLE replicated_table_func_test_4 (a int);
 SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_4', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_function('add_with_param_names(int, int)', '$1', colocate_with:='replicated_table_func_test_4');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -673,7 +673,7 @@ FROM pg_dist_partition, citus.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
  table_and_function_colocated 
-------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -681,7 +681,7 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
 -- group preserved, because we're using the default shard creation settings
 SELECT create_distributed_function('add_with_param_names(int, int)', 'val1');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -690,7 +690,7 @@ FROM pg_dist_partition, citus.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_with_param_names(int, int)'::regprocedure;
  table_and_function_colocated 
-------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -700,7 +700,7 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
 -- to coerce the values
 SELECT create_distributed_function('add_numeric(numeric, numeric)', '$1', colocate_with:='replicated_table_func_test_4');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -709,13 +709,13 @@ FROM pg_dist_partition, citus.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_numeric(numeric, numeric)'::regprocedure;
  table_and_function_colocated 
-------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:='replicated_table_func_test_4');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -724,7 +724,7 @@ FROM pg_dist_partition, citus.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_text(text, text)'::regprocedure;
  table_and_function_colocated 
-------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -741,7 +741,7 @@ HINT:  Provide a distributed table via "colocate_with" option to create_distribu
 -- sync metadata to workers for consistent results when clearing objects
 SELECT public.wait_until_metadata_sync();
  wait_until_metadata_sync 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -750,7 +750,7 @@ SET citus.shard_count TO 4;
 CREATE TABLE test (id int, name text);
 SELECT create_distributed_table('test','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -765,7 +765,7 @@ END;
 $$  LANGUAGE plpgsql;
 SELECT create_distributed_function('increment(int)', '$1', colocate_with := 'test');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -780,13 +780,13 @@ END;
 $$  LANGUAGE plpgsql;
 SELECT test_func_calls_dist_func();
  test_func_calls_dist_func 
----------------------------
+---------------------------------------------------------------------
                           
 (1 row)
 
 SELECT test_func_calls_dist_func();
  test_func_calls_dist_func 
----------------------------
+---------------------------------------------------------------------
                           
 (1 row)
 
@@ -794,7 +794,7 @@ SELECT test_func_calls_dist_func();
 INSERT INTO test SELECT increment(3);
 SELECT * FROM test ORDER BY id;
  id | name  
-----+-------
+---------------------------------------------------------------------
   3 | three
   4 | 
 (2 rows)
@@ -806,7 +806,7 @@ DROP SCHEMA function_tests2 CASCADE;
 -- clear objects
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
  
 (2 rows)
@@ -829,7 +829,7 @@ DROP SCHEMA function_tests2 CASCADE;
 DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser$$);
      run_command_on_workers      
----------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP ROLE")
  (localhost,57638,t,"DROP ROLE")
 (2 rows)

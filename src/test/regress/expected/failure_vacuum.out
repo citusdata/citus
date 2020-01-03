@@ -4,7 +4,7 @@
 SET citus.next_shard_id TO 12000000;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,19 +14,19 @@ SET citus.multi_shard_commit_protocol TO '1pc';
 CREATE TABLE vacuum_test (key int, value int);
 SELECT create_distributed_table('vacuum_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.clear_network_traffic();
  clear_network_traffic 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -37,7 +37,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -48,7 +48,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -58,7 +58,7 @@ ANALYZE vacuum_test;
 SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND 
 shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
  shardid  | shardstate 
-----------+------------
+---------------------------------------------------------------------
  12000000 |          3
 (1 row)
 
@@ -69,7 +69,7 @@ WHERE shardid IN (
 -- the same tests with cancel
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -77,7 +77,7 @@ VACUUM vacuum_test;
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -86,27 +86,27 @@ ERROR:  canceling statement due to user request
 -- cancel during COMMIT should be ignored
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ANALYZE vacuum_test;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE other_vacuum_test (key int, value int);
 SELECT create_distributed_table('other_vacuum_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -117,7 +117,7 @@ DETAIL:  server closed the connection unexpectedly
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -126,7 +126,7 @@ ERROR:  canceling statement due to user request
 -- ==== Clean up, we're done here ====
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 

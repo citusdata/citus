@@ -59,280 +59,280 @@ CREATE FUNCTION find_shard_interval_index(bigint)
 CREATE TABLE table1_group1 ( id int );
 SELECT master_create_distributed_table('table1_group1', 'id', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_worker_shards('table1_group1', 4, 2);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_group1 ( id int );
 SELECT master_create_distributed_table('table2_group1', 'id', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_worker_shards('table2_group1', 4, 2);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table3_group2 ( id int );
 SELECT master_create_distributed_table('table3_group2', 'id', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_worker_shards('table3_group2', 4, 2);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table4_group2 ( id int );
 SELECT master_create_distributed_table('table4_group2', 'id', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_worker_shards('table4_group2', 4, 2);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table5_groupX ( id int );
 SELECT master_create_distributed_table('table5_groupX', 'id', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_worker_shards('table5_groupX', 4, 2);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table6_append ( id int );
 SELECT master_create_distributed_table('table6_append', 'id', 'append');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('table6_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1300020
 (1 row)
 
 SELECT master_create_empty_shard('table6_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1300021
 (1 row)
 
 -- make table1_group1 and table2_group1 co-located manually
 SELECT colocation_test_colocate_tables('table1_group1', 'table2_group1');
  colocation_test_colocate_tables 
----------------------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- check co-location id
 SELECT get_table_colocation_id('table1_group1');
  get_table_colocation_id 
--------------------------
+---------------------------------------------------------------------
                     1000
 (1 row)
 
 SELECT get_table_colocation_id('table5_groupX');
  get_table_colocation_id 
--------------------------
+---------------------------------------------------------------------
                        0
 (1 row)
 
 SELECT get_table_colocation_id('table6_append');
  get_table_colocation_id 
--------------------------
+---------------------------------------------------------------------
                        0
 (1 row)
 
 -- check self table co-location
 SELECT tables_colocated('table1_group1', 'table1_group1');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT tables_colocated('table5_groupX', 'table5_groupX');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT tables_colocated('table6_append', 'table6_append');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- check table co-location with same co-location group
 SELECT tables_colocated('table1_group1', 'table2_group1');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- check table co-location with different co-location group
 SELECT tables_colocated('table1_group1', 'table3_group2');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- check table co-location with invalid co-location group
 SELECT tables_colocated('table1_group1', 'table5_groupX');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT tables_colocated('table1_group1', 'table6_append');
  tables_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- check self shard co-location
 SELECT shards_colocated(1300000, 1300000);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT shards_colocated(1300016, 1300016);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT shards_colocated(1300020, 1300020);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- check shard co-location with same co-location group
 SELECT shards_colocated(1300000, 1300004);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- check shard co-location with same table different co-location group
 SELECT shards_colocated(1300000, 1300001);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- check shard co-location with different co-location group
 SELECT shards_colocated(1300000, 1300005);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- check shard co-location with invalid co-location group
 SELECT shards_colocated(1300000, 1300016);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT shards_colocated(1300000, 1300020);
  shards_colocated 
-------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- check co-located table list
 SELECT UNNEST(get_colocated_table_array('table1_group1'))::regclass ORDER BY 1;
     unnest     
----------------
+---------------------------------------------------------------------
  table1_group1
  table2_group1
 (2 rows)
 
 SELECT UNNEST(get_colocated_table_array('table5_groupX'))::regclass ORDER BY 1;
     unnest     
----------------
+---------------------------------------------------------------------
  table5_groupx
 (1 row)
 
 SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass ORDER BY 1;
     unnest     
----------------
+---------------------------------------------------------------------
  table6_append
 (1 row)
 
 -- check co-located shard list
 SELECT UNNEST(get_colocated_shard_array(1300000))::regclass ORDER BY 1;
  unnest  
----------
+---------------------------------------------------------------------
  1300000
  1300004
 (2 rows)
 
 SELECT UNNEST(get_colocated_shard_array(1300016))::regclass ORDER BY 1;
  unnest  
----------
+---------------------------------------------------------------------
  1300016
 (1 row)
 
 SELECT UNNEST(get_colocated_shard_array(1300020))::regclass ORDER BY 1;
  unnest  
----------
+---------------------------------------------------------------------
  1300020
 (1 row)
 
 -- check FindShardIntervalIndex function
 SELECT find_shard_interval_index(1300000);
  find_shard_interval_index 
----------------------------
+---------------------------------------------------------------------
                          0
 (1 row)
 
 SELECT find_shard_interval_index(1300001);
  find_shard_interval_index 
----------------------------
+---------------------------------------------------------------------
                          1
 (1 row)
 
 SELECT find_shard_interval_index(1300002);
  find_shard_interval_index 
----------------------------
+---------------------------------------------------------------------
                          2
 (1 row)
 
 SELECT find_shard_interval_index(1300003);
  find_shard_interval_index 
----------------------------
+---------------------------------------------------------------------
                          3
 (1 row)
 
 SELECT find_shard_interval_index(1300016);
  find_shard_interval_index 
----------------------------
+---------------------------------------------------------------------
                          0
 (1 row)
 
@@ -341,14 +341,14 @@ SET citus.shard_count = 2;
 CREATE TABLE table1_groupA ( id int );
 SELECT create_distributed_table('table1_groupA', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupA ( id int );
 SELECT create_distributed_table('table2_groupA', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -357,14 +357,14 @@ SET citus.shard_replication_factor = 1;
 CREATE TABLE table1_groupB ( id int );
 SELECT create_distributed_table('table1_groupB', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupB ( id int );
 SELECT create_distributed_table('table2_groupB', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -376,14 +376,14 @@ SET citus.shard_replication_factor to DEFAULT;
 CREATE TABLE table1_groupC ( id text );
 SELECT create_distributed_table('table1_groupC', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupC ( id text );
 SELECT create_distributed_table('table2_groupC', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -392,14 +392,14 @@ SET citus.shard_count = 8;
 CREATE TABLE table1_groupD ( id int );
 SELECT create_distributed_table('table1_groupD', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupD ( id int );
 SELECT create_distributed_table('table2_groupD', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -407,14 +407,14 @@ SELECT create_distributed_table('table2_groupD', 'id');
 CREATE TABLE table_append ( id int );
 SELECT create_distributed_table('table_append', 'id', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table_range ( id int );
 SELECT create_distributed_table('table_range', 'id', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -423,7 +423,7 @@ CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
 SELECT create_distributed_table('table3_groupD', 'id');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -432,7 +432,7 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
@@ -444,7 +444,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY logicalrelid;
  logicalrelid  | colocationid 
----------------+--------------
+---------------------------------------------------------------------
  table1_groupa |            4
  table2_groupa |            4
  table1_groupb |            5
@@ -460,7 +460,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 DROP TABLE table1_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             4 |          2 |                 2 |                     23 |                           0
 (1 row)
 
@@ -468,7 +468,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             4 |          2 |                 2 |                     23 |                           0
 (1 row)
 
@@ -477,14 +477,14 @@ SET citus.shard_count = 2;
 CREATE TABLE table1_groupE ( id int );
 SELECT create_distributed_table('table1_groupE', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupE ( id int );
 SELECT create_distributed_table('table2_groupE', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -492,7 +492,7 @@ SELECT create_distributed_table('table2_groupE', 'id');
 CREATE TABLE table3_groupE ( dummy_column text, id int );
 SELECT create_distributed_table('table3_groupE', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -501,7 +501,7 @@ CREATE SCHEMA schema_colocation;
 CREATE TABLE schema_colocation.table4_groupE ( id int );
 SELECT create_distributed_table('schema_colocation.table4_groupE', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -509,28 +509,28 @@ SELECT create_distributed_table('schema_colocation.table4_groupE', 'id');
 CREATE TABLE table1_group_none_1 ( id int );
 SELECT create_distributed_table('table1_group_none_1', 'id', colocate_with => 'none');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_group_none_1 ( id int );
 SELECT create_distributed_table('table2_group_none_1', 'id', colocate_with => 'table1_group_none_1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table1_group_none_2 ( id int );
 SELECT create_distributed_table('table1_group_none_2', 'id', colocate_with => 'none');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table4_groupE ( id int );
 SELECT create_distributed_table('table4_groupE', 'id', colocate_with => 'default');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -539,7 +539,7 @@ SET citus.shard_count = 3;
 CREATE TABLE table1_group_none_3 ( id int );
 SELECT create_distributed_table('table1_group_none_3', 'id', colocate_with => 'NONE');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -547,7 +547,7 @@ SELECT create_distributed_table('table1_group_none_3', 'id', colocate_with => 'N
 CREATE TABLE table1_group_default ( id int );
 SELECT create_distributed_table('table1_group_default', 'id', colocate_with => 'DEFAULT');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -556,7 +556,7 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
@@ -569,7 +569,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
           logicalrelid           | colocationid 
----------------------------------+--------------
+---------------------------------------------------------------------
  table1_groupe                   |            4
  table2_groupe                   |            4
  table3_groupe                   |            4
@@ -606,7 +606,7 @@ SELECT create_distributed_table('table_failing', 'id', colocate_with => '');
 ERROR:  invalid name syntax
 SELECT create_distributed_table('table_failing', 'id', colocate_with => NULL);
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -619,14 +619,14 @@ DETAIL:  Distribution column types don't match for table1_groupe and table_bigin
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300062'::regclass;
     Column    |  Type   | Modifiers 
---------------+---------+-----------
+---------------------------------------------------------------------
  dummy_column | text    | 
  id           | integer | 
 (2 rows)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colocation.table4_groupE_1300064'::regclass;
  Column |  Type   | Modifiers 
---------+---------+-----------
+---------------------------------------------------------------------
  id     | integer | 
 (1 row)
 
@@ -635,14 +635,14 @@ SET citus.next_shard_id TO 1300080;
 CREATE TABLE table1_groupF ( id int );
 SELECT create_reference_table('table1_groupF');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_groupF ( id int );
 SELECT create_reference_table('table2_groupF');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -651,7 +651,7 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
@@ -677,7 +677,7 @@ ORDER BY
     table1,
     table2;
              table1              |             table2              | colocated 
----------------------------------+---------------------------------+-----------
+---------------------------------------------------------------------
  table1_group1                   | table2_group1                   | t
  table1_groupb                   | table2_groupb                   | t
  table1_groupc                   | table2_groupc                   | t
@@ -718,7 +718,7 @@ ORDER BY
     shardid,
     nodeport;
           logicalrelid           | shardid | shardstorage | nodeport | shardminvalue | shardmaxvalue 
----------------------------------+---------+--------------+----------+---------------+---------------
+---------------------------------------------------------------------
  table1_groupb                   | 1300026 | t            |    57637 | -2147483648   | -1
  table1_groupb                   | 1300027 | t            |    57638 | 0             | 2147483647
  table2_groupb                   | 1300028 | t            |    57637 | -2147483648   | -1
@@ -840,14 +840,14 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
  logicalrelid | colocationid 
---------------+--------------
+---------------------------------------------------------------------
 (0 rows)
 
 -- first check failing cases
@@ -871,51 +871,51 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
  logicalrelid | colocationid 
---------------+--------------
+---------------------------------------------------------------------
 (0 rows)
 
 -- check successfully cololated tables
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT mark_tables_colocated('table1_groupC', ARRAY['table2_groupC']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT mark_tables_colocated('table1_groupD', ARRAY['table2_groupD']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT mark_tables_colocated('table1_groupE', ARRAY['table2_groupE', 'table3_groupE']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- check to colocate with itself
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -923,14 +923,14 @@ SET citus.shard_count = 2;
 CREATE TABLE table1_group_none ( id int );
 SELECT create_distributed_table('table1_group_none', 'id', colocate_with => 'NONE');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE table2_group_none ( id int );
 SELECT create_distributed_table('table2_group_none', 'id', colocate_with => 'NONE');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -939,7 +939,7 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             2 |          2 |                 1 |                     23 |                           0
             3 |          2 |                 2 |                     25 |                         100
             4 |          8 |                 2 |                     23 |                           0
@@ -950,7 +950,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
    logicalrelid    | colocationid 
--------------------+--------------
+---------------------------------------------------------------------
  table1_groupb     |            2
  table2_groupb     |            2
  table1_groupc     |            3
@@ -967,14 +967,14 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 -- move the all tables in colocation group 5 to colocation group 7
 SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
 SELECT mark_tables_colocated('table1_group_none', ARRAY['table2_group_none']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -983,7 +983,7 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
             2 |          2 |                 1 |                     23 |                           0
             3 |          2 |                 2 |                     25 |                         100
             4 |          8 |                 2 |                     23 |                           0
@@ -993,7 +993,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
    logicalrelid    | colocationid 
--------------------+--------------
+---------------------------------------------------------------------
  table1_groupb     |            2
  table2_groupb     |            2
  table1_groupc     |            3
@@ -1011,7 +1011,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 CREATE TABLE table1_groupG ( id int );
 SELECT create_distributed_table('table1_groupG', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1025,7 +1025,7 @@ CREATE TABLE table2_groupG ( id int );
 ERROR:  relation "table2_groupg" already exists
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

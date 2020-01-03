@@ -17,7 +17,7 @@ SELECT run_command_on_coordinator_and_workers($cf$
     RETURNS NULL ON NULL INPUT;
 $cf$);
  run_command_on_coordinator_and_workers 
-----------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -29,7 +29,7 @@ SELECT run_command_on_coordinator_and_workers($cf$
     RETURNS NULL ON NULL INPUT;
 $cf$);
  run_command_on_coordinator_and_workers 
-----------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -43,7 +43,7 @@ SELECT run_command_on_coordinator_and_workers($co$
     );
 $co$);
  run_command_on_coordinator_and_workers 
-----------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -75,7 +75,7 @@ CREATE TABLE composite_type_partitioned_table
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -87,14 +87,14 @@ INSERT INTO composite_type_partitioned_table VALUES  (4, '(7, 8)'::test_composit
 INSERT INTO composite_type_partitioned_table VALUES  (5, '(9, 10)'::test_composite_type);
 SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_composite_type;
  id |  col  
-----+-------
+---------------------------------------------------------------------
   4 | (7,8)
 (1 row)
 
 UPDATE composite_type_partitioned_table SET id = 6 WHERE col =  '(7, 8)'::test_composite_type;
 SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_composite_type;
  id |  col  
-----+-------
+---------------------------------------------------------------------
   6 | (7,8)
 (1 row)
 
@@ -106,7 +106,7 @@ CREATE TABLE bugs (
 );
 SELECT create_distributed_table('bugs', 'status', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -118,7 +118,7 @@ INSERT INTO bugs VALUES  (4, 'closed');
 INSERT INTO bugs VALUES  (5, 'open');
 SELECT * FROM bugs WHERE status =  'closed'::bug_status;
  id | status 
-----+--------
+---------------------------------------------------------------------
   3 | closed
   4 | closed
 (2 rows)
@@ -127,7 +127,7 @@ UPDATE bugs SET status = 'closed'::bug_status WHERE id = 2;
 ERROR:  modifying the partition value of rows is not allowed
 SELECT * FROM bugs WHERE status = 'open'::bug_status;
  id | status 
-----+--------
+---------------------------------------------------------------------
   2 | open
   5 | open
 (2 rows)
@@ -140,7 +140,7 @@ CREATE TABLE varchar_hash_partitioned_table
 );
 SELECT create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -152,14 +152,14 @@ INSERT INTO varchar_hash_partitioned_table VALUES  (4, 'Sumedh');
 INSERT INTO varchar_hash_partitioned_table VALUES  (5, 'Marco');
 SELECT * FROM varchar_hash_partitioned_table WHERE id = 1;
  id | name  
-----+-------
+---------------------------------------------------------------------
   1 | Jason
 (1 row)
 
 UPDATE varchar_hash_partitioned_table SET id = 6 WHERE name = 'Jason';
 SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
  id | name  
-----+-------
+---------------------------------------------------------------------
   6 | Jason
 (1 row)
 

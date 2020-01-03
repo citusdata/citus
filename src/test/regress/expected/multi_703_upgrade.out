@@ -16,7 +16,7 @@ INSERT INTO pg_dist_node (nodename, nodeport, groupid)
 ALTER EXTENSION citus UPDATE TO '7.0-3';
 SELECT * FROM pg_dist_placement;
  placementid | shardid | shardstate | shardlength | groupid 
--------------+---------+------------+-------------+---------
+---------------------------------------------------------------------
            1 |       1 |          1 |           0 |       1
 (1 row)
 

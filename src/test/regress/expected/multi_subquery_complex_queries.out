@@ -69,7 +69,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -134,7 +134,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -200,7 +200,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            234
      2 |             75
@@ -265,7 +265,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            369
      2 |             75
@@ -344,7 +344,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      2 |            433
      3 |             75
@@ -430,7 +430,7 @@ DEBUG:  generating subplan 16_4 for subquery SELECT "time", event, user_id FROM 
 DEBUG:  generating subplan 16_5 for subquery SELECT intermediate_result."time", intermediate_result.event, intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result("time" timestamp without time zone, event integer, user_id integer) UNION SELECT events_subquery_2.max, events_subquery_2.event, events_subquery_2.user_id FROM (SELECT events_subquery_5.max, events_subquery_5.event, events_subquery_5.user_id FROM (SELECT intermediate_result.max, intermediate_result.event, intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(max timestamp without time zone, event integer, user_id integer)) events_subquery_5) events_subquery_2 UNION SELECT intermediate_result."time", intermediate_result.event, intermediate_result.user_id FROM read_intermediate_result('16_3'::text, 'binary'::citus_copy_format) intermediate_result("time" timestamp without time zone, event integer, user_id integer) UNION SELECT intermediate_result."time", intermediate_result.event, intermediate_result.user_id FROM read_intermediate_result('16_4'::text, 'binary'::citus_copy_format) intermediate_result("time" timestamp without time zone, event integer, user_id integer)
 DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT event_types AS types, count(*) AS sumofeventtype FROM (SELECT q.user_id, q."time", q.event_types, t.user_id, random() AS random FROM ((SELECT t_1.user_id, t_1."time", unnest(t_1.collected_events) AS event_types FROM (SELECT t1.user_id, min(t1."time") AS "time", array_agg(t1.event ORDER BY t1."time", t1.event DESC) AS collected_events FROM (SELECT intermediate_result."time", intermediate_result.event, intermediate_result.user_id FROM read_intermediate_result('16_5'::text, 'binary'::citus_copy_format) intermediate_result("time" timestamp without time zone, event integer, user_id integer)) t1 GROUP BY t1.user_id) t_1) q JOIN (SELECT users.user_id FROM public.users_table users WHERE ((users.value_1 OPERATOR(pg_catalog.>) 0) AND (users.value_1 OPERATOR(pg_catalog.<) 4))) t ON ((t.user_id OPERATOR(pg_catalog.=) q.user_id)))) final_query(user_id, "time", event_types, user_id_1, random) GROUP BY event_types ORDER BY event_types
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      2 |            433
      3 |             75
@@ -503,7 +503,7 @@ ORDER BY
 DEBUG:  generating subplan 22_1 for subquery SELECT user_id, "time", unnest(collected_events) AS event_types FROM (SELECT t1.user_id, min(t1."time") AS "time", array_agg(t1.event ORDER BY t1."time", t1.event DESC) AS collected_events FROM (SELECT events_subquery_1.user_id, events_subquery_1."time", events_subquery_1.event FROM (SELECT events.user_id, events."time", 0 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) events_subquery_1 UNION SELECT events_subquery_2.user_id, events_subquery_2."time", events_subquery_2.event FROM (SELECT events.user_id, events."time", 1 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[3, 4]))) events_subquery_2 UNION SELECT events_subquery_3.user_id, events_subquery_3."time", events_subquery_3.event FROM (SELECT events.user_id, events."time", 2 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6]))) events_subquery_3 UNION SELECT events_subquery_4.user_id, events_subquery_4."time", events_subquery_4.event FROM (SELECT events.user_id, events."time", 3 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5]))) events_subquery_4) t1 GROUP BY t1.user_id) t
 DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT event_types AS types, count(*) AS sumofeventtype FROM (SELECT q.user_id, q."time", q.event_types, t.user_id, random() AS random FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_types FROM read_intermediate_result('22_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_types integer)) q JOIN (SELECT users.user_id FROM public.users_table users WHERE ((users.value_1 OPERATOR(pg_catalog.>) 0) AND (users.value_1 OPERATOR(pg_catalog.<) 4))) t ON ((t.user_id OPERATOR(pg_catalog.<>) q.user_id)))) final_query(user_id, "time", event_types, user_id_1, random) GROUP BY event_types ORDER BY event_types
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |           2088
      1 |           2163
      2 |            397
@@ -653,7 +653,7 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            434
      2 |            433
@@ -717,7 +717,7 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -780,7 +780,7 @@ ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -839,7 +839,7 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             62
@@ -903,7 +903,7 @@ ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -983,7 +983,7 @@ GROUP BY
   user_id ORDER BY cnt DESC, user_id DESC
 LIMIT 10;
  user_id | cnt 
----------+-----
+---------------------------------------------------------------------
        3 | 275
        6 |  72
 (2 rows)
@@ -1065,7 +1065,7 @@ LIMIT 10;
 DEBUG:  generating subplan 42_1 for subquery SELECT DISTINCT user_id FROM public.events_table events WHERE (event_type OPERATOR(pg_catalog.=) ANY (ARRAY[0, 6])) GROUP BY user_id
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT user_id, count(*) AS cnt FROM (SELECT first_query.user_id, random() AS random FROM ((SELECT t.user_id, t."time", unnest(t.collected_events) AS event_types FROM (SELECT t1.user_id, min(t1."time") AS "time", array_agg(t1.event ORDER BY t1."time", t1.event DESC) AS collected_events FROM (SELECT events_subquery_1.user_id, events_subquery_1."time", events_subquery_1.event FROM (SELECT events.user_id, events."time", 0 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))) events_subquery_1 UNION ALL SELECT events_subquery_2.user_id, events_subquery_2."time", events_subquery_2.event FROM (SELECT events.user_id, events."time", 1 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[3, 4]))) events_subquery_2 UNION ALL SELECT events_subquery_3.user_id, events_subquery_3."time", events_subquery_3.event FROM (SELECT events.user_id, events."time", 2 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6]))) events_subquery_3 UNION ALL SELECT events_subquery_4.user_id, events_subquery_4."time", events_subquery_4.event FROM (SELECT events.user_id, events."time", 3 AS event FROM public.events_table events WHERE (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 6]))) events_subquery_4) t1 GROUP BY t1.user_id) t) first_query JOIN (SELECT t.user_id FROM ((SELECT users.user_id FROM public.users_table users WHERE ((users.value_1 OPERATOR(pg_catalog.>) 0) AND (users.value_1 OPERATOR(pg_catalog.<) 4))) t LEFT JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) t2 ON ((t2.user_id OPERATOR(pg_catalog.>) t.user_id))) WHERE (t2.user_id IS NULL)) second_query ON ((first_query.user_id OPERATOR(pg_catalog.=) second_query.user_id)))) final_query GROUP BY user_id ORDER BY (count(*)) DESC, user_id DESC LIMIT 10
  user_id | cnt 
----------+-----
+---------------------------------------------------------------------
        5 | 324
        6 |  72
 (2 rows)
@@ -1146,7 +1146,7 @@ GROUP BY
   user_id ORDER BY cnt DESC, user_id DESC
 LIMIT 10;
  user_id | cnt 
----------+-----
+---------------------------------------------------------------------
        3 | 275
        6 |  72
 (2 rows)
@@ -1192,7 +1192,7 @@ order BY
   user_id
 LIMIT 50;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017
        3 | Thu Nov 23 18:08:26.550729 2017
 (2 rows)
@@ -1231,7 +1231,7 @@ ORDER BY
   user_id
 limit 50;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017
        3 | Thu Nov 23 18:08:26.550729 2017
 (2 rows)
@@ -1372,7 +1372,7 @@ ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
  user_id |            lastseen             
----------+---------------------------------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017
        2 | Thu Nov 23 17:26:14.563216 2017
        2 | Thu Nov 23 17:26:14.563216 2017
@@ -1436,7 +1436,7 @@ GROUP BY 1
 ORDER BY 2, 1 DESC
 LIMIT 10;
  user_id |               max               | count 
----------+---------------------------------+-------
+---------------------------------------------------------------------
        2 | Thu Nov 23 17:26:14.563216 2017 |    10
 (1 row)
 
@@ -1717,7 +1717,7 @@ GROUP BY
 ORDER BY
   generated_group_field DESC, value DESC;
  value | generated_group_field 
--------+-----------------------
+---------------------------------------------------------------------
      1 |                     5
      2 |                     2
      2 |                     1
@@ -1771,7 +1771,7 @@ ORDER BY
 DEBUG:  generating subplan 64_1 for subquery SELECT user_id, value_2 FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_3 OPERATOR(pg_catalog.>) (3)::double precision))
 DEBUG:  Plan 64 query after replacing subqueries and CTEs: SELECT count(*) AS value, generated_group_field FROM (SELECT DISTINCT "pushedDownQuery_1".real_user_id, "pushedDownQuery_1".generated_group_field FROM (SELECT "eventQuery".real_user_id, "eventQuery"."time", random() AS random, "eventQuery".value_2 AS generated_group_field FROM (SELECT temp_data_queries."time", temp_data_queries.user_id, temp_data_queries.value_2, user_filters_1.real_user_id FROM ((SELECT events."time", events.user_id, events.value_2 FROM public.events_table events WHERE ((events.user_id OPERATOR(pg_catalog.>) 1) AND (events.user_id OPERATOR(pg_catalog.<) 4) AND (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5])))) temp_data_queries JOIN (SELECT user_where_1_1.real_user_id FROM ((SELECT users.user_id AS real_user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 1) AND (users.user_id OPERATOR(pg_catalog.<) 4) AND (users.value_2 OPERATOR(pg_catalog.>) 3))) user_where_1_1 JOIN (SELECT intermediate_result.user_id, intermediate_result.value_2 FROM read_intermediate_result('64_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) user_where_1_join_1 ON ((user_where_1_1.real_user_id OPERATOR(pg_catalog.=) user_where_1_join_1.value_2)))) user_filters_1 ON ((temp_data_queries.user_id OPERATOR(pg_catalog.=) user_filters_1.real_user_id)))) "eventQuery") "pushedDownQuery_1") "pushedDownQuery" GROUP BY generated_group_field ORDER BY generated_group_field DESC, (count(*)) DESC
  value | generated_group_field 
--------+-----------------------
+---------------------------------------------------------------------
      1 |                     5
      2 |                     2
      2 |                     1
@@ -1823,7 +1823,7 @@ ORDER BY
 DEBUG:  generating subplan 66_1 for subquery SELECT user_id, value_2 FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_3 OPERATOR(pg_catalog.>) (3)::double precision))
 DEBUG:  Plan 66 query after replacing subqueries and CTEs: SELECT count(*) AS value, generated_group_field FROM (SELECT DISTINCT "pushedDownQuery_1".real_user_id, "pushedDownQuery_1".generated_group_field FROM (SELECT "eventQuery".real_user_id, "eventQuery"."time", random() AS random, "eventQuery".value_2 AS generated_group_field FROM (SELECT temp_data_queries."time", temp_data_queries.user_id, temp_data_queries.value_2, user_filters_1.real_user_id FROM ((SELECT events."time", events.user_id, events.value_2 FROM public.events_table events WHERE ((events.user_id OPERATOR(pg_catalog.>) 1) AND (events.user_id OPERATOR(pg_catalog.<) 4) AND (events.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5])))) temp_data_queries JOIN (SELECT user_where_1_1.real_user_id FROM ((SELECT users.user_id AS real_user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 1) AND (users.user_id OPERATOR(pg_catalog.<) 4) AND (users.value_2 OPERATOR(pg_catalog.>) 3))) user_where_1_1 JOIN (SELECT intermediate_result.user_id, intermediate_result.value_2 FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) user_where_1_join_1 ON ((user_where_1_1.real_user_id OPERATOR(pg_catalog.>=) user_where_1_join_1.user_id)))) user_filters_1 ON ((temp_data_queries.user_id OPERATOR(pg_catalog.=) user_filters_1.real_user_id)))) "eventQuery") "pushedDownQuery_1") "pushedDownQuery" GROUP BY generated_group_field ORDER BY generated_group_field DESC, (count(*)) DESC
  value | generated_group_field 
--------+-----------------------
+---------------------------------------------------------------------
      1 |                     5
      2 |                     2
      2 |                     1
@@ -1870,7 +1870,7 @@ FROM
 GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
  value_3 | cnt 
----------+-----
+---------------------------------------------------------------------
        0 |   7
       10 |  21
        4 |  21
@@ -1923,7 +1923,7 @@ ORDER BY cnt, value_3 DESC LIMIT 10;
 DEBUG:  generating subplan 69_1 for subquery SELECT user_id FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 DEBUG:  Plan 69 query after replacing subqueries and CTEs: SELECT value_3, count(*) AS cnt FROM (SELECT segmentalias_1.value_3, segmentalias_1.user_id, random() AS random FROM (SELECT users_in_segment_1.user_id, users_in_segment_1.value_3 FROM ((SELECT all_buckets_1.user_id, (all_buckets_1.value_3 OPERATOR(pg_catalog.*) (2)::double precision) AS value_3 FROM (SELECT simple_user_where_1.user_id, simple_user_where_1.value_3 FROM (SELECT users.user_id, users.value_3 FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 1) AND (users.user_id OPERATOR(pg_catalog.<) 4) AND (users.value_2 OPERATOR(pg_catalog.>) 2))) simple_user_where_1) all_buckets_1) users_in_segment_1 JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('69_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) some_users_data ON (true))) segmentalias_1) "tempQuery" GROUP BY value_3 ORDER BY (count(*)), value_3 DESC LIMIT 10
  value_3 | cnt 
----------+-----
+---------------------------------------------------------------------
        0 |  14
       10 |  42
        4 |  42
@@ -1978,7 +1978,7 @@ ORDER BY
   value_3 DESC, user_id ASC
 LIMIT 10;
  user_id | value_3 
----------+---------
+---------------------------------------------------------------------
        2 |       5
        2 |       5
        2 |       5
@@ -2032,7 +2032,7 @@ ORDER BY
   value_3 DESC, user_id ASC
 LIMIT 10;
  user_id | value_3 
----------+---------
+---------------------------------------------------------------------
        2 |       5
        2 |       5
        2 |       5
@@ -2087,7 +2087,7 @@ ORDER BY
   value_3 DESC, user_id DESC
 LIMIT 10;
  user_id | value_3 
----------+---------
+---------------------------------------------------------------------
        3 |       5
        3 |       5
        3 |       5
@@ -2140,7 +2140,7 @@ FROM
 ORDER BY value_3 DESC, user_id DESC
 LIMIT 10;
  user_id | value_3 
----------+---------
+---------------------------------------------------------------------
        3 |       5
        3 |       5
        3 |       5
@@ -2191,7 +2191,7 @@ count(*) AS cnt, "generated_group_field"
     cnt DESC, generated_group_field ASC
   LIMIT 10;
  cnt | generated_group_field 
------+-----------------------
+---------------------------------------------------------------------
  336 |                     2
  210 |                     1
  210 |                     3
@@ -2219,7 +2219,7 @@ ORDER BY
   cnt DESC, user_id DESC
 LIMIT 10;
  cnt | user_id 
------+---------
+---------------------------------------------------------------------
   11 |       3
   10 |       2
    8 |       4
@@ -2268,7 +2268,7 @@ ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
  user_id | value_2 
----------+---------
+---------------------------------------------------------------------
        2 |       5
 (1 row)
 
@@ -2378,7 +2378,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
 (2 rows)
@@ -2445,7 +2445,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            425
      2 |             75
@@ -2511,7 +2511,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |            449
      1 |            433
      2 |             75
@@ -2572,7 +2572,7 @@ GROUP BY
 ORDER BY
   types;
  types | sumofeventtype 
--------+----------------
+---------------------------------------------------------------------
      0 |              4
      1 |              8
      2 |              1
@@ -2609,7 +2609,7 @@ ORDER BY
   1,2,3,4
 LIMIT 5;
  uid | event_type | value_2 | value_3 
------+------------+---------+---------
+---------------------------------------------------------------------
    1 |          1 |       0 |       2
    1 |          1 |       0 |       2
    1 |          1 |       0 |       2
@@ -2646,7 +2646,7 @@ FROM
 GROUP BY user_id
 ORDER BY 1, 2;
  user_id |      subquery_avg      
----------+------------------------
+---------------------------------------------------------------------
        1 |     2.3333333333333333
        3 |     5.0000000000000000
        4 | 1.00000000000000000000
@@ -2681,7 +2681,7 @@ FROM
 GROUP BY a.user_id
 ORDER BY 1, 2;
  user_id |      subquery_avg      
----------+------------------------
+---------------------------------------------------------------------
        1 |     2.3333333333333333
        3 |     5.0000000000000000
        4 | 1.00000000000000000000
@@ -2698,7 +2698,7 @@ FROM (
 ORDER BY k1
 LIMIT 5;
  k1 
-----
+---------------------------------------------------------------------
   1
   1
   1
@@ -2713,7 +2713,7 @@ FROM (
 ORDER BY k1
 LIMIT 5;
  k1 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -2726,7 +2726,7 @@ FROM (users_table u FULL JOIN events_table e ON (u.user_id = e.user_id)) k(x1, x
 ORDER BY 1, 2, 3
 LIMIT 5;
  x1 | x3 | value_2 
-----+----+---------
+---------------------------------------------------------------------
   1 |  1 |       1
   1 |  1 |       1
   1 |  1 |       1
@@ -2739,7 +2739,7 @@ FROM (users_table u FULL JOIN events_table e USING (user_id)) k(x1, x2, x3, x4, 
 ORDER BY 1, 2, 3
 LIMIT 5;
  x1 | x3 | value_2 
-----+----+---------
+---------------------------------------------------------------------
   1 |  1 |       1
   1 |  1 |       1
   1 |  1 |       1
@@ -2753,7 +2753,7 @@ FROM  (users_table LEFT OUTER JOIN events_table ON (users_table.user_id = events
 ORDER BY 1 DESC
 LIMIT 10;
  c_custkey 
------------
+---------------------------------------------------------------------
          6
          6
          6
@@ -2773,7 +2773,7 @@ GROUP BY 1
 ORDER BY 2, 1
 LIMIT 10;
  c_custkey |        date_trunc        
------------+--------------------------
+---------------------------------------------------------------------
          2 | Thu Nov 23 13:52:00 2017
          6 | Thu Nov 23 14:43:00 2017
          4 | Thu Nov 23 15:32:00 2017
@@ -2790,7 +2790,7 @@ HAVING extract(minute from max(c_nationkey))  >= 45
 ORDER BY 2, 1
 LIMIT 10;
  c_custkey |        date_trunc        
------------+--------------------------
+---------------------------------------------------------------------
          2 | Thu Nov 23 13:52:00 2017
          5 | Thu Nov 23 16:48:00 2017
 (2 rows)
@@ -2801,7 +2801,7 @@ FROM (users_table JOIN events_table USING (user_id)) AS test(user_id, c_nationke
 ORDER BY 1 DESC
 LIMIT 10;
  user_id 
----------
+---------------------------------------------------------------------
        6
        6
        6
@@ -2825,7 +2825,7 @@ GROUP BY 1,2
 ORDER BY 2 DESC, 1 DESC
 LIMIT 10;
  bar | value_3 
------+---------
+---------------------------------------------------------------------
    3 |       5
    2 |       5
    1 |       5
@@ -2853,7 +2853,7 @@ GROUP BY 1, 2
 ORDER BY 2 DESC, 1 DESC
 LIMIT 10;
  bar | value_3 
------+---------
+---------------------------------------------------------------------
    3 |       5
    2 |       5
    1 |       5
@@ -2882,7 +2882,7 @@ SELECT bar, foo.value_3, c_custkey, test_2.time_2 FROM
 ORDER BY 2 DESC, 1 DESC, 3 DESC, 4 DESC
 LIMIT 10;
  bar | value_3 | c_custkey |             time_2              
------+---------+-----------+---------------------------------
+---------------------------------------------------------------------
    3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
    3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017
    3 |       5 |         3 | Thu Nov 23 17:18:51.048758 2017

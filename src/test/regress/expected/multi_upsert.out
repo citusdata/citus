@@ -9,7 +9,7 @@ CREATE TABLE upsert_test
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test', 'part_key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -27,7 +27,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1)
 -- see the results
 SELECT * FROM upsert_test ORDER BY part_key ASC;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |         2 |         4
         2 |         2 |          
 (2 rows)
@@ -42,7 +42,7 @@ UPDATE SET other_col = EXCLUDED.other_col WHERE upsert_test.part_key != 1;
 -- see the results
 SELECT * FROM upsert_test ORDER BY part_key ASC;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |         2 |         4
         2 |        20 |          
         3 |        30 |          
@@ -56,7 +56,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |         2 |         4
 (1 row)
 
@@ -66,7 +66,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |        30 |         4
 (1 row)
 
@@ -79,7 +79,7 @@ INSERT INTO upsert_test (part_key, other_col, third_col) VALUES (1, 1, 100) ON C
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |       100 |         4
 (1 row)
 
@@ -89,7 +89,7 @@ INSERT INTO upsert_test as ups_test (part_key) VALUES (1)
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |       150 |       200
 (1 row)
 
@@ -100,7 +100,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_ke
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |       151 |       872
 (1 row)
 
@@ -111,7 +111,7 @@ INSERT INTO upsert_test as ups_test (part_key, other_col) VALUES (1, 1) ON CONFL
 -- see the results
 SELECT * FROM upsert_test;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         1 |         5 |       872
 (1 row)
 
@@ -120,7 +120,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
         RETURNING *;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         2 |         2 |          
 (1 row)
 
@@ -128,7 +128,7 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
 	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
         RETURNING *;
  part_key | other_col | third_col 
-----------+-----------+-----------
+---------------------------------------------------------------------
         2 |         3 |          
 (1 row)
 
@@ -143,7 +143,7 @@ CREATE TABLE upsert_test_2
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_2', 'part_key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -164,7 +164,7 @@ CREATE INDEX idx_ups_test ON upsert_test_3(part_key);
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_3', 'part_key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -180,7 +180,7 @@ CREATE TABLE upsert_test_4
 -- distribute the table and create shards
 SELECT create_distributed_table('upsert_test_4', 'part_key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -196,7 +196,7 @@ INSERT INTO upsert_test_4 VALUES (1, 0) ON CONFLICT(part_key) DO UPDATE SET coun
 -- now see the results
 SELECT * FROM upsert_test_4;
  part_key | count 
-----------+-------
+---------------------------------------------------------------------
         1 |     6
 (1 row)
 
@@ -205,7 +205,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE dropcol_distributed(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
 SELECT create_distributed_table('dropcol_distributed', 'key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

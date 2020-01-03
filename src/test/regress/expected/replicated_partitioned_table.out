@@ -29,7 +29,7 @@ SELECT create_distributed_table('collections', 'key');
 NOTICE:  Copying data from local table...
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -45,7 +45,7 @@ NOTICE:  Copying data from local table...
 CREATE TABLE collections_5 AS SELECT * FROM collections LIMIT 0;
 SELECT create_distributed_table('collections_5', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -65,7 +65,7 @@ GROUP BY
 ORDER BY
 	1,2;
  logicalrelid  | placement_count 
----------------+-----------------
+---------------------------------------------------------------------
  collections   |               8
  collections_1 |               8
  collections_2 |               8
@@ -82,7 +82,7 @@ FROM
 WHERE
 	logicalrelid::text LIKE '%collections%';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -146,7 +146,7 @@ HINT:  Run the query on the parent table "collections" instead.
 CREATE TABLE fkey_test (key bigint PRIMARY KEY);
 SELECT create_distributed_table('fkey_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -169,13 +169,13 @@ ALTER TABLE collections ATTACH PARTITION collections_6 FOR VALUES IN ( 6 );
 -- read queries works just fine
 SELECT count(*) FROM collections_1 WHERE key = 1;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM collections_1 WHERE key != 1;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -186,7 +186,7 @@ CREATE TABLE collections_agg (
 );
 SELECT create_distributed_table('collections_agg', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -213,7 +213,7 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('customer_engagements', 'id', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -246,14 +246,14 @@ ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
 SELECT * FROM customer_engagements ORDER BY 1,2,3;
  id | event_id | value 
-----+----------+-------
+---------------------------------------------------------------------
   1 |        1 |     1
   1 |        2 |     1
   2 |        1 |     1
@@ -264,14 +264,14 @@ ROLLBACK;
 BEGIN;
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO customer_engagements VALUES (1, 1);
 SELECT count(*) FROM customer_engagements;
  count 
--------
+---------------------------------------------------------------------
      5
 (1 row)
 

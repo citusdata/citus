@@ -6,7 +6,7 @@ INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 SELECT create_reference_table('reference_table_test');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -18,7 +18,7 @@ FROM
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
  partmethod | partkeyisnull | repmodel 
-------------+---------------+----------
+---------------------------------------------------------------------
  n          | t             | t
 (1 row)
 
@@ -30,7 +30,7 @@ FROM
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
  shardid | shardminvalueisnull | shardmaxvalueisnull 
----------+---------------------+---------------------
+---------------------------------------------------------------------
  1250000 | t                   | t
 (1 row)
 
@@ -44,14 +44,14 @@ WHERE
 GROUP BY shardid
 ORDER BY shardid;
  shardid | all_placements_healthy | replicated_to_all 
----------+------------------------+-------------------
+---------------------------------------------------------------------
  1250000 | t                      | t
 (1 row)
 
 -- check whether data was copied into distributed table
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
@@ -69,7 +69,7 @@ SELECT
 FROM
 	reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
        3 |       3 | 3       | Sat Dec 03 00:00:00 2016
@@ -84,7 +84,7 @@ FROM
 WHERE
 	value_1 = 1;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
@@ -96,7 +96,7 @@ FROM
 ORDER BY
 	2 ASC LIMIT 3;
  value_1 | value_2 
----------+---------
+---------------------------------------------------------------------
        1 |       1
        2 |       2
        3 |       3
@@ -111,7 +111,7 @@ WHERE
 ORDER BY
 	2 LIMIT 3;
  value_1 | value_3 
----------+---------
+---------------------------------------------------------------------
        4 | 4
        5 | 5
 (2 rows)
@@ -124,7 +124,7 @@ ORDER BY
 	2 ASC
 LIMIT 2;
  value_1 | ?column? 
----------+----------
+---------------------------------------------------------------------
        1 |       15
        2 |       30
 (2 rows)
@@ -136,7 +136,7 @@ FROM
 ORDER BY
 	2 ASC LIMIT 2 OFFSET 2;
  value_1 | ?column? 
----------+----------
+---------------------------------------------------------------------
        3 |       45
        4 |       60
 (2 rows)
@@ -148,7 +148,7 @@ FROM
 WHERE
 	value_2 = 2 OR value_2 = 3;
  value_2 |         value_4          
----------+--------------------------
+---------------------------------------------------------------------
        2 | Fri Dec 02 00:00:00 2016
        3 | Sat Dec 03 00:00:00 2016
 (2 rows)
@@ -160,7 +160,7 @@ FROM
 WHERE
 	value_2 = 2 AND value_2 = 3;
  value_2 | value_4 
----------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -170,7 +170,7 @@ FROM
 WHERE
 	value_3 = '2' OR value_1 = 3;
  value_2 |         value_4          
----------+--------------------------
+---------------------------------------------------------------------
        2 | Fri Dec 02 00:00:00 2016
        3 | Sat Dec 03 00:00:00 2016
 (2 rows)
@@ -185,7 +185,7 @@ WHERE
 	)
 	AND FALSE;
  value_2 | value_4 
----------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -202,7 +202,7 @@ WHERE
 	)
 	AND value_1 < 3;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (2 rows)
@@ -217,7 +217,7 @@ WHERE
 		'1', '2'
 	);
          value_4          
---------------------------
+---------------------------------------------------------------------
  Thu Dec 01 00:00:00 2016
  Fri Dec 02 00:00:00 2016
 (2 rows)
@@ -232,7 +232,7 @@ WHERE
 		'5', '2'
 	);
  date_part 
------------
+---------------------------------------------------------------------
          2
          5
 (2 rows)
@@ -244,7 +244,7 @@ FROM
 WHERE
 	value_2 <= 2 AND value_2 >= 4;
  value_4 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -254,7 +254,7 @@ FROM
 WHERE
 	value_2 <= 20 AND value_2 >= 4;
          value_4          
---------------------------
+---------------------------------------------------------------------
  Sun Dec 04 00:00:00 2016
  Mon Dec 05 00:00:00 2016
 (2 rows)
@@ -266,7 +266,7 @@ FROM
 WHERE
 	value_2 >= 5 AND value_2 <= random();
  value_4 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -276,7 +276,7 @@ FROM
 WHERE
 	value_4 BETWEEN '2016-12-01' AND '2016-12-03';
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -289,7 +289,7 @@ FROM
 WHERE
 	FALSE;
  value_1 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -299,7 +299,7 @@ FROM
 WHERE
 	int4eq(1, 2);
  value_1 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- rename output name and do some operations
@@ -308,7 +308,7 @@ SELECT
 FROM
 	reference_table_test;
  id | age 
-----+-----
+---------------------------------------------------------------------
   1 |  15
   2 |  30
   3 |  45
@@ -323,7 +323,7 @@ SELECT
 FROM
 	some_data;
  value_2 |         value_4          
----------+--------------------------
+---------------------------------------------------------------------
        3 | Sat Dec 03 00:00:00 2016
        4 | Sun Dec 04 00:00:00 2016
        5 | Mon Dec 05 00:00:00 2016
@@ -333,7 +333,7 @@ FROM
 WITH some_data AS ( SELECT value_2, value_4 FROM reference_table_test WHERE value_2 >=3)
 SELECT * FROM reference_table_test ORDER BY 1 LIMIT 1;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
@@ -345,7 +345,7 @@ FROM
 WHERE
 	value_1 = 1;
  value_1 | value_2 | value_3 |         value_4          | position 
----------+---------+---------+--------------------------+----------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016 |        3
 (1 row)
 
@@ -356,7 +356,7 @@ FROM
 WHERE
 	value_1 = 1 OR value_1 = 2;
  value_1 | value_2 | value_3 |         value_4          | position 
----------+---------+---------+--------------------------+----------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016 |        3
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016 |        3
 (2 rows)
@@ -369,7 +369,7 @@ SELECT * FROM (
 ) AS combination
 ORDER BY value_1;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        3 |       3 | 3       | Sat Dec 03 00:00:00 2016
 (2 rows)
@@ -381,7 +381,7 @@ SELECT * FROM (
 ) AS combination
 ORDER BY value_1;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
@@ -392,7 +392,7 @@ SELECT * FROM (
 ) AS combination
 ORDER BY value_1;
  value_1 | value_2 | value_3 | value_4 
----------+---------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- to make the tests more interested for aggregation tests, ingest some more data
@@ -411,7 +411,7 @@ HAVING
 ORDER BY
 	1;
          value_4          | sum 
---------------------------+-----
+---------------------------------------------------------------------
  Fri Dec 02 00:00:00 2016 |   4
  Sat Dec 03 00:00:00 2016 |   6
  Sun Dec 04 00:00:00 2016 |   4
@@ -428,7 +428,7 @@ GROUP BY
 	GROUPING sets ((value_4), (value_3))
 ORDER BY 1, 2, 3;
          value_4          | value_3 | sum 
---------------------------+---------+-----
+---------------------------------------------------------------------
  Thu Dec 01 00:00:00 2016 |         |   2
  Fri Dec 02 00:00:00 2016 |         |   4
  Sat Dec 03 00:00:00 2016 |         |   6
@@ -449,7 +449,7 @@ FROM
 ORDER BY
 	1;
          value_4          
---------------------------
+---------------------------------------------------------------------
  Thu Dec 01 00:00:00 2016
  Fri Dec 02 00:00:00 2016
  Sat Dec 03 00:00:00 2016
@@ -463,7 +463,7 @@ SELECT
 FROM
 	reference_table_test;
          value_4          | rank 
---------------------------+------
+---------------------------------------------------------------------
  Thu Dec 01 00:00:00 2016 |    1
  Thu Dec 01 00:00:00 2016 |    1
  Fri Dec 02 00:00:00 2016 |    1
@@ -480,7 +480,7 @@ SELECT
 FROM
 	reference_table_test;
          value_4          |          avg           
---------------------------+------------------------
+---------------------------------------------------------------------
  Thu Dec 01 00:00:00 2016 | 1.00000000000000000000
  Thu Dec 01 00:00:00 2016 | 1.00000000000000000000
  Fri Dec 02 00:00:00 2016 |     2.0000000000000000
@@ -503,7 +503,7 @@ SELECT
 	FROM
 		reference_table_test;
  c 
----
+---------------------------------------------------------------------
  3
 (1 row)
 
@@ -524,7 +524,7 @@ SELECT
 	ORDER BY
 		1;
  value_1 | c 
----------+---
+---------------------------------------------------------------------
        1 | 0
        2 | 0
        3 | 1
@@ -536,7 +536,7 @@ SELECT
 BEGIN;
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
        3 |       3 | 3       | Sat Dec 03 00:00:00 2016
@@ -549,7 +549,7 @@ SELECT * FROM reference_table_test;
 
 SELECT * FROM reference_table_test WHERE value_1 = 1;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (2 rows)
@@ -564,13 +564,13 @@ DECLARE test_cursor CURSOR FOR
 		ORDER BY value_1;
 FETCH test_cursor;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
 FETCH ALL test_cursor;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
@@ -578,12 +578,12 @@ FETCH ALL test_cursor;
 
 FETCH test_cursor; -- fetch one row after the last
  value_1 | value_2 | value_3 | value_4 
----------+---------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 FETCH BACKWARD test_cursor;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (1 row)
 
@@ -598,14 +598,14 @@ CREATE TEMP TABLE temp_reference_test as
 CREATE TABLE reference_table_test_second (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_second');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE reference_table_test_third (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_third');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -625,7 +625,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -640,7 +640,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        4
        5
 (2 rows)
@@ -654,7 +654,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- join on different columns and different data types via casts
@@ -667,7 +667,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -682,7 +682,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -697,7 +697,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -714,7 +714,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        3
 (1 row)
 
@@ -728,7 +728,7 @@ WHERE
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        3
 (1 row)
 
@@ -741,7 +741,7 @@ FROM
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        3
 (1 row)
 
@@ -754,7 +754,7 @@ FROM
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
        3
@@ -770,7 +770,7 @@ FROM
 ORDER BY
 	1;
  value_1 
----------
+---------------------------------------------------------------------
        3
         
 (2 rows)
@@ -779,7 +779,7 @@ ORDER BY
 CREATE TABLE reference_table_test_fourth (value_1 int, value_2 float PRIMARY KEY, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_fourth');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -796,14 +796,14 @@ ERROR:  null value in column "value_2" violates not-null constraint
 -- lets run some upserts
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01') ON CONFLICT DO NOTHING RETURNING *;
  value_1 | value_2 | value_3 | value_4 
----------+---------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON CONFLICT (value_2) DO
 	UPDATE SET value_3 = EXCLUDED.value_3, value_2 = EXCLUDED.value_2
 	RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 10      | Thu Dec 01 00:00:00 2016
 (1 row)
 
@@ -812,7 +812,7 @@ INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON C
 	UPDATE SET value_3 = EXCLUDED.value_3 || '+10', value_2 = EXCLUDED.value_2 + 10, value_1 = EXCLUDED.value_1 + 10, value_4 = '2016-12-10'
 	RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
       11 |      11 | 10+10   | Sat Dec 10 00:00:00 2016
 (1 row)
 
@@ -826,7 +826,7 @@ WHERE
 GROUP BY shardid
 ORDER BY shardid;
  shardid | all_placements_healthy | replicated_to_all 
----------+------------------------+-------------------
+---------------------------------------------------------------------
  1250003 | t                      | t
 (1 row)
 
@@ -837,7 +837,7 @@ WHERE
 	value_1 = 1
 RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (2 rows)
@@ -848,7 +848,7 @@ WHERE
 	value_4 = '2016-12-05'
 RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        5 |       5 | 5       | Mon Dec 05 00:00:00 2016
 (1 row)
 
@@ -860,7 +860,7 @@ WHERE
 	value_2 = 2
 RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        2 |      15 | 2       | Fri Dec 02 00:00:00 2016
        2 |      15 | 2       | Fri Dec 02 00:00:00 2016
 (2 rows)
@@ -872,7 +872,7 @@ SET
 	value_2 = 15, value_1 = 45
 RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
       45 |      15 | 2       | Fri Dec 02 00:00:00 2016
       45 |      15 | 2       | Fri Dec 02 00:00:00 2016
       45 |      15 | 3       | Sat Dec 03 00:00:00 2016
@@ -884,7 +884,7 @@ DELETE FROM
 	reference_table_test
 RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
       45 |      15 | 2       | Fri Dec 02 00:00:00 2016
       45 |      15 | 2       | Fri Dec 02 00:00:00 2016
       45 |      15 | 3       | Sat Dec 03 00:00:00 2016
@@ -896,7 +896,7 @@ RETURNING *;
 CREATE TABLE reference_table_test_fifth (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_fifth');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -906,7 +906,7 @@ INSERT INTO
 	reference_table_test_fifth (value_2) VALUES (2)
 RETURNING value_1, value_2;
  value_1 | value_2 
----------+---------
+---------------------------------------------------------------------
        1 |       2
 (1 row)
 
@@ -914,7 +914,7 @@ INSERT INTO
 	reference_table_test_fifth (value_2) VALUES (2)
 RETURNING value_1, value_2;
  value_1 | value_2 
----------+---------
+---------------------------------------------------------------------
        2 |       2
 (1 row)
 
@@ -922,7 +922,7 @@ INSERT INTO
 	reference_table_test_fifth (value_2, value_3) VALUES (nextval('example_ref_value_seq'), nextval('example_ref_value_seq')::text)
 RETURNING value_1, value_2, value_3;
  value_1 | value_2 | value_3 
----------+---------+---------
+---------------------------------------------------------------------
        3 |       1 | 2
 (1 row)
 
@@ -932,7 +932,7 @@ WHERE
 	value_1 = 1
 RETURNING value_1, value_2, value_4 > '2000-01-01';
  value_1 | value_2 | ?column? 
----------+---------+----------
+---------------------------------------------------------------------
        1 |       2 | t
 (1 row)
 
@@ -960,7 +960,7 @@ INSERT INTO
 		reference_table_test
 	RETURNING *;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Fri Jan 01 00:00:00 2016
          |       2 | 2       | Sat Jan 02 00:00:00 2016
          |         | 3       | 
@@ -975,7 +975,7 @@ INSERT INTO
 		reference_table_test JOIN reference_table_test_second USING (value_1)
 	RETURNING *;
  value_1 | value_2 | value_3 | value_4 
----------+---------+---------+---------
+---------------------------------------------------------------------
          |       1 |         | 
 (1 row)
 
@@ -984,14 +984,14 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE colocated_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_distributed_table('colocated_table_test', 'value_1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE colocated_table_test_2 (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_distributed_table('colocated_table_test_2', 'value_1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1012,7 +1012,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1025,7 +1025,7 @@ WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1038,7 +1038,7 @@ WHERE
 	reference_table_test.value_1 = colocated_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1053,7 +1053,7 @@ WHERE
 ORDER BY colocated_table_test.value_2;
 LOG:  join order: [ "colocated_table_test_2" ][ cartesian product reference join "reference_table_test" ][ dual partition join "colocated_table_test" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        1
        2
@@ -1069,7 +1069,7 @@ WHERE
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1083,7 +1083,7 @@ WHERE
 	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1096,7 +1096,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1139,7 +1139,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
  value_1 | value_2 
----------+---------
+---------------------------------------------------------------------
        1 |       1
        2 |       2
 (2 rows)
@@ -1155,7 +1155,7 @@ WHERE
 	colocated_table_test_2.value_1 > reference_table_test.value_2
 RETURNING value_1, value_2;
  value_1 | value_2 
----------+---------
+---------------------------------------------------------------------
        2 |       1
 (1 row)
 
@@ -1191,7 +1191,7 @@ DETAIL:  Replication models don't match for colocated_table_test_2 and reference
 -- should work sliently
 SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
  mark_tables_colocated 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1202,7 +1202,7 @@ CREATE SCHEMA reference_schema;
 CREATE TABLE reference_schema.reference_table_test_sixth (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_schema.reference_table_test_sixth');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1211,7 +1211,7 @@ SET search_path TO 'reference_schema';
 CREATE TABLE reference_table_test_seventh (value_1 serial  PRIMARY KEY, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test_seventh');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1228,7 +1228,7 @@ SELECT
 FROM
 	reference_schema.reference_table_test_sixth;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1241,7 +1241,7 @@ FROM
 WHERE
 	reference_table_test_sixth.value_4 = reference_table_test_seventh.value_4;
  value_1 
----------
+---------------------------------------------------------------------
        1
        2
 (2 rows)
@@ -1255,7 +1255,7 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reftable.value_4;
  value_2 | value_1 
----------+---------
+---------------------------------------------------------------------
        1 |       1
        2 |       2
 (2 rows)
@@ -1273,7 +1273,7 @@ SELECT
 FROM
 	reference_table_test;
  count 
--------
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -1284,7 +1284,7 @@ SELECT
 FROM
 	reference_table_test;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1292,32 +1292,32 @@ FROM
 -- and check the metadata
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
         logicalrelid        
-----------------------------
+---------------------------------------------------------------------
  reference_table_test_fifth
 (1 row)
 
 SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
         logicalrelid        
-----------------------------
+---------------------------------------------------------------------
  reference_table_test_fifth
 (1 row)
 
 DROP TABLE reference_table_test_fifth;
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
  logicalrelid 
---------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '%reference_table_test_fifth%';
  logicalrelid 
---------------
+---------------------------------------------------------------------
 (0 rows)
 
 -- now test DDL changes
 CREATE TABLE reference_schema.reference_table_ddl (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_schema.reference_table_ddl');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1335,7 +1335,7 @@ ALTER TABLE reference_schema.reference_table_ddl ALTER COLUMN value_3 SET NOT NU
 -- see that Citus applied all DDLs to the table
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl'::regclass;
  Column  |            Type             |  Modifiers   
----------+-----------------------------+--------------
+---------------------------------------------------------------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
@@ -1345,7 +1345,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'reference_schema.reference_index_2'::regclass;
  Column  |       Type       | Definition 
----------+------------------+------------
+---------------------------------------------------------------------
  value_2 | double precision | value_2
  value_3 | text             | value_3
 (2 rows)
@@ -1354,7 +1354,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
  Column  |            Type             |  Modifiers   
----------+-----------------------------+--------------
+---------------------------------------------------------------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
@@ -1364,7 +1364,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'reference_schema.reference_index_2_1250019'::regclass;
  Column  |       Type       | Definition 
----------+------------------+------------
+---------------------------------------------------------------------
  value_2 | double precision | value_2
  value_3 | text             | value_3
 (2 rows)
@@ -1374,7 +1374,7 @@ DROP INDEX reference_schema.reference_index_2;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
  Column  |            Type             |  Modifiers   
----------+-----------------------------+--------------
+---------------------------------------------------------------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
@@ -1384,7 +1384,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 \di reference_schema.reference_index_2*
           List of relations
  Schema | Name | Type | Owner | Table 
---------+------+------+-------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -1405,14 +1405,14 @@ SELECT part_storage_type, part_key, part_replica_count, part_max_size,
            part_placement_policy
   FROM master_get_table_metadata('reference_schema.reference_table_ddl');
  part_storage_type | part_key | part_replica_count | part_max_size | part_placement_policy 
--------------------+----------+--------------------+---------------+-----------------------
+---------------------------------------------------------------------
  t                 |          |                  2 |       1536000 |                     2
 (1 row)
 
 SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset
 SELECT master_update_shard_statistics(:a_shard_id);
  master_update_shard_statistics 
---------------------------------
+---------------------------------------------------------------------
                            8192
 (1 row)
 
@@ -1422,7 +1422,7 @@ ERROR:  cannot append to shardId 1250019
 DETAIL:  We currently don't support appending to shards in hash-partitioned or reference tables
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
                                                                            master_get_table_ddl_events                                                                           
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  CREATE TABLE reference_schema.reference_table_ddl (value_2 double precision DEFAULT 25.0, value_3 text NOT NULL, value_4 timestamp without time zone, value_5 double precision)
  ALTER TABLE reference_schema.reference_table_ddl OWNER TO postgres
 (2 rows)
@@ -1434,13 +1434,13 @@ SELECT placementid AS b_placement_id FROM pg_dist_shard_placement WHERE shardid 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placement_id;
 SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
  master_copy_shard_placement 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
  shardid | shardstate 
----------+------------
+---------------------------------------------------------------------
  1250019 |          1
 (1 row)
 
@@ -1458,49 +1458,49 @@ RETURNS void AS '
 TRUNCATE reference_table_test;
 SELECT select_count_all();
  select_count_all 
-------------------
+---------------------------------------------------------------------
                 0
 (1 row)
 
 SELECT insert_into_ref_table(1, 1.0, '1', '2016-12-01');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_into_ref_table(2, 2.0, '2', '2016-12-02');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_into_ref_table(3, 3.0, '3', '2016-12-03');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_into_ref_table(4, 4.0, '4', '2016-12-04');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_into_ref_table(5, 5.0, '5', '2016-12-05');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_into_ref_table(6, 6.0, '6', '2016-12-06');
  insert_into_ref_table 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT select_count_all();
  select_count_all 
-------------------
+---------------------------------------------------------------------
                 6
 (1 row)
 
@@ -1518,7 +1518,7 @@ EXECUTE insert_into_ref_table_pr(6, 6.0, '6', '2016-12-06');
 -- see the count, then truncate the table
 SELECT select_count_all();
  select_count_all 
-------------------
+---------------------------------------------------------------------
                 6
 (1 row)
 
@@ -1531,7 +1531,7 @@ CREATE TYPE reference_comp_key as (key text, value text);
 CREATE TABLE reference_table_composite (id int PRIMARY KEY, data reference_comp_key);
 SELECT create_reference_table('reference_table_composite');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1540,14 +1540,14 @@ INSERT INTO reference_table_composite (id, data) VALUES (1, ('key_1', 'value_1')
 INSERT INTO reference_table_composite (id, data) VALUES (2, ('key_2', 'value_2')::reference_comp_key);
 SELECT * FROM reference_table_composite;
  id |      data       
-----+-----------------
+---------------------------------------------------------------------
   1 | (key_1,value_1)
   2 | (key_2,value_2)
 (2 rows)
 
 SELECT (data).key FROM reference_table_composite;
   key  
--------
+---------------------------------------------------------------------
  key_1
  key_2
 (2 rows)
@@ -1558,14 +1558,14 @@ BEGIN;
 INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
 ROLLBACK;
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 | value_4 
----------+---------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- now insert a row and commit
@@ -1574,7 +1574,7 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 COMMIT;
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
        2 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (1 row)
 
@@ -1584,7 +1584,7 @@ UPDATE reference_table_test SET value_1 = 10 WHERE value_1 = 2;
 COMMIT;
 SELECT * FROM reference_table_test;
  value_1 | value_2 | value_3 |         value_4          
----------+---------+---------+--------------------------
+---------------------------------------------------------------------
       10 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (1 row)
 

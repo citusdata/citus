@@ -63,7 +63,7 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     RETURNS NULL ON NULL INPUT;
 SELECT create_distributed_function('add(int,int)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -73,7 +73,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) CALLED ON NULL INPUT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -86,7 +86,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) STRICT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -97,7 +97,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) STRICT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -108,7 +108,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) IMMUTABLE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -119,7 +119,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) STABLE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -130,7 +130,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) VOLATILE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -141,7 +141,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) LEAKPROOF;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -152,7 +152,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) NOT LEAKPROOF;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -165,7 +165,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SECURITY INVOKER;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -176,7 +176,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SECURITY INVOKER;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -187,7 +187,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SECURITY DEFINER;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -198,7 +198,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SECURITY DEFINER;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -209,7 +209,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) PARALLEL UNSAFE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -220,7 +220,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) PARALLEL RESTRICTED;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -231,7 +231,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) PARALLEL SAFE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -243,7 +243,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) COST 1234.000000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -254,7 +254,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) COST 1234.500000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -265,7 +265,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages = 'error';
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -276,7 +276,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages TO DEFAULT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -287,7 +287,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET log_min_messages FROM CURRENT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -298,7 +298,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET TIME ZONE INTERVAL '@ 8 hours ago';
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -309,7 +309,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET timezone = '-7';
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -320,7 +320,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET "citus.setting;'" = 'hello '' world';
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -331,7 +331,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET "citus.setting;'" = -3.2;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -342,7 +342,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET "citus.setting;'" = -32;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -355,7 +355,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET "citus.setting;'" = 'hello '' world', 'second '' item';
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                         deparse_and_run_on_workers                         
----------------------------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  SET citus.setting;' takes only one argument")
  (localhost,57638,f,"ERROR:  SET citus.setting;' takes only one argument")
 (2 rows)
@@ -366,7 +366,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) RESET log_min_messages;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -377,7 +377,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) RESET ALL;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -389,7 +389,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) RENAME TO summation;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -404,7 +404,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.summation(integer, integer) RENAME TO add;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -416,7 +416,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers('CREATE ROLE function_role');
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -427,7 +427,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) OWNER TO function_role;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -438,7 +438,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) OWNER TO missing_role;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                      deparse_and_run_on_workers                     
---------------------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  role ""missing_role"" does not exist")
  (localhost,57638,f,"ERROR:  role ""missing_role"" does not exist")
 (2 rows)
@@ -450,7 +450,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) SET SCHEMA public;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -463,7 +463,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION public.add(integer, integer) SET SCHEMA function_tests;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -475,7 +475,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) DEPENDS ON EXTENSION citus;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -487,7 +487,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -497,7 +497,7 @@ SELECT deparse_test($cmd$
 DROP FUNCTION add(int,int);
 $cmd$);
                     deparse_test                     
------------------------------------------------------
+---------------------------------------------------------------------
  DROP FUNCTION function_tests.add(integer, integer);
 (1 row)
 
@@ -508,7 +508,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, integer) VOLATILE LEAKPROOF SECURITY DEFINER PARALLEL UNSAFE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -521,7 +521,7 @@ $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION missing_function(pg_catalog.int4,text);
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                               deparse_and_run_on_workers                               
----------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  function missing_function(integer, text) does not exist")
  (localhost,57638,f,"ERROR:  function missing_function(integer, text) does not exist")
 (2 rows)
@@ -534,7 +534,7 @@ $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_function(pg_catalog.int4,text);
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers      
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP FUNCTION")
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
@@ -545,7 +545,7 @@ $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_schema.missing_function(pg_catalog.int4,pg_catalog.float8);
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers      
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP FUNCTION")
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
@@ -556,7 +556,7 @@ $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_func_without_args;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers      
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP FUNCTION")
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
@@ -569,7 +569,7 @@ SELECT run_command_on_workers($$
     CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
 $$);
        run_command_on_workers        
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
@@ -583,13 +583,13 @@ CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text) RETURNS TEXT
     LANGUAGE SQL;
 SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"()');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -599,7 +599,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() SET SCHEMA "CiTUS.TEEN2";
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -611,7 +611,7 @@ $cmd$);
 INFO:  Propagating deparsed query: DROP FUNCTION "CiTUS.TEEN2"."TeeNFunCT10N.1!?!"(), "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text);
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers      
--------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP FUNCTION")
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
@@ -622,7 +622,7 @@ CREATE FUNCTION func_default_param(param INT DEFAULT 0) RETURNS TEXT
     LANGUAGE SQL;
 SELECT create_distributed_function('func_default_param(INT)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -632,7 +632,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_default_param(param integer) RENAME TO func_with_default_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -643,7 +643,7 @@ CREATE FUNCTION func_out_param(IN param INT, OUT result TEXT)
     LANGUAGE SQL;
 SELECT create_distributed_function('func_out_param(INT)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -653,7 +653,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_out_param(param integer, OUT result text) RENAME TO func_in_and_out_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -667,7 +667,7 @@ END; $$
 LANGUAGE plpgsql;
 SELECT create_distributed_function('square(NUMERIC)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -677,7 +677,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.square(INOUT a numeric) SET search_path TO DEFAULT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -698,7 +698,7 @@ END; $$
 LANGUAGE plpgsql;
 SELECT create_distributed_function('sum_avg(NUMERIC[])');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -708,7 +708,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.sum_avg(VARIADIC list numeric[], OUT total numeric, OUT average numeric) COST 10000.000000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -720,7 +720,7 @@ CREATE FUNCTION func_custom_param(IN param intpair, OUT total INT)
     LANGUAGE SQL;
 SELECT create_distributed_function('func_custom_param(intpair)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -730,7 +730,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_custom_param(param function_tests.intpair, OUT total integer) RENAME TO func_with_custom_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -742,7 +742,7 @@ CREATE FUNCTION func_returns_table(IN count INT)
     LANGUAGE SQL;
 SELECT create_distributed_function('func_returns_table(INT)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -752,7 +752,7 @@ $cmd$);
 INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_returns_table(count integer) ROWS  100.000000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers      
---------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"ALTER FUNCTION")
  (localhost,57638,t,"ALTER FUNCTION")
 (2 rows)
@@ -768,7 +768,7 @@ SELECT run_command_on_workers($$
     DROP SCHEMA function_tests CASCADE;
 $$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP SCHEMA")
  (localhost,57638,t,"DROP SCHEMA")
 (2 rows)

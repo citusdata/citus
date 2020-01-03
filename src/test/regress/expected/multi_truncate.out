@@ -11,7 +11,7 @@ SET search_path TO multi_truncate;
 CREATE TABLE test_truncate_append(a int);
 SELECT create_distributed_table('test_truncate_append', 'a', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -22,34 +22,34 @@ UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 500
 WHERE shardid = :new_shard_id;
 SELECT count(*) FROM test_truncate_append;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 INSERT INTO test_truncate_append values (1);
 SELECT count(*) FROM test_truncate_append;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- create some more shards
 SELECT master_create_empty_shard('test_truncate_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1210001
 (1 row)
 
 SELECT master_create_empty_shard('test_truncate_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1210002
 (1 row)
 
 -- verify 3 shards are presents
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1210000
  1210001
  1210002
@@ -59,14 +59,14 @@ TRUNCATE TABLE test_truncate_append;
 -- verify data is truncated from the table
 SELECT count(*) FROM test_truncate_append;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- verify no shard exists anymore
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::regclass;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- command can run inside transaction
@@ -79,7 +79,7 @@ DROP TABLE test_truncate_append;
 CREATE TABLE test_truncate_range(a int);
 SELECT create_distributed_table('test_truncate_range', 'a', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -96,7 +96,7 @@ UPDATE pg_dist_shard SET shardminvalue = 1501, shardmaxvalue = 2500
 WHERE shardid = :new_shard_id;
 SELECT count(*) FROM test_truncate_range;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -106,14 +106,14 @@ INSERT INTO test_truncate_range values (2000);
 INSERT INTO test_truncate_range values (100);
 SELECT count(*) FROM test_truncate_range;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 -- verify 3 shards are presents
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1210003
  1210004
  1210005
@@ -123,14 +123,14 @@ TRUNCATE TABLE test_truncate_range;
 -- verify data is truncated from the table
 SELECT count(*) FROM test_truncate_range;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- verify 3 shards are still present
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1210003
  1210004
  1210005
@@ -141,7 +141,7 @@ INSERT INTO test_truncate_range VALUES (1);
 BEGIN; TRUNCATE TABLE test_truncate_range; ROLLBACK;
 SELECT count(*) FROM test_truncate_range;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -153,7 +153,7 @@ DROP TABLE test_truncate_range;
 CREATE TABLE test_truncate_hash(a int);
 SELECT master_create_distributed_table('test_truncate_hash', 'a', 'hash');
  master_create_distributed_table 
----------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -161,7 +161,7 @@ SELECT master_create_distributed_table('test_truncate_hash', 'a', 'hash');
 TRUNCATE TABLE test_truncate_hash;
 SELECT count(*) FROM test_truncate_hash;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -183,20 +183,20 @@ DETAIL:  No shards exist for distributed table "test_truncate_hash".
 HINT:  Run master_create_worker_shards to create shards and try again.
 SELECT count(*) FROM test_truncate_hash;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- verify 4 shards are present
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 TRUNCATE TABLE test_truncate_hash;
 SELECT master_create_worker_shards('test_truncate_hash', 4, 1);
  master_create_worker_shards 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -206,7 +206,7 @@ INSERT INTO test_truncate_hash values (2000);
 INSERT INTO test_truncate_hash values (100);
 SELECT count(*) FROM test_truncate_hash;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -214,14 +214,14 @@ TRUNCATE TABLE test_truncate_hash;
 -- verify data is truncated from the table
 SELECT count(*) FROM test_truncate_hash;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- verify 4 shards are still presents
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1210006
  1210007
  1210008
@@ -233,7 +233,7 @@ INSERT INTO test_truncate_hash VALUES (1);
 BEGIN; TRUNCATE TABLE test_truncate_hash; ROLLBACK;
 SELECT count(*) FROM test_truncate_hash;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -243,21 +243,21 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE "a b hash" (a int, b int);
 SELECT create_distributed_table('"a b hash"', 'a', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO "a b hash" values (1, 0);
 SELECT * from "a b hash";
  a | b 
----+---
+---------------------------------------------------------------------
  1 | 0
 (1 row)
 
 TRUNCATE TABLE "a b hash";
 SELECT * from "a b hash";
  a | b 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE "a b hash";
@@ -265,7 +265,7 @@ DROP TABLE "a b hash";
 CREATE TABLE "a b append" (a int, b int);
 SELECT create_distributed_table('"a b append"', 'a', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -279,7 +279,7 @@ INSERT INTO "a b append" values (1, 1);
 INSERT INTO "a b append" values (600, 600);
 SELECT * FROM "a b append" ORDER BY a;
   a  |  b  
------+-----
+---------------------------------------------------------------------
    1 |   1
  600 | 600
 (2 rows)
@@ -288,7 +288,7 @@ TRUNCATE TABLE "a b append";
 -- verify all shards are dropped
 SELECT shardid FROM pg_dist_shard where logicalrelid = '"a b append"'::regclass;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE "a b append";
@@ -298,7 +298,7 @@ INSERT INTO test_local_truncate VALUES (1,2);
 SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -309,14 +309,14 @@ COMMIT;
 -- Ensure distributed data is not truncated
 SELECT * FROM test_local_truncate;
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 2
 (1 row)
 
 -- Undistribute table
 SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
  master_drop_all_shards 
-------------------------
+---------------------------------------------------------------------
                       4
 (1 row)
 
@@ -324,7 +324,7 @@ DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regcla
 -- Ensure local data is truncated
 SELECT * FROM test_local_truncate;
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE test_local_truncate;
@@ -334,7 +334,7 @@ INSERT INTO test_local_truncate VALUES (1,2);
 SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -345,14 +345,14 @@ ROLLBACK;
 -- Ensure distributed data is not truncated
 SELECT * FROM test_local_truncate;
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 2
 (1 row)
 
 -- Undistribute table
 SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
  master_drop_all_shards 
-------------------------
+---------------------------------------------------------------------
                       4
 (1 row)
 
@@ -360,7 +360,7 @@ DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regcla
 -- Ensure local data is not truncated
 SELECT * FROM test_local_truncate;
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 2
 (1 row)
 

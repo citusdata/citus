@@ -5,21 +5,21 @@ SET citus.replication_model TO streaming;
 CREATE TABLE recursive_dml_queries_mx.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_dml_queries_mx.second_distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('second_distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_dml_queries_mx.reference_table (id text, name text);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -136,7 +136,7 @@ WHERE
 RETURNING
 	distributed_table.*;
  tenant_id | dept |          info          
------------+------+------------------------
+---------------------------------------------------------------------
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
@@ -157,7 +157,7 @@ WHERE
 RETURNING
 	distributed_table.*;
  tenant_id | dept |          info          
------------+------+------------------------
+---------------------------------------------------------------------
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 

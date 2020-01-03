@@ -10,7 +10,7 @@ WHERE name = 'hll'
 \gset
 :create_cmd;
  hll_present 
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -22,7 +22,7 @@ LINE 1: CREATE TABLE daily_uniques(day date, unique_users hll);
                                                           ^
 SELECT create_distributed_table('raw_table', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -191,7 +191,7 @@ WHERE name = 'topn'
 \gset
 :create_topn;
  topn_present 
---------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -199,13 +199,13 @@ CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 SELECT create_distributed_table('customer_reviews', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('popular_reviewer', 'day');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

@@ -142,111 +142,111 @@ SET client_min_messages TO INFO;
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
  plpgsql_test_1 
-----------------
+---------------------------------------------------------------------
            2985
 (1 row)
 
 SELECT plpgsql_test_2();
  plpgsql_test_2 
-----------------
+---------------------------------------------------------------------
           12000
 (1 row)
 
 SELECT plpgsql_test_3();
  plpgsql_test_3 
-----------------
+---------------------------------------------------------------------
            1956
 (1 row)
 
 SELECT plpgsql_test_4();
  plpgsql_test_4 
-----------------
+---------------------------------------------------------------------
            7806
 (1 row)
 
 SELECT plpgsql_test_5();
  plpgsql_test_5 
-----------------
+---------------------------------------------------------------------
              39
 (1 row)
 
 -- run PL/pgsql functions with different parameters
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           11813
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           10185
 (1 row)
 
 SELECT plpgsql_test_7('UNITED KINGDOM', 'CHINA');
              plpgsql_test_7             
-----------------------------------------
+---------------------------------------------------------------------
  ("UNITED KINGDOM",CHINA,1996,18560.22)
 (1 row)
 
 SELECT plpgsql_test_7('FRANCE', 'GERMANY');
          plpgsql_test_7          
----------------------------------
+---------------------------------------------------------------------
  (GERMANY,FRANCE,1995,2399.2948)
 (1 row)
 
 -- now, PL/pgsql functions with random order
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           11813
 (1 row)
 
 SELECT plpgsql_test_3();
  plpgsql_test_3 
-----------------
+---------------------------------------------------------------------
            1956
 (1 row)
 
 SELECT plpgsql_test_7('FRANCE', 'GERMANY');
          plpgsql_test_7          
----------------------------------
+---------------------------------------------------------------------
  (GERMANY,FRANCE,1995,2399.2948)
 (1 row)
 
 SELECT plpgsql_test_5();
  plpgsql_test_5 
-----------------
+---------------------------------------------------------------------
              39
 (1 row)
 
 SELECT plpgsql_test_1();
  plpgsql_test_1 
-----------------
+---------------------------------------------------------------------
            2985
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           10185
 (1 row)
 
 SELECT plpgsql_test_4();
  plpgsql_test_4 
-----------------
+---------------------------------------------------------------------
            7806
 (1 row)
 
 SELECT plpgsql_test_7('UNITED KINGDOM', 'CHINA');
              plpgsql_test_7             
-----------------------------------------
+---------------------------------------------------------------------
  ("UNITED KINGDOM",CHINA,1996,18560.22)
 (1 row)
 
 SELECT plpgsql_test_2();
  plpgsql_test_2 
-----------------
+---------------------------------------------------------------------
           12000
 (1 row)
 
@@ -256,26 +256,26 @@ RESET citus.task_executor_type;
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
  plpgsql_test_1 
-----------------
+---------------------------------------------------------------------
            2985
 (1 row)
 
 SELECT plpgsql_test_2();
  plpgsql_test_2 
-----------------
+---------------------------------------------------------------------
           12000
 (1 row)
 
 -- run PL/pgsql functions with different parameters
 SELECT plpgsql_test_6(155);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           11813
 (1 row)
 
 SELECT plpgsql_test_6(1555);
  plpgsql_test_6 
-----------------
+---------------------------------------------------------------------
           10185
 (1 row)
 
@@ -287,7 +287,7 @@ CREATE TABLE plpgsql_table (
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('plpgsql_table','key','hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -299,37 +299,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT no_parameter_insert();
  no_parameter_insert 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -342,37 +342,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT single_parameter_insert(1);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT single_parameter_insert(2);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT single_parameter_insert(3);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT single_parameter_insert(4);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT single_parameter_insert(5);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT single_parameter_insert(6);
  single_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -385,37 +385,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT double_parameter_insert(1, 10);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT double_parameter_insert(2, 20);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT double_parameter_insert(3, 30);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT double_parameter_insert(4, 40);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT double_parameter_insert(5, 50);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT double_parameter_insert(6, 60);
  double_parameter_insert 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -428,44 +428,44 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT non_partition_parameter_insert(10);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_insert(20);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_insert(30);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_insert(40);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_insert(50);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_insert(60);
  non_partition_parameter_insert 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- check inserted values
 SELECT * FROM plpgsql_table ORDER BY key, value;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |    10
    0 |    20
    0 |    30
@@ -513,42 +513,42 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT router_partition_column_select(1);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (1,10)
  (1,)
 (2 rows)
 
 SELECT router_partition_column_select(2);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (2,20)
  (2,)
 (2 rows)
 
 SELECT router_partition_column_select(3);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (3,30)
  (3,)
 (2 rows)
 
 SELECT router_partition_column_select(4);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (4,40)
  (4,)
 (2 rows)
 
 SELECT router_partition_column_select(5);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (5,50)
  (5,)
 (2 rows)
 
 SELECT router_partition_column_select(6);
  router_partition_column_select 
---------------------------------
+---------------------------------------------------------------------
  (6,60)
  (6,)
 (2 rows)
@@ -574,37 +574,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT router_non_partition_column_select(10);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,10)
 (1 row)
 
 SELECT router_non_partition_column_select(20);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,20)
 (1 row)
 
 SELECT router_non_partition_column_select(30);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,30)
 (1 row)
 
 SELECT router_non_partition_column_select(40);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,40)
 (1 row)
 
 SELECT router_non_partition_column_select(50);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,50)
 (1 row)
 
 SELECT router_non_partition_column_select(60);
  router_non_partition_column_select 
-------------------------------------
+---------------------------------------------------------------------
  (0,60)
 (1 row)
 
@@ -629,42 +629,42 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT real_time_non_partition_column_select(10);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(20);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,20)
  (2,20)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(30);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,30)
  (3,30)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(40);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,40)
  (4,40)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(50);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,50)
  (5,50)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(60);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,60)
  (6,60)
 (2 rows)
@@ -690,7 +690,7 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT real_time_partition_column_select(1);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (1,)
@@ -698,7 +698,7 @@ SELECT real_time_partition_column_select(1);
 
 SELECT real_time_partition_column_select(2);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (2,20)
@@ -707,7 +707,7 @@ SELECT real_time_partition_column_select(2);
 
 SELECT real_time_partition_column_select(3);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (3,30)
@@ -716,7 +716,7 @@ SELECT real_time_partition_column_select(3);
 
 SELECT real_time_partition_column_select(4);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (4,40)
@@ -725,7 +725,7 @@ SELECT real_time_partition_column_select(4);
 
 SELECT real_time_partition_column_select(5);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (5,50)
@@ -734,7 +734,7 @@ SELECT real_time_partition_column_select(5);
 
 SELECT real_time_partition_column_select(6);
  real_time_partition_column_select 
------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (6,60)
@@ -763,42 +763,42 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_non_partition_column_select(10);
  task_tracker_non_partition_column_select 
-------------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
 (2 rows)
 
 SELECT task_tracker_non_partition_column_select(20);
  task_tracker_non_partition_column_select 
-------------------------------------------
+---------------------------------------------------------------------
  (0,20)
  (2,20)
 (2 rows)
 
 SELECT task_tracker_non_partition_column_select(30);
  task_tracker_non_partition_column_select 
-------------------------------------------
+---------------------------------------------------------------------
  (0,30)
  (3,30)
 (2 rows)
 
 SELECT task_tracker_non_partition_column_select(40);
  task_tracker_non_partition_column_select 
-------------------------------------------
+---------------------------------------------------------------------
  (0,40)
  (4,40)
 (2 rows)
 
 SELECT task_tracker_non_partition_column_select(50);
  task_tracker_non_partition_column_select 
-------------------------------------------
+---------------------------------------------------------------------
  (0,50)
  (5,50)
 (2 rows)
 
 SELECT real_time_non_partition_column_select(60);
  real_time_non_partition_column_select 
----------------------------------------
+---------------------------------------------------------------------
  (0,60)
  (6,60)
 (2 rows)
@@ -824,7 +824,7 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_partition_column_select(1);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (1,)
@@ -832,7 +832,7 @@ SELECT task_tracker_partition_column_select(1);
 
 SELECT task_tracker_partition_column_select(2);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (2,20)
@@ -841,7 +841,7 @@ SELECT task_tracker_partition_column_select(2);
 
 SELECT task_tracker_partition_column_select(3);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (3,30)
@@ -850,7 +850,7 @@ SELECT task_tracker_partition_column_select(3);
 
 SELECT task_tracker_partition_column_select(4);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (4,40)
@@ -859,7 +859,7 @@ SELECT task_tracker_partition_column_select(4);
 
 SELECT task_tracker_partition_column_select(5);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (5,50)
@@ -868,7 +868,7 @@ SELECT task_tracker_partition_column_select(5);
 
 SELECT task_tracker_partition_column_select(6);
  task_tracker_partition_column_select 
---------------------------------------
+---------------------------------------------------------------------
  (0,10)
  (1,10)
  (6,60)
@@ -885,37 +885,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT partition_parameter_update(1, 11);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_update(2, 21);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_update(3, 31);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_update(4, 41);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_update(5, 51);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_update(6, 61);
  partition_parameter_update 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -927,44 +927,44 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT non_partition_parameter_update(10, 12);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_update(20, 22);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_update(30, 32);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_update(40, 42);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_update(50, 52);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_update(60, 62);
  non_partition_parameter_update 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- check table after updates
 SELECT * FROM plpgsql_table ORDER BY key, value;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |    12
    0 |    22
    0 |    32
@@ -1000,37 +1000,37 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT partition_parameter_delete(1, 11);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_delete(2, 21);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_delete(3, 31);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_delete(4, 41);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_delete(5, 51);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT partition_parameter_delete(6, 61);
  partition_parameter_delete 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1042,44 +1042,44 @@ $$ LANGUAGE plpgsql;
 -- execute 6 times to trigger prepared statement usage
 SELECT non_partition_parameter_delete(12);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_delete(22);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_delete(32);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_delete(42);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_delete(52);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT non_partition_parameter_delete(62);
  non_partition_parameter_delete 
---------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- check table after deletes
 SELECT * FROM plpgsql_table ORDER BY key, value;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |      
    0 |      
    0 |      
@@ -1092,7 +1092,7 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
 CREATE TABLE execute_parameter_test (key int, val date);
 SELECT create_distributed_table('execute_parameter_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1113,7 +1113,7 @@ CREATE TABLE func_parameter_test (
 );
 SELECT create_distributed_table('func_parameter_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1136,43 +1136,43 @@ $BODY$
 LANGUAGE plpgsql;
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT insert_with_max('key');
  insert_with_max 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT key, seq FROM func_parameter_test ORDER BY seq;
  key | seq 
------+-----
+---------------------------------------------------------------------
  key |   1
  key |   2
  key |   3
@@ -1188,7 +1188,7 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE TABLE prepare_ddl (x int, y int);
 SELECT create_distributed_table('prepare_ddl', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1202,13 +1202,13 @@ END;
 $BODY$ LANGUAGE plpgsql;
 SELECT ddl_in_plpgsql();
  ddl_in_plpgsql 
-----------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT ddl_in_plpgsql();
  ddl_in_plpgsql 
-----------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1225,7 +1225,7 @@ CREATE SCHEMA otherschema;
 SET search_path TO otherschema, public;
 SELECT ddl_in_plpgsql();
  ddl_in_plpgsql 
-----------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1235,20 +1235,20 @@ DROP INDEX prepared_index;
 CREATE TABLE prepare_ddl (x int, y int);
 SELECT create_distributed_table('prepare_ddl', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT ddl_in_plpgsql();
  ddl_in_plpgsql 
-----------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- verify the index is created in the correct schema
 SELECT schemaname, indexrelname FROM pg_stat_all_indexes WHERE indexrelname = 'prepared_index';
  schemaname  |  indexrelname  
--------------+----------------
+---------------------------------------------------------------------
  otherschema | prepared_index
 (1 row)
 
@@ -1265,13 +1265,13 @@ END;
 $BODY$ LANGUAGE plpgsql;
 SELECT copy_in_plpgsql();
  copy_in_plpgsql 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT copy_in_plpgsql();
  copy_in_plpgsql 
------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1286,13 +1286,13 @@ END;
 $BODY$ LANGUAGE plpgsql;
 SELECT local_copy_in_plpgsql();
  local_copy_in_plpgsql 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT local_copy_in_plpgsql();
  local_copy_in_plpgsql 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1310,7 +1310,7 @@ END;
 $function$;
 SELECT type_ddl_plpgsql();
  type_ddl_plpgsql 
-------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1318,14 +1318,14 @@ SELECT type_ddl_plpgsql();
 CREATE TYPE prepare_ddl_type AS (x int, y int);
 SELECT type_ddl_plpgsql();
  type_ddl_plpgsql 
-------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- find all renamed types to verify the schema name didn't leak, nor a crash happened
 SELECT nspname, typname FROM pg_type JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace WHERE typname = 'prepare_ddl_type_backup';
    nspname   |         typname         
--------------+-------------------------
+---------------------------------------------------------------------
  public      | prepare_ddl_type_backup
  otherschema | prepare_ddl_type_backup
 (2 rows)

@@ -5,14 +5,14 @@ SET citus.next_shard_id TO 590000;
 CREATE TABLE lineitem_hash (LIKE lineitem);
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE orders_hash (LIKE orders);
 SELECT create_distributed_table('orders_hash', 'o_orderkey', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -23,7 +23,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
                                             QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.revenue DESC, remote_scan.l_orderkey
@@ -48,7 +48,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
                                  QUERY PLAN                                  
------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_orderkey
@@ -72,7 +72,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_shipmode HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
                                      QUERY PLAN                                     
-------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_shipmode
@@ -96,7 +96,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_shipmode, l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 3 DESC, 1, 2 LIMIT 3;
                                                   QUERY PLAN                                                  
---------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.revenue DESC, remote_scan.l_shipmode, remote_scan.l_orderkey
@@ -122,7 +122,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_orderkey, o_orderkey, l_shipmode HAVING sum(l_quantity) > 24
     ORDER BY 1 DESC LIMIT 3;
                                                          QUERY PLAN                                                          
------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.revenue DESC
@@ -151,7 +151,7 @@ EXPLAIN (COSTS FALSE)
     GROUP BY l_shipmode, o_clerk HAVING sum(l_quantity) > 24
     ORDER BY 1 DESC LIMIT 3;
                                               QUERY PLAN                                              
-------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: (sum(remote_scan.revenue)) DESC
@@ -180,7 +180,7 @@ GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1
 ORDER BY 1;
  max 
------
+---------------------------------------------------------------------
    4
    5
    5
@@ -192,7 +192,7 @@ GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 OR count(*) > 10
 ORDER BY 1;
  max 
------
+---------------------------------------------------------------------
    4
    5
    5
@@ -205,7 +205,7 @@ GROUP BY user_id
 HAVING max(value_2) > 4 AND min(value_2) < 1 AND count(*) > 20
 ORDER BY 1;
  max 
------
+---------------------------------------------------------------------
    5
    5
 (2 rows)
@@ -215,7 +215,7 @@ FROM users_table
 GROUP BY user_id
 HAVING max(value_2) > 0 AND count(*) FILTER (WHERE value_3=2) > 3 AND min(value_2) IN (0,1,2,3);
  max 
------
+---------------------------------------------------------------------
    5
 (1 row)
 

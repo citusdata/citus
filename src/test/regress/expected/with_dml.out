@@ -3,21 +3,21 @@ SET search_path TO 	with_dml, public;
 CREATE TABLE with_dml.distributed_table (tenant_id text PRIMARY KEY, dept int);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE with_dml.second_distributed_table (tenant_id text, dept int);
 SELECT create_distributed_table('second_distributed_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE with_dml.reference_table (id text, name text);
 SELECT create_reference_table('reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

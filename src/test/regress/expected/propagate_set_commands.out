@@ -3,7 +3,7 @@ SET search_path TO propagate_set_commands;
 CREATE TABLE test (id int, value int);
 SELECT create_distributed_table('test', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -16,7 +16,7 @@ SET citus.select_opens_transaction_block TO on;
 BEGIN;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
@@ -29,7 +29,7 @@ BEGIN;
 SET enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
@@ -39,7 +39,7 @@ BEGIN;
 SET LOCAL exit_on_error TO on;
 SELECT current_setting('exit_on_error') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -49,14 +49,14 @@ BEGIN;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
 -- expand to new node, set should still apply
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -66,7 +66,7 @@ BEGIN;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -74,14 +74,14 @@ SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
 SET LOCAL enable_hashagg TO DEFAULT;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
 -- expand to new node, set to default should still apply
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
@@ -91,7 +91,7 @@ BEGIN;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -99,7 +99,7 @@ SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
 SET enable_hashagg TO DEFAULT;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -109,7 +109,7 @@ BEGIN;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -117,14 +117,14 @@ SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
 RESET enable_hashagg;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
 -- expand to new node, reset should still apply
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
@@ -134,7 +134,7 @@ BEGIN;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  off
 (1 row)
 
@@ -143,7 +143,7 @@ RESET ALL;
 SET search_path = 'propagate_set_commands';
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 
@@ -151,7 +151,7 @@ SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
 SET LOCAL enable_hashagg TO false;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 3;
  current_setting 
------------------
+---------------------------------------------------------------------
  on
 (1 row)
 

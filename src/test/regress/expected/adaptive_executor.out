@@ -6,7 +6,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 801009000;
 SELECT create_distributed_table('test','x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -19,7 +19,7 @@ SET citus.task_executor_type TO 'adaptive';
 BEGIN;
 SELECT count(*) FROM test a JOIN (SELECT x, pg_sleep(0.1) FROM test) b USING (x);
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -28,7 +28,7 @@ SELECT sum(result::bigint) FROM run_command_on_workers($$
   WHERE pid <> pg_backend_pid() AND query LIKE '%8010090%'
 $$);
  sum 
------
+---------------------------------------------------------------------
    2
 (1 row)
 
@@ -38,7 +38,7 @@ SET citus.executor_slow_start_interval TO '10ms';
 BEGIN;
 SELECT count(*) FROM test a JOIN (SELECT x, pg_sleep(0.1) FROM test) b USING (x);
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -47,7 +47,7 @@ SELECT sum(result::bigint) FROM run_command_on_workers($$
   WHERE pid <> pg_backend_pid() AND query LIKE '%8010090%'
 $$);
  sum 
------
+---------------------------------------------------------------------
    4
 (1 row)
 

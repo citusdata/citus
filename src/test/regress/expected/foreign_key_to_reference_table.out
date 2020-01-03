@@ -29,7 +29,7 @@ SELECT
 CREATE TABLE referenced_table(id int UNIQUE, test_column int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -38,7 +38,7 @@ SELECT create_reference_table('referenced_table');
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -54,7 +54,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -70,7 +70,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -89,14 +89,14 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -112,7 +112,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -131,21 +131,21 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
        name       |                     relid                      |                  refd_relid                   
-------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000043 | fkey_reference_table.referencing_table_7000043 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000044 | fkey_reference_table.referencing_table_7000044 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000045 | fkey_reference_table.referencing_table_7000045 | fkey_reference_table.referenced_table_7000042
@@ -160,13 +160,13 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
------------------------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  referencing_table_id_fkey_7000051 | fkey_reference_table.referencing_table_7000051 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000052 | fkey_reference_table.referencing_table_7000052 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000053 | fkey_reference_table.referencing_table_7000053 | fkey_reference_table.referenced_table_7000042
@@ -181,14 +181,14 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
        name       |                     relid                      |                  refd_relid                   
-------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000059 | fkey_reference_table.referencing_table_7000059 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000060 | fkey_reference_table.referencing_table_7000060 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000061 | fkey_reference_table.referencing_table_7000061 | fkey_reference_table.referenced_table_7000042
@@ -204,14 +204,14 @@ BEGIN;
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
   SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
------------------------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  referencing_table_id_fkey_7000067 | fkey_reference_table.referencing_table_7000067 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000068 | fkey_reference_table.referencing_table_7000068 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000069 | fkey_reference_table.referencing_table_7000069 | fkey_reference_table.referenced_table_7000042
@@ -226,14 +226,14 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
        name       |                     relid                      |                  refd_relid                   
-------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000075 | fkey_reference_table.referencing_table_7000075 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000076 | fkey_reference_table.referencing_table_7000076 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000077 | fkey_reference_table.referencing_table_7000077 | fkey_reference_table.referenced_table_7000042
@@ -248,14 +248,14 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
        name       |                     relid                      |                  refd_relid                   
-------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000083 | fkey_reference_table.referencing_table_7000083 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000084 | fkey_reference_table.referencing_table_7000084 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000085 | fkey_reference_table.referencing_table_7000085 | fkey_reference_table.referenced_table_7000042
@@ -270,14 +270,14 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
        name       |                     relid                      |                  refd_relid                   
-------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000091 | fkey_reference_table.referencing_table_7000091 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000092 | fkey_reference_table.referencing_table_7000092 | fkey_reference_table.referenced_table_7000042
  fkey_ref_7000093 | fkey_reference_table.referencing_table_7000093 | fkey_reference_table.referenced_table_7000042
@@ -293,7 +293,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -303,7 +303,7 @@ DETAIL:  Adding a column with a constraint in one command is not supported becau
 HINT:  You can issue each command separately such as ALTER TABLE referencing_table ADD COLUMN referencing data_type; ALTER TABLE referencing_table ADD CONSTRAINT constraint_name FOREIGN KEY (referencing) REFERENCES referenced_table(id) ON UPDATE CASCADE;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
  name | relid | refd_relid 
-------+-------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -312,7 +312,7 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -322,7 +322,7 @@ DETAIL:  Citus Community Edition currently supports foreign key constraints only
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
  name | relid | refd_relid 
-------+-------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -330,7 +330,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -340,7 +340,7 @@ DETAIL:  Citus Community Edition currently supports foreign key constraints only
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
  name | relid | refd_relid 
-------+-------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -349,13 +349,13 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
------------------------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  referencing_table_id_fkey_7000123 | fkey_reference_table.referencing_table_7000123 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000124 | fkey_reference_table.referencing_table_7000124 | fkey_reference_table.referenced_table_7000042
  referencing_table_id_fkey_7000125 | fkey_reference_table.referencing_table_7000125 | fkey_reference_table.referenced_table_7000042
@@ -372,21 +372,21 @@ BEGIN;
   CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
   SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
   SELECT create_distributed_table('referencing_table', 'ref_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
                name                |                     relid                      |                  refd_relid                   
------------------------------------+------------------------------------------------+-----------------------------------------------
+---------------------------------------------------------------------
  referencing_table_id_fkey_7000132 | fkey_reference_table.referencing_table_7000132 | fkey_reference_table.referenced_table_7000131
  referencing_table_id_fkey_7000133 | fkey_reference_table.referencing_table_7000133 | fkey_reference_table.referenced_table_7000131
  referencing_table_id_fkey_7000134 | fkey_reference_table.referencing_table_7000134 | fkey_reference_table.referenced_table_7000131
@@ -403,7 +403,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -412,14 +412,14 @@ ERROR:  cannot create foreign key constraint since relations are not colocated o
 DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 SELECT * FROM table_fkeys_in_workers WHERE name LIKE 'fkey_ref%' ORDER BY 1,2,3;
  name | relid | refd_relid 
-------+-------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -428,7 +428,7 @@ ERROR:  cannot create foreign key constraint since relations are not colocated o
 DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 SELECT * FROM table_fkeys_in_workers WHERE name LIKE 'fkey_ref%' ORDER BY 1,2,3;
  name | relid | refd_relid 
-------+-------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -438,13 +438,13 @@ CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, te
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -471,7 +471,7 @@ TRUNCATE referenced_table CASCADE;
 NOTICE:  truncate cascades to table "referencing_table"
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -484,13 +484,13 @@ CREATE TABLE referenced_table(id int, test_column int, PRIMARY KEY(id));
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('referencing_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -507,13 +507,13 @@ CREATE TABLE referenced_schema.referenced_table(id int UNIQUE, test_column int, 
 CREATE TABLE referencing_schema.referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_schema.referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_schema.referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -523,7 +523,7 @@ INSERT INTO referencing_schema.referencing_table SELECT x, x from generate_serie
 DELETE FROM referenced_schema.referenced_table WHERE id > 800;
 SELECT count(*) FROM referencing_schema.referencing_table;
  count 
--------
+---------------------------------------------------------------------
    800
 (1 row)
 
@@ -536,13 +536,13 @@ CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(tes
 CREATE TABLE referencing_table(id int, ref_id int DEFAULT 1);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -552,7 +552,7 @@ INSERT INTO referencing_table SELECT x, x FROM generate_series(1,1000) AS f(x);
 DELETE FROM referenced_table WHERE test_column > 800;
 SELECT count(*) FROM referencing_table WHERE ref_id = 1;
  count 
--------
+---------------------------------------------------------------------
    201
 (1 row)
 
@@ -564,13 +564,13 @@ CREATE TABLE referenced_table(test_column composite, PRIMARY KEY(test_column));
 CREATE TABLE referencing_table(id int, referencing_composite composite);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -580,7 +580,7 @@ INSERT INTO referencing_table SELECT x, (x+1, x+1)::composite FROM generate_seri
 DELETE FROM referenced_table WHERE (test_column).key1 > 900;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    899
 (1 row)
 
@@ -596,13 +596,13 @@ CREATE TABLE referenced_table(test_column SERIAL PRIMARY KEY, test_column2 int);
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -612,7 +612,7 @@ INSERT INTO referencing_table SELECT x, x FROM generate_series(1,1000) AS f(x);
 DELETE FROM referenced_table WHERE test_column2 > 10;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -628,13 +628,13 @@ CREATE TABLE referenced_table(test_column int PRIMARY KEY, test_column2 int);
 CREATE TABLE referencing_table(id int, ref_id SERIAL);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -659,13 +659,13 @@ CREATE TABLE referenced_table(test_column SERIAL PRIMARY KEY, test_column2 int);
 CREATE TABLE referencing_table(id int, ref_id SERIAL);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -688,13 +688,13 @@ CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(tes
 CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -710,13 +710,13 @@ CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(tes
 CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -729,7 +729,7 @@ DO UPDATE
   SET test_column = -1 * EXCLUDED.test_column;
 SELECT * FROM referencing_table WHERE ref_id < 0 ORDER BY 1;
  id | ref_id 
-----+--------
+---------------------------------------------------------------------
   1 |     -1
   2 |     -2
   3 |     -3
@@ -747,7 +747,7 @@ INSERT INTO referencing_table VALUES (1,1), (2,2), (3,3);
 SELECT create_reference_table('referenced_table');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -774,19 +774,19 @@ CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(te
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('referenced_table2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -794,7 +794,7 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
          name          |                     relid                      |                   refd_relid                   
------------------------+------------------------------------------------+------------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000226      | fkey_reference_table.referencing_table_7000226 | fkey_reference_table.referenced_table_7000224
  fkey_ref_7000227      | fkey_reference_table.referencing_table_7000227 | fkey_reference_table.referenced_table_7000224
  fkey_ref_7000228      | fkey_reference_table.referencing_table_7000228 | fkey_reference_table.referenced_table_7000224
@@ -831,21 +831,21 @@ DETAIL:  Key (id)=(1015) is not present in table "referenced_table_7000224".
 INSERT INTO referencing_table SELECT x, x+1 FROM generate_series(600,900) AS f(x);
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    301
 (1 row)
 
 DELETE FROM referenced_table WHERE test_column < 700;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    201
 (1 row)
 
 DELETE FROM referenced_table2 WHERE test_column2 > 800;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -860,25 +860,25 @@ CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(te
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('referenced_table2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
     16
 (1 row)
 
@@ -900,19 +900,19 @@ CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(te
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('referenced_table2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -922,7 +922,7 @@ BEGIN;
 COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
          name          |                     relid                      |                   refd_relid                   
------------------------+------------------------------------------------+------------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000246      | fkey_reference_table.referencing_table_7000246 | fkey_reference_table.referenced_table_7000244
  fkey_ref_7000247      | fkey_reference_table.referencing_table_7000247 | fkey_reference_table.referenced_table_7000244
  fkey_ref_7000248      | fkey_reference_table.referencing_table_7000248 | fkey_reference_table.referenced_table_7000244
@@ -956,21 +956,21 @@ ERROR:  insert or update on table "referencing_table_7000248" violates foreign k
 INSERT INTO referencing_table SELECT x, x+501 FROM generate_series(0,1000) AS f(x);
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
   1001
 (1 row)
 
 DELETE FROM referenced_table WHERE test_column < 700;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    301
 (1 row)
 
 DELETE FROM referenced_table2 WHERE test_column2 > 800;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -986,19 +986,19 @@ CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES r
 BEGIN;
   SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_reference_table('referenced_table2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1006,7 +1006,7 @@ BEGIN;
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
     16
 (1 row)
 
@@ -1029,19 +1029,19 @@ CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int);
 CREATE TABLE referencing_table2(id int, ref_id int);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1053,7 +1053,7 @@ ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref_to_dist FOREIGN KEY (id) 
 COMMIT;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
            name           |                      relid                      |                   refd_relid                   
---------------------------+-------------------------------------------------+------------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000265         | fkey_reference_table.referencing_table_7000265  | fkey_reference_table.referenced_table_7000264
  fkey_ref_7000266         | fkey_reference_table.referencing_table_7000266  | fkey_reference_table.referenced_table_7000264
  fkey_ref_7000267         | fkey_reference_table.referencing_table_7000267  | fkey_reference_table.referenced_table_7000264
@@ -1096,20 +1096,20 @@ INSERT INTO referencing_table2 SELECT x, x+1 FROM generate_series(0,300) AS f(x)
 DELETE FROM referenced_table WHERE test_column < 200;
 SELECT count(*) FROM referencing_table;
  count 
--------
+---------------------------------------------------------------------
    201
 (1 row)
 
 SELECT count(*) FROM referencing_table2;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 DELETE FROM referencing_table WHERE id > 200;
 SELECT count(*) FROM referencing_table2;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -1126,7 +1126,7 @@ CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int, FOREIGN KEY (id) 
 CREATE TABLE referencing_table2(id int, ref_id int, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1134,20 +1134,20 @@ BEGIN;
   SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
   SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('referencing_table2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
     24
 (1 row)
 
@@ -1168,26 +1168,26 @@ CREATE TABLE referencing_table(id int, ref_id int, ref_id2 int, PRIMARY KEY(id, 
 CREATE TABLE referencing_referencing_table(id int, ref_id int, FOREIGN KEY (id, ref_id) REFERENCES referencing_table(id, ref_id) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id, ref_id2) REFERENCES referenced_table(test_column, test_column2) ON DELETE CASCADE;
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%' ORDER BY 1,2,3;
                          name                         |                           relid                            |                   refd_relid                   
-------------------------------------------------------+------------------------------------------------------------+------------------------------------------------
+---------------------------------------------------------------------
  fkey_ref_7000299                                     | fkey_reference_table.referencing_table_7000299             | fkey_reference_table.referenced_table_7000298
  fkey_ref_7000300                                     | fkey_reference_table.referencing_table_7000300             | fkey_reference_table.referenced_table_7000298
  fkey_ref_7000301                                     | fkey_reference_table.referencing_table_7000301             | fkey_reference_table.referenced_table_7000298
@@ -1212,7 +1212,7 @@ INSERT INTO referencing_referencing_table SELECT x, x+1 FROM generate_series(1,9
 DELETE FROM referenced_table WHERE test_column > 800;
 SELECT max(ref_id) FROM referencing_referencing_table;
  max 
------
+---------------------------------------------------------------------
  800
 (1 row)
 
@@ -1228,21 +1228,21 @@ BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES test_table_1(id));
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES test_table_2(id));
   SELECT create_distributed_table('test_table_3', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1256,14 +1256,14 @@ BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1279,14 +1279,14 @@ BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
   SELECT create_distributed_table('test_table_1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   CREATE TABLE test_table_2(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1306,7 +1306,7 @@ BEGIN;
   SELECT create_reference_table('test_table_1');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1322,13 +1322,13 @@ BEGIN;
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1342,26 +1342,26 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      8
 (1 row)
 
 ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1372,13 +1372,13 @@ BEGIN;
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1391,7 +1391,7 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1402,13 +1402,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1416,7 +1416,7 @@ ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
 NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1427,13 +1427,13 @@ BEGIN;
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1442,7 +1442,7 @@ NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_tab
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1452,20 +1452,20 @@ CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 ALTER TABLE test_table_2 DROP COLUMN value_1;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1476,13 +1476,13 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) 
 BEGIN;
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1490,7 +1490,7 @@ BEGIN;
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1500,13 +1500,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1514,7 +1514,7 @@ ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
 NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1525,13 +1525,13 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) 
 BEGIN;
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1540,7 +1540,7 @@ NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_tab
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1550,13 +1550,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1573,7 +1573,7 @@ ERROR:  integer out of range
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      8
 (1 row)
 
@@ -1586,13 +1586,13 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) 
 BEGIN;
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1602,7 +1602,7 @@ NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_tab
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1612,13 +1612,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1628,7 +1628,7 @@ TRUNCATE test_table_1 CASCADE;
 NOTICE:  truncate cascades to table "test_table_2"
 SELECT * FROM test_table_2;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE test_table_1, test_table_2;
@@ -1637,13 +1637,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1655,7 +1655,7 @@ NOTICE:  truncate cascades to table "test_table_2"
 COMMIT;
 SELECT * FROM test_table_2;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE test_table_1, test_table_2;
@@ -1665,13 +1665,13 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) 
 BEGIN;
   SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
   SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1682,7 +1682,7 @@ NOTICE:  truncate cascades to table "test_table_2"
 COMMIT;
 SELECT * FROM test_table_2;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE test_table_1, test_table_2;
@@ -1691,13 +1691,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1706,12 +1706,12 @@ INSERT INTO test_table_2 VALUES (1,1),(2,2),(3,3);
 TRUNCATE test_table_2 CASCADE;
 SELECT * FROM test_table_2;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM test_table_1;
  id 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -1723,13 +1723,13 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1740,12 +1740,12 @@ BEGIN;
 COMMIT;
 SELECT * FROM test_table_2;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM test_table_1;
  id 
-----
+---------------------------------------------------------------------
   1
   2
   3
@@ -1759,19 +1759,19 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int);
 SELECT create_reference_table('test_table_1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('test_table_3', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1797,13 +1797,13 @@ ERROR:  distributing partitioned tables in only supported for hash-distributed t
 -- partitioned tables are supported as hash distributed table
 SELECT create_reference_table('referenced_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -1821,7 +1821,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO referencing_table VALUES (0, 1);
 SELECT * FROM referencing_table;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   0 |       1
 (1 row)
 
@@ -1841,7 +1841,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD COLUMN x INT;
   SELECT * FROM referencing_table;
  id | value_1 | x 
-----+---------+---
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;
@@ -1850,7 +1850,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD COLUMN x INT;
   SELECT * FROM referencing_table;
  id | value_1 | x 
-----+---------+---
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;

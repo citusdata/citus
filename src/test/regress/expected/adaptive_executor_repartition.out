@@ -6,7 +6,7 @@ SET citus.enable_repartition_joins TO true;
 CREATE TABLE ab(a int, b int);
 SELECT create_distributed_table('ab', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,39 +14,39 @@ INSERT INTO ab SELECT *,* FROM generate_series(1,10);
 SELECT COUNT(*) FROM ab k, ab l
 WHERE k.a = l.b;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT COUNT(*) FROM ab k, ab l, ab m, ab t
 WHERE k.a = l.b AND k.a = m.b AND t.b = l.a;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 BEGIN;
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -63,19 +63,19 @@ CREATE TABLE single_hash_repartition_second (id int, sum int, avg float);
 CREATE TABLE ref_table (id int, sum int, avg float);
 SELECT create_distributed_table('single_hash_repartition_first', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('single_hash_repartition_second', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('ref_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -87,7 +87,7 @@ FROM
 WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          Task Count: 4
@@ -105,7 +105,7 @@ FROM
 WHERE
 	t1.id = t2.id AND t1.sum = t3.id;
                               QUERY PLAN                              
-----------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
          Task Count: 4

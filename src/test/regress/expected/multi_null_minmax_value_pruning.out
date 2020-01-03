@@ -13,13 +13,13 @@ SET citus.log_multi_join_order to true;
 SET citus.enable_repartition_joins to ON;
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290000;
  shardminvalue | shardmaxvalue 
----------------+---------------
+---------------------------------------------------------------------
  1             | 5986
 (1 row)
 
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
  shardminvalue | shardmaxvalue 
----------------+---------------
+---------------------------------------------------------------------
  8997          | 14947
 (1 row)
 
@@ -34,7 +34,7 @@ CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE st
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
        coordinator_plan       
-------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -47,7 +47,7 @@ LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                                    QUERY PLAN                                   
---------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
@@ -83,7 +83,7 @@ CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE st
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
        coordinator_plan       
-------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -122,7 +122,7 @@ DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
--------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
@@ -148,7 +148,7 @@ CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE st
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
        coordinator_plan       
-------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -187,7 +187,7 @@ DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
--------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
@@ -215,7 +215,7 @@ CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE st
 DEBUG:  Plan is router executable
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
        coordinator_plan       
-------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -254,7 +254,7 @@ DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
                             QUERY PLAN                             
--------------------------------------------------------------------
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4

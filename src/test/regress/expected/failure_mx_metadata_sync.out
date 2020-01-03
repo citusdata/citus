@@ -10,14 +10,14 @@ SET citus.replication_model TO 'streaming';
 SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE t1 (id int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -25,14 +25,14 @@ INSERT INTO t1 SELECT x FROM generate_series(1,100) AS f(x);
 -- Initial metadata status
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
  hasmetadata 
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- Failure to set groupid in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -40,7 +40,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -52,7 +52,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to drop all tables in pg_dist_partition
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -60,7 +60,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -72,7 +72,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to truncate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -80,7 +80,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -92,7 +92,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- Failure to populate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -100,7 +100,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -112,26 +112,26 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- Verify that coordinator knows worker does not have valid metadata
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
  hasmetadata 
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- Verify we can sync metadata after unsuccessful attempts
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
  hasmetadata 
--------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -139,7 +139,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 CREATE TABLE t2 (id int PRIMARY KEY);
 SELECT citus.mitmproxy('conn.onParse(query="^INSERT INTO pg_dist_placement").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -150,7 +150,7 @@ ERROR:  server closed the connection unexpectedly
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.onParse(query="^INSERT INTO pg_dist_shard").cancel(' || :pid || ')');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -161,7 +161,7 @@ SELECT count(*) > 0 AS is_table_distributed
 FROM pg_dist_partition
 WHERE logicalrelid='t2'::regclass;
  is_table_distributed 
-----------------------
+---------------------------------------------------------------------
  f
 (1 row)
 

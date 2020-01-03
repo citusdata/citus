@@ -6,14 +6,14 @@ SET citus.next_placement_id TO 800000;
 CREATE TABLE with_transactions.raw_table (tenant_id int, income float, created_at timestamptz);
 SELECT create_distributed_table('raw_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE with_transactions.second_raw_table (tenant_id int, income float, created_at timestamptz);
 SELECT create_distributed_table('second_raw_table', 'tenant_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -43,13 +43,13 @@ ROLLBACK;
 -- see that both UPDATE and DELETE commands are rollbacked
 SELECT count(*) FROM raw_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
 SELECT max(income) FROM raw_table;
  max  
-------
+---------------------------------------------------------------------
  1000
 (1 row)
 
@@ -57,7 +57,7 @@ SELECT max(income) FROM raw_table;
 BEGIN;
 	SELECT count (*) FROM second_raw_table;
  count 
--------
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -86,19 +86,19 @@ DEBUG:  Plan 12 query after replacing subqueries and CTEs: UPDATE with_transacti
 -- make sure that everything committed
 SELECT count(*) FROM raw_table;
  count 
--------
+---------------------------------------------------------------------
    105
 (1 row)
 
 SELECT count(*) FROM raw_table WHERE created_at = '2001-02-10 20:00:00';
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT count(*) FROM second_raw_table;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -114,7 +114,7 @@ DEBUG:  generating subplan 17_1 for CTE ids_inserted: INSERT INTO with_transacti
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT income FROM with_transactions.second_raw_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT ids_inserted.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) ids_inserted)) ORDER BY income DESC LIMIT 3
 DEBUG:  push down of limit count: 3
  income 
---------
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;
@@ -136,7 +136,7 @@ END;
 $BODY$;
 SELECT count(*) FROM (SELECT run_ctes(s) FROM generate_series(1,current_setting('max_connections')::int+2) s) a;
  count 
--------
+---------------------------------------------------------------------
    102
 (1 row)
 

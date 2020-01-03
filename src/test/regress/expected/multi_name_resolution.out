@@ -9,13 +9,13 @@ create table namenest1 (id integer primary key, user_id integer);
 create table namenest2 (id integer primary key, value_2 integer);
 select * from create_distributed_table('namenest1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select * from create_reference_table('namenest2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -32,7 +32,7 @@ FROM (
 ) AS join_alias(id_deep)
 WHERE bar.id_deep = join_alias.id_deep;
  r 
----
+---------------------------------------------------------------------
 (0 rows)
 
 DROP SCHEMA multi_name_resolution CASCADE;

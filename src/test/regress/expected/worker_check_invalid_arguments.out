@@ -21,7 +21,7 @@ CREATE TABLE :Table_Name(textcolumn text, binarycolumn bytea);
 COPY :Table_Name FROM stdin;
 SELECT COUNT(*) FROM :Table_Name;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -53,7 +53,7 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Name, :Partition_Column_Type,
 				    ARRAY['aaa', 'some']::_text);
  worker_range_partition_table 
-------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -93,7 +93,7 @@ SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'bytea']);
  worker_merge_files_into_table 
--------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

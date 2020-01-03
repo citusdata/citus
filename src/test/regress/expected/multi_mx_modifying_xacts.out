@@ -14,7 +14,7 @@ INSERT INTO researchers_mx VALUES (2, 1, 'John Backus');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
     name     
--------------
+---------------------------------------------------------------------
  John Backus
 (1 row)
 
@@ -26,7 +26,7 @@ INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 1');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
          name         
-----------------------
+---------------------------------------------------------------------
  John Backus Worker 1
 (1 row)
 
@@ -38,7 +38,7 @@ INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 2');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
          name         
-----------------------
+---------------------------------------------------------------------
  John Backus Worker 2
 (1 row)
 
@@ -49,7 +49,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
      name     
---------------
+---------------------------------------------------------------------
  Donald Knuth
 (1 row)
 
@@ -60,7 +60,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
      name     
---------------
+---------------------------------------------------------------------
  Donald Knuth
 (1 row)
 
@@ -71,7 +71,7 @@ DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
      name     
---------------
+---------------------------------------------------------------------
  Donald Knuth
 (1 row)
 
@@ -85,7 +85,7 @@ INSERT INTO researchers_mx VALUES (6, 3, 'Ken Thompson');
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 3 AND id = 6;
      name     
---------------
+---------------------------------------------------------------------
  Ken Thompson
 (1 row)
 
@@ -109,7 +109,7 @@ ROLLBACK TO hire_engelbart;
 COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 4;
    name   
-----------
+---------------------------------------------------------------------
  Jim Gray
 (1 row)
 
@@ -131,7 +131,7 @@ INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;;
  id | lab_id |       name        | id |    name    
-----+--------+-------------------+----+------------
+---------------------------------------------------------------------
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (1 row)
 
@@ -150,7 +150,7 @@ INSERT INTO labs_mx VALUES (5, 'Los Alamos');
 COMMIT;
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id and researchers_mx.lab_id = 5;
  id | lab_id |       name        | id |    name    
-----+--------+-------------------+----+------------
+---------------------------------------------------------------------
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
@@ -172,7 +172,7 @@ SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -188,7 +188,7 @@ BEGIN;
 \copy labs_mx from stdin delimiter ','
 SELECT name FROM labs_mx WHERE id = 10;
        name       
-------------------
+---------------------------------------------------------------------
  Weyland-Yutani-1
  Weyland-Yutani-2
 (2 rows)
@@ -206,7 +206,7 @@ COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- same test on the second worker node
@@ -222,7 +222,7 @@ COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- create trigger on one worker to reject certain values
@@ -250,12 +250,12 @@ COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- same failure test from worker 2
@@ -269,12 +269,12 @@ COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_1_port
@@ -297,12 +297,12 @@ COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- same test from the other worker
@@ -319,12 +319,12 @@ COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- what if the failures happen at COMMIT time?
@@ -349,12 +349,12 @@ ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 7;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TRIGGER reject_bad_mx ON labs_mx_1220102;
@@ -377,12 +377,12 @@ ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- what if one shard (objects_mx) succeeds but another (labs_mx) completely fails?
@@ -402,11 +402,11 @@ ERROR:  could not commit transaction on any active node
 -- no data should persists
 SELECT * FROM objects_mx WHERE id = 1;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs_mx WHERE id = 8;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 

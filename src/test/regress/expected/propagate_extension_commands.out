@@ -7,27 +7,27 @@ CREATE EXTENSION seg;
 --  make sure that both the schema and the extension is distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test');
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 CREATE TABLE test_table (key int, value seg);
 SELECT create_distributed_table('test_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 --  make sure that the table is also distributed now
 SELECT count(*) from pg_dist_partition where logicalrelid='extension''test.test_table'::regclass;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -35,7 +35,7 @@ CREATE TYPE two_segs AS (seg_1 seg, seg_2 seg);
 -- verify that the type that depends on the extension is also marked as distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_type WHERE typname = 'two_segs' AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test'));
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -47,20 +47,20 @@ BEGIN;
 	CREATE TABLE dist_table (key int, value public.issn);
 	SELECT create_distributed_table('dist_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	-- we can even run queries (sequentially) over the distributed table
 	SELECT * FROM dist_table;
  key | value 
------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 	INSERT INTO dist_table VALUES (1, public.issn('1436-4522'));
 	INSERT INTO dist_table SELECT * FROM dist_table RETURNING *;
  key |   value   
------+-----------
+---------------------------------------------------------------------
    1 | 1436-4522
 (1 row)
 
@@ -68,13 +68,13 @@ COMMIT;
 -- make sure that the extension is distributed even if we run create extension in a transaction block
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1)
  (localhost,57638,t,1)
 (2 rows)
@@ -83,7 +83,7 @@ CREATE TABLE ref_table (a public.issn);
 -- now, create a reference table relying on the data types
 SELECT create_reference_table('ref_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -95,7 +95,7 @@ RESET client_min_messages;
 -- before updating the version, ensure the current version
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
  run_command_on_workers  
--------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1.1)
  (localhost,57638,t,1.1)
 (2 rows)
@@ -105,7 +105,7 @@ ALTER EXTENSION isn UPDATE TO '1.2';
 -- show that ALTER EXTENSION is propagated
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
  run_command_on_workers  
--------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1.2)
  (localhost,57638,t,1.2)
 (2 rows)
@@ -113,7 +113,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 -- before changing the schema, ensure the current schmea
 SELECT run_command_on_workers($$SELECT nspname from pg_namespace where oid=(SELECT extnamespace FROM pg_extension WHERE extname = 'isn')$$);
        run_command_on_workers       
-------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,extension'test)
  (localhost,57638,t,extension'test)
 (2 rows)
@@ -125,14 +125,14 @@ SET search_path TO public;
 -- make sure that the extension is distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- show that the ALTER EXTENSION command is propagated
 SELECT run_command_on_workers($$SELECT nspname from pg_namespace where oid=(SELECT extnamespace FROM pg_extension WHERE extname = 'isn')$$);
    run_command_on_workers   
-----------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,public)
  (localhost,57638,t,public)
 (2 rows)
@@ -155,7 +155,7 @@ DROP SCHEMA "extension'test" CASCADE;
 RESET client_min_messages;
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -164,13 +164,13 @@ CREATE EXTENSION seg;
 -- show that the extension is created on existing worker
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1)
 (1 row)
 
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers  
--------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1.3)
 (1 row)
 
@@ -178,7 +178,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 CREATE TABLE ref_table_2 (x seg);
 SELECT create_reference_table('ref_table_2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -186,21 +186,21 @@ SELECT create_reference_table('ref_table_2');
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "ref_table_2" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1)
  (localhost,57638,t,1)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers  
--------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1.3)
  (localhost,57638,t,1.3)
 (2 rows)
@@ -208,13 +208,13 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 -- and similarly check for the reference table
 select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='ref_table_2'::regclass;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -227,14 +227,14 @@ ROLLBACK;
 -- make sure that the extension is not distributed
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- and the extension does not exist on workers
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -262,7 +262,7 @@ SET client_min_messages TO WARNING;
 DROP EXTENSION pg_buffercache, isn CASCADE;
 SELECT count(*) FROM pg_extension WHERE extname IN ('pg_buffercache', 'isn');
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -274,13 +274,13 @@ SET client_min_messages TO WARNING;
 DROP EXTENSION seg CASCADE;
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -290,7 +290,7 @@ RESET client_min_messages;
 -- make sure that the extension is not avaliable anymore as a distributed object
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -302,7 +302,7 @@ BEGIN;
 	CREATE TABLE some_random_table (a int);
 	SELECT create_distributed_table('some_random_table', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -310,7 +310,7 @@ BEGIN;
 	CREATE TABLE some_random_table_2 (a int, b seg);
 	SELECT create_distributed_table('some_random_table_2', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -319,7 +319,7 @@ ROLLBACK;
 -- block is rollbacked, that's a shortcoming of dependency creation logic
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
  run_command_on_workers  
--------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,1.3)
  (localhost,57638,t,1.3)
 (2 rows)
@@ -335,7 +335,7 @@ RESET client_min_messages;
 -- remove the node, we'll add back again
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -350,7 +350,7 @@ BEGIN;
 	CREATE TABLE t2 (a int, b test_type_2, c issn);
 	SELECT create_distributed_table('t2', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -358,7 +358,7 @@ BEGIN;
 	CREATE TABLE t3 (a int, b test_type_3);
 	SELECT create_reference_table('t3');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -367,20 +367,20 @@ COMMIT;
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "t3" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 -- make sure that both extensions are created on both nodes
 SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,2)
  (localhost,57638,t,2)
 (2 rows)

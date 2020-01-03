@@ -10,7 +10,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE modify_fast_path(key int, value_1 int, value_2 text);
 SELECT create_distributed_table('modify_fast_path', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -18,14 +18,14 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE modify_fast_path_replication_2(key int, value_1 int, value_2 text);
 SELECT create_distributed_table('modify_fast_path_replication_2', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE modify_fast_path_reference(key int, value_1 int, value_2 text);
 SELECT create_reference_table('modify_fast_path_reference');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -111,7 +111,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- modifying ctes are not supported via fast-path
@@ -128,7 +128,7 @@ DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT key, value_1, 
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- for update/share is supported via fast-path when replication factor = 1 or reference table
@@ -138,7 +138,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM modify_fast_path WHERE key = 1 FOR SHARE;
@@ -147,7 +147,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR UPDATE;
@@ -155,7 +155,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR SHARE;
@@ -163,7 +163,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  key | value_1 | value_2 
------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- for update/share is not supported via fast-path wen replication factor > 1
@@ -253,7 +253,7 @@ DETAIL:  distribution column value: 1
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -269,7 +269,7 @@ DETAIL:  distribution column value: 2
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -285,7 +285,7 @@ DETAIL:  distribution column value: 3
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -301,7 +301,7 @@ DETAIL:  distribution column value: 4
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -317,7 +317,7 @@ DETAIL:  distribution column value: 5
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -336,7 +336,7 @@ DETAIL:  distribution column value: 6
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -352,7 +352,7 @@ DETAIL:  distribution column value: 6
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql 
--------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

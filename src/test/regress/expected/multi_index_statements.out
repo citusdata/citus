@@ -10,19 +10,19 @@ SET citus.next_shard_id TO 102080;
 CREATE TABLE index_test_range(a int, b int, c int);
 SELECT create_distributed_table('index_test_range', 'a', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('index_test_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     102080
 (1 row)
 
 SELECT master_create_empty_shard('index_test_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     102081
 (1 row)
 
@@ -31,26 +31,26 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE index_test_hash(a int, b int, c int);
 SELECT create_distributed_table('index_test_hash', 'a', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE index_test_append(a int, b int, c int);
 SELECT create_distributed_table('index_test_append', 'a', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('index_test_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     102090
 (1 row)
 
 SELECT master_create_empty_shard('index_test_append');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     102091
 (1 row)
 
@@ -100,7 +100,7 @@ DROP TABLE local_table;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
  schemaname |    tablename     |             indexname              | tablespace |                                                          indexdef                                                          
-------------+------------------+------------------------------------+------------+----------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  public     | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON public.index_test_hash USING btree (a)
  public     | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON public.index_test_hash USING btree (a, b)
  public     | index_test_hash  | index_test_hash_index_a_b_c        |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON public.index_test_hash USING btree (a) INCLUDE (b, c)
@@ -122,25 +122,25 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
  count 
--------
+---------------------------------------------------------------------
      9
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
  count 
--------
+---------------------------------------------------------------------
     32
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -178,7 +178,7 @@ ERROR:  creating index without a name on a distributed table is currently unsupp
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
  schemaname |    tablename     |             indexname              | tablespace |                                                          indexdef                                                          
-------------+------------------+------------------------------------+------------+----------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  public     | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON public.index_test_hash USING btree (a)
  public     | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON public.index_test_hash USING btree (a, b)
  public     | index_test_hash  | index_test_hash_index_a_b_c        |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON public.index_test_hash USING btree (a) INCLUDE (b, c)
@@ -238,24 +238,24 @@ DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 -- As there's a primary key, so exclude those from this check.
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
  indrelid | indexrelid 
-----------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
  schemaname |    tablename    |          indexname          | tablespace |                                                 indexdef                                                 
-------------+-----------------+-----------------------------+------------+----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  public     | index_test_hash | index_test_hash_index_a_b_c |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON public.index_test_hash USING btree (a) INCLUDE (b, c)
 (1 row)
 
 \c - - - :worker_1_port
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
  indrelid | indexrelid 
-----------+------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
  schemaname |       tablename        |             indexname              | tablespace |                                                        indexdef                                                        
-------------+------------------------+------------------------------------+------------+------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  public     | index_test_hash_102082 | index_test_hash_index_a_b_c_102082 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102082 ON public.index_test_hash_102082 USING btree (a) INCLUDE (b, c)
  public     | index_test_hash_102083 | index_test_hash_index_a_b_c_102083 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102083 ON public.index_test_hash_102083 USING btree (a) INCLUDE (b, c)
  public     | index_test_hash_102084 | index_test_hash_index_a_b_c_102084 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102084 ON public.index_test_hash_102084 USING btree (a) INCLUDE (b, c)
@@ -277,7 +277,7 @@ HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then r
 -- the failure results in an INVALID index
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid? 
---------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -286,7 +286,7 @@ DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid? 
---------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -301,7 +301,7 @@ HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then r
 -- the failure results in an INVALID index
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid? 
---------------
+---------------------------------------------------------------------
  f
 (1 row)
 

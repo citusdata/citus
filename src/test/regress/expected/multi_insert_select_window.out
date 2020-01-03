@@ -15,7 +15,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
    101 |     6 | 3.2079207920792079
 (1 row)
 
@@ -34,7 +34,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
    101 |     6 | 3.2079207920792079
 (1 row)
 
@@ -53,7 +53,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
    101 |     6 | 3.2079207920792079
 (1 row)
 
@@ -75,7 +75,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     12 |     6 | 3.5000000000000000
 (1 row)
 
@@ -96,7 +96,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      8 |     2 | 1.1250000000000000
 (1 row)
 
@@ -117,7 +117,7 @@ SELECT * FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     30 |     6 | 3.4000000000000000
 (1 row)
 
@@ -139,7 +139,7 @@ SELECT * FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     20 |     6 | 3.3500000000000000
 (1 row)
 
@@ -176,7 +176,7 @@ JOIN
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -202,7 +202,7 @@ GROUP BY
  -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      1 |     1 | 4.0000000000000000
 (1 row)
 
@@ -228,7 +228,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      2 |     2 | 3.5000000000000000
 (1 row)
 
@@ -253,7 +253,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      1 |     1 | 4.0000000000000000
 (1 row)
 
@@ -275,7 +275,7 @@ LIMIT
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -293,7 +293,7 @@ GROUP BY user_id;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -319,7 +319,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      4 |     4 | 2.5000000000000000
 (1 row)
 
@@ -339,7 +339,7 @@ SELECT * FROM (
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -362,7 +362,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     32 |     6 | 3.5937500000000000
 (1 row)
 
@@ -393,7 +393,7 @@ WHERE
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -411,7 +411,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -429,7 +429,7 @@ SELECT * FROM (
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     26 |     6 | 3.7692307692307692
 (1 row)
 
@@ -451,7 +451,7 @@ LIMIT
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     10 |     5 | 3.8000000000000000
 (1 row)
 
@@ -472,7 +472,7 @@ FROM
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
     26 |     6 | 3.7692307692307692
 (1 row)
 
@@ -488,7 +488,7 @@ LIMIT
 -- since there is a limit but not order, we cannot run avg(user_id)
 SELECT count(*) FROM agg_results_window;
  count 
--------
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -518,7 +518,7 @@ LIMIT
 -- since there is a limit but not order, we cannot test avg or distinct count
 SELECT count(*) FROM agg_results_window;
  count 
--------
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -545,7 +545,7 @@ GROUP BY
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -590,7 +590,7 @@ LIMIT
 -- since there is a limit but not order, we cannot test avg or distinct count
 SELECT count(*) FROM agg_results_window;
  count 
--------
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -632,7 +632,7 @@ FROM (
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
--------+-------+--------------------
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 

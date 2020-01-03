@@ -8,7 +8,7 @@ SET citus.shard_replication_factor to 1;
 CREATE TABLE test_table(id int, col_1 int, col_2 text);
 SELECT create_distributed_table('test_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -16,7 +16,7 @@ SELECT create_distributed_table('test_table','id');
 CREATE TABLE co_test_table(id int, col_1 int, col_2 text);
 SELECT create_distributed_table('co_test_table','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -24,7 +24,7 @@ SELECT create_distributed_table('co_test_table','id');
 CREATE TABLE ref_test_table(id int, col_1 int, col_2 text);
 SELECT create_reference_table('ref_test_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -33,14 +33,14 @@ SELECT create_reference_table('ref_test_table');
 BEGIN;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 INSERT INTO test_table VALUES(7,8,'gg');
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      7
 (1 row)
 
@@ -49,14 +49,14 @@ ROLLBACK;
 BEGIN;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 INSERT INTO test_table VALUES (7,8,'gg'),(8,9,'hh'),(9,10,'ii');
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      9
 (1 row)
 
@@ -65,14 +65,14 @@ ROLLBACK;
 BEGIN;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 INSERT INTO test_table SELECT * FROM co_test_table;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     12
 (1 row)
 
@@ -81,14 +81,14 @@ ROLLBACK;
 BEGIN;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      9
 (1 row)
 
@@ -97,7 +97,7 @@ ROLLBACK;
 BEGIN;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   27
 (1 row)
 
@@ -105,7 +105,7 @@ UPDATE test_table SET col_1 = 0 WHERE id = 2;
 DELETE FROM test_table WHERE id = 3;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   20
 (1 row)
 
@@ -114,14 +114,14 @@ ROLLBACK;
 BEGIN;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   27
 (1 row)
 
 UPDATE test_table SET col_1 = 5;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   30
 (1 row)
 
@@ -130,7 +130,7 @@ ROLLBACK;
 BEGIN;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   27
 (1 row)
 
@@ -143,7 +143,7 @@ WHERE
 	AND test_table.id = 1;
 SELECT SUM(col_1) FROM test_table;
  sum 
------
+---------------------------------------------------------------------
   29
 (1 row)
 
@@ -161,14 +161,14 @@ SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 BEGIN;
 SELECT COUNT(*) FROM partitioning_test;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -176,7 +176,7 @@ INSERT INTO partitioning_test_2009 VALUES (3, '2009-09-09');
 INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
 SELECT COUNT(*) FROM partitioning_test;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -187,14 +187,14 @@ BEGIN;
 CREATE TABLE test_table_inn(id int, num_1 int);
 SELECT create_distributed_table('test_table_inn','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 INSERT INTO test_table_inn VALUES(1,3),(4,5),(6,7);
 SELECT COUNT(*) FROM test_table_inn;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -204,7 +204,7 @@ COMMIT;
 BEGIN;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -212,7 +212,7 @@ CREATE INDEX tt_ind_1 ON test_table(col_1);
 ALTER TABLE test_table ADD CONSTRAINT num_check CHECK (col_1 < 50);
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -220,7 +220,7 @@ ROLLBACK;
 -- We don't get a distributed transaction id outside a transaction block
 SELECT (get_current_transaction_id()).transaction_number > 0 FROM test_table LIMIT 1;
  ?column? 
-----------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -228,7 +228,7 @@ SELECT (get_current_transaction_id()).transaction_number > 0 FROM test_table LIM
 BEGIN;
 SELECT (get_current_transaction_id()).transaction_number > 0 FROM test_table LIMIT 1;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -245,7 +245,7 @@ END;
 $BODY$ LANGUAGE plpgsql;
 $$);
  run_command_on_master_and_workers 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -253,14 +253,14 @@ $$);
 BEGIN;
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
 -- Sneakily insert directly into shards
 SELECT insert_row_test(pg_typeof(test_table)::name) FROM test_table;
  insert_row_test 
------------------
+---------------------------------------------------------------------
  t
  t
  t
@@ -271,14 +271,14 @@ SELECT insert_row_test(pg_typeof(test_table)::name) FROM test_table;
 
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
     12
 (1 row)
 
 ABORT;
 SELECT count(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -289,7 +289,7 @@ BEGIN;
 DELETE FROM test_table where id = 1 or id = 3;
 SELECT * FROM co_test_table;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   2 |    30 | 'bb10'
 (1 row)
 
@@ -300,7 +300,7 @@ SET client_min_messages TO ERROR;
 alter system set deadlock_timeout TO '250ms';
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -349,7 +349,7 @@ ROLLBACK;
 CREATE USER rls_user;
 SELECT run_command_on_workers('CREATE USER rls_user');
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -358,14 +358,14 @@ GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user;
 GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user;
 SELECT run_command_on_workers('GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user');
   run_command_on_workers   
----------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
 (2 rows)
 
 SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user');
   run_command_on_workers   
----------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
 (2 rows)
@@ -382,7 +382,7 @@ SET search_path = 'multi_real_time_transaction';
 -- shouldn't see all rows because of RLS
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -391,7 +391,7 @@ BEGIN;
 SET LOCAL app.show_rows TO TRUE;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -400,7 +400,7 @@ SET LOCAL citus.propagate_set_commands TO 'local';
 SET LOCAL app.show_rows TO TRUE;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -408,14 +408,14 @@ SAVEPOINT disable_rls;
 SET LOCAL app.show_rows TO FALSE;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 ROLLBACK TO SAVEPOINT disable_rls;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -424,7 +424,7 @@ SET LOCAL app.show_rows TO FALSE;
 RELEASE SAVEPOINT disable_rls_for_real;
 SELECT COUNT(*) FROM test_table;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -437,7 +437,7 @@ SET ROLE rls_user;
 SET search_path = 'multi_real_time_transaction';
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   1 |     2 | 'cc2'
   1 |    20 | 'aa10'
   2 |    30 | 'bb10'
@@ -451,14 +451,14 @@ SET search_path = 'multi_real_time_transaction';
 -- shard xxxxx contains data from tenant id 1
 SELECT * FROM co_test_table_1610004 ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   1 |     2 | 'cc2'
   1 |    20 | 'aa10'
 (2 rows)
 
 SELECT * FROM co_test_table_1610006 ORDER BY id, col_1;
  id | col_1 | col_2 
-----+-------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
@@ -466,7 +466,7 @@ SET search_path = 'multi_real_time_transaction';
 -- shard xxxxx contains data from tenant id 3
 SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   3 |     4 | 'cc1'
   3 |     5 | 'cc2'
   3 |    40 | 'cc10'
@@ -475,7 +475,7 @@ SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
 -- shard xxxxx contains data from tenant id 2
 SELECT * FROM co_test_table_1610007 ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   2 |    30 | 'bb10'
 (1 row)
 
@@ -489,7 +489,7 @@ SET citus.enable_ddl_propagation to on;
 SELECT run_command_on_shards('co_test_table', $cmd$CREATE POLICY filter_by_tenant_id ON %s TO PUBLIC
         USING (id = ANY(string_to_array(current_setting('app.tenant_id'), ',')::int[]));$cmd$);
     run_command_on_shards    
------------------------------
+---------------------------------------------------------------------
  (1610004,t,"CREATE POLICY")
  (1610005,t,"CREATE POLICY")
  (1610006,t,"CREATE POLICY")
@@ -502,7 +502,7 @@ ALTER TABLE co_test_table ENABLE ROW LEVEL SECURITY;
 SET citus.enable_ddl_propagation to on;
 SELECT run_command_on_shards('co_test_table','ALTER TABLE %s ENABLE ROW LEVEL SECURITY;');
    run_command_on_shards   
----------------------------
+---------------------------------------------------------------------
  (1610004,t,"ALTER TABLE")
  (1610005,t,"ALTER TABLE")
  (1610006,t,"ALTER TABLE")
@@ -518,7 +518,7 @@ SET LOCAL citus.propagate_set_commands TO 'local';
 SET LOCAL app.tenant_id TO 1;
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   1 |     2 | 'cc2'
   1 |    20 | 'aa10'
 (2 rows)
@@ -527,7 +527,7 @@ SAVEPOINT disable_rls;
 SET LOCAL app.tenant_id TO 3;
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   3 |     4 | 'cc1'
   3 |     5 | 'cc2'
   3 |    40 | 'cc10'
@@ -536,7 +536,7 @@ SELECT * FROM co_test_table ORDER BY id, col_1;
 ROLLBACK TO SAVEPOINT disable_rls;
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   1 |     2 | 'cc2'
   1 |    20 | 'aa10'
 (2 rows)
@@ -546,7 +546,7 @@ SET LOCAL app.tenant_id TO 3;
 RELEASE SAVEPOINT disable_rls_for_real;
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   3 |     4 | 'cc1'
   3 |     5 | 'cc2'
   3 |    40 | 'cc10'
@@ -558,7 +558,7 @@ RELEASE SAVEPOINT disable_rls;
 SET LOCAL app.tenant_id TO '1,3';
 SELECT * FROM co_test_table ORDER BY id, col_1;
  id | col_1 | col_2  
-----+-------+--------
+---------------------------------------------------------------------
   1 |     2 | 'cc2'
   1 |    20 | 'aa10'
   3 |     4 | 'cc1'
@@ -574,7 +574,7 @@ ALTER TABLE co_test_table DISABLE ROW LEVEL SECURITY;
 SET citus.enable_ddl_propagation to on;
 SELECT run_command_on_shards('co_test_table','ALTER TABLE %s DISABLE ROW LEVEL SECURITY;');
    run_command_on_shards   
----------------------------
+---------------------------------------------------------------------
  (1610004,t,"ALTER TABLE")
  (1610005,t,"ALTER TABLE")
  (1610006,t,"ALTER TABLE")
@@ -586,7 +586,7 @@ DROP POLICY filter_by_tenant_id ON co_test_table;
 SET citus.enable_ddl_propagation to on;
 SELECT run_command_on_shards('co_test_table', 'DROP POLICY filter_by_tenant_id ON %s;');
    run_command_on_shards   
----------------------------
+---------------------------------------------------------------------
  (1610004,t,"DROP POLICY")
  (1610005,t,"DROP POLICY")
  (1610006,t,"DROP POLICY")
@@ -599,7 +599,7 @@ BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT id, pg_advisory_lock(15) FROM test_table ORDER BY 1 DESC;
  id | pg_advisory_lock 
-----+------------------
+---------------------------------------------------------------------
   6 | 
   5 | 
   4 | 
@@ -613,7 +613,7 @@ SET client_min_messages TO DEFAULT;
 alter system set deadlock_timeout TO DEFAULT;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -624,7 +624,7 @@ SET citus.select_opens_transaction_block TO off;
 -- still holds the advisory locks since the sessions are still active
 SELECT id, pg_advisory_xact_lock(16) FROM test_table ORDER BY id;
  id | pg_advisory_xact_lock 
-----+-----------------------
+---------------------------------------------------------------------
   1 | 
   2 | 
   3 | 

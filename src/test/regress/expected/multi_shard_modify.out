@@ -9,7 +9,7 @@ CREATE TABLE multi_shard_modify_test (
         t_value integer not null);
 SELECT create_distributed_table('multi_shard_modify_test', 't_key', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -21,7 +21,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -29,14 +29,14 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 ROLLBACK;
 SELECT count(*) FROM multi_shard_modify_test;
  count 
--------
+---------------------------------------------------------------------
     27
 (1 row)
 
@@ -54,7 +54,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -63,7 +63,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -76,7 +76,7 @@ ERROR:  relation temp_nations is not distributed
 -- commands with a USING clause are unsupported
 SELECT create_distributed_table('temp_nations', 'name', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -89,7 +89,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -102,7 +102,7 @@ ERROR:  cannot perform an INSERT without a partition column value
 SET citus.multi_shard_commit_protocol TO '1pc';
 SELECT count(*) FROM multi_shard_modify_test;
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -110,13 +110,13 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM multi_shard_modify_test;
  count 
--------
+---------------------------------------------------------------------
     23
 (1 row)
 
@@ -126,13 +126,13 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM multi_shard_modify_test;
  count 
--------
+---------------------------------------------------------------------
     21
 (1 row)
 
@@ -146,7 +146,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 15
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -156,7 +156,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -165,13 +165,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_key=17;
  t_name 
---------
+---------------------------------------------------------------------
  warsaw
 (1 row)
 
@@ -180,13 +180,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
  t_name 
---------
+---------------------------------------------------------------------
  ???
  ???
  ???
@@ -198,13 +198,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
  t_value 
----------
+---------------------------------------------------------------------
      296
      296
      296
@@ -216,13 +216,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_name, t_value FROM multi_shard_modify_test WHERE t_key>30 AND t_key<35;
   t_name  | t_value 
-----------+---------
+---------------------------------------------------------------------
  somename |     333
  somename |     333
  somename |     333
@@ -234,13 +234,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_name FROM multi_shard_modify_test WHERE t_value < 0;
   t_name   
------------
+---------------------------------------------------------------------
  nice city
  nice city
 (2 rows)
@@ -255,7 +255,7 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -264,7 +264,7 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -278,13 +278,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
  t_value 
----------
+---------------------------------------------------------------------
       10
 (1 row)
 
@@ -293,13 +293,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
  t_value 
----------
+---------------------------------------------------------------------
       47
 (1 row)
 
@@ -309,7 +309,7 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -318,13 +318,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
  t_value 
----------
+---------------------------------------------------------------------
       78
 (1 row)
 
@@ -333,7 +333,7 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -347,7 +347,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
  master_modify_multiple_shards 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 

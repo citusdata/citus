@@ -18,7 +18,7 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
            avg           
--------------------------
+---------------------------------------------------------------------
  142158.8766934673366834
 (1 row)
 
@@ -45,7 +45,7 @@ FROM
 DEBUG:  generating subplan 2_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
 DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT avg(order_count) AS avg FROM (SELECT intermediate_result.l_suppkey, intermediate_result.order_count FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(l_suppkey integer, order_count bigint)) order_counts
         avg         
---------------------
+---------------------------------------------------------------------
  1.7199369356456930
 (1 row)
 
@@ -69,7 +69,7 @@ SELECT count(*) FROM (
    SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
 ) b;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -90,7 +90,7 @@ DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT count(*) AS cou
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
--------
+---------------------------------------------------------------------
  12001
 (1 row)
 
@@ -112,7 +112,7 @@ DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
--------
+---------------------------------------------------------------------
  14496
 (1 row)
 
@@ -124,7 +124,7 @@ SELECT count(*) FROM
 ) b;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -151,7 +151,7 @@ FROM
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
           avg           
-------------------------
+---------------------------------------------------------------------
  17470.0940725222668915
 (1 row)
 
@@ -193,7 +193,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          39
          39
@@ -219,7 +219,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          39
          39
@@ -244,7 +244,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          39
          39
@@ -279,7 +279,7 @@ ON (l_orderkey::int8 = o_orderkey::int8)
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
       14947
       14947
       14946
@@ -315,7 +315,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          39
          39
@@ -340,7 +340,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          39
          39
@@ -397,7 +397,7 @@ LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
        4 |       5 |       4 |       1
@@ -412,7 +412,7 @@ LEFT JOIN users_reference_table t2 ON t1.user_id > t2.user_id
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        6 |       5 |       5 |       3
        5 |       5 |       5 |       3
        4 |       5 |       5 |       3
@@ -434,7 +434,7 @@ LEFT JOIN users_reference_table t2 ON t1.user_id = (CASE WHEN t2.user_id > 3 THE
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        6 |         |         |        
        5 |         |         |        
        4 |         |         |        
@@ -451,7 +451,7 @@ SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
  ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
  LIMIT 5;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
        4 |       5 |       4 |       1
@@ -479,7 +479,7 @@ FROM (
 ORDER BY 1, 2, 3
 LIMIT 5;
  user_id | value_1 | event_type 
----------+---------+------------
+---------------------------------------------------------------------
        1 |       1 |          0
        1 |       1 |          0
        1 |       1 |          1
@@ -494,7 +494,7 @@ JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 5;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        6 |       5 |       2 |       0
        5 |       5 |       5 |       1
        4 |       5 |       4 |       1
@@ -514,7 +514,7 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
  l_orderkey 
-------------
+---------------------------------------------------------------------
          39
          38
          37
@@ -537,7 +537,7 @@ ON (l_orderkey = o_orderkey)
 WHERE
 	(o_orderkey < l_quantity);
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
@@ -553,7 +553,7 @@ WHERE
 ORDER BY l_quantity DESC
 LIMIT 10;
  l_quantity 
-------------
+---------------------------------------------------------------------
       50.00
       49.00
       46.00
@@ -578,7 +578,7 @@ WHERE
 ORDER BY l_quantity DESC
 LIMIT 10;
  l_quantity 
-------------
+---------------------------------------------------------------------
       50.00
       49.00
       46.00
@@ -601,7 +601,7 @@ ON (l_orderkey = o_orderkey)
 WHERE
 	(o_orderkey < l_quantity);
  count 
--------
+---------------------------------------------------------------------
     25
 (1 row)
 
@@ -617,7 +617,7 @@ FROM (
 	   l_orderkey
 ) z;
  count 
--------
+---------------------------------------------------------------------
      7
 (1 row)
 
@@ -669,7 +669,7 @@ ORDER BY
 	o_custkey ASC
 LIMIT 10;
  o_custkey | total_order_count 
------------+-------------------
+---------------------------------------------------------------------
       1462 |                 9
        619 |                 8
        643 |                 8
@@ -699,7 +699,7 @@ WHERE
 	unit_price > 1000 AND
 	unit_price < 10000;
           avg          
------------------------
+---------------------------------------------------------------------
  4968.4946466804019323
 (1 row)
 
@@ -718,7 +718,7 @@ SELECT count(*) FROM
 	WHERE l_orderkey = 1
 ) b;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -731,7 +731,7 @@ SELECT count(*) FROM
 	WHERE l_orderkey = 1
 ) b;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -749,7 +749,7 @@ SELECT max(l_orderkey) FROM
   ) z
 ) y;
   max  
--------
+---------------------------------------------------------------------
  14947
 (1 row)
 
@@ -770,7 +770,7 @@ FROM
       GROUP BY user_id) AS bar
    WHERE foo.user_id = bar.user_id ) AS baz;
  user_id | counter | user_id | counter 
----------+---------+---------+---------
+---------------------------------------------------------------------
 (0 rows)
 
 -- Subqueries filter by different users, one of which overlaps
@@ -793,7 +793,7 @@ FROM
 ORDER BY 1,2
 LIMIT 5;
  user_id | counter | user_id | counter 
----------+---------+---------+---------
+---------------------------------------------------------------------
        2 |      57 |       2 |      57
 (1 row)
 
@@ -827,7 +827,7 @@ CREATE TABLE subquery_pruning_varchar_test_table
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -839,7 +839,7 @@ SELECT * FROM
 AS foo;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM
@@ -847,7 +847,7 @@ SELECT * FROM
 AS foo;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
 (0 rows)
 
 SET client_min_messages TO NOTICE;
@@ -880,7 +880,7 @@ SELECT * FROM
 		a_inner)
 AS foo;
  a 
----
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE subquery_pruning_varchar_test_table;
@@ -911,7 +911,7 @@ FROM
 		tenant_id,
 		user_id) AS subquery;
    event_average    
---------------------
+---------------------------------------------------------------------
  3.6666666666666667
 (1 row)
 
@@ -980,7 +980,7 @@ GROUP BY
 ORDER BY
     event_average DESC;
    event_average    |       hasdone       
---------------------+---------------------
+---------------------------------------------------------------------
  4.0000000000000000 | Has not done paying
  2.5000000000000000 | Has done paying
 (2 rows)
@@ -1056,7 +1056,7 @@ GROUP BY
 ORDER BY
 	count_pay;
    event_average    | count_pay 
---------------------+-----------
+---------------------------------------------------------------------
  3.0000000000000000 |         0
 (1 row)
 
@@ -1113,7 +1113,7 @@ ORDER BY
 LIMIT
 	10;
  tenant_id | user_id | user_lastseen |        event_array         
------------+---------+---------------+----------------------------
+---------------------------------------------------------------------
          1 |    1003 |    1472807315 | {click,click,click,submit}
          1 |    1002 |    1472807215 | {click,click,submit,pay}
          1 |    1001 |    1472807115 | {click,submit,pay}

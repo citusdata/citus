@@ -4,44 +4,44 @@
 -- Check that we can correctly handle complex expressions and aggregates.
 SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
         ?column?        
-------------------------
+---------------------------------------------------------------------
  12000.0000000000000000
 (1 row)
 
 SELECT sum(l_quantity) / (10 * avg(l_quantity)) FROM lineitem;
        ?column?        
------------------------
+---------------------------------------------------------------------
  1200.0000000000000000
 (1 row)
 
 SELECT (sum(l_quantity) / (10 * avg(l_quantity))) + 11 FROM lineitem;
        ?column?        
------------------------
+---------------------------------------------------------------------
  1211.0000000000000000
 (1 row)
 
 SELECT avg(l_quantity) as average FROM lineitem;
        average       
----------------------
+---------------------------------------------------------------------
  25.4462500000000000
 (1 row)
 
 SELECT 100 * avg(l_quantity) as average_times_hundred FROM lineitem;
  average_times_hundred 
------------------------
+---------------------------------------------------------------------
  2544.6250000000000000
 (1 row)
 
 SELECT 100 * avg(l_quantity) / 10 as average_times_ten FROM lineitem;
   average_times_ten   
-----------------------
+---------------------------------------------------------------------
  254.4625000000000000
 (1 row)
 
 SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem 
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
  l_quantity | count_quantity 
-------------+----------------
+---------------------------------------------------------------------
       44.00 |           2150
       38.00 |           2160
       45.00 |           2180
@@ -98,42 +98,42 @@ SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE octet_length(l_comment || l_comment) > 40;
  count 
--------
+---------------------------------------------------------------------
   8148
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE octet_length(concat(l_comment, l_comment)) > 40;
  count 
--------
+---------------------------------------------------------------------
   8148
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE octet_length(l_comment) + octet_length('randomtext'::text) > 40;
  count 
--------
+---------------------------------------------------------------------
   4611
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE octet_length(l_comment) + 10 > 40;
  count 
--------
+---------------------------------------------------------------------
   4611
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE (l_receiptdate::timestamp - l_shipdate::timestamp) > interval '5 days';
  count 
--------
+---------------------------------------------------------------------
  10008
 (1 row)
 
 -- can push down queries where no columns present on the WHERE clause
 SELECT count(*) FROM lineitem WHERE random() = -0.1;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -141,7 +141,7 @@ SELECT count(*) FROM lineitem WHERE random() = -0.1;
 SELECT count(*) FROM lineitem
 	WHERE (l_partkey > 10000) is true;
  count 
--------
+---------------------------------------------------------------------
  11423
 (1 row)
 
@@ -149,7 +149,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE l_partkey = ANY(ARRAY[19353, 19354, 19355]);
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -157,7 +157,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE l_partkey = ALL(ARRAY[19353]);
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -165,7 +165,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE ARRAY[19353, 19354, 19355] @> ARRAY[l_partkey];
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -173,7 +173,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE (l_quantity/100)::int::bool::text::bool;
  count 
--------
+---------------------------------------------------------------------
    260
 (1 row)
 
@@ -181,7 +181,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE (CASE WHEN l_orderkey > 4000 THEN l_partkey / 100 > 1 ELSE false END);
  count 
--------
+---------------------------------------------------------------------
   7948
 (1 row)
 
@@ -189,7 +189,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE COALESCE((l_partkey/50000)::bool, false);
  count 
--------
+---------------------------------------------------------------------
   9122
 (1 row)
 
@@ -197,7 +197,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE NULLIF((l_partkey/50000)::bool, false);
  count 
--------
+---------------------------------------------------------------------
   9122
 (1 row)
 
@@ -205,7 +205,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM orders
 	WHERE o_comment IS NOT null;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -213,7 +213,7 @@ SELECT count(*) FROM orders
 SELECT count(*) FROM lineitem
 	WHERE isfinite(l_shipdate);
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -221,7 +221,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE 0 != 0;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -229,7 +229,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE l_partkey IS DISTINCT FROM 50040;
  count 
--------
+---------------------------------------------------------------------
  11999
 (1 row)
 
@@ -237,7 +237,7 @@ SELECT count(*) FROM lineitem
 SELECT count(*) FROM lineitem
 	WHERE row(l_partkey, 2, 3) > row(2000, 2, 3);
  count 
--------
+---------------------------------------------------------------------
  11882
 (1 row)
 
@@ -252,7 +252,7 @@ SELECT count(*) FROM lineitem
 		  l_partkey IS DISTINCT FROM 50040 AND
 		  row(l_partkey, 2, 3) > row(2000, 2, 3);
  count 
--------
+---------------------------------------------------------------------
    137
 (1 row)
 
@@ -264,7 +264,7 @@ SELECT l_linenumber FROM lineitem
 		l_linenumber
 	LIMIT 1;
  l_linenumber 
---------------
+---------------------------------------------------------------------
             1
 (1 row)
 
@@ -277,7 +277,7 @@ SELECT count(*) * l_discount as total_discount, count(*), sum(l_tax), l_discount
 	ORDER BY
 		total_discount DESC, sum(l_tax) DESC;
  total_discount | count |  sum  | l_discount 
-----------------+-------+-------+------------
+---------------------------------------------------------------------
          104.80 |  1048 | 41.08 |       0.10
           98.55 |  1095 | 44.15 |       0.09
           90.64 |  1133 | 45.94 |       0.08
@@ -300,7 +300,7 @@ SELECT l_linenumber FROM lineitem
 		l_linenumber
 	LIMIT 1;
  l_linenumber 
---------------
+---------------------------------------------------------------------
             2
 (1 row)
 
@@ -315,7 +315,7 @@ SELECT max(l_linenumber), min(l_discount), l_receiptdate FROM lineitem
 		l_receiptdate
 	LIMIT 1;
  max | min  | l_receiptdate 
------+------+---------------
+---------------------------------------------------------------------
    3 | 0.07 | 01-09-1992
 (1 row)
 
@@ -323,21 +323,21 @@ SELECT max(l_linenumber), min(l_discount), l_receiptdate FROM lineitem
 SELECT count(*) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
  count 
--------
+---------------------------------------------------------------------
    951
 (1 row)
 
 SELECT count(*) FROM lineitem
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5;
  count 
--------
+---------------------------------------------------------------------
    951
 (1 row)
 
 SELECT count(*) FROM lineitem JOIN orders ON l_orderkey = o_orderkey
 	WHERE l_quantity < 5;
  count 
--------
+---------------------------------------------------------------------
    951
 (1 row)
 
@@ -356,7 +356,7 @@ DETAIL:  Subqueries with offset are not supported yet
 -- Simple LIMIT/OFFSET with ORDER BY
 SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
  o_orderkey 
-------------
+---------------------------------------------------------------------
          69
          70
          71
@@ -383,7 +383,7 @@ ORDER BY
 	customer_keys.o_custkey DESC
 LIMIT 10 OFFSET 20;
  o_custkey | total_order_count 
------------+-------------------
+---------------------------------------------------------------------
       1466 |                 1
       1465 |                 2
       1463 |                 4
@@ -416,7 +416,7 @@ SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt 
 -- OFFSET without LIMIT
 SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
  o_custkey 
------------
+---------------------------------------------------------------------
       1498
       1498
       1499
@@ -437,7 +437,7 @@ ORDER BY 1, 2, 3
 LIMIT 10 OFFSET 20;
 DEBUG:  push down of limit count: 30
  l_partkey | o_custkey | l_quantity 
------------+-----------+------------
+---------------------------------------------------------------------
        655 |        58 |      50.00
        669 |       319 |      34.00
        699 |      1255 |      50.00
@@ -465,7 +465,7 @@ SELECT
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
  l_orderkey |    sum    |    sum    | count | count |    max    |   max    
-------------+-----------+-----------+-------+-------+-----------+----------
+---------------------------------------------------------------------
       12804 | 440012.71 |  45788.16 |     7 |     1 |  94398.00 | 45788.16
        9863 | 412560.63 | 175647.63 |     7 |     3 |  85723.77 | 50769.14
        2567 | 412076.77 |  59722.26 |     7 |     1 |  94894.00 |  9784.02
@@ -492,7 +492,7 @@ SELECT
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
  l_orderkey |    sum    |    sum    | count | count |   max    |   max    
-------------+-----------+-----------+-------+-------+----------+----------
+---------------------------------------------------------------------
        9863 | 412560.63 | 175647.63 |     7 |     3 | 85723.77 | 50769.14
       12039 | 407048.94 |  76406.30 |     7 |     2 | 94471.02 | 19679.30
        5606 | 403595.91 |  36531.51 |     7 |     2 | 94890.18 | 30582.75

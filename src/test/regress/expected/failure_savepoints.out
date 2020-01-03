@@ -5,7 +5,7 @@
 -- as invalid and continue with a WARNING.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -19,7 +19,7 @@ CREATE TABLE artists (
 );
 SELECT create_distributed_table('artists', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -31,7 +31,7 @@ INSERT INTO artists VALUES (4, 'William Kurelek');
 -- simply fail at SAVEPOINT
 SELECT citus.mitmproxy('conn.onQuery(query="^SAVEPOINT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -55,14 +55,14 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
-----+-----------------
+---------------------------------------------------------------------
   4 | William Kurelek
 (1 row)
 
 -- fail at RELEASE
 SELECT citus.mitmproxy('conn.onQuery(query="^RELEASE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -87,14 +87,14 @@ CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
-----+-----------------
+---------------------------------------------------------------------
   4 | William Kurelek
 (1 row)
 
 -- fail at ROLLBACK
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -111,14 +111,14 @@ COMMIT;
 ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
-----+-----------------
+---------------------------------------------------------------------
   4 | William Kurelek
 (1 row)
 
 -- fail at second RELEASE
 SELECT citus.mitmproxy('conn.onQuery(query="^RELEASE").after(1).kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -143,14 +143,14 @@ CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
-----+-----------------
+---------------------------------------------------------------------
   4 | William Kurelek
 (1 row)
 
 -- fail at second ROLLBACK
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").after(1).kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -169,13 +169,13 @@ COMMIT;
 ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
-----+-----------------
+---------------------------------------------------------------------
   4 | William Kurelek
 (1 row)
 
 SELECT citus.mitmproxy('conn.onQuery(query="^RELEASE").after(1).kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -192,12 +192,12 @@ RELEASE SAVEPOINT s2;
 COMMIT;
 SELECT * FROM artists WHERE id=7;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -220,7 +220,7 @@ COMMIT;
 ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id=6;
  id | name 
-----+------
+---------------------------------------------------------------------
 (0 rows)
 
 -- replication factor > 1
@@ -233,14 +233,14 @@ SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- single shard, on both workers
 SELECT create_distributed_table('researchers', 'lab_id', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- simply fail at SAVEPOINT
 SELECT citus.mitmproxy('conn.onQuery(query="^SAVEPOINT").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -262,7 +262,7 @@ COMMIT;
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
  id | lab_id | name 
-----+--------+------
+---------------------------------------------------------------------
 (0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
@@ -270,14 +270,14 @@ WHERE shardstate = 3 AND shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'researchers'::regclass
 ) RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
 (0 rows)
 
 TRUNCATE researchers;
 -- fail at rollback
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -294,7 +294,7 @@ ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
  id | lab_id | name 
-----+--------+------
+---------------------------------------------------------------------
 (0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
@@ -302,14 +302,14 @@ WHERE shardstate = 3 AND shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'researchers'::regclass
 ) RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
 (0 rows)
 
 TRUNCATE researchers;
 -- fail at release
 SELECT citus.mitmproxy('conn.onQuery(query="^RELEASE").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -330,7 +330,7 @@ COMMIT;
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
  id | lab_id | name 
-----+--------+------
+---------------------------------------------------------------------
 (0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
@@ -338,14 +338,14 @@ WHERE shardstate = 3 AND shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'researchers'::regclass
 ) RETURNING placementid;
  placementid 
--------------
+---------------------------------------------------------------------
 (0 rows)
 
 TRUNCATE researchers;
 -- clean up
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 

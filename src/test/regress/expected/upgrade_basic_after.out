@@ -2,7 +2,7 @@ SET search_path TO upgrade_basic, public, pg_catalog;
 BEGIN;
 SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
   schemaname   | tablename | indexname | tablespace |                            indexdef                             
----------------+-----------+-----------+------------+-----------------------------------------------------------------
+---------------------------------------------------------------------
  upgrade_basic | r         | r_pkey    |            | CREATE UNIQUE INDEX r_pkey ON upgrade_basic.r USING btree (a)
  upgrade_basic | t         | t_a_idx   |            | CREATE INDEX t_a_idx ON upgrade_basic.t USING hash (a)
  upgrade_basic | tp        | tp_pkey   |            | CREATE UNIQUE INDEX tp_pkey ON upgrade_basic.tp USING btree (a)
@@ -10,31 +10,31 @@ SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
 
 SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg_dist_placement;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT nextval('pg_dist_groupid_seq') = MAX(groupid)+1 FROM pg_dist_node;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT nextval('pg_dist_node_nodeid_seq') = MAX(nodeid)+1 FROM pg_dist_node;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT nextval('pg_dist_colocationid_seq') = MAX(colocationid)+1 FROM pg_dist_colocation;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -51,7 +51,7 @@ SELECT sequence_name FROM information_schema.sequences
     'pg_dist_colocationid_seq'
   );
  sequence_name 
----------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT logicalrelid FROM pg_dist_partition
@@ -62,7 +62,7 @@ SELECT logicalrelid FROM pg_dist_partition
    AND relnamespace='upgrade_basic'::regnamespace
   ORDER BY logicalrelid;
  logicalrelid 
---------------
+---------------------------------------------------------------------
  t
  tp
  t_ab
@@ -80,7 +80,7 @@ SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4
     AND tgname LIKE 'truncate_trigger_%'
   ORDER BY tgrelid::regclass;
  tgrelid  |         tgfoid         | tgisinternal | tgenabled |  tgtype  
-----------+------------------------+--------------+-----------+----------
+---------------------------------------------------------------------
  t        | citus_truncate_trigger | t            | O         | 00100000
  tp       | citus_truncate_trigger | t            | O         | 00100000
  t_ab     | citus_truncate_trigger | t            | O         | 00100000
@@ -91,7 +91,7 @@ SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4
 
 SELECT * FROM t ORDER BY a;
  a 
----
+---------------------------------------------------------------------
  1
  2
  3
@@ -101,14 +101,14 @@ SELECT * FROM t ORDER BY a;
 
 SELECT * FROM t WHERE a = 1;
  a 
----
+---------------------------------------------------------------------
  1
 (1 row)
 
 INSERT INTO t SELECT * FROM generate_series(10, 15);
 EXPLAIN (COSTS FALSE) SELECT * from t;
                        QUERY PLAN                        
----------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 32
    Tasks Shown: One of 32
@@ -119,7 +119,7 @@ EXPLAIN (COSTS FALSE) SELECT * from t;
 
 EXPLAIN (COSTS FALSE) SELECT * from t WHERE a = 1;
                        QUERY PLAN                        
----------------------------------------------------------
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
@@ -133,13 +133,13 @@ EXPLAIN (COSTS FALSE) SELECT * from t WHERE a = 1;
 
 SELECT * FROM t WHERE a = 10;
  a  
-----
+---------------------------------------------------------------------
  10
 (1 row)
 
 SELECT * FROM t WHERE a = 11;
  a  
-----
+---------------------------------------------------------------------
  11
 (1 row)
 
@@ -147,7 +147,7 @@ COPY t FROM PROGRAM 'echo 20 && echo 21 && echo 22 && echo 23 && echo 24' WITH C
 ALTER TABLE t ADD COLUMN b int DEFAULT 10;
 SELECT * FROM t ORDER BY a;
  a  | b  
-----+----
+---------------------------------------------------------------------
   1 | 10
   2 | 10
   3 | 10
@@ -169,7 +169,7 @@ SELECT * FROM t ORDER BY a;
 TRUNCATE TABLE t;
 SELECT * FROM T;
  a | b 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE t;
@@ -177,7 +177,7 @@ DROP TABLE t;
 -- verify that the table whose column is dropped before a pg_upgrade still works as expected.
 SELECT * FROM t_ab ORDER BY b;
  b  
-----
+---------------------------------------------------------------------
  11
  22
  33
@@ -185,13 +185,13 @@ SELECT * FROM t_ab ORDER BY b;
 
 SELECT * FROM t_ab WHERE b = 11;
  b  
-----
+---------------------------------------------------------------------
  11
 (1 row)
 
 SELECT * FROM t_ab WHERE b = 22;
  b  
-----
+---------------------------------------------------------------------
  22
 (1 row)
 
@@ -199,7 +199,7 @@ SELECT * FROM t_ab WHERE b = 22;
 -- before the upgrade
 SELECT * FROM t2 ORDER BY a;
  a | b  
----+----
+---------------------------------------------------------------------
  1 | 11
  2 | 22
  3 | 33
@@ -208,13 +208,13 @@ SELECT * FROM t2 ORDER BY a;
 SELECT create_distributed_table('t2', 'a');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM t2 ORDER BY a;
  a | b  
----+----
+---------------------------------------------------------------------
  1 | 11
  2 | 22
  3 | 33
@@ -225,7 +225,7 @@ BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT * FROM r ORDER BY a;
  a 
----
+---------------------------------------------------------------------
  1
  2
  3
@@ -235,7 +235,7 @@ SELECT * FROM r ORDER BY a;
 
 SELECT * FROM tr ORDER BY pk;
  pk | a 
-----+---
+---------------------------------------------------------------------
   1 | 1
   2 | 2
   3 | 3
@@ -246,7 +246,7 @@ SELECT * FROM tr ORDER BY pk;
 DELETE FROM r where a = 1;
 SELECT * FROM r ORDER BY a;
  a 
----
+---------------------------------------------------------------------
  2
  3
  4
@@ -255,7 +255,7 @@ SELECT * FROM r ORDER BY a;
 
 SELECT * FROM tr ORDER BY pk;
  pk | a 
-----+---
+---------------------------------------------------------------------
   2 | 2
   3 | 3
   4 | 4
@@ -265,7 +265,7 @@ SELECT * FROM tr ORDER BY pk;
 UPDATE r SET a = 30 WHERE a = 3;
 SELECT * FROM r ORDER BY a;
  a  
-----
+---------------------------------------------------------------------
   2
   4
   5
@@ -274,7 +274,7 @@ SELECT * FROM r ORDER BY a;
 
 SELECT * FROM tr ORDER BY pk;
  pk | a  
-----+----
+---------------------------------------------------------------------
   2 |  2
   3 | 30
   4 |  4
@@ -285,7 +285,7 @@ SELECT * FROM tr ORDER BY pk;
 CREATE TABLE t3(a int, b int);
 SELECT create_distributed_table('t3', 'a');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -294,7 +294,7 @@ INSERT INTO t3 VALUES (2, 22);
 INSERT INTO t3 VALUES (3, 33);
 SELECT * FROM t3 ORDER BY a;
  a | b  
----+----
+---------------------------------------------------------------------
  1 | 11
  2 | 22
  3 | 33
@@ -304,14 +304,14 @@ SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
   WHERE logicalrelid = 't_append'::regclass
   ORDER BY shardminvalue, shardmaxvalue;
  shardminvalue | shardmaxvalue 
----------------+---------------
+---------------------------------------------------------------------
  1             | 3
  5             | 7
 (2 rows)
 
 SELECT * FROM t_append ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       2
   2 |       3
   3 |       4
@@ -325,7 +325,7 @@ SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
   WHERE logicalrelid = 't_append'::regclass
   ORDER BY shardminvalue, shardmaxvalue;
  shardminvalue | shardmaxvalue 
----------------+---------------
+---------------------------------------------------------------------
  1             | 3
  5             | 7
  9             | 11
@@ -333,7 +333,7 @@ SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
 
 SELECT * FROM t_append ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       2
   2 |       3
   3 |       4

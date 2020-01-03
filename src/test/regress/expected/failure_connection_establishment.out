@@ -7,7 +7,7 @@
 --
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -24,7 +24,7 @@ CREATE TABLE products (
 );
 SELECT create_distributed_table('products', 'product_no');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -39,7 +39,7 @@ DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY const
 SET citus.node_connection_timeout TO 400;
 SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -47,7 +47,7 @@ ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -62,19 +62,19 @@ INSERT INTO r1 (id, name) VALUES
 SELECT create_reference_table('r1');
 NOTICE:  Copying data from local table...
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.clear_network_traffic();
  clear_network_traffic 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -89,13 +89,13 @@ SET citus.task_assignment_policy TO 'round-robin';
 -- test would be if one of the queries does not return the result but an error.
 SELECT name FROM r1 WHERE id = 2;
  name 
-------
+---------------------------------------------------------------------
  bar
 (1 row)
 
 SELECT name FROM r1 WHERE id = 2;
  name 
-------
+---------------------------------------------------------------------
  bar
 (1 row)
 
@@ -103,13 +103,13 @@ SELECT name FROM r1 WHERE id = 2;
 -- connection to have been delayed and thus caused a timeout
 SELECT citus.dump_network_traffic();
         dump_network_traffic         
--------------------------------------
+---------------------------------------------------------------------
  (0,coordinator,"[initial message]")
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -119,7 +119,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SET citus.force_max_query_parallelization TO ON;
 SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -127,13 +127,13 @@ SELECT citus.mitmproxy('conn.delay(500)');
 -- test would be if one of the queries does not return the result but an error.
 SELECT count(*) FROM products;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM products;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -141,13 +141,13 @@ SELECT count(*) FROM products;
 -- is the worker
 SELECT citus.dump_network_traffic() ORDER BY 1 OFFSET 1;
         dump_network_traffic         
--------------------------------------
+---------------------------------------------------------------------
  (1,coordinator,"[initial message]")
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -155,7 +155,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE single_replicatated(key int);
 SELECT create_distributed_table('single_replicatated', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -164,7 +164,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 SET citus.force_max_query_parallelization TO ON;
 SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -176,7 +176,7 @@ SET citus.force_max_query_parallelization TO OFF;
 -- mark placement INVALID
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -189,13 +189,13 @@ WHERE
 	shardstate = 3 AND 
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
  invalid_placement_count 
--------------------------
+---------------------------------------------------------------------
                        0
 (1 row)
 
 SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -209,14 +209,14 @@ WHERE
 	shardstate = 3 AND 
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
  invalid_placement_count 
--------------------------
+---------------------------------------------------------------------
                        1
 (1 row)
 
 -- show that INSERT went through
 SELECT count(*) FROM products WHERE product_no = 100;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -226,12 +226,12 @@ SELECT get_global_active_transactions();
 WARNING:  could not establish connection after 400 ms
 WARNING:  connection error: localhost:xxxxx
  get_global_active_transactions 
---------------------------------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 

@@ -4,7 +4,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers($$CREATE USER collationuser;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -24,7 +24,7 @@ JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
      collname     |     nspname     | rolname  
-------------------+-----------------+----------
+---------------------------------------------------------------------
  german_phonebook | collation_tests | postgres
 (1 row)
 
@@ -36,20 +36,20 @@ INSERT INTO test_propagate VALUES (1, 'aesop', U&'\00E4sop'), (2, U&'Vo\1E9Er', 
 SELECT create_distributed_table('test_propagate', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- Test COLLATE is pushed down
 SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b';
  id |  t1   |  t2  
-----+-------+------
+---------------------------------------------------------------------
   1 | aesop | äsop
 (1 row)
 
 SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b' COLLATE "C";
  id |  t1  |  t2   
-----+------+-------
+---------------------------------------------------------------------
   2 | Voẞr | Vossr
 (1 row)
 
@@ -57,7 +57,7 @@ SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b' COLLATE "C";
 CREATE TABLE test_range(key text COLLATE german_phonebook, val int);
 SELECT create_distributed_table('test_range', 'key', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -77,7 +77,7 @@ SELECT * FROM test_range WHERE key > 'Ab' AND key < U&'\00E4z';
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  key  | val 
-------+-----
+---------------------------------------------------------------------
  äsop |   1
 (1 row)
 
@@ -89,7 +89,7 @@ JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
            collname            |     nspname     | rolname  
--------------------------------+-----------------+----------
+---------------------------------------------------------------------
  german_phonebook              | collation_tests | postgres
  german_phonebook_unpropagated | collation_tests | postgres
 (2 rows)
@@ -106,7 +106,7 @@ JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
            collname            |     nspname      |    rolname    
--------------------------------+------------------+---------------
+---------------------------------------------------------------------
  german_phonebook2             | collation_tests2 | collationuser
  german_phonebook_unpropagated | collation_tests  | postgres
 (2 rows)
@@ -128,7 +128,7 @@ DROP SCHEMA collation_tests2 CASCADE;
 DROP USER collationuser;
 SELECT run_command_on_workers($$DROP USER collationuser;$$);
      run_command_on_workers      
----------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP ROLE")
  (localhost,57638,t,"DROP ROLE")
 (2 rows)

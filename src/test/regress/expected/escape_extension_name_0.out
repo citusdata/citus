@@ -13,14 +13,14 @@ WHERE name = 'uuid-ossp'
 \gset
 :uuid_present_command;
  uuid_ossp_present 
--------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- show that the extension is created on both nodes
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -32,7 +32,7 @@ RESET client_min_messages;
 -- show that the extension is dropped from both nodes
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)
@@ -40,7 +40,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname 
 -- show that extension recreation on new nodes works also fine with extension names that require escaping
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -55,21 +55,21 @@ WHERE name = 'uuid-ossp'
 \gset
 :uuid_present_command;
  uuid_ossp_present 
--------------------
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- and add the other node
 SELECT 1 from master_add_node('localhost', :worker_2_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 -- show that the extension exists on both nodes
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'uuid-ossp'$$);
  run_command_on_workers 
-------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,0)
  (localhost,57638,t,0)
 (2 rows)

@@ -9,34 +9,34 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABlE ref_table(id int, value_1 int);
 SELECT create_reference_table('ref_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABlE ref_table_2(id int, value_1 int);
 SELECT create_reference_table('ref_table_2');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE test_table_1(id int, value_1 int);
 SELECT create_distributed_table('test_table_1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -47,28 +47,28 @@ SET search_path TO 'mx_modify_reference_table';
 INSERT INTO ref_table VALUES(1,1),(2,2);
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
    3
 (1 row)
 
 UPDATE ref_table SET value_1 = 1 WHERE id = 2;
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
    2
 (1 row)
 
 DELETE FROM ref_table;
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
     
 (1 row)
 
 COPY ref_table FROM STDIN DELIMITER ',';
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
    3
 (1 row)
 
@@ -76,7 +76,7 @@ SELECT SUM(value_1) FROM ref_table;
 -- It has been started to be supported on MX nodes with DML operations.
 SELECT * FROM ref_table FOR UPDATE;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       1
   2 |       2
 (2 rows)
@@ -86,14 +86,14 @@ SELECT * FROM ref_table FOR UPDATE;
 INSERT INTO ref_table SELECT * FROM test_table_1;
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   14
 (1 row)
 
 INSERT INTO ref_table_2 SELECT * FROM ref_table;
 SELECT SUM(value_1) FROM ref_table_2;
  sum 
------
+---------------------------------------------------------------------
   14
 (1 row)
 
@@ -102,13 +102,13 @@ SELECT SUM(value_1) FROM ref_table_2;
 SET search_path TO 'mx_modify_reference_table';
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   14
 (1 row)
 
 SELECT SUM(value_1) FROM ref_table_2;
  sum 
------
+---------------------------------------------------------------------
   14
 (1 row)
 
@@ -118,35 +118,35 @@ SELECT SUM(value_1) FROM ref_table_2;
 INSERT INTO ref_table VALUES(1,1),(2,2);
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   17
 (1 row)
 
 UPDATE ref_table SET value_1 = 1 WHERE id = 2;
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   15
 (1 row)
 
 COPY ref_table FROM STDIN DELIMITER ',';
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   18
 (1 row)
 
 INSERT INTO ref_table SELECT * FROM test_table_1;
 SELECT SUM(value_1) FROM ref_table;
  sum 
------
+---------------------------------------------------------------------
   29
 (1 row)
 
 INSERT INTO ref_table_2 SELECT * FROM ref_table;
 SELECT SUM(value_1) FROM ref_table_2;
  sum 
------
+---------------------------------------------------------------------
   43
 (1 row)
 

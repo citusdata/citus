@@ -5,7 +5,7 @@ SET citus.replication_model TO streaming;
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,7 +14,7 @@ SELECT create_distributed_table('test_recovery', 'x');
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -22,13 +22,13 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -37,7 +37,7 @@ SELECT count(*) FROM pg_dist_transaction;
 -- accordingly.
 SELECT * FROM pg_dist_local_group;
  groupid 
----------
+---------------------------------------------------------------------
       14
 (1 row)
 
@@ -61,33 +61,33 @@ INSERT INTO pg_dist_transaction VALUES (14, 'citus_14_should_be_forgotten');
 INSERT INTO pg_dist_transaction VALUES (122, 'citus_122_should_do_nothing');
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              3
 (1 row)
 
 -- delete the citus_122_should_do_nothing transaction
 DELETE FROM pg_dist_transaction WHERE gid = 'citus_122_should_do_nothing' RETURNING *;
  groupid |             gid             
----------+-----------------------------
+---------------------------------------------------------------------
      122 | citus_122_should_do_nothing
 (1 row)
 
 ROLLBACK PREPARED 'citus_122_should_do_nothing';
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'table_should_abort';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'table_should_commit';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -95,7 +95,7 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'table_should_commit';
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -107,13 +107,13 @@ INSERT INTO test_recovery VALUES ('world');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -127,13 +127,13 @@ INSERT INTO test_recovery VALUES ('world');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -141,13 +141,13 @@ SELECT recover_prepared_transactions();
 INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -155,7 +155,7 @@ SELECT recover_prepared_transactions();
 COPY test_recovery (x) FROM STDIN CSV;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -163,27 +163,27 @@ SELECT count(*) FROM pg_dist_transaction;
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
  pg_sleep 
-----------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 

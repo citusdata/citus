@@ -12,7 +12,7 @@ DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 -- make worker 1 receive metadata changes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -23,20 +23,20 @@ ERROR:  node at "localhost:xxxxx" does not exist
 -- verify node exist before removal
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- verify node is removed
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -46,7 +46,7 @@ SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeid=:worker_2_nodeid
 -- add a secondary to check we don't attempt to replicate the table to it
 SELECT 1 FROM master_add_node('localhost', 9000, groupid=>:worker_2_group, noderole=>'secondary');
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -54,72 +54,72 @@ SELECT 1 FROM master_add_node('localhost', 9000, groupid=>:worker_2_group, noder
 CREATE TABLE remove_node_reference_table(column1 int);
 SELECT create_reference_table('remove_node_reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- make sure when we add a secondary we don't attempt to add placements to it
 SELECT 1 FROM master_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- make sure when we disable a secondary we don't remove any placements
 SELECT master_disable_node('localhost', 9001);
  master_disable_node 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT isactive FROM pg_dist_node WHERE nodeport = 9001;
  isactive 
-----------
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- make sure when we activate a secondary we don't add any placements
 SELECT 1 FROM master_activate_node('localhost', 9001);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- make sure when we remove a secondary we don't remove any placements
 SELECT master_remove_node('localhost', 9001);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -130,7 +130,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -141,14 +141,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -159,21 +159,21 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
 \c - - - :master_port
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -184,7 +184,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -194,14 +194,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -212,7 +212,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -223,20 +223,20 @@ ERROR:  node at "localhost:xxxxx" does not exist
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 -- try to disable the node before removing it (this used to crash)
 SELECT master_disable_node('localhost', :worker_2_port);
  master_disable_node 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -244,7 +244,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -252,7 +252,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -263,7 +263,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -274,14 +274,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -292,7 +292,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -300,7 +300,7 @@ WHERE
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -308,7 +308,7 @@ ROLLBACK;
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -319,7 +319,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -330,14 +330,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -348,7 +348,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -357,7 +357,7 @@ WHERE
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -368,7 +368,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -379,14 +379,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -397,7 +397,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -405,7 +405,7 @@ WHERE
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -413,7 +413,7 @@ COMMIT;
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -424,7 +424,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -434,14 +434,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -452,7 +452,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -460,7 +460,7 @@ WHERE
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -468,7 +468,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -479,7 +479,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -490,14 +490,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -508,7 +508,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -517,7 +517,7 @@ BEGIN;
 INSERT INTO remove_node_reference_table VALUES(1);
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -525,7 +525,7 @@ COMMIT;
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -536,7 +536,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -546,21 +546,21 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 --verify the data is inserted
 SELECT * FROM remove_node_reference_table;
  column1 
----------
+---------------------------------------------------------------------
        1
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -571,12 +571,12 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM remove_node_reference_table;
  column1 
----------
+---------------------------------------------------------------------
        1
 (1 row)
 
@@ -585,7 +585,7 @@ SELECT * FROM remove_node_reference_table;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -593,7 +593,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -604,7 +604,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -615,14 +615,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -633,7 +633,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -642,7 +642,7 @@ BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -650,7 +650,7 @@ COMMIT;
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -661,7 +661,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -671,14 +671,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -689,7 +689,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -697,7 +697,7 @@ SET citus.next_shard_id TO 1380001;
 -- verify table structure is changed
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;
  Column  |  Type   | Modifiers 
----------+---------+-----------
+---------------------------------------------------------------------
  column1 | integer | 
  column2 | integer | 
 (2 rows)
@@ -706,7 +706,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -714,7 +714,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -725,7 +725,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
@@ -736,14 +736,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -752,7 +752,7 @@ COMMIT;
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -763,18 +763,18 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
 (0 rows)
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -782,7 +782,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 CREATE TABLE remove_node_reference_table(column1 int);
 SELECT create_reference_table('remove_node_reference_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -791,14 +791,14 @@ CREATE SCHEMA remove_node_reference_table_schema;
 CREATE TABLE remove_node_reference_table_schema.table1(column1 int);
 SELECT create_reference_table('remove_node_reference_table_schema.table1');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -811,7 +811,7 @@ WHERE
 ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380001 |          1 |           0 | localhost |    57638
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
@@ -823,14 +823,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -843,7 +843,7 @@ WHERE
 ORDER BY
 	shardid;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380001 |          1 |           0 | localhost |    57638
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
@@ -851,14 +851,14 @@ ORDER BY
 \c - - - :master_port
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- status after master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -869,7 +869,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -879,14 +879,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -897,7 +897,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -906,7 +906,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -914,7 +914,7 @@ NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
 -- status before master_disable_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -927,7 +927,7 @@ WHERE
 ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380001 |          1 |           0 | localhost |    57638
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
@@ -939,14 +939,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -958,7 +958,7 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY shardid ASC;
  shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
+---------------------------------------------------------------------
  1380001 |          1 |           0 | localhost |    57638
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
@@ -966,14 +966,14 @@ ORDER BY shardid ASC;
 \c - - - :master_port
 SELECT master_disable_node('localhost', :worker_2_port);
  master_disable_node 
----------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- status after master_disable_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -984,7 +984,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT *
@@ -994,14 +994,14 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation 
---------------+------------+-------------------+------------------------+-----------------------------
+---------------------------------------------------------------------
         10004 |          1 |                -1 |                      0 |                           0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -1012,7 +1012,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -1021,7 +1021,7 @@ SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -1031,7 +1031,7 @@ DROP TABLE remove_node_reference_table_schema.table1;
 DROP SCHEMA remove_node_reference_table_schema CASCADE;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

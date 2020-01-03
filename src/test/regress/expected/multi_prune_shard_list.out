@@ -36,63 +36,63 @@ CREATE TABLE pruning ( species text, last_pruned date, plant_id integer );
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('pruning', 'species', 'hash');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- with no values, expect all shards
 SELECT prune_using_no_values('pruning');
      prune_using_no_values     
--------------------------------
+---------------------------------------------------------------------
  {800000,800001,800002,800003}
 (1 row)
 
 -- with a single value, expect a single shard
 SELECT prune_using_single_value('pruning', 'tomato');
  prune_using_single_value 
---------------------------
+---------------------------------------------------------------------
  {800002}
 (1 row)
 
 -- null values should result in no pruning
 SELECT prune_using_single_value('pruning', NULL);
    prune_using_single_value    
--------------------------------
+---------------------------------------------------------------------
  {800000,800001,800002,800003}
 (1 row)
 
 -- build an OR clause and expect more than one sahrd
 SELECT prune_using_either_value('pruning', 'tomato', 'petunia');
  prune_using_either_value 
---------------------------
+---------------------------------------------------------------------
  {800002,800001}
 (1 row)
 
 -- an AND clause with values on different shards returns no shards
 SELECT prune_using_both_values('pruning', 'tomato', 'petunia');
  prune_using_both_values 
--------------------------
+---------------------------------------------------------------------
  {}
 (1 row)
 
 -- even if both values are on the same shard, a value can't be equal to two others
 SELECT prune_using_both_values('pruning', 'tomato', 'rose');
  prune_using_both_values 
--------------------------
+---------------------------------------------------------------------
  {}
 (1 row)
 
 -- unit test of the equality expression generation code
 SELECT debug_equality_expression('pruning');
                                                                                                                                                                            debug_equality_expression                                                                                                                                                                            
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  {OPEXPR :opno 98 :opfuncid 67 :opresulttype 16 :opretset false :opcollid 0 :inputcollid 100 :args ({VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} {CONST :consttype 25 :consttypmod -1 :constcollid 100 :constlen -1 :constbyval false :constisnull true :location -1 :constvalue <>}) :location -1}
 (1 row)
 
 -- print the initial ordering of shard intervals
 SELECT print_sorted_shard_intervals('pruning');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800000,800001,800002,800003}
 (1 row)
 
@@ -106,32 +106,32 @@ UPDATE pg_dist_shard set shardminvalue = -1073741824 WHERE shardid = 800001;
 CREATE TABLE pruning_range ( species text, last_pruned date, plant_id integer );
 SELECT create_distributed_table('pruning_range', 'species', 'range');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- create worker shards
 SELECT master_create_empty_shard('pruning_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     800004
 (1 row)
 
 SELECT master_create_empty_shard('pruning_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     800005
 (1 row)
 
 SELECT master_create_empty_shard('pruning_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     800006
 (1 row)
 
 SELECT master_create_empty_shard('pruning_range');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                     800007
 (1 row)
 
@@ -143,7 +143,7 @@ UPDATE pg_dist_shard SET shardminvalue = 'g', shardmaxvalue = 'h' WHERE shardid 
 -- print the ordering of shard intervals with range partitioning as well
 SELECT print_sorted_shard_intervals('pruning_range');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800004,800005,800006,800007}
 (1 row)
 
@@ -151,7 +151,7 @@ SELECT print_sorted_shard_intervals('pruning_range');
 UPDATE pg_dist_shard set shardminvalue = NULL WHERE shardid = 800005;
 SELECT print_sorted_shard_intervals('pruning_range');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800004,800006,800007,800005}
 (1 row)
 
@@ -159,7 +159,7 @@ SELECT print_sorted_shard_intervals('pruning_range');
 UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 800006;
 SELECT print_sorted_shard_intervals('pruning_range');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800004,800007,800005,800006}
 (1 row)
 
@@ -167,7 +167,7 @@ SELECT print_sorted_shard_intervals('pruning_range');
 UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 800004;
 SELECT print_sorted_shard_intervals('pruning_range');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800007,800004,800005,800006}
 (1 row)
 
@@ -175,7 +175,7 @@ SELECT print_sorted_shard_intervals('pruning_range');
 UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 800007;
 SELECT print_sorted_shard_intervals('pruning_range');
  print_sorted_shard_intervals  
--------------------------------
+---------------------------------------------------------------------
  {800004,800005,800006,800007}
 (1 row)
 
@@ -188,7 +188,7 @@ CREATE TABLE coerce_hash (
 );
 SELECT create_distributed_table('coerce_hash', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -197,14 +197,14 @@ INSERT INTO coerce_hash VALUES (1, 'test value');
 -- SELECT with same type as partition column
 SELECT * FROM coerce_hash WHERE id = 1::bigint;
  id |   value    
-----+------------
+---------------------------------------------------------------------
   1 | test value
 (1 row)
 
 -- SELECT with similar type to partition column
 SELECT * FROM coerce_hash WHERE id = 1;
  id |   value    
-----+------------
+---------------------------------------------------------------------
   1 | test value
 (1 row)
 
@@ -217,13 +217,13 @@ SELECT * FROM coerce_hash WHERE id = 1;
 -- test now, but if the old behavior is restored, it should crash again.
 SELECT * FROM coerce_hash WHERE id = 1.0;
  id |   value    
-----+------------
+---------------------------------------------------------------------
   1 | test value
 (1 row)
 
 SELECT * FROM coerce_hash WHERE id = 1.0::numeric;
  id |   value    
-----+------------
+---------------------------------------------------------------------
   1 | test value
 (1 row)
 

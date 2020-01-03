@@ -5,7 +5,7 @@ INSERT INTO tt1 VALUES(1,2),(2,3),(3,4);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -14,7 +14,7 @@ INSERT INTO tt2 VALUES(3,3),(4,4),(5,5);
 SELECT create_distributed_table('tt2','id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -41,7 +41,7 @@ FROM cte_1
 WHERE cte_1.id = tt1.id;
 SELECT * FROM tt1 ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       2
   2 |       6
   3 |       4
@@ -65,7 +65,7 @@ UPDATE tt1
 SET value_1 = (SELECT max(id) + abs(2 + 3.5) FROM cte_1);
 SELECT * FROM tt1 ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       9
   2 |       9
   3 |       9
@@ -89,7 +89,7 @@ UPDATE tt1
 SET value_1 = (SELECT max(id) + abs(2 + 3.5) FROM cte_1);
 SELECT * FROM tt1 ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   1 |       9
   2 |       9
   3 |       9
@@ -115,7 +115,7 @@ USING cte_1
 WHERE tt1.id < cte_1.id;
 SELECT * FROM tt1 ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   3 |       4
 (1 row)
 
@@ -135,7 +135,7 @@ USING cte_1
 WHERE tt1.id < cte_1.id;
 SELECT * FROM tt1 ORDER BY id;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;

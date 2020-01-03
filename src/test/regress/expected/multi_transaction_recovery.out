@@ -6,7 +6,7 @@ SET citus.next_shard_id TO 1220000;
 SET client_min_messages TO ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -18,14 +18,14 @@ SET citus.force_max_query_parallelization TO ON;
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- Ensure pg_dist_transaction is empty
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -58,25 +58,25 @@ INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten'),
                                        (0, 'citus_0_should_be_forgotten');
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              6
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -84,13 +84,13 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -106,13 +106,13 @@ SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) >= 2 FROM pg_dist_transaction;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -120,19 +120,19 @@ SELECT count(*) >= 2 FROM pg_dist_transaction;
 CREATE TABLE test_recovery_ref (x text);
 SELECT create_reference_table('test_recovery_ref');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) >= 4 FROM pg_dist_transaction;
  ?column? 
-----------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -140,7 +140,7 @@ SELECT recover_prepared_transactions();
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -150,7 +150,7 @@ ALTER TABLE test_recovery ADD COLUMN y text;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -158,19 +158,19 @@ SELECT count(*) FROM pg_dist_transaction;
 ALTER TABLE test_recovery ADD COLUMN y text;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -180,7 +180,7 @@ INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -188,13 +188,13 @@ SELECT count(*) FROM pg_dist_transaction;
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -202,13 +202,13 @@ SELECT recover_prepared_transactions();
 INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -216,13 +216,13 @@ SELECT recover_prepared_transactions();
 COPY test_recovery (x) FROM STDIN CSV;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -233,7 +233,7 @@ CREATE TABLE test_recovery_single (LIKE test_recovery);
 -- one connection/transaction per node
 SELECT create_distributed_table('test_recovery_single', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -246,13 +246,13 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -265,13 +265,13 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -281,13 +281,13 @@ SET citus.force_max_query_parallelization TO OFF;
 BEGIN;
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -296,13 +296,13 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -312,13 +312,13 @@ SET citus.force_max_query_parallelization TO ON;
 BEGIN;
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-0';
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
 SELECT count(*) FROM test_recovery_single WHERE x = 'hello-2';
  count 
--------
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -327,7 +327,7 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -335,27 +335,27 @@ SELECT count(*) FROM pg_dist_transaction;
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- Sleep 1 second to give Valgrind enough time to clear transactions
 SELECT pg_sleep(1);
  pg_sleep 
-----------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -364,7 +364,7 @@ DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 

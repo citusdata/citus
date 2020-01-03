@@ -7,12 +7,12 @@ ANALYZE lineitem_hash_part;
 -- function calls are supported
 SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;
  l_orderkey | now 
-------------+-----
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT DISTINCT l_partkey, 1 + (random() * 0)::int FROM lineitem_hash_part ORDER BY 1 DESC LIMIT 3;
  l_partkey | ?column? 
------------+----------
+---------------------------------------------------------------------
     199973 |        1
     199946 |        1
     199943 |        1
@@ -21,7 +21,7 @@ SELECT DISTINCT l_partkey, 1 + (random() * 0)::int FROM lineitem_hash_part ORDER
 -- const expressions are supported
 SELECT DISTINCT l_orderkey, 1+1 FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
  l_orderkey | ?column? 
-------------+----------
+---------------------------------------------------------------------
           1 |        2
           2 |        2
           3 |        2
@@ -32,7 +32,7 @@ SELECT DISTINCT l_orderkey, 1+1 FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
 -- non const expressions are also supported
 SELECT DISTINCT l_orderkey, l_partkey + 1 FROM lineitem_hash_part ORDER BY 1, 2 LIMIT 5;
  l_orderkey | ?column? 
-------------+----------
+---------------------------------------------------------------------
           1 |     2133
           1 |    15636
           1 |    24028
@@ -43,7 +43,7 @@ SELECT DISTINCT l_orderkey, l_partkey + 1 FROM lineitem_hash_part ORDER BY 1, 2 
 -- column expressions are supported
 SELECT DISTINCT l_orderkey, l_shipinstruct || l_shipmode FROM lineitem_hash_part ORDER BY 2 , 1 LIMIT 5;
  l_orderkey |    ?column?    
-------------+----------------
+---------------------------------------------------------------------
          32 | COLLECT CODAIR
          39 | COLLECT CODAIR
          66 | COLLECT CODAIR
@@ -54,7 +54,7 @@ SELECT DISTINCT l_orderkey, l_shipinstruct || l_shipmode FROM lineitem_hash_part
 -- function calls with const input are supported
 SELECT DISTINCT l_orderkey, strpos('AIR', 'A') FROM lineitem_hash_part ORDER BY 1,2 LIMIT 5;
  l_orderkey | strpos 
-------------+--------
+---------------------------------------------------------------------
           1 |      1
           2 |      1
           3 |      1
@@ -69,7 +69,7 @@ SELECT DISTINCT l_orderkey, strpos(l_shipmode, 'I')
 	ORDER BY 2, 1
 	LIMIT 5;
  l_orderkey | strpos 
-------------+--------
+---------------------------------------------------------------------
           1 |      2
           3 |      2
           5 |      2
@@ -80,7 +80,7 @@ SELECT DISTINCT l_orderkey, strpos(l_shipmode, 'I')
 -- row types are supported
 SELECT DISTINCT (l_orderkey, l_partkey) AS pair FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
    pair    
------------
+---------------------------------------------------------------------
  (1,2132)
  (1,15635)
  (1,24027)
@@ -93,19 +93,19 @@ SELECT DISTINCT (l_orderkey, l_partkey) AS pair FROM lineitem_hash_part ORDER BY
 CREATE TEMP TABLE temp_orderkeys AS SELECT DISTINCT l_orderkey FROM lineitem_hash_part;
 SELECT COUNT(*) FROM temp_orderkeys;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT COUNT(DISTINCT l_orderkey) FROM lineitem_hash_part;
  count 
--------
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT DISTINCT l_orderkey FROM lineitem_hash_part WHERE l_orderkey < 500 and l_partkey < 5000 order by 1;
  l_orderkey 
-------------
+---------------------------------------------------------------------
           1
           3
          32
@@ -129,7 +129,7 @@ SELECT DISTINCT l_orderkey FROM lineitem_hash_part WHERE l_orderkey < 500 and l_
 -- distinct on non-partition column
 SELECT DISTINCT l_partkey FROM lineitem_hash_part WHERE l_orderkey > 5 and l_orderkey < 20 order by 1;
  l_partkey 
------------
+---------------------------------------------------------------------
      79251
      94780
     139636
@@ -142,7 +142,7 @@ SELECT DISTINCT l_partkey FROM lineitem_hash_part WHERE l_orderkey > 5 and l_ord
 
 SELECT DISTINCT l_shipmode FROM lineitem_hash_part ORDER BY 1 DESC;
  l_shipmode 
-------------
+---------------------------------------------------------------------
  TRUCK     
  SHIP      
  REG AIR   
@@ -158,7 +158,7 @@ SELECT DISTINCT l_orderkey, o_orderdate
 	WHERE l_orderkey < 10
 	ORDER BY l_orderkey;
  l_orderkey | o_orderdate 
-------------+-------------
+---------------------------------------------------------------------
           1 | 01-02-1996
           2 | 12-01-1996
           3 | 10-14-1993
@@ -177,7 +177,7 @@ SELECT DISTINCT l_orderkey, count(*)
 	HAVING count(*) > 5
 	ORDER BY 2 DESC, 1;
  l_orderkey | count 
-------------+-------
+---------------------------------------------------------------------
           7 |     7
          68 |     7
         129 |     7
@@ -208,7 +208,7 @@ EXPLAIN (COSTS FALSE)
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
                                        QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.count DESC, remote_scan.l_orderkey
    ->  HashAggregate
@@ -235,7 +235,7 @@ EXPLAIN (COSTS FALSE)
 		HAVING count(*) > 5
 		ORDER BY 2 DESC, 1;
                                           QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.count DESC, remote_scan.l_orderkey
    ->  Unique
@@ -261,7 +261,7 @@ SELECT DISTINCT count(*)
 	GROUP BY l_suppkey, l_linenumber
 	ORDER BY 1;
  count 
--------
+---------------------------------------------------------------------
      1
      2
      3
@@ -277,7 +277,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1;
                                           QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
    ->  HashAggregate
@@ -303,7 +303,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1;
                                                 QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
    ->  Unique
@@ -332,7 +332,7 @@ SELECT DISTINCT l_suppkey, count(*)
 	ORDER BY 1
 	LIMIT 10;
  l_suppkey | count 
------------+-------
+---------------------------------------------------------------------
          1 |     1
          2 |     1
          3 |     1
@@ -353,7 +353,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                      QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_suppkey
@@ -381,7 +381,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                         QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_suppkey
@@ -411,7 +411,7 @@ SELECT DISTINCT l_suppkey, avg(l_partkey)
 	ORDER BY 1,2
 	LIMIT 10;
  l_suppkey |          avg           
------------+------------------------
+---------------------------------------------------------------------
          1 |    190000.000000000000
          2 |    172450.000000000000
          3 |    112469.000000000000
@@ -433,7 +433,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                       QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
@@ -461,7 +461,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                           QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
@@ -490,7 +490,7 @@ SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
 	ORDER BY l_suppkey,1
 	LIMIT 10;
           avg           
-------------------------
+---------------------------------------------------------------------
     190000.000000000000
     172450.000000000000
     112469.000000000000
@@ -512,7 +512,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY l_suppkey,1
 		LIMIT 10;
                                                           QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
@@ -539,7 +539,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY l_suppkey,1
 		LIMIT 10;
                                                           QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
@@ -566,7 +566,7 @@ SELECT DISTINCT avg(ceil(l_partkey / 2))
 	ORDER BY 1
 	LIMIT 10;
  avg 
------
+---------------------------------------------------------------------
    9
   39
   74
@@ -587,7 +587,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
@@ -615,7 +615,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                    QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
@@ -644,7 +644,7 @@ SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis
 	ORDER BY 1
 	LIMIT 10;
  dis 
------
+---------------------------------------------------------------------
    2
    3
    4
@@ -665,7 +665,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                                 QUERY PLAN                                                                 
--------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
@@ -693,7 +693,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1
 		LIMIT 10;
                                                                     QUERY PLAN                                                                    
---------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
@@ -723,7 +723,7 @@ SELECT DISTINCT *
 	ORDER BY 1,2
 	LIMIT 10;
  l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |                 l_comment                  
-------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+--------------------------------------------
+---------------------------------------------------------------------
           1 |      2132 |      4633 |            4 |      28.00 |        28955.64 |       0.09 |  0.06 | N            | O            | 04-21-1996 | 03-30-1996   | 05-16-1996    | NONE                      | AIR        | lites. fluffily even de
           1 |     15635 |       638 |            6 |      32.00 |        49620.16 |       0.07 |  0.02 | N            | O            | 01-30-1996 | 02-07-1996   | 02-03-1996    | DELIVER IN PERSON         | MAIL       | arefully slyly ex
           1 |     24027 |      1534 |            5 |      24.00 |        22824.48 |       0.10 |  0.04 | N            | O            | 03-30-1996 | 03-14-1996   | 04-01-1996    | NONE                      | FOB        |  pending foxes. slyly re
@@ -745,7 +745,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                                                                                                                                                                              QUERY PLAN                                                                                                                                                                                                              
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
@@ -775,7 +775,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                                                                                                                                                                                 QUERY PLAN                                                                                                                                                                                                                
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
@@ -803,7 +803,7 @@ SELECT DISTINCT count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
 	GROUP BY l_orderkey
 	ORDER BY 1,2;
  count | count 
--------+-------
+---------------------------------------------------------------------
      1 |     1
      2 |     1
      2 |     2
@@ -839,7 +839,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_orderkey
 		ORDER BY 1,2;
                                           QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.count, remote_scan.count_1
    ->  HashAggregate
@@ -865,7 +865,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_orderkey
 		ORDER BY 1,2;
                                              QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.count, remote_scan.count_1
    ->  Unique
@@ -890,7 +890,7 @@ SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) 
 	GROUP BY l_suppkey
 	ORDER BY 1;
  count 
--------
+---------------------------------------------------------------------
      0
      1
      2
@@ -905,7 +905,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey
 		ORDER BY 1;
                                                       QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: (ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))
    ->  HashAggregate
@@ -930,7 +930,7 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey
 		ORDER BY 1;
                                                           QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: (ceil(((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint) / 2))::double precision))
    ->  Unique
@@ -959,7 +959,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 2
 		LIMIT 15;
                                              QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.array_length
@@ -986,7 +986,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 2
 		LIMIT 15;
                                                 QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.array_length
@@ -1014,7 +1014,7 @@ SELECT DISTINCT l_partkey, count(*)
 	HAVING count(*) > 2
 	ORDER BY 1;
  l_partkey | count 
------------+-------
+---------------------------------------------------------------------
       1051 |     3
       1927 |     3
       6983 |     3
@@ -1036,7 +1036,7 @@ EXPLAIN (COSTS FALSE)
 		HAVING count(*) > 2
 		ORDER BY 1;
                                              QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.l_partkey
    ->  HashAggregate
@@ -1060,7 +1060,7 @@ SELECT DISTINCT l_partkey, avg(l_linenumber)
 	HAVING avg(l_linenumber) > 2
 	ORDER BY 1;
  l_partkey |        avg         
------------+--------------------
+---------------------------------------------------------------------
         18 | 7.0000000000000000
         79 | 6.0000000000000000
        149 | 4.5000000000000000
@@ -1084,7 +1084,7 @@ SELECT DISTINCT l_partkey, l_suppkey
 	WHERE l_shipmode = 'AIR' AND l_orderkey < 100
 	ORDER BY 1, 2;
  l_partkey | l_suppkey 
------------+-----------
+---------------------------------------------------------------------
       2132 |      4633
       4297 |      1798
      37531 |        35
@@ -1108,7 +1108,7 @@ EXPLAIN (COSTS FALSE)
 		WHERE l_shipmode = 'AIR' AND l_orderkey < 100
 		ORDER BY 1, 2;
                                              QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.l_partkey, remote_scan.l_suppkey
    ->  HashAggregate
@@ -1131,7 +1131,7 @@ SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 	WHERE l_orderkey < 35
 	ORDER BY 1;
  l_orderkey | l_partkey | l_suppkey 
-------------+-----------+-----------
+---------------------------------------------------------------------
           1 |    155190 |      7706
           2 |    106170 |      1191
           3 |      4297 |      1798
@@ -1150,7 +1150,7 @@ EXPLAIN (COSTS FALSE)
 		WHERE l_orderkey < 35
 		ORDER BY 1;
                                           QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.l_orderkey
@@ -1175,7 +1175,7 @@ SELECT DISTINCT ON (l_partkey) l_partkey, l_orderkey
 	ORDER BY 1,2
 	LIMIT 20;
  l_partkey | l_orderkey 
------------+------------
+---------------------------------------------------------------------
         18 |      12005
         79 |       5121
         91 |       2883
@@ -1204,7 +1204,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 20;
                                                 QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
@@ -1228,7 +1228,7 @@ SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
 	WHERE o_custkey < 15
 	ORDER BY 1,2;
  o_custkey | l_orderkey 
------------+------------
+---------------------------------------------------------------------
          1 |       9154
          2 |      10563
          4 |        320
@@ -1249,7 +1249,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2;
 $Q$);
                         coordinator_plan                         
------------------------------------------------------------------
+---------------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
@@ -1266,7 +1266,7 @@ EXPLAIN (COSTS FALSE)
 		WHERE o_custkey < 15;
 $Q$);
              coordinator_plan             
-------------------------------------------
+---------------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey
@@ -1280,7 +1280,7 @@ SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, 
 	WHERE o_custkey < 20
 	ORDER BY 1,2,3;
  o_custkey | l_orderkey | l_linenumber | l_partkey 
------------+------------+--------------+-----------
+---------------------------------------------------------------------
          1 |       9154 |            1 |     86513
          1 |      14656 |            1 |     59539
          2 |      10563 |            1 |    147459
@@ -1327,7 +1327,7 @@ EXPLAIN (COSTS FALSE)
 		WHERE o_custkey < 20;
 $Q$);
                         coordinator_plan                         
------------------------------------------------------------------
+---------------------------------------------------------------------
  Unique
    ->  Sort
          Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
@@ -1341,7 +1341,7 @@ SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, 
 	WHERE o_custkey < 15
 	ORDER BY 1,2,3 DESC;
  o_custkey | l_orderkey | l_linenumber | l_partkey 
------------+------------+--------------+-----------
+---------------------------------------------------------------------
          1 |       9154 |            7 |    173448
          1 |      14656 |            1 |     59539
          2 |      10563 |            4 |    110741
@@ -1381,7 +1381,7 @@ SELECT DISTINCT l_orderkey, l_partkey
 	ORDER BY 1,2
 	LIMIT 10;
  l_orderkey | l_partkey 
-------------+-----------
+---------------------------------------------------------------------
           1 |      2132
           1 |     15635
           1 |     24027
@@ -1403,7 +1403,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                 QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
@@ -1431,7 +1431,7 @@ SELECT DISTINCT l_orderkey, cnt
 	ORDER BY 1,2
 	LIMIT 10;
  l_orderkey | cnt 
-------------+-----
+---------------------------------------------------------------------
           1 |   6
           2 |   1
           3 |   6
@@ -1454,7 +1454,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                    QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.cnt
@@ -1486,7 +1486,7 @@ SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey
 	ORDER BY 1,2
 	LIMIT 10;
  l_orderkey | l_partkey 
-------------+-----------
+---------------------------------------------------------------------
           1 |      2132
           2 |    106170
           3 |      4297
@@ -1509,7 +1509,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 1,2
 		LIMIT 10;
                                                    QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
@@ -1538,7 +1538,7 @@ SELECT DISTINCT ON (l_partkey) l_orderkey, l_partkey
 	ORDER BY 2,1
 	LIMIT 10;
  l_orderkey | l_partkey 
-------------+-----------
+---------------------------------------------------------------------
       12005 |        18
        5121 |        79
        2883 |        91
@@ -1561,7 +1561,7 @@ EXPLAIN (COSTS FALSE)
 		ORDER BY 2,1
 		LIMIT 10;
                                                    QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort

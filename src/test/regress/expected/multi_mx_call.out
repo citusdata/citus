@@ -8,7 +8,7 @@ set citus.replication_model to 'statement';
 create table mx_call_dist_table_replica(id int, val int);
 select create_distributed_table('mx_call_dist_table_replica', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -21,7 +21,7 @@ set citus.replication_model to 'streaming';
 create table mx_call_dist_table_1(id int, val int);
 select create_distributed_table('mx_call_dist_table_1', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -29,7 +29,7 @@ insert into mx_call_dist_table_1 values (3,1),(4,5),(9,2),(6,5),(3,5);
 create table mx_call_dist_table_2(id int, val int);
 select create_distributed_table('mx_call_dist_table_2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -37,7 +37,7 @@ insert into mx_call_dist_table_2 values (1,1),(1,2),(2,2),(3,3),(3,4);
 create table mx_call_dist_table_bigint(id bigint, val bigint);
 select create_distributed_table('mx_call_dist_table_bigint', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -45,7 +45,7 @@ insert into mx_call_dist_table_bigint values (1,1),(1,2),(2,2),(3,3),(3,4);
 create table mx_call_dist_table_ref(id int, val int);
 select create_reference_table('mx_call_dist_table_ref');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -54,7 +54,7 @@ create type mx_call_enum as enum ('A', 'S', 'D', 'F');
 create table mx_call_dist_table_enum(id int, key mx_call_enum);
 select create_distributed_table('mx_call_dist_table_enum', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -86,45 +86,45 @@ END;$$;
 -- Test that undistributed procedures have no issue executing
 call multi_mx_call.mx_call_proc(2, 0);
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
  x | y 
----+---
+---------------------------------------------------------------------
  F | S
 (1 row)
 
 -- Same for unqualified names
 call mx_call_proc(2, 0);
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 call mx_call_proc_custom_types('S', 'A');
  x | y 
----+---
+---------------------------------------------------------------------
  F | S
 (1 row)
 
 -- Mark both procedures as distributed ...
 select create_distributed_function('mx_call_proc(int,int)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select create_distributed_function('mx_call_proc_bigint(bigint,bigint)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -140,68 +140,68 @@ DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 call mx_call_proc_bigint(4, 2);
 DEBUG:  stored procedure does not have co-located tables
  y 
----
+---------------------------------------------------------------------
  8
 (1 row)
 
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 DEBUG:  stored procedure does not have co-located tables
  x | y 
----+---
+---------------------------------------------------------------------
  F | S
 (1 row)
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 call multi_mx_call.mx_call_proc(2, 0);
 DEBUG:  pushing down the procedure
  y  
-----
+---------------------------------------------------------------------
  28
 (1 row)
 
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 DEBUG:  pushing down the procedure
  x | y 
----+---
+---------------------------------------------------------------------
  S | S
 (1 row)
 
 call mx_call_proc(2, 0);
 DEBUG:  pushing down the procedure
  y  
-----
+---------------------------------------------------------------------
  28
 (1 row)
 
 call mx_call_proc_custom_types('S', 'A');
 DEBUG:  pushing down the procedure
  x | y 
----+---
+---------------------------------------------------------------------
  S | S
 (1 row)
 
@@ -209,7 +209,7 @@ DEBUG:  pushing down the procedure
 call mx_call_proc_bigint(4, 2);
 DEBUG:  pushing down the procedure
  y 
----
+---------------------------------------------------------------------
  8
 (1 row)
 
@@ -224,7 +224,7 @@ DEBUG:  Plan 13 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
@@ -237,7 +237,7 @@ SET client_min_messages TO DEBUG1;
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 DEBUG:  stored procedure does not have co-located tables
  x | y 
----+---
+---------------------------------------------------------------------
  F | S
 (1 row)
 
@@ -245,7 +245,7 @@ DEBUG:  stored procedure does not have co-located tables
 -- This also tests that we have cache invalidation for pg_dist_object updates
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, -1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -258,13 +258,13 @@ DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -277,14 +277,14 @@ DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 -- We don't currently support colocating with reference tables
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -297,14 +297,14 @@ DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 -- We don't currently support colocating with replicated tables
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_replica'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -317,7 +317,7 @@ DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
@@ -326,7 +326,7 @@ drop table mx_call_dist_table_replica;
 SET client_min_messages TO DEBUG1;
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
  colocate_proc_with_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -348,7 +348,7 @@ select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_t
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -356,7 +356,7 @@ CALL multi_mx_call.mx_call_proc_tx(20);
 DEBUG:  pushing down the procedure
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
  id | val 
-----+-----
+---------------------------------------------------------------------
   3 |   1
   3 |   5
   4 |   5
@@ -378,7 +378,7 @@ select create_distributed_function('mx_call_proc_raise(int)', '$1', 'mx_call_dis
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -391,13 +391,13 @@ ERROR:  error
 -- Test that we don't propagate to non-metadata worker nodes
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select stop_metadata_sync_to_node('localhost', :worker_2_port);
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -410,20 +410,20 @@ DEBUG:  Plan 28 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
 SET client_min_messages TO NOTICE;
 select start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 select start_metadata_sync_to_node('localhost', :worker_2_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -442,7 +442,7 @@ SELECT create_distributed_function('mx_call_add(int,int)');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -456,7 +456,7 @@ DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT (3 OPERATOR(pg_
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  29
 (1 row)
 
@@ -464,7 +464,7 @@ PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
 call multi_mx_call.mx_call_proc(multi_mx_call.mx_call_add(3, 4), 2);
 DEBUG:  pushing down the procedure
  y  
-----
+---------------------------------------------------------------------
  33
 (1 row)
 
@@ -478,7 +478,7 @@ DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT (1 OPERATOR(pg_
 CONTEXT:  SQL statement "SELECT y + (select sum(t1.val + t2.val) from multi_mx_call.mx_call_dist_table_1 t1 join multi_mx_call.mx_call_dist_table_2 t2 on t1.id = t2.id)"
 PL/pgSQL function mx_call_proc(integer,integer) line 8 at assignment
  y  
-----
+---------------------------------------------------------------------
  27
 (1 row)
 

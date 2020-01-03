@@ -3,14 +3,14 @@ SET search_path TO recursive_set_local, public;
 CREATE TABLE recursive_set_local.test (x int, y int);
 SELECT create_distributed_table('test', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_set_local.ref (a int, b int);
 SELECT create_reference_table('ref');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -29,7 +29,7 @@ DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
 (0 rows)
 
 -- we should be able to run set operations with generate series
@@ -41,7 +41,7 @@ DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)
@@ -57,7 +57,7 @@ DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)
@@ -67,7 +67,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a 
----
+---------------------------------------------------------------------
  3
  2
 (2 rows)
@@ -92,7 +92,7 @@ DEBUG:  Plan 12 query after replacing subqueries and CTEs: (SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  4
  3
  2
@@ -110,7 +110,7 @@ DEBUG:  Plan 14 query after replacing subqueries and CTEs: (SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  4
  3
 (2 rows)
@@ -131,7 +131,7 @@ DEBUG:  Plan 16 query after replacing subqueries and CTEs: (SELECT cte_1.user_id
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  user_id 
----------
+---------------------------------------------------------------------
        6
        5
        4
@@ -166,7 +166,7 @@ DEBUG:  generating subplan 19_4 for subquery (SELECT cte_1.x FROM (SELECT interm
 DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.x FROM read_intermediate_result('19_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo, recursive_set_local.test WHERE (test.y OPERATOR(pg_catalog.=) foo.x)
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -197,7 +197,7 @@ DEBUG:  Plan 23 query after replacing subqueries and CTEs: SELECT count(*) AS co
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -215,7 +215,7 @@ DEBUG:  generating subplan 27_4 for subquery SELECT intermediate_result.x FROM r
 DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_set_local.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('27_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -236,7 +236,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_set_local.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT cte.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte)) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -282,7 +282,7 @@ DEBUG:  generating subplan 42_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT test.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u RIGHT JOIN recursive_set_local.test USING (x)) ORDER BY test.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 |   | 1
  2 |   | 2
 (2 rows)
@@ -300,7 +300,7 @@ DEBUG:  generating subplan 45_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 45 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- set operations and the sublink can be recursively planned
@@ -321,7 +321,7 @@ DEBUG:  Plan 48 query after replacing subqueries and CTEs: SELECT x FROM (SELECT
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  1
  2
 (2 rows)
@@ -370,7 +370,7 @@ DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)

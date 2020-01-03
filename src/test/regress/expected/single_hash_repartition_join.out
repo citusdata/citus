@@ -10,19 +10,19 @@ CREATE TABLE ref_table (id int, sum int, avg float);
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('single_hash_repartition_first', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_distributed_table('single_hash_repartition_second', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT create_reference_table('ref_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 

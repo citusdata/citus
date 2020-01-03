@@ -12,7 +12,7 @@ SET TIME ZONE 'PST8PDT';
 -- should return uninitialized values if not in a transaction
 SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp 
----------------------------+--------------------+-------------------
+---------------------------------------------------------------------
                          0 |                  0 | 
 (1 row)
 
@@ -20,21 +20,21 @@ BEGIN;
 	-- we should still see the uninitialized values
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
 	-- now assign a value
     SELECT assign_distributed_transaction_id(50, 50, '2016-01-01 00:00:00+0');
  assign_distributed_transaction_id 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
     -- see the assigned value
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number |      transaction_stamp       | ?column? 
----------------------------+--------------------+------------------------------+----------
+---------------------------------------------------------------------
                         50 |                 50 | Thu Dec 31 16:00:00 2015 PST | t
 (1 row)
 
@@ -45,7 +45,7 @@ ROLLBACK;
 -- since the transaction finished, we should see the uninitialized values
 SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
@@ -54,14 +54,14 @@ BEGIN;
 	-- we should still see the uninitialized values
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
 	-- now assign a value
     SELECT assign_distributed_transaction_id(52, 52, '2015-01-01 00:00:00+0');
  assign_distributed_transaction_id 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -71,7 +71,7 @@ COMMIT;
 -- since the transaction errored, we should see the uninitialized values again
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
@@ -79,20 +79,20 @@ COMMIT;
 BEGIN;
 	SELECT assign_distributed_transaction_id(52, 52, '2015-01-01 00:00:00+0');
  assign_distributed_transaction_id 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number |      transaction_stamp       | ?column? 
----------------------------+--------------------+------------------------------+----------
+---------------------------------------------------------------------
                         52 |                 52 | Wed Dec 31 16:00:00 2014 PST | t
 (1 row)
 
 	\c - - - :master_port
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
@@ -100,13 +100,13 @@ BEGIN;
 BEGIN;
 	SELECT assign_distributed_transaction_id(120, 120, '2015-01-01 00:00:00+0');
  assign_distributed_transaction_id 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number |      transaction_stamp       | ?column? 
----------------------------+--------------------+------------------------------+----------
+---------------------------------------------------------------------
                        120 |                120 | Wed Dec 31 16:00:00 2014 PST | t
 (1 row)
 
@@ -114,7 +114,7 @@ BEGIN;
 -- after the prepare we should see that transaction id is cleared
 SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
  initiator_node_identifier | transaction_number | transaction_stamp | ?column? 
----------------------------+--------------------+-------------------+----------
+---------------------------------------------------------------------
                          0 |                  0 |                   | t
 (1 row)
 
@@ -131,7 +131,7 @@ $$ LANGUAGE sql;
 BEGIN;
 SELECT assign_distributed_transaction_id(50, 1234567, '2016-01-01 00:00:00+0');
  assign_distributed_transaction_id 
------------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -145,7 +145,7 @@ SET LOCAL parallel_tuple_cost TO 0;
 EXPLAIN (COSTS OFF)
 SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
                          QUERY PLAN                          
--------------------------------------------------------------
+---------------------------------------------------------------------
  Gather
    Workers Planned: 1
    ->  Parallel Seq Scan on parallel_id_test
@@ -154,7 +154,7 @@ SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
 
 SELECT a FROM parallel_id_test WHERE a = parallel_worker_transaction_id_test();
     a    
----------
+---------------------------------------------------------------------
  1234567
  1234567
 (2 rows)

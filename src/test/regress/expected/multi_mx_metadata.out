@@ -3,7 +3,7 @@
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -33,35 +33,35 @@ SET citus.replication_model TO streaming;
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('distributed_mx_table', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 -- Verify that we've logged commit records
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- Confirm that the metadata transactions have been committed
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
 -- Verify that the commit records have been removed
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+---------------------------------------------------------------------
  key      | text   | not null
  value    | jsonb  | 
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
@@ -70,35 +70,35 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
  Column | Type | Definition 
---------+------+------------
+---------------------------------------------------------------------
  key    | text | key
 (1 row)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_value_idx'::regclass;
  Column | Type | Definition 
---------+------+------------
+---------------------------------------------------------------------
  value  | text | value
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 \c - - - :worker_2_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+---------------------------------------------------------------------
  key      | text   | not null
  value    | jsonb  | 
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
@@ -107,28 +107,28 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
  Column | Type | Definition 
---------+------+------------
+---------------------------------------------------------------------
  key    | text | key
 (1 row)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_value_idx'::regclass;
  Column | Type | Definition 
---------+------+------------
+---------------------------------------------------------------------
  value  | text | value
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -143,7 +143,7 @@ CREATE TABLE should_not_exist (
 );
 SELECT create_distributed_table('should_not_exist', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -152,7 +152,7 @@ ABORT;
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_not_exist';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -167,7 +167,7 @@ CREATE TABLE should_not_exist (
 );
 SELECT create_distributed_table('should_not_exist', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -185,7 +185,7 @@ CREATE TABLE objects_for_xacts (
 );
 SELECT create_distributed_table('objects_for_xacts', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -195,14 +195,14 @@ COMMIT;
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
  repmodel 
-----------
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -222,7 +222,7 @@ CREATE TABLE objects_for_xacts2 (
 );
 SELECT create_distributed_table('objects_for_xacts2', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -230,7 +230,7 @@ ROLLBACK;
 -- show that the table not exists on the coordinator
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -238,14 +238,14 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schema
 -- the distributed table not exists on the worker node
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -256,7 +256,7 @@ HINT:  Connect to the coordinator and run it again.
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -278,13 +278,13 @@ INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_commit'
 INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_be_forgotten');
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 
--------------------------------
+---------------------------------------------------------------------
                              3
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -292,13 +292,13 @@ SELECT count(*) FROM pg_dist_transaction;
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -308,7 +308,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -346,7 +346,7 @@ ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
 SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
  master_drop_sequences 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -356,7 +356,7 @@ SELECT master_drop_sequences(ARRAY['public.']);
 ERROR:  invalid name syntax
 SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
  master_drop_sequences 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -366,7 +366,7 @@ DROP TABLE unrelated_table;
 -- doesn't error out but it has no effect, so no need to error out
 SELECT master_drop_sequences(NULL);
  master_drop_sequences 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -374,7 +374,7 @@ SELECT master_drop_sequences(NULL);
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+---------------------------------------------------------------------
  key      | text   | not null
  value    | jsonb  | 
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
@@ -405,7 +405,7 @@ SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
  raise_failed_aclcheck 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -422,7 +422,7 @@ DROP TABLE unrelated_table;
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+---------------------------------------------------------------------
  key      | text   | not null
  value    | jsonb  | 
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
@@ -433,7 +433,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 

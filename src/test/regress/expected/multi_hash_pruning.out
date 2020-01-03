@@ -25,7 +25,7 @@ CREATE TABLE orders_hash_partitioned (
 	o_comment varchar(79) );
 SELECT create_distributed_table('orders_hash_partitioned', 'o_orderkey');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -35,7 +35,7 @@ SET client_min_messages TO DEBUG2;
 SELECT count(*) FROM orders_hash_partitioned;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -44,7 +44,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -53,7 +53,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -62,7 +62,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 3
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -71,7 +71,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 4
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -81,7 +81,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -90,7 +90,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -99,35 +99,35 @@ SET citus.enable_router_execution TO 'false';
 SELECT count(*) FROM orders_hash_partitioned;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -135,14 +135,14 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 DEBUG:  Router planner not enabled.
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -150,21 +150,21 @@ SET citus.enable_router_execution TO DEFAULT;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -172,7 +172,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -180,7 +180,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_clerk = 'aaa';
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -188,7 +188,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -196,7 +196,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -206,7 +206,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -215,14 +215,14 @@ SET client_min_messages TO DEFAULT;
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey = ANY ('{1,2,3}');
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey IN (1,2,3);
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
@@ -230,41 +230,41 @@ SELECT count(*) FROM lineitem_hash_part
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey IN (NULL);
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey = ANY (NULL);
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey IN (NULL) OR TRUE;
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey = ANY (NULL) OR TRUE;	
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
 -- Check whether we support IN/ANY in subquery
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem_hash_part);
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderkey FROM lineitem_hash_part);
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -272,42 +272,42 @@ SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderke
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY ('{1,2,3}');
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey IN (1,2,3);
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY(NULL) OR TRUE;	
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT count(*) FROM lineitem_range
 	WHERE l_orderkey = ANY ('{1,2,3}');
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
 SELECT count(*) FROM lineitem_range
 	WHERE l_orderkey IN (1,2,3);
  count 
--------
+---------------------------------------------------------------------
     13
 (1 row)
 
 SELECT count(*) FROM lineitem_range
 	WHERE l_orderkey = ANY(NULL) OR TRUE;	
  count 
--------
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -318,7 +318,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey < ALL ('{1,2,3}');
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -328,7 +328,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_totalprice IN (2, 5);
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -336,7 +336,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = random();
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -344,7 +344,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() OR o_orderkey = 1;
 DEBUG:  Router planner cannot handle multi-shard select queries
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -354,7 +354,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -376,7 +376,7 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-10
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -389,7 +389,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 

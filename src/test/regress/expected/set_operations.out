@@ -3,21 +3,21 @@ SET search_path TO recursive_union, public;
 CREATE TABLE recursive_union.test (x int, y int);
 SELECT create_distributed_table('test', 'x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE recursive_union.ref (a int, b int);
 SELECT create_reference_table('ref');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 CREATE TABLE test_not_colocated (LIKE test);
 SELECT create_distributed_table('test_not_colocated', 'x', colocate_with := 'none');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -35,7 +35,7 @@ DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -48,7 +48,7 @@ DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
  3 | 3
@@ -58,7 +58,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  3 | 3
 (2 rows)
@@ -73,7 +73,7 @@ DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT intermediate_re
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  1 | 1
  2 | 2
@@ -88,7 +88,7 @@ DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
  2 | 2
@@ -99,7 +99,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  2 | 2
  3 | 3
@@ -116,7 +116,7 @@ DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -129,7 +129,7 @@ DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  2 | 2
 (1 row)
 
@@ -137,7 +137,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  3 | 3
 (2 rows)
@@ -152,7 +152,7 @@ DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -165,7 +165,7 @@ DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  2 | 2
 (1 row)
 
@@ -173,7 +173,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  3 | 3
 (2 rows)
@@ -188,7 +188,7 @@ DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 (SELECT * FROM test) EXCEPT (SELECT * FROM ref) ORDER BY 1,2;
@@ -199,7 +199,7 @@ DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
 (1 row)
 
@@ -207,7 +207,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 (SELECT * FROM test) EXCEPT ALL (SELECT * FROM test) ORDER BY 1,2;
@@ -220,7 +220,7 @@ DEBUG:  Plan 33 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 (SELECT * FROM test) EXCEPT ALL (SELECT * FROM ref) ORDER BY 1,2;
@@ -231,7 +231,7 @@ DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT intermediate_r
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
 (1 row)
 
@@ -239,7 +239,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- more complex set operation trees are supported
@@ -262,7 +262,7 @@ DEBUG:  Plan 39 query after replacing subqueries and CTEs: (((SELECT intermediat
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x  | y  
-----+----
+---------------------------------------------------------------------
   1 |   
   2 |  2
   3 |  3
@@ -279,7 +279,7 @@ DEBUG:  Plan is router executable
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -297,7 +297,7 @@ DEBUG:  Plan 43 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -313,7 +313,7 @@ DEBUG:  Plan 47 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
  3 | 3
@@ -323,7 +323,7 @@ SELECT * FROM ((SELECT * FROM ref) UNION (SELECT * FROM ref)) u ORDER BY 1,2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  3 | 3
 (2 rows)
@@ -331,7 +331,7 @@ DEBUG:  Plan is router executable
 SELECT * FROM ((SELECT * FROM test) UNION ALL (SELECT * FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  1 | 1
  2 | 2
@@ -341,7 +341,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT * FROM ((SELECT x, y FROM test) UNION ALL (SELECT y, x FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  1 | 1
  2 | 2
@@ -359,7 +359,7 @@ DEBUG:  Plan 53 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
  2 | 2
@@ -370,7 +370,7 @@ SELECT * FROM ((SELECT * FROM ref) UNION ALL (SELECT * FROM ref)) u ORDER BY 1,2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  2 | 2
  3 | 3
@@ -390,7 +390,7 @@ DEBUG:  Plan 57 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -408,7 +408,7 @@ DEBUG:  Plan 61 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -424,7 +424,7 @@ DEBUG:  Plan 65 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  2 | 2
 (1 row)
 
@@ -432,7 +432,7 @@ SELECT * FROM ((SELECT * FROM ref) INTERSECT (SELECT * FROM ref)) u ORDER BY 1,2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
  2 | 2
  3 | 3
 (2 rows)
@@ -450,7 +450,7 @@ DEBUG:  Plan 69 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM ((SELECT x, y FROM test) EXCEPT (SELECT y, x FROM test)) u ORDER BY 1,2;
@@ -466,7 +466,7 @@ DEBUG:  Plan 73 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM ref)) u ORDER BY 1,2;
@@ -480,7 +480,7 @@ DEBUG:  Plan 77 query after replacing subqueries and CTEs: SELECT x, y FROM (SEL
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
 (1 row)
 
@@ -488,14 +488,14 @@ SELECT * FROM ((SELECT * FROM ref) EXCEPT (SELECT * FROM ref)) u ORDER BY 1,2;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  a | b 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- unions can even be pushed down within a join
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) u JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 | 1 | 1
  2 | 2 | 2
 (2 rows)
@@ -503,7 +503,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT * FROM ((SELECT * FROM test) UNION ALL (SELECT * FROM test)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 | 1 | 1
  1 | 1 | 1
  2 | 2 | 2
@@ -524,7 +524,7 @@ DEBUG:  generating subplan 83_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 83 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('83_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 | 1 | 1
  2 | 2 | 2
 (2 rows)
@@ -556,7 +556,7 @@ DEBUG:  generating subplan 91_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 91 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('91_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 | 1 | 1
  2 | 2 | 2
 (2 rows)
@@ -573,7 +573,7 @@ DEBUG:  generating subplan 95_3 for subquery SELECT intermediate_result.x, inter
 DEBUG:  Plan 95 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('95_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  1 | 1 | 1
  2 | 2 | 2
 (2 rows)
@@ -582,7 +582,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
  SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test ORDER BY x)) u JOIN generate_series(1,10) x USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -601,7 +601,7 @@ DEBUG:  Plan 100 query after replacing subqueries and CTEs: SELECT u.x, u.y FROM
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- subqueries in WHERE clause with set operations fails due to the current limitaions of recursive planning IN WHERE clause
@@ -618,7 +618,7 @@ DEBUG:  generating subplan 105_1 for subquery SELECT y FROM recursive_union.test
 DEBUG:  Plan 105 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT test.x, test.y FROM recursive_union.test UNION SELECT test.x, test.y FROM recursive_union.test) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('105_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -640,7 +640,7 @@ DEBUG:  Plan 107 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -661,7 +661,7 @@ DEBUG:  Plan 112 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -680,7 +680,7 @@ DEBUG:  Plan 117 query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y | rnk 
----+---+-----
+---------------------------------------------------------------------
  2 | 2 |   1
  1 | 1 |   1
 (2 rows)
@@ -707,7 +707,7 @@ DEBUG:  generating subplan 122_3 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan 122 query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('122_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y 
----+---+---
+---------------------------------------------------------------------
  2 | 2 | 2
 (1 row)
 
@@ -742,7 +742,7 @@ DEBUG:  Plan 130 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -751,7 +751,7 @@ DEBUG:  Plan is router executable
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x FROM test c WHERE y = 2) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -771,7 +771,7 @@ DEBUG:  generating subplan 136_1 for subquery SELECT b.x FROM recursive_union.te
 DEBUG:  Plan 136 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (NOT (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('136_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
 (0 rows)
 
 -- subquery union in WHERE clause without parition column equality is recursively planned
@@ -787,7 +787,7 @@ DEBUG:  generating subplan 140_3 for subquery SELECT intermediate_result.x FROM 
 DEBUG:  Plan 140 query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('140_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -821,7 +821,7 @@ DEBUG:  Plan 146 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  2 | 2
  1 | 1
 (2 rows)
@@ -840,7 +840,7 @@ DEBUG:  Plan 150 query after replacing subqueries and CTEs: SELECT count(DISTINC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
--------
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -857,7 +857,7 @@ DEBUG:  Plan 154 query after replacing subqueries and CTEs: SELECT count(DISTINC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -875,7 +875,7 @@ DEBUG:  Plan 158 query after replacing subqueries and CTEs: SELECT avg(DISTINCT 
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
           avg           
-------------------------
+---------------------------------------------------------------------
  1.50000000000000000000
 (1 row)
 
@@ -927,7 +927,7 @@ DEBUG:  Plan 164 query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
 (0 rows)
 
 --  repartition is recursively planned with the set operation
@@ -969,7 +969,7 @@ DEBUG:  Plan 167 query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)
@@ -990,7 +990,7 @@ DEBUG:  Plan 170 query after replacing subqueries and CTEs: SELECT y FROM (SELEC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  y 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)
@@ -1000,7 +1000,7 @@ CREATE VIEW set_view_pushdown AS (SELECT x FROM test) UNION (SELECT x FROM test)
 SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x 
----
+---------------------------------------------------------------------
  2
  1
 (2 rows)
@@ -1019,7 +1019,7 @@ DEBUG:  generating subplan 175_3 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan 175 query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT u.x, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('175_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, test.y) set_view_recursive_second ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -1049,7 +1049,7 @@ DEBUG:  Plan 179 query after replacing subqueries and CTEs: (SELECT intermediate
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x 
----
+---------------------------------------------------------------------
 (0 rows)
 
 -- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
@@ -1066,7 +1066,7 @@ DEBUG:  Plan 188 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)
@@ -1084,7 +1084,7 @@ DEBUG:  Plan 192 query after replacing subqueries and CTEs: SELECT x, y FROM (SE
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  x | y 
----+---
+---------------------------------------------------------------------
  1 | 1
  2 | 2
 (2 rows)

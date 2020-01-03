@@ -13,11 +13,10 @@ s/placement [0-9]+/placement xxxxx/g
 s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
-#
-## Differing names can have differing table column widths
-#s/(-+\|)+-+/---/g
-#s/.*-------------.*/---------------------------------------------------------------------/g
-#
+
+# Differing names can have differing table column widths
+s/^-[+-]{2,}$/---------------------------------------------------------------------/g
+
 ## In foreign_key_to_reference_table, normalize shard table names, etc in
 ## the generated plan
 #s/"(foreign_key_2_|fkey_ref_to_dist_|fkey_ref_)[0-9]+"/"\1xxxxxxx"/g

@@ -32,19 +32,19 @@ VACUUM (FULL) customer_copy_hash;
 -- Tests on distributed tables with streaming replication.
 SELECT citus_table_size('customer_copy_hash');
  citus_table_size 
-------------------
+---------------------------------------------------------------------
            548864
 (1 row)
 
 SELECT citus_relation_size('customer_copy_hash');
  citus_relation_size 
----------------------
+---------------------------------------------------------------------
               548864
 (1 row)
 
 SELECT citus_total_relation_size('customer_copy_hash');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                    1597440
 (1 row)
 
@@ -53,7 +53,7 @@ SELECT citus_table_size('customer_copy_hash'),
        citus_table_size('customer_copy_hash'),
        citus_table_size('supplier');
  citus_table_size | citus_table_size | citus_table_size 
-------------------+------------------+------------------
+---------------------------------------------------------------------
            548864 |           548864 |           401408
 (1 row)
 
@@ -62,19 +62,19 @@ VACUUM (FULL) customer_copy_hash;
 -- Tests on distributed table with index.
 SELECT citus_table_size('customer_copy_hash');
  citus_table_size 
-------------------
+---------------------------------------------------------------------
            548864
 (1 row)
 
 SELECT citus_relation_size('customer_copy_hash');
  citus_relation_size 
----------------------
+---------------------------------------------------------------------
               548864
 (1 row)
 
 SELECT citus_total_relation_size('customer_copy_hash');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                    2646016
 (1 row)
 
@@ -82,19 +82,19 @@ SELECT citus_total_relation_size('customer_copy_hash');
 VACUUM (FULL) supplier;
 SELECT citus_table_size('supplier');
  citus_table_size 
-------------------
+---------------------------------------------------------------------
            376832
 (1 row)
 
 SELECT citus_relation_size('supplier');
  citus_relation_size 
----------------------
+---------------------------------------------------------------------
               376832
 (1 row)
 
 SELECT citus_total_relation_size('supplier');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                     376832
 (1 row)
 
@@ -102,19 +102,19 @@ CREATE INDEX index_2 on supplier(s_suppkey);
 VACUUM (FULL) supplier;
 SELECT citus_table_size('supplier');
  citus_table_size 
-------------------
+---------------------------------------------------------------------
            376832
 (1 row)
 
 SELECT citus_relation_size('supplier');
  citus_relation_size 
----------------------
+---------------------------------------------------------------------
               376832
 (1 row)
 
 SELECT citus_total_relation_size('supplier');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                     458752
 (1 row)
 
@@ -126,14 +126,14 @@ ERROR:  citus size functions cannot be called in transaction blocks which contai
 END;
 show citus.node_conninfo;
  citus.node_conninfo 
----------------------
+---------------------------------------------------------------------
  sslmode=require
 (1 row)
 
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=require';
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -141,19 +141,19 @@ SELECT pg_reload_conf();
 -- wouldn't prevent future commands to fail
 SELECT citus_total_relation_size('customer_copy_hash');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                    2646016
 (1 row)
 
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT citus_total_relation_size('customer_copy_hash');
  citus_total_relation_size 
----------------------------
+---------------------------------------------------------------------
                    2646016
 (1 row)
 
@@ -161,7 +161,7 @@ SELECT citus_total_relation_size('customer_copy_hash');
 ALTER SYSTEM RESET citus.node_conninfo;
 SELECT pg_reload_conf();
  pg_reload_conf 
-----------------
+---------------------------------------------------------------------
  t
 (1 row)
 

@@ -8,7 +8,7 @@ SET citus.multi_shard_modify_mode to 'parallel';
 CREATE TABLE users_test_table(user_id int, value_1 int, value_2 int, value_3 int);
 SELECT create_distributed_table('users_test_table', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -16,7 +16,7 @@ SELECT create_distributed_table('users_test_table', 'user_id');
 CREATE TABLE events_test_table (user_id int, value_1 int, value_2 int, value_3 int);
 SELECT create_distributed_table('events_test_table', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -24,7 +24,7 @@ SELECT create_distributed_table('events_test_table', 'user_id');
 CREATE TABLE events_reference_copy_table (like events_test_table);
 SELECT create_reference_table('events_reference_copy_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -32,7 +32,7 @@ INSERT INTO events_reference_copy_table SELECT * FROM events_test_table;
 CREATE TABLE users_reference_copy_table (like users_test_table);
 SELECT create_reference_table('users_reference_copy_table');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -41,40 +41,40 @@ INSERT INTO users_reference_copy_table SELECT * FROM users_test_table;
 UPDATE users_test_table SET value_1 = 1;
 SELECT COUNT(*), SUM(value_1) FROM users_test_table;
  count | sum 
--------+-----
+---------------------------------------------------------------------
     15 |  15
 (1 row)
 
 SELECT COUNT(*), SUM(value_2) FROM users_test_table WHERE user_id = 1 or user_id = 3;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  52
 (1 row)
 
 UPDATE users_test_table SET value_2 = value_2 + 1 WHERE user_id = 1 or user_id = 3;
 SELECT COUNT(*), SUM(value_2) FROM users_test_table WHERE user_id = 1 or user_id = 3;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  56
 (1 row)
 
 UPDATE users_test_table SET value_3 = 0 WHERE user_id <> 5;
 SELECT SUM(value_3) FROM users_test_table WHERE user_id <> 5;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 DELETE FROM users_test_table WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -84,7 +84,7 @@ UPDATE users_test_table SET value_3 = 0;
 END;
 SELECT SUM(value_3) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
@@ -94,7 +94,7 @@ UPDATE users_test_table SET value_3 = 1;
 ROLLBACK;
 SELECT SUM(value_3) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
@@ -107,7 +107,7 @@ UPDATE users_test_table SET value_3 = 1;
 END;
 SELECT SUM(value_3) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
   16
 (1 row)
 
@@ -130,7 +130,7 @@ UPDATE users_test_table SET value_3 = 0;
 END;
 SELECT SUM(value_3) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
@@ -138,14 +138,14 @@ SELECT SUM(value_3) FROM users_test_table;
 UPDATE users_test_table SET value_3 = 1 WHERE user_id = 3 or true;
 SELECT COUNT(*), SUM(value_3) FROM users_test_table;
  count | sum 
--------+-----
+---------------------------------------------------------------------
     16 |  16
 (1 row)
 
 UPDATE users_test_table SET value_3 = 0 WHERE user_id = 20 and false;
 SELECT COUNT(*), SUM(value_3) FROM users_test_table;
  count | sum 
--------+-----
+---------------------------------------------------------------------
     16 |  16
 (1 row)
 
@@ -159,7 +159,7 @@ EXECUTE foo_plan(9,45);
 EXECUTE foo_plan(0,0);
 SELECT SUM(value_1), SUM(value_3) FROM users_test_table;
  sum | sum 
------+-----
+---------------------------------------------------------------------
    0 |   0
 (1 row)
 
@@ -177,38 +177,38 @@ INSERT INTO append_stage_table_2 VALUES(10,4);
 CREATE TABLE test_append_table(id int, col_2 int);
 SELECT create_distributed_table('test_append_table','id','append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('test_append_table');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1440010
 (1 row)
 
 SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
  master_append_table_to_shard 
-------------------------------
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
  new_shard_id 
---------------
+---------------------------------------------------------------------
       1440011
 (1 row)
 
 SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'localhost', :master_port);
  master_append_table_to_shard 
-------------------------------
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 UPDATE test_append_table SET col_2 = 5;
 SELECT * FROM test_append_table ORDER BY 1 DESC, 2 DESC;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
  10 |     5
   9 |     5
   8 |     5
@@ -230,7 +230,7 @@ INSERT INTO tt1 VALUES (1,11), (3,15), (5,17), (6,19), (8,17), (2,12);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -238,7 +238,7 @@ UPDATE tt1 SET col_2 = 13;
 DELETE FROM tt1 WHERE id = 1 or id = 3 or id = 5;
 SELECT * FROM tt1 ORDER BY 1 DESC, 2 DESC;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
   8 |    13
   6 |    13
   2 |    13
@@ -256,7 +256,7 @@ UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 COMMIT;
 SELECT * FROM tt1 ORDER BY id;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
   2 |    12
   4 |     7
   6 |    12
@@ -274,7 +274,7 @@ DELETE FROM tt1_1120;
 COMMIT;
 SELECT * FROM tt1 ORDER BY id;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE tt1;
@@ -282,7 +282,7 @@ DROP TABLE tt1;
 CREATE TABLE tt2(id int, col_2 int);
 SELECT create_distributed_table('tt2','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -292,7 +292,7 @@ UPDATE tt2 SET col_2 = 1;
 COMMIT;
 SELECT * FROM tt2 ORDER BY id;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
   1 |     1
   2 |     1
   3 |     1
@@ -303,7 +303,7 @@ SELECT * FROM tt2 ORDER BY id;
 -- Test returning with both type of executors
 UPDATE tt2 SET col_2 = 5 RETURNING id, col_2;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
   1 |     5
   2 |     5
   3 |     5
@@ -314,7 +314,7 @@ UPDATE tt2 SET col_2 = 5 RETURNING id, col_2;
 SET citus.multi_shard_modify_mode to sequential;
 UPDATE tt2 SET col_2 = 3 RETURNING id, col_2;
  id | col_2 
-----+-------
+---------------------------------------------------------------------
   1 |     3
   2 |     3
   3 |     3
@@ -330,7 +330,7 @@ SET citus.shard_count to 6;
 CREATE TABLE events_test_table_2 (user_id int, value_1 int, value_2 int, value_3 int);
 SELECT create_distributed_table('events_test_table_2', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -344,7 +344,7 @@ INSERT INTO test_table_1 VALUES(3, '2111-01-12 08:35:19', 9);
 SELECT create_distributed_table('test_table_1', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -370,7 +370,7 @@ WHERE now() > (SELECT max(date_col)
                GROUP BY id)
 RETURNING *;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        1 |       5 |       7 |       7
        1 |      20 |      12 |      25
        1 |      60 |      17 |      17
@@ -396,7 +396,7 @@ WHERE  user_id IN (SELECT user_id
               SELECT user_id
               FROM   events_test_table) returning value_3;
  value_3 
----------
+---------------------------------------------------------------------
        0
        0
        0
@@ -418,7 +418,7 @@ WHERE  user_id IN (SELECT user_id
               SELECT user_id
               FROM   events_test_table) returning value_3;
  value_3 
----------
+---------------------------------------------------------------------
        0
        0
        0
@@ -494,7 +494,7 @@ SELECT * FROM events_test_table
 WHERE events_test_table.user_id = 1 OR events_test_table.user_id = 5;
 SELECT SUM(value_2) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
  169
 (1 row)
 
@@ -504,7 +504,7 @@ FROM events_test_table
 WHERE users_test_table.user_id = events_test_table.user_id;
 SELECT SUM(value_2) FROM users_test_table;
  sum 
------
+---------------------------------------------------------------------
   97
 (1 row)
 
@@ -514,7 +514,7 @@ CREATE SCHEMA sec_schema;
 CREATE TABLE sec_schema.tt1(id int, value_1 int);
 SELECT create_distributed_table('sec_schema.tt1','id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -526,7 +526,7 @@ WHERE id < (SELECT max(value_2) FROM events_test_table_2
              GROUP BY user_id)
 RETURNING *;
  id | value_1 
-----+---------
+---------------------------------------------------------------------
   7 |      11
   9 |      11
 (2 rows)
@@ -564,7 +564,7 @@ WHERE  date_col IN (SELECT now());
 -- Test with prepared statements
 SELECT COUNT(*) FROM users_test_table WHERE value_1 = 0;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -580,7 +580,7 @@ EXECUTE foo_plan_2(9,45);
 EXECUTE foo_plan_2(0,0);
 SELECT COUNT(*) FROM users_test_table WHERE value_1 = 0;
  count 
--------
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -755,7 +755,7 @@ BEGIN;
 DECLARE test_cursor CURSOR FOR SELECT * FROM users_test_table ORDER BY user_id;
 FETCH test_cursor;
  user_id | value_1 | value_2 | value_3 
----------+---------+---------+---------
+---------------------------------------------------------------------
        1 |       2 |       5 |       0
 (1 row)
 
@@ -765,7 +765,7 @@ ROLLBACK;
 -- Stable functions are supported
 SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
  id |           date_col           | col_3 
-----+------------------------------+-------
+---------------------------------------------------------------------
   3 | Mon Jan 12 08:35:19 2111 PST |     9
   2 | Sun Feb 01 08:31:16 2015 PST |     7
   1 | Sat Apr 05 08:32:12 2014 PDT |     5
@@ -774,7 +774,7 @@ SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 UPDATE test_table_1 SET col_3 = 3 WHERE date_col < now();
 SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
  id |           date_col           | col_3 
-----+------------------------------+-------
+---------------------------------------------------------------------
   3 | Mon Jan 12 08:35:19 2111 PST |     9
   2 | Sun Feb 01 08:31:16 2015 PST |     3
   1 | Sat Apr 05 08:32:12 2014 PDT |     3
@@ -783,7 +783,7 @@ SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 DELETE FROM test_table_1 WHERE date_col < current_timestamp;
 SELECT * FROM test_table_1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
  id |           date_col           | col_3 
-----+------------------------------+-------
+---------------------------------------------------------------------
   3 | Mon Jan 12 08:35:19 2111 PST |     9
 (1 row)
 
@@ -796,7 +796,7 @@ INSERT INTO test_table_2 VALUES(3, random());
 SELECT create_distributed_table('test_table_2', 'id');
 NOTICE:  Copying data from local table...
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -806,41 +806,41 @@ DROP TABLE test_table_2;
 -- Run multi shard updates and deletes without transaction on reference tables
 SELECT COUNT(*) FROM users_reference_copy_table;
  count 
--------
+---------------------------------------------------------------------
     15
 (1 row)
 
 UPDATE users_reference_copy_table SET value_1 = 1;
 SELECT SUM(value_1) FROM users_reference_copy_table;
  sum 
------
+---------------------------------------------------------------------
   15
 (1 row)
 
 SELECT COUNT(*), SUM(value_2) FROM users_reference_copy_table WHERE user_id = 3 or user_id = 5;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  52
 (1 row)
 
 UPDATE users_reference_copy_table SET value_2 = value_2 + 1 WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*), SUM(value_2) FROM users_reference_copy_table WHERE user_id = 3 or user_id = 5;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  56
 (1 row)
 
 UPDATE users_reference_copy_table SET value_3 = 0 WHERE user_id <> 3;
 SELECT SUM(value_3) FROM users_reference_copy_table WHERE user_id <> 3;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
 DELETE FROM users_reference_copy_table WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*) FROM users_reference_copy_table WHERE user_id = 3 or user_id = 5;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -850,7 +850,7 @@ SET citus.shard_replication_factor to 2;
 CREATE TABLE users_test_table(user_id int, value_1 int, value_2 int, value_3 int);
 SELECT create_distributed_table('users_test_table', 'user_id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -859,40 +859,40 @@ SELECT create_distributed_table('users_test_table', 'user_id');
 UPDATE users_test_table SET value_1 = 1;
 SELECT COUNT(*), SUM(value_1) FROM users_test_table;
  count | sum 
--------+-----
+---------------------------------------------------------------------
     15 |  15
 (1 row)
 
 SELECT COUNT(*), SUM(value_2) FROM users_test_table WHERE user_id = 1 or user_id = 3;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  52
 (1 row)
 
 UPDATE users_test_table SET value_2 = value_2 + 1 WHERE user_id = 1 or user_id = 3;
 SELECT COUNT(*), SUM(value_2) FROM users_test_table WHERE user_id = 1 or user_id = 3;
  count | sum 
--------+-----
+---------------------------------------------------------------------
      4 |  56
 (1 row)
 
 UPDATE users_test_table SET value_3 = 0 WHERE user_id <> 5;
 SELECT SUM(value_3) FROM users_test_table WHERE user_id <> 5;
  sum 
------
+---------------------------------------------------------------------
    0
 (1 row)
 
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 DELETE FROM users_test_table WHERE user_id = 3 or user_id = 5;
 SELECT COUNT(*) FROM users_test_table WHERE user_id = 3 or user_id = 5;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 

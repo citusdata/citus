@@ -1,6 +1,6 @@
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -15,26 +15,26 @@ ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100;
 CREATE TABLE copy_test (key int, value int);
 SELECT create_distributed_table('copy_test', 'key');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT citus.clear_network_traffic();
  clear_network_traffic 
------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 SELECT count(1) FROM copy_test;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT citus.dump_network_traffic();
                                                                                                                                                                                                                                                                                                                                                                                               dump_network_traffic                                                                                                                                                                                                                                                                                                                                                                                               
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------
  (0,coordinator,"[initial message]")
  (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
  (0,coordinator,"[""Query(query=BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, XX, 'XXXX-XX-XX XX:XX:XX.XXXXXX-XX');)""]")
@@ -55,7 +55,7 @@ SELECT citus.dump_network_traffic();
 -- the query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -69,7 +69,7 @@ CONTEXT:  COPY copy_test, line 1: "0, 0"
 -- the query should abort
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -83,7 +83,7 @@ COPY copy_test, line 1: "0, 0"
 -- the query should abort
 SELECT citus.mitmproxy('conn.onCopyData().killall()'); -- raw rows from the client
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -93,7 +93,7 @@ ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 -- the query should abort
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -103,7 +103,7 @@ ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 -- the query should succeed, and the placement should be marked inactive
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -111,19 +111,19 @@ SELECT count(1) FROM pg_dist_shard_placement WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'copy_test'::regclass
 ) AND shardstate = 3;
  count 
--------
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(1) FROM copy_test;
  count 
--------
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -136,7 +136,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- the shard is marked invalid
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -144,13 +144,13 @@ SELECT count(1) FROM pg_dist_shard_placement WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'copy_test'::regclass
 ) AND shardstate = 3;
  count 
--------
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(1) FROM copy_test;
  count 
--------
+---------------------------------------------------------------------
      8
 (1 row)
 
@@ -170,7 +170,7 @@ CONTEXT:  COPY copy_test, line 5: "10"
 -- kill the connection if the coordinator sends COMMIT. It doesn't, so nothing changes
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").kill()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -179,13 +179,13 @@ ERROR:  missing data for column "value"
 CONTEXT:  COPY copy_test, line 5: "10"
 SELECT * FROM copy_test ORDER BY key, value;
  key | value 
------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- ==== clean up some more to prepare for tests with only one replica ====
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -195,7 +195,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'copy_test'::regclass
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid 
----------+------------+-------------+-----------+----------+-------------
+---------------------------------------------------------------------
   100400 |          1 |           0 | localhost |     9060 |         100
   100400 |          3 |           0 | localhost |    57637 |         101
 (2 rows)
@@ -204,7 +204,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -214,7 +214,7 @@ SELECT * FROM copy_test;
 -- the worker is unreachable
 SELECT citus.mitmproxy('conn.killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -228,13 +228,13 @@ ERROR:  could not connect to any active placements
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -244,7 +244,7 @@ SELECT * FROM copy_test;
 -- the first message fails
 SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -256,13 +256,13 @@ ERROR:  failure on connection marked as essential: localhost:xxxxx
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -272,7 +272,7 @@ SELECT * FROM copy_test;
 -- the COPY message fails
 SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -284,13 +284,13 @@ CONTEXT:  while executing command on localhost:xxxxx
 COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -300,7 +300,7 @@ SELECT * FROM copy_test;
 -- the COPY data fails
 SELECT citus.mitmproxy('conn.onCopyData().killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -308,13 +308,13 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -324,7 +324,7 @@ SELECT * FROM copy_test;
 -- the COMMIT fails
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -338,13 +338,13 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -356,7 +356,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'copy_test'::regclass
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid 
----------+------------+-------------+-----------+----------+-------------
+---------------------------------------------------------------------
   100400 |          1 |           0 | localhost |     9060 |         100
   100400 |          3 |           0 | localhost |    57637 |         101
 (2 rows)
@@ -364,7 +364,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
 -- the COMMIT makes it through but the connection dies before we get a response
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COMMIT").killall()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -378,7 +378,7 @@ WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -386,14 +386,14 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'copy_test'::regclass
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid 
----------+------------+-------------+-----------+----------+-------------
+---------------------------------------------------------------------
   100400 |          1 |           0 | localhost |     9060 |         100
   100400 |          3 |           0 | localhost |    57637 |         101
 (2 rows)
 
 SELECT * FROM copy_test;
  key | value 
------+-------
+---------------------------------------------------------------------
    0 |     0
    1 |     1
    2 |     4
@@ -407,7 +407,7 @@ SELECT * FROM copy_test;
 -- ==== Clean up, we're done here ====
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
------------
+---------------------------------------------------------------------
  
 (1 row)
 

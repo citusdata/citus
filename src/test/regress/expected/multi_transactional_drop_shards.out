@@ -8,7 +8,7 @@ SET citus.shard_count TO 4;
 CREATE TABLE transactional_drop_shards(column1 int);
 SELECT create_distributed_table('transactional_drop_shards', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -18,7 +18,7 @@ ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410000
  1410001
  1410002
@@ -34,7 +34,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410000 |          1 | localhost |    57637
  1410000 |          1 | localhost |    57638
  1410001 |          1 | localhost |    57637
@@ -49,7 +49,7 @@ ORDER BY
 \dt transactional_drop_shards
                    List of relations
  Schema |           Name            | Type  |  Owner   
---------+---------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards | table | postgres
 (1 row)
 
@@ -58,7 +58,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410000 | table | postgres
  public | transactional_drop_shards_1410001 | table | postgres
  public | transactional_drop_shards_1410002 | table | postgres
@@ -73,7 +73,7 @@ COMMIT;
 -- verify metadata is deleted
 SELECT shardid FROM pg_dist_shard WHERE shardid IN (1410000, 1410001, 1410002, 1410003) ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -85,14 +85,14 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
----------+------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify table is dropped
 \dt transactional_drop_shards
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify shards are dropped
@@ -100,7 +100,7 @@ ORDER BY
 \dt transactional_drop_shards_*
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -108,20 +108,20 @@ ORDER BY
 CREATE TABLE transactional_drop_shards(column1 int);
 SELECT create_distributed_table('transactional_drop_shards', 'column1', 'append');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
 SELECT master_create_empty_shard('transactional_drop_shards');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1410004
 (1 row)
 
 BEGIN;
 SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
  master_apply_delete_command 
------------------------------
+---------------------------------------------------------------------
                            1
 (1 row)
 
@@ -129,7 +129,7 @@ ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410004
 (1 row)
 
@@ -142,7 +142,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410004 |          1 | localhost |    57637
  1410004 |          1 | localhost |    57638
 (2 rows)
@@ -152,7 +152,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410004 | table | postgres
 (1 row)
 
@@ -161,7 +161,7 @@ ORDER BY
 BEGIN;
 SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
  master_apply_delete_command 
------------------------------
+---------------------------------------------------------------------
                            1
 (1 row)
 
@@ -169,7 +169,7 @@ COMMIT;
 -- verify metadata is deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -181,7 +181,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
----------+------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify shards are dropped
@@ -189,14 +189,14 @@ ORDER BY
 \dt transactional_drop_shards_*
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
 -- test DROP table in a transaction after insertion
 SELECT master_create_empty_shard('transactional_drop_shards');
  master_create_empty_shard 
----------------------------
+---------------------------------------------------------------------
                    1410005
 (1 row)
 
@@ -207,7 +207,7 @@ ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410005
 (1 row)
 
@@ -220,7 +220,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410005 |          1 | localhost |    57637
  1410005 |          1 | localhost |    57638
 (2 rows)
@@ -229,7 +229,7 @@ ORDER BY
 \dt transactional_drop_shards
                    List of relations
  Schema |           Name            | Type  |  Owner   
---------+---------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards | table | postgres
 (1 row)
 
@@ -238,7 +238,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410005 | table | postgres
 (1 row)
 
@@ -248,7 +248,7 @@ BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
 SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
  master_apply_delete_command 
------------------------------
+---------------------------------------------------------------------
                            1
 (1 row)
 
@@ -256,7 +256,7 @@ ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410005
 (1 row)
 
@@ -269,7 +269,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410005 |          1 | localhost |    57637
  1410005 |          1 | localhost |    57638
 (2 rows)
@@ -279,7 +279,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410005 | table | postgres
 (1 row)
 
@@ -298,7 +298,7 @@ ERROR:  illegal value
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410005
 (1 row)
 
@@ -311,7 +311,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410005 |          1 | localhost |    57637
  1410005 |          1 | localhost |    57638
 (2 rows)
@@ -320,7 +320,7 @@ ORDER BY
 \dt transactional_drop_shards
                    List of relations
  Schema |           Name            | Type  |  Owner   
---------+---------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards | table | postgres
 (1 row)
 
@@ -329,7 +329,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410005 | table | postgres
 (1 row)
 
@@ -338,7 +338,7 @@ ORDER BY
 CREATE TABLE transactional_drop_reference(column1 int);
 SELECT create_reference_table('transactional_drop_reference');
  create_reference_table 
-------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -349,7 +349,7 @@ ERROR:  illegal value
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_reference'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410006
 (1 row)
 
@@ -362,7 +362,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410006 |          1 | localhost |    57637
  1410006 |          1 | localhost |    57638
 (2 rows)
@@ -371,7 +371,7 @@ ORDER BY
 \dt transactional_drop_reference
                     List of relations
  Schema |             Name             | Type  |  Owner   
---------+------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_reference | table | postgres
 (1 row)
 
@@ -380,7 +380,7 @@ ORDER BY
 \dt transactional_drop_reference*
                         List of relations
  Schema |                 Name                 | Type  |  Owner   
---------+--------------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_reference_1410006 | table | postgres
 (1 row)
 
@@ -393,7 +393,7 @@ ERROR:  illegal value
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410005
 (1 row)
 
@@ -406,7 +406,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410005 |          1 | localhost |    57637
  1410005 |          1 | localhost |    57638
 (2 rows)
@@ -416,7 +416,7 @@ ORDER BY
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_shards_1410005 | table | postgres
 (1 row)
 
@@ -427,7 +427,7 @@ SET citus.shard_count TO 8;
 CREATE TABLE transactional_drop_serial(column1 int, column2 SERIAL);
 SELECT create_distributed_table('transactional_drop_serial', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -438,7 +438,7 @@ ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_serial'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410007
  1410008
  1410009
@@ -458,7 +458,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410007 |          1 | localhost |    57637
  1410007 |          1 | localhost |    57638
  1410008 |          1 | localhost |    57637
@@ -481,7 +481,7 @@ ORDER BY
 \dt transactional_drop_serial
                    List of relations
  Schema |           Name            | Type  |  Owner   
---------+---------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_serial | table | postgres
 (1 row)
 
@@ -490,7 +490,7 @@ ORDER BY
 \dt transactional_drop_serial_*
                        List of relations
  Schema |               Name                | Type  |  Owner   
---------+-----------------------------------+-------+----------
+---------------------------------------------------------------------
  public | transactional_drop_serial_1410007 | table | postgres
  public | transactional_drop_serial_1410008 | table | postgres
  public | transactional_drop_serial_1410009 | table | postgres
@@ -504,7 +504,7 @@ ORDER BY
 \ds transactional_drop_serial_column2_seq
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -515,7 +515,7 @@ COMMIT;
 -- verify metadata is deleted
 SELECT shardid FROM pg_dist_shard WHERE shardid IN (1410007, 1410008, 1410009, 1410010, 1410011, 1410012, 1410013, 1410014) ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -527,14 +527,14 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
----------+------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify table is dropped
 \dt transactional_drop_serial
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify shards and sequence are dropped
@@ -542,13 +542,13 @@ ORDER BY
 \dt transactional_drop_serial_*
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \ds transactional_drop_serial_column2_seq
       List of relations
  Schema | Name | Type | Owner 
---------+------+------+-------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -558,7 +558,7 @@ SET citus.shard_count TO 4;
 CREATE TABLE transactional_drop_mx(column1 int);
 SELECT create_distributed_table('transactional_drop_mx', 'column1');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -566,7 +566,7 @@ UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='transactional_drop
 -- make worker 1 receive metadata changes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
------------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -574,7 +574,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_mx'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410015
  1410016
  1410017
@@ -590,7 +590,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410015 |          1 | localhost |    57637
  1410016 |          1 | localhost |    57638
  1410017 |          1 | localhost |    57637
@@ -605,7 +605,7 @@ ROLLBACK;
 \c - - - :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_mx'::regclass ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
  1410015
  1410016
  1410017
@@ -621,7 +621,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+---------------------------------------------------------------------
  1410015 |          1 | localhost |    57637
  1410016 |          1 | localhost |    57638
  1410017 |          1 | localhost |    57637
@@ -637,7 +637,7 @@ COMMIT;
 \c - - - :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE shardid IN (1410015, 1410016, 1410017, 1410018) ORDER BY shardid;
  shardid 
----------
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT
@@ -649,7 +649,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
----------+------------+----------+----------
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -657,14 +657,14 @@ ORDER BY
 SELECT 1 FROM master_add_node('localhost', :master_port);
 NOTICE:  Replicating reference table "transactional_drop_reference" to the node localhost:xxxxx
  ?column? 
-----------
+---------------------------------------------------------------------
         1
 (1 row)
 
 CREATE TABLE citus_local (id serial, k int);
 SELECT create_distributed_table('citus_local', 'id');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -672,7 +672,7 @@ INSERT INTO citus_local (k) VALUES (2);
 DROP TABLE citus_local;
 SELECT master_remove_node('localhost', :master_port);
  master_remove_node 
---------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -680,7 +680,7 @@ SELECT master_remove_node('localhost', :master_port);
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
-----------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
@@ -691,14 +691,14 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 GRANT ALL ON SCHEMA public TO try_drop_table;
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
       run_command_on_workers       
------------------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
 
 SELECT run_command_on_workers('GRANT ALL ON SCHEMA public TO try_drop_table');
   run_command_on_workers   
----------------------------
+---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
 (2 rows)
@@ -708,7 +708,7 @@ BEGIN;
 CREATE TABLE temp_dist_table (x int, y int);
 SELECT create_distributed_table('temp_dist_table','x');
  create_distributed_table 
---------------------------
+---------------------------------------------------------------------
  
 (1 row)
 
