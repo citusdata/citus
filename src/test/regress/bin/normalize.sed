@@ -25,8 +25,8 @@ s/"(referencing_table_0_|referenced_table2_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
 s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 
-## shard table names for multi_subtransactions
-#s/"t2_[0-9]+"/"t2_xxxxxxx"/g
+# shard table names for multi_subtransactions
+s/"t2_[0-9]+"/"t2_xxxxxxx"/g
 #
 ## shard table names for custom_aggregate_support
 #s/ daily_uniques_[0-9]+ / daily_uniques_xxxxxxx /g

@@ -207,28 +207,28 @@ with r AS (
     update t1 set b = b - 10
     returning *
 ) insert into t2 select * from r;
-ERROR:  new row for relation "t2_1190005" violates check constraint "t2_b_check"
+ERROR:  new row for relation "t2_xxxxxxx" violates check constraint "t2_b_check"
 rollback to savepoint s1;
 savepoint s2;
 with r AS (
     update t2 set b = b - 10
     returning *
 ) insert into t1 select * from r;
-ERROR:  new row for relation "t2_1190004" violates check constraint "t2_b_check"
+ERROR:  new row for relation "t2_xxxxxxx" violates check constraint "t2_b_check"
 rollback to savepoint s2;
 savepoint s3;
 with r AS (
     insert into t2 select i, i+1 from generate_series(-10,-5) i
     returning *
 ) insert into t1 select * from r;
-ERROR:  new row for relation "t2_1190004" violates check constraint "t2_b_check"
+ERROR:  new row for relation "t2_xxxxxxx" violates check constraint "t2_b_check"
 rollback to savepoint s3;
 savepoint s4;
 with r AS (
     insert into t1 select i, i+1 from generate_series(-10,-5) i
     returning *
 ) insert into t2 select * from r;
-ERROR:  new row for relation "t2_1190005" violates check constraint "t2_b_check"
+ERROR:  new row for relation "t2_xxxxxxx" violates check constraint "t2_b_check"
 rollback to savepoint s4;
 with r AS (
     update t2 set b = b + 1
