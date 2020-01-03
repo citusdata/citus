@@ -291,7 +291,7 @@ DEBUG:  generating subplan 66_2 for CTE id_title: SELECT id, title FROM public.a
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-DEBUG:  Plan 66 query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('66_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('66_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | id | title
@@ -475,7 +475,7 @@ ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 85_1 for subquery SELECT id, word_count FROM public.articles_hash_mx
-DEBUG:  Plan 85 query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('85_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('85_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) ORDER BY test.word_count DESC, articles_hash_mx.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | word_count
@@ -494,7 +494,7 @@ ORDER BY articles_hash_mx.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 87_1 for subquery SELECT id, word_count FROM public.articles_hash_mx
-DEBUG:  Plan 87 query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('87_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) AND (articles_hash_mx.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash_mx.id
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash_mx.id, test.word_count FROM public.articles_hash_mx, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('87_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash_mx.id) AND (articles_hash_mx.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash_mx.id
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
@@ -620,7 +620,7 @@ DEBUG:  found no worker with all shard placements
 DEBUG:  generating subplan 96_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash_mx
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  Plan 96 query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash_mx a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash_mx a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('96_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
@@ -814,7 +814,7 @@ UNION
 ORDER BY 1,2;
 DEBUG:  generating subplan 110_1 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 1)
 DEBUG:  generating subplan 110_2 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 2)
-DEBUG:  Plan 110 query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) UNION SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) ORDER BY 1, 2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) UNION SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('110_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) ORDER BY 1, 2
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572

@@ -236,7 +236,7 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-DEBUG:  Plan 12 query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('12_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('12_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | id | title
@@ -322,7 +322,7 @@ DEBUG:  data-modifying statements are not supported in the WITH clauses of distr
 DEBUG:  generating subplan 24_1 for CTE update_article: UPDATE fast_path_router_select.articles_hash SET word_count = 10 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 9)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) update_article
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) update_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | title | word_count
@@ -337,7 +337,7 @@ DEBUG:  data-modifying statements are not supported in the WITH clauses of distr
 DEBUG:  generating subplan 26_1 for CTE delete_article: DELETE FROM fast_path_router_select.articles_hash WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) delete_article
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, author_id, title, word_count FROM (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) delete_article
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | title | word_count
@@ -415,7 +415,7 @@ ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 32_1 for subquery SELECT id, word_count FROM fast_path_router_select.articles_hash
-DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
  id | word_count
@@ -434,7 +434,7 @@ ORDER BY articles_hash.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan 34_1 for subquery SELECT id, word_count FROM fast_path_router_select.articles_hash
-DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash.id) AND (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash.id
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE ((test.id OPERATOR(pg_catalog.=) articles_hash.id) AND (articles_hash.author_id OPERATOR(pg_catalog.=) 1)) ORDER BY articles_hash.id
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
