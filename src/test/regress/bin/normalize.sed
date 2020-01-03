@@ -27,9 +27,9 @@ s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 
 # shard table names for multi_subtransactions
 s/"t2_[0-9]+"/"t2_xxxxxxx"/g
-#
-## shard table names for custom_aggregate_support
-#s/ daily_uniques_[0-9]+ / daily_uniques_xxxxxxx /g
+
+# shard table names for custom_aggregate_support
+s/ daily_uniques_[0-9]+ / daily_uniques_xxxxxxx /g
 #
 ## In foreign_key_restriction_enforcement, normalize shard names
 #s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
