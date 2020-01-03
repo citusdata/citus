@@ -30,9 +30,9 @@ s/"t2_[0-9]+"/"t2_xxxxxxx"/g
 
 # shard table names for custom_aggregate_support
 s/ daily_uniques_[0-9]+ / daily_uniques_xxxxxxx /g
-#
-## In foreign_key_restriction_enforcement, normalize shard names
-#s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
+
+# In foreign_key_restriction_enforcement, normalize shard names
+s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
 #
 ## In multi_insert_select_conflict, normalize shard name and constraints
 #s/"(target_table_|target_table_|test_ref_table_)[0-9]+"/"\1xxxxxxx"/g

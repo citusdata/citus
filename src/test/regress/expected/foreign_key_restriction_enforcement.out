@@ -471,7 +471,7 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 1;
-ERROR:  insert or update on table "on_update_fkey_table_2380002" violates foreign key constraint "fkey_2380002"
+ERROR:  insert or update on table "on_update_fkey_table_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
 CONTEXT:  while executing command on localhost:xxxxx
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 2;
@@ -525,7 +525,7 @@ BEGIN;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Reference relation "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed relations due to foreign keys. Any parallel modification to those hash distributed relations in the same transaction can only be executed in sequential query execution mode
 	COPY on_update_fkey_table FROM STDIN WITH CSV;
-ERROR:  insert or update on table "on_update_fkey_table_2380004" violates foreign key constraint "fkey_2380004"
+ERROR:  insert or update on table "on_update_fkey_table_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
 ROLLBACK;
 -- case 2.8: UPDATE to a reference table is followed by TRUNCATE

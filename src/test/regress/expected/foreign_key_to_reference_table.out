@@ -1814,7 +1814,7 @@ ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey FOREIGN KEY (id) REFERENCES 
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1) REFERENCES referenced_table;
 -- should fail since the data will flow to partitioning_test_4 and it has a foreign constraint to partitioning_test_0 on id column
 INSERT INTO referencing_table VALUES (0, 5);
-ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_7000540"
+ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (id)=(X) is not present in table "referencing_table_0_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- should succeed on partitioning_test_0

@@ -306,7 +306,7 @@ NOTICE:  truncate cascades to table "target_table"
 		col_2,
 		col_1
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
-ERROR:  insert or update on table "target_table_1900000" violates foreign key constraint "fkey_1900000"
+ERROR:  insert or update on table "target_table_1900000" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (col_1)=(1) is not present in table "test_ref_table_1900012".
 CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
