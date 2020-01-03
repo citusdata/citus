@@ -95,8 +95,8 @@ contain_param_walker(Node *node, void *context)
  * forms involving multiple function calls, FROM clauses, WHERE clauses,
  * ... Those complex forms are handled in the coordinator.
  */
-DistributedPlan *
-TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
+PlannedStmt *
+TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 {
 	List *targetList = NIL;
 	TargetEntry *targetEntry = NULL;
@@ -114,11 +114,8 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	StringInfo queryString = NULL;
 	Task *task = NULL;
 	Job *job = NULL;
-	DistributedPlan *distributedPlan = NULL;
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	struct ParamWalkerContext walkerParamContext = { 0 };
-
-	/* set hasExternParam now in case of early exit */
-	*hasExternParam = false;
 
 	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG4))
 	{
@@ -133,19 +130,19 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		return NULL;
 	}
 
-	if (query == NULL)
+	if (planContext->parse == NULL)
 	{
 		/* no query (mostly here to be defensive) */
 		return NULL;
 	}
 
-	if (query->commandType != CMD_SELECT)
+	if (planContext->parse->commandType != CMD_SELECT)
 	{
 		/* not a SELECT */
 		return NULL;
 	}
 
-	FromExpr *joinTree = query->jointree;
+	FromExpr *joinTree = planContext->parse->jointree;
 	if (joinTree == NULL)
 	{
 		/* no join tree (mostly here to be defensive) */
@@ -174,7 +171,8 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 
 			if (IsA(reference, RangeTblRef))
 			{
-				RangeTblEntry *rtentry = rt_fetch(reference->rtindex, query->rtable);
+				RangeTblEntry *rtentry = rt_fetch(reference->rtindex,
+												  planContext->parse->rtable);
 				if (rtentry->rtekind != RTE_RESULT)
 				{
 					/* e.g. SELECT f() FROM rel */
@@ -203,8 +201,8 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 #endif
 	}
 
-	targetList = query->targetList;
-	if (list_length(query->targetList) != 1)
+	targetList = planContext->parse->targetList;
+	if (list_length(planContext->parse->targetList) != 1)
 	{
 		/* multiple target list items */
 		return NULL;
@@ -288,7 +286,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		if (partitionParam->paramkind == PARAM_EXTERN)
 		{
 			/* Don't log a message, we should end up here again without a parameter */
-			*hasExternParam = true;
+			DissuadePlannerFromUsingPlan(planContext->plan);
 			return NULL;
 		}
 	}
@@ -354,7 +352,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 		if (walkerParamContext.paramKind == PARAM_EXTERN)
 		{
 			/* Don't log a message, we should end up here again without a parameter */
-			*hasExternParam = true;
+			DissuadePlannerFromUsingPlan(planContext->plan);
 		}
 		else
 		{
@@ -367,7 +365,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
 	queryString = makeStringInfo();
-	pg_get_query_def(query, queryString);
+	pg_get_query_def(planContext->parse, queryString);
 
 	task = CitusMakeNode(Task);
 	task->taskType = SELECT_TASK;
@@ -378,7 +376,7 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 
 	job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();
-	job->jobQuery = query;
+	job->jobQuery = planContext->parse;
 	job->taskList = list_make1(task);
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
@@ -390,5 +388,5 @@ TryToDelegateFunctionCall(Query *query, bool *hasExternParam)
 	/* worker will take care of any necessary locking, treat query as read-only */
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 
-	return distributedPlan;
+	return FinalizePlan(planContext->plan, distributedPlan);
 }
