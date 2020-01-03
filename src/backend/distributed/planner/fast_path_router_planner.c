@@ -162,7 +162,6 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  *      and it should be ANDed with any other filters. Also, the distribution
  *      key should only exists once in the WHERE clause. So basically,
  *          SELECT ... FROM dist_table WHERE dist_key = X
- *   - No returning for UPDATE/DELETE queries
  *   - All INSERT statements (including multi-row INSERTs) as long as the commands
  *     don't have any sublinks/CTEs etc
  */
@@ -181,9 +180,9 @@ FastPathRouterQuery(Query *query)
 	 * We want to deal with only very simple queries. Some of the
 	 * checks might be too restrictive, still we prefer this way.
 	 */
-	if (query->cteList != NIL || query->returningList != NIL ||
-		query->hasSubLinks || query->setOperations != NULL ||
-		query->hasTargetSRFs || query->hasModifyingCTE)
+	if (query->cteList != NIL || query->hasSubLinks ||
+		query->setOperations != NULL || query->hasTargetSRFs ||
+		query->hasModifyingCTE)
 	{
 		return false;
 	}
