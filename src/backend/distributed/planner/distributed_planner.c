@@ -73,8 +73,10 @@ typedef struct DistributedPlanningContext
 	Query *parse;
 
 	/* A copy of the original parsed query that is given to the planner. This
-	 * doesn't contain the changes that are made to parse. This is NULL for non
-	 * distributed plans, since those don't need it. */
+	 * doesn't contain most of the changes that are made to parse. There's one
+	 * that change that is made for non fast path router queries though, which
+	 * is the assigning of RTE identities using AssignRTEIdentities. This is
+	 * NULL for non distributed plans, since those don't need it. */
 	Query *originalQuery;
 
 	/* the cursor options given to the planner */
@@ -194,7 +196,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	{
 		/*
 		 *  We need to copy the parse tree because the FastPathPlanner modifies
-		 *  it.
+		 *  it. In the next branch we do the same for other distributed queries
+		 *  too, but for those it needs to be done AFTER calling
+		 *  AssignRTEIdentities.
 		 */
 		ctx.originalQuery = copyObject(parse);
 	}
@@ -217,10 +221,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 		/*
 		 * standard_planner scribbles on it's input, but for deparsing we need the
-		 * unmodified form. Note that we keep RTE_RELATIONs with their identities
-		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
-		 * of the query tree. Note that we copy the query tree once we're sure it's a
-		 * distributed query.
+		 * unmodified form. Note that before copying we call
+		 * AssignRTEIdentities, which is needed because these identities need
+		 * to be present in the copied query too.
 		 */
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 		ctx.originalQuery = copyObject(parse);
@@ -250,16 +253,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	PG_TRY();
 	{
-		/*
-		 * For trivial queries, we're skipping the standard_planner() in
-		 * order to eliminate its overhead.
-		 *
-		 * Otherwise, call into standard planner. This is required because the Citus
-		 * planner relies on both the restriction information per table and parse tree
-		 * transformations made by postgres' planner.
-		 */
 		DistributedPlan *delegatedPlan = NULL;
 		bool hasExternParam = false;
+
 		if (fastPathRouterQuery)
 		{
 			result = PlanFastPathDistributedStmt(&ctx, distributionKeyValue);
