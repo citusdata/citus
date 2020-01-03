@@ -66,20 +66,32 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-typedef struct DistributedStmtOptions
+typedef struct DistributedPlanningContext
 {
+	/* The parsed query that is given to the planner. It is a slightly modified
+	 * to work with the standard_planner */
 	Query *parse;
-	int cursorOptions;
-	ParamListInfo boundParams;
+
+	/* A copy of the original parsed query that is given to the planner. This
+	 * doesn't contain the changes that are made to parse. This is NULL for non
+	 * distributed plans, since those don't need it. */
 	Query *originalQuery;
+
+	/* the cursor options given to the planner */
+	int cursorOptions;
+
+	/* the ParamListInfo that is given to the planner */
+	ParamListInfo boundParams;
+
+	/* Our custom restriction context */
 	PlannerRestrictionContext *plannerRestrictionContext;
-} DistributedStmtOptions;
+} DistributedPlanningContext;
 
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(PlannedStmt *localPlan,
-												  DistributedStmtOptions *opts);
+												  DistributedPlanningContext *ctx);
 static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
 											   Query *query, ParamListInfo boundParams,
 											   bool hasUnresolvedParams,
@@ -123,11 +135,11 @@ static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boun
 static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
 static bool UpdateReferenceTablesWithShard(Node *node, void *context);
-static PlannedStmt * FastPastDistributedStmt(DistributedStmtOptions *opts,
-											 Const *distributionKeyValue);
-static PlannedStmt * NonFastPathDistributedStmt(DistributedStmtOptions *opts,
-												List *rangeTableList, int rteIdCounter);
-static PlannedStmt * NonDistributedStmt(DistributedStmtOptions *opts);
+static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *ctx,
+												 Const *distributionKeyValue);
+static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *ctx,
+										 List *rangeTableList, int rteIdCounter);
+static PlannedStmt * PlanNonDistributedStmt(DistributedPlanningContext *ctx);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -140,7 +152,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	int rteIdCounter = 1;
 	bool fastPathRouterQuery = false;
 	Const *distributionKeyValue = NULL;
-	DistributedStmtOptions opts = {
+	DistributedPlanningContext ctx = {
 		.parse = parse,
 		.cursorOptions = cursorOptions,
 		.boundParams = boundParams,
@@ -181,7 +193,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 *  We need to copy the parse tree because the FastPathPlanner modifies
 		 *  it.
 		 */
-		opts.originalQuery = copyObject(parse);
+		ctx.originalQuery = copyObject(parse);
 	}
 	else if (needsDistributedPlanning)
 	{
@@ -208,7 +220,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * distributed query.
 		 */
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
-		opts.originalQuery = copyObject(parse);
+		ctx.originalQuery = copyObject(parse);
 
 		setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(rangeTableList,
@@ -222,7 +234,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	ReplaceTableVisibleFunction((Node *) parse);
 
 	/* create a restriction context and put it at the end if context list */
-	opts.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+	ctx.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
 
 	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
@@ -245,15 +257,15 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 */
 		if (fastPathRouterQuery)
 		{
-			result = FastPastDistributedStmt(&opts, distributionKeyValue);
+			result = PlanFastPathDistributedStmt(&ctx, distributionKeyValue);
 		}
 		else if (needsDistributedPlanning)
 		{
-			result = NonFastPathDistributedStmt(&opts, rangeTableList, rteIdCounter);
+			result = PlanDistributedStmt(&ctx, rangeTableList, rteIdCounter);
 		}
 		else
 		{
-			result = NonDistributedStmt(&opts);
+			result = PlanNonDistributedStmt(&ctx);
 		}
 	}
 	PG_CATCH();
@@ -545,47 +557,47 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * FastPathDistributedStmt creates a distributed planned statement using the
- * FastPathPlanner.
+ * PlanFastPathDistributedStmt creates a distributed planned statement using
+ * the FastPathPlanner.
  */
 static PlannedStmt *
-FastPastDistributedStmt(DistributedStmtOptions *opts, Const *distributionKeyValue)
+PlanFastPathDistributedStmt(DistributedPlanningContext *ctx, Const *distributionKeyValue)
 {
-	opts->plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
+	ctx->plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery =
 		true;
-	opts->plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue =
+	ctx->plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue =
 		distributionKeyValue;
 
-	PlannedStmt *fastPathPlan = FastPathPlanner(opts->originalQuery, opts->parse,
-												opts->boundParams);
+	PlannedStmt *fastPathPlan = FastPathPlanner(ctx->originalQuery, ctx->parse,
+												ctx->boundParams);
 
-	return CreateDistributedPlannedStmt(fastPathPlan, opts);
+	return CreateDistributedPlannedStmt(fastPathPlan, ctx);
 }
 
 
 /*
- * NonFastPathDistributedStmt creates a distributed planned statement using the
- * PG planner.
+ * PlanDistributedStmt creates a distributed planned statement using the PG
+ * planner.
  */
 static PlannedStmt *
-NonFastPathDistributedStmt(DistributedStmtOptions *opts,
-						   List *rangeTableList,
-						   int rteIdCounter)
+PlanDistributedStmt(DistributedPlanningContext *ctx,
+					List *rangeTableList,
+					int rteIdCounter)
 {
 	/*
 	 * Call into standard_planner because the Citus planner relies on both the
 	 * restriction information per table and parse tree transformations made by
 	 * postgres' planner.
 	 */
-	PlannedStmt *standardPlan = standard_planner(opts->parse, opts->cursorOptions,
-												 opts->boundParams);
+	PlannedStmt *standardPlan = standard_planner(ctx->parse, ctx->cursorOptions,
+												 ctx->boundParams);
 
 	/* may've inlined new relation rtes */
-	rangeTableList = ExtractRangeTableEntryList(opts->parse);
+	rangeTableList = ExtractRangeTableEntryList(ctx->parse);
 	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 
 
-	PlannedStmt *result = CreateDistributedPlannedStmt(standardPlan, opts);
+	PlannedStmt *result = CreateDistributedPlannedStmt(standardPlan, ctx);
 
 	bool setPartitionedTablesInherited = true;
 	AdjustPartitioningForDistributedPlanning(rangeTableList,
@@ -596,17 +608,17 @@ NonFastPathDistributedStmt(DistributedStmtOptions *opts,
 
 
 /*
- * NonDistributedStmt creates a normal (non-distributed) planned statement
+ * PlanNonDistributedStmt creates a normal (non-distributed) planned statement
  * using the PG planner.
  */
 static PlannedStmt *
-NonDistributedStmt(DistributedStmtOptions *opts)
+PlanNonDistributedStmt(DistributedPlanningContext *ctx)
 {
-	PlannedStmt *result = standard_planner(opts->parse, opts->cursorOptions,
-										   opts->boundParams);
+	PlannedStmt *result = standard_planner(ctx->parse, ctx->cursorOptions,
+										   ctx->boundParams);
 
 	bool hasExternParam = false;
-	DistributedPlan *delegatePlan = TryToDelegateFunctionCall(opts->parse,
+	DistributedPlan *delegatePlan = TryToDelegateFunctionCall(ctx->parse,
 															  &hasExternParam);
 	if (delegatePlan != NULL)
 	{
@@ -630,25 +642,25 @@ NonDistributedStmt(DistributedStmtOptions *opts)
  * query into a distributed plan that is encapsulated by a PlannedStmt.
  */
 static PlannedStmt *
-CreateDistributedPlannedStmt(PlannedStmt *localPlan, DistributedStmtOptions *opts)
+CreateDistributedPlannedStmt(PlannedStmt *localPlan, DistributedPlanningContext *ctx)
 {
 	uint64 planId = NextPlanId++;
 	bool hasUnresolvedParams = false;
 	JoinRestrictionContext *joinRestrictionContext =
-		opts->plannerRestrictionContext->joinRestrictionContext;
+		ctx->plannerRestrictionContext->joinRestrictionContext;
 
-	if (HasUnresolvedExternParamsWalker((Node *) opts->originalQuery, opts->boundParams))
+	if (HasUnresolvedExternParamsWalker((Node *) ctx->originalQuery, ctx->boundParams))
 	{
 		hasUnresolvedParams = true;
 	}
 
-	opts->plannerRestrictionContext->joinRestrictionContext =
+	ctx->plannerRestrictionContext->joinRestrictionContext =
 		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
 	DistributedPlan *distributedPlan =
-		CreateDistributedPlan(planId, opts->originalQuery, opts->parse,
-							  opts->boundParams,
-							  hasUnresolvedParams, opts->plannerRestrictionContext);
+		CreateDistributedPlan(planId, ctx->originalQuery, ctx->parse,
+							  ctx->boundParams,
+							  hasUnresolvedParams, ctx->plannerRestrictionContext);
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
@@ -701,7 +713,7 @@ CreateDistributedPlannedStmt(PlannedStmt *localPlan, DistributedStmtOptions *opt
 	 * if it is planned as a multi shard modify query.
 	 */
 	if ((distributedPlan->planningError ||
-		 (IsUpdateOrDelete(opts->originalQuery) && IsMultiTaskPlan(distributedPlan))) &&
+		 (IsUpdateOrDelete(ctx->originalQuery) && IsMultiTaskPlan(distributedPlan))) &&
 		hasUnresolvedParams)
 	{
 		/*
