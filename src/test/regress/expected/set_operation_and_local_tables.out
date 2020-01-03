@@ -22,9 +22,9 @@ SET client_min_messages TO DEBUG;
 -- we should be able to run set operations with local tables
 (SELECT x FROM test) INTERSECT (SELECT x FROM local_test) ORDER BY 1 DESC;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 3_1 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 3_2 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -36,7 +36,7 @@ DEBUG:  Plan is router executable
 (SELECT x FROM test) INTERSECT (SELECT i FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 5_1 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -52,7 +52,7 @@ DEBUG:  Plan is router executable
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 7_1 for subquery SELECT x FROM recursive_set_local.test LIMIT 5
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.test LIMIT 5
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -76,7 +76,7 @@ DEBUG:  Plan is router executable
 (SELECT x FROM test) INTERSECT (SELECT i/0 FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 10_1 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT (i.i OPERATOR(pg_catalog./) 0) FROM generate_series(0, 100) i(i) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -85,9 +85,9 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- we should be able to run set operations with generate series and local tables as well
 ((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 12_1 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 12_2 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: (SELECT intermediate_result.x FROM read_intermediate_result('12_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('12_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -102,10 +102,10 @@ DEBUG:  Plan is router executable
 -- two local tables are on different leaf queries, so safe to plan & execute
 ((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT x FROM local_test) ORDER BY 1 DESC;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 14_1 for subquery SELECT x FROM recursive_set_local.local_test
-DEBUG:  generating subplan 14_2 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 14_3 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: (SELECT intermediate_result.x FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('14_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -122,11 +122,11 @@ cte_2 AS (SELECT user_id FROM events_table)
 ((SELECT * FROM cte_1) UNION (SELECT * FROM cte_2) UNION (SELECT x FROM local_test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)
 ORDER BY 1 DESC;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 16_1 for CTE cte_1: SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 16_2 for CTE cte_2: SELECT user_id FROM public.events_table
+DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT user_id FROM public.events_table
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 16_3 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: (SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_2.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_2 UNION SELECT intermediate_result.x FROM read_intermediate_result('16_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -153,16 +153,16 @@ FROM
 	test
 	WHERE test.y = foo.x;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 19_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 19_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
+DEBUG:  generating subplan XXX_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 19_3 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 19_4 for subquery (SELECT cte_1.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte_1 UNION SELECT cte_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte_1) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('19_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
+DEBUG:  generating subplan XXX_4 for subquery (SELECT cte_1.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte_1 UNION SELECT cte_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte_1) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('19_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.x FROM read_intermediate_result('19_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo, recursive_set_local.test WHERE (test.y OPERATOR(pg_catalog.=) foo.x)
 DEBUG:  Router planner cannot handle multi-shard select queries
  count
@@ -183,16 +183,16 @@ FROM
 	ref
 	WHERE ref.a = foo.x;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 23_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT x FROM recursive_set_local.test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 23_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
+DEBUG:  generating subplan XXX_2 for CTE cte_1: SELECT a FROM recursive_set_local.ref
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 23_3 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 23_4 for subquery (SELECT cte_1.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte_1 UNION SELECT cte_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('23_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte_1) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('23_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
+DEBUG:  generating subplan XXX_4 for subquery (SELECT cte_1.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte_1 UNION SELECT cte_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('23_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte_1) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('23_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.x FROM read_intermediate_result('23_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo, recursive_set_local.ref WHERE (ref.a OPERATOR(pg_catalog.=) foo.x)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -204,14 +204,14 @@ DEBUG:  Plan is router executable
 -- subquery union in WHERE clause without parition column equality is recursively planned including the local tables
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c UNION SELECT y FROM local_test d) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 27_1 for subquery SELECT y FROM recursive_set_local.local_test d
+DEBUG:  generating subplan XXX_1 for subquery SELECT y FROM recursive_set_local.local_test d
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 27_2 for subquery SELECT x FROM recursive_set_local.test b
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test b
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 27_3 for subquery SELECT y FROM recursive_set_local.test c
+DEBUG:  generating subplan XXX_3 for subquery SELECT y FROM recursive_set_local.test c
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 27_4 for subquery SELECT intermediate_result.x FROM read_intermediate_result('27_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('27_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
+DEBUG:  generating subplan XXX_4 for subquery SELECT intermediate_result.x FROM read_intermediate_result('27_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('27_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('27_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_set_local.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('27_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y
@@ -223,13 +223,13 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- same query with subquery in where is wrapped in CTE
 SELECT * FROM test a WHERE x IN (WITH cte AS (SELECT x FROM test b UNION SELECT y FROM test c UNION SELECT y FROM local_test d) SELECT * FROM cte) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 31_1 for CTE cte: SELECT b.x FROM recursive_set_local.test b UNION SELECT c.y FROM recursive_set_local.test c UNION SELECT d.y FROM recursive_set_local.local_test d
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT b.x FROM recursive_set_local.test b UNION SELECT c.y FROM recursive_set_local.test c UNION SELECT d.y FROM recursive_set_local.local_test d
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 32_1 for subquery SELECT y FROM recursive_set_local.local_test d
+DEBUG:  generating subplan XXX_1 for subquery SELECT y FROM recursive_set_local.local_test d
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 32_2 for subquery SELECT x FROM recursive_set_local.test b
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test b
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 32_3 for subquery SELECT y FROM recursive_set_local.test c
+DEBUG:  generating subplan XXX_3 for subquery SELECT y FROM recursive_set_local.test c
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('32_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -246,25 +246,25 @@ SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 
 DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 35_1 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 35_2 for subquery SELECT x, y FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_set_local.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 35_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('35_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('35_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('35_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('35_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, local_test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('35_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.local_test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Local tables cannot be used in distributed queries.
 ERROR:  relation local_test is not distributed
 -- though we replace some queries including the local query, the intermediate result is on the outer part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 39_1 for subquery SELECT x, y FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 39_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 39_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('39_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
@@ -272,13 +272,13 @@ DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer jo
 -- we replace some queries including the local query, the intermediate result is on the inner part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u RIGHT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 42_1 for subquery SELECT x, y FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 42_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 42_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('42_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u RIGHT JOIN recursive_set_local.test USING (x)) ORDER BY test.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y
@@ -290,13 +290,13 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- recurively plan left part of the join, and run a final real-time query
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u INNER JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 45_1 for subquery SELECT x, y FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan 45_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_set_local.test ORDER BY x LIMIT 1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 45_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('45_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y | y
@@ -306,17 +306,17 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- set operations and the sublink can be recursively planned
 SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_test) as foo WHERE x IN (SELECT x FROM test))) u ORDER BY 1;
 DEBUG:  Local tables cannot be used in distributed queries.
-DEBUG:  generating subplan 48_1 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 48_2 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 48_3 for subquery SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('48_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('48_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 48_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_4 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 48_5 for subquery SELECT intermediate_result.x FROM read_intermediate_result('48_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('48_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
+DEBUG:  generating subplan XXX_5 for subquery SELECT intermediate_result.x FROM read_intermediate_result('48_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.x FROM read_intermediate_result('48_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x FROM (SELECT intermediate_result.x FROM read_intermediate_result('48_5'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) u ORDER BY x
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -360,12 +360,12 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
-DEBUG:  generating subplan 53_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 2
-DEBUG:  generating subplan 53_2 for subquery SELECT x FROM recursive_set_local.local_test
+DEBUG:  generating subplan XXX_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 2
+DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 53_3 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_3 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 53_4 for subquery SELECT x FROM recursive_set_local.test
+DEBUG:  generating subplan XXX_4 for subquery SELECT x FROM recursive_set_local.test
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('53_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT SELECT intermediate_result.x FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) INTERSECT ((SELECT intermediate_result.x FROM read_intermediate_result('53_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION ALL SELECT intermediate_result.x FROM read_intermediate_result('53_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) INTERSECT SELECT i.i FROM generate_series(0, 100) i(i)) ORDER BY 1 DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

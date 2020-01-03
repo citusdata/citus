@@ -41,7 +41,7 @@ SELECT true AS valid FROM explain_json_2($$
     WHERE
         foo.value_2 = bar.value_2;
 $$);
-DEBUG:  generating subplan 3_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.value_2 FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
  valid
 ---------------------------------------------------------------------
@@ -61,7 +61,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT event_type FROM events_table WHERE user_id < 100);
 
 $$);
-DEBUG:  generating subplan 5_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 100)
+DEBUG:  generating subplan XXX_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 100)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer)))
  valid
 ---------------------------------------------------------------------
@@ -80,7 +80,7 @@ SELECT true AS valid FROM explain_json_2($$
     NOT IN
         (SELECT user_id FROM events_table WHERE event_type = 2);
 $$);
-DEBUG:  generating subplan 7_1 for subquery SELECT user_id FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) 2)
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.events_table WHERE (NOT (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
  valid
 ---------------------------------------------------------------------
@@ -101,7 +101,7 @@ SELECT true AS valid FROM explain_json_2($$
         foo.event_type IN (SELECT event_type FROM events_table WHERE user_id < 3);
 
 $$);
-DEBUG:  generating subplan 9_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 3)
+DEBUG:  generating subplan XXX_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 3)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('9_1'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer))))
  valid
 ---------------------------------------------------------------------
@@ -121,7 +121,7 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id = bar.user_id AND
         foo.user_id IN (SELECT user_id FROM events_table WHERE user_id < 10);
 $$);
-DEBUG:  generating subplan 11_1 for subquery SELECT (users_table.user_id OPERATOR(pg_catalog./) 2) AS user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT (users_table.user_id OPERATOR(pg_catalog./) 2) AS user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.user_id OPERATOR(pg_catalog.=) ANY (SELECT events_table.user_id FROM public.events_table WHERE (events_table.user_id OPERATOR(pg_catalog.<) 10))))
  valid
 ---------------------------------------------------------------------
@@ -141,8 +141,8 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id = bar.user_id AND
         foo.user_id NOT IN (SELECT user_id FROM events_table WHERE user_id < 10);
 $$);
-DEBUG:  generating subplan 13_1 for subquery SELECT (users_table.user_id OPERATOR(pg_catalog./) 2) AS user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 13_2 for subquery SELECT user_id FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT (users_table.user_id OPERATOR(pg_catalog./) 2) AS user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('13_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (NOT (foo.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('13_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))))
  valid
 ---------------------------------------------------------------------
@@ -162,8 +162,8 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id = bar.user_id AND
         foo.event_type IN (SELECT event_type FROM events_table WHERE user_id < 4);
 $$);
-DEBUG:  generating subplan 16_1 for subquery SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 16_2 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer))))
  valid
 ---------------------------------------------------------------------
@@ -186,10 +186,10 @@ SELECT true AS valid FROM explain_json_2($$
 
     ) as foo_top, events_table WHERE events_table.user_id = foo_top.user_id;
 $$);
-DEBUG:  generating subplan 19_1 for subquery SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 19_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.event_type) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 19_3 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.=) 5)
-DEBUG:  generating subplan 19_4 for subquery SELECT foo.user_id, random() AS random FROM (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('19_3'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer))))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, events_table.event_type FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.event_type) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_3 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_4 for subquery SELECT foo.user_id, random() AS random FROM (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((foo.user_id OPERATOR(pg_catalog.=) bar.user_id) AND (foo.event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('19_3'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer))))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo_top.user_id, foo_top.random, events_table.user_id FROM (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('19_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) foo_top, public.events_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) foo_top.user_id)
  valid
 ---------------------------------------------------------------------
@@ -220,7 +220,7 @@ SELECT true AS valid FROM explain_json_2($$
     ) as foo_top;
 
 $$);
-DEBUG:  generating subplan 24_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, random FROM (SELECT foo1.user_id, random() AS random FROM (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo1, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) foo2, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo3, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) foo4, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('24_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo5 WHERE ((foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo2.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo3.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo5.value_1))) foo_top
  valid
 ---------------------------------------------------------------------
@@ -251,7 +251,7 @@ SELECT true AS valid FROM explain_json_2($$
         foo1.user_id = foo5.user_id
     ) as foo_top;
 $$);
-DEBUG:  generating subplan 26_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, random FROM (SELECT foo1.user_id, random() AS random FROM (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo1, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) foo2, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo3, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) foo4, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo5 WHERE ((foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo2.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo3.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo5.user_id))) foo_top
  valid
 ---------------------------------------------------------------------
@@ -280,8 +280,8 @@ SELECT true AS valid FROM explain_json_2($$
             foo1.user_id = foo5.value_1
     ) as foo_top;
 $$);
-DEBUG:  generating subplan 28_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 28_2 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, random FROM (SELECT foo1.user_id, random() AS random FROM (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo1, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('28_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo2, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo3, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) foo4, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('28_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo5 WHERE ((foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo2.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo3.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo5.value_1))) foo_top
  valid
 ---------------------------------------------------------------------
@@ -311,8 +311,8 @@ SELECT true AS valid FROM explain_json_2($$
             foo2.user_id = foo5.value_1
     ) as foo_top;
 $$);
-DEBUG:  generating subplan 31_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 31_2 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[17, 18, 19, 20])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, random FROM (SELECT foo1.user_id, random() AS random FROM (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo1, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo2, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo3, (SELECT users_table.user_id, users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) foo4, (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) foo5 WHERE ((foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo2.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo3.user_id) AND (foo1.user_id OPERATOR(pg_catalog.=) foo4.user_id) AND (foo2.user_id OPERATOR(pg_catalog.=) foo5.value_1))) foo_top
  valid
 ---------------------------------------------------------------------
@@ -344,8 +344,8 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id = bar.user_id) as bar_top
         ON (foo_top.user_id = bar_top.user_id);
 $$);
-DEBUG:  generating subplan 34_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 34_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)) foo_top JOIN (SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('34_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)) bar_top ON ((foo_top.user_id OPERATOR(pg_catalog.=) bar_top.user_id)))
  valid
 ---------------------------------------------------------------------
@@ -378,7 +378,7 @@ SELECT true AS valid FROM explain_json_2($$
         ON (foo_top.value_2 = bar_top.user_id);
 
 $$);
-DEBUG:  generating subplan 37_1 for subquery SELECT foo.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT foo.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.user_id, foo.value_2 FROM (SELECT DISTINCT users_table.user_id, users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)) foo_top JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar_top ON ((foo_top.value_2 OPERATOR(pg_catalog.=) bar_top.user_id)))
  valid
 ---------------------------------------------------------------------
@@ -409,8 +409,8 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id = bar.user_id) as bar_top
     ON (foo_top.value_2 = bar_top.user_id);
 $$);
-DEBUG:  generating subplan 39_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))
-DEBUG:  generating subplan 39_2 for subquery SELECT foo.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[13, 14, 15, 16])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT foo.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.user_id, foo.value_2 FROM (SELECT DISTINCT users_table.user_id, users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.user_id OPERATOR(pg_catalog.=) bar.user_id)) foo_top JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar_top ON ((foo_top.value_2 OPERATOR(pg_catalog.=) bar_top.user_id)))
  valid
 ---------------------------------------------------------------------
@@ -430,7 +430,7 @@ SELECT true AS valid FROM explain_json_2($$
                 WHERE foo.my_users = users_table.user_id) as mid_level_query
         ) as bar;
 $$);
-DEBUG:  generating subplan 42_1 for subquery SELECT events_table.user_id AS my_users FROM public.events_table, public.users_table WHERE (events_table.event_type OPERATOR(pg_catalog.=) users_table.user_id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT events_table.user_id AS my_users FROM public.events_table, public.users_table WHERE (events_table.event_type OPERATOR(pg_catalog.=) users_table.user_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT mid_level_query.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, (SELECT intermediate_result.my_users FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(my_users integer)) foo WHERE (foo.my_users OPERATOR(pg_catalog.=) users_table.user_id)) mid_level_query) bar
  valid
 ---------------------------------------------------------------------
@@ -449,7 +449,7 @@ SELECT true AS valid FROM explain_json_2($$
         WHERE foo.my_users = users_table.user_id) as mid_level_query   ) as bar;
 
 $$);
-DEBUG:  generating subplan 44_1 for subquery SELECT events_table.event_type AS my_users, random() AS random FROM public.events_table, public.users_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT events_table.event_type AS my_users, random() AS random FROM public.events_table, public.users_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT mid_level_query.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, (SELECT intermediate_result.my_users, intermediate_result.random FROM read_intermediate_result('44_1'::text, 'binary'::citus_copy_format) intermediate_result(my_users integer, random double precision)) foo WHERE (foo.my_users OPERATOR(pg_catalog.=) users_table.user_id)) mid_level_query) bar
  valid
 ---------------------------------------------------------------------
@@ -472,7 +472,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
                  WHERE foo.my_users = users_table.user_id) as mid_level_query
          ) as bar;
  $$);
-DEBUG:  generating subplan 46_1 for subquery SELECT events_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT events_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT mid_level_query.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, (SELECT events_table.user_id AS my_users FROM public.events_table, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('46_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) selected_users WHERE (events_table.event_type OPERATOR(pg_catalog.=) selected_users.user_id)) foo WHERE (foo.my_users OPERATOR(pg_catalog.=) users_table.user_id)) mid_level_query) bar
  valid
 ---------------------------------------------------------------------
@@ -505,7 +505,7 @@ SELECT true AS valid FROM explain_json_2($$
     ) as bar;
 
 $$);
-DEBUG:  generating subplan 48_1 for subquery SELECT value_2 FROM public.events_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.events_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT mid_level_query.user_id FROM (SELECT DISTINCT users_table.user_id FROM public.users_table, (SELECT events_table.user_id AS my_users FROM public.events_table, (SELECT events_table_1.user_id FROM public.users_table users_table_1, public.events_table events_table_1 WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table_1.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('48_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))))) selected_users WHERE (events_table.user_id OPERATOR(pg_catalog.=) selected_users.user_id)) foo WHERE (foo.my_users OPERATOR(pg_catalog.=) users_table.user_id)) mid_level_query) bar
  valid
 ---------------------------------------------------------------------
@@ -526,7 +526,7 @@ WHERE
 	 	users_table, events_table
 	 WHERE
 	 	users_table.user_id = events_table.value_2 AND event_type IN (5,6));$$);
-DEBUG:  generating subplan 50_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('50_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
  valid
 ---------------------------------------------------------------------
@@ -542,8 +542,8 @@ SELECT count(*) FROM q1, (SELECT
 					users_table, events_table
 				WHERE
 					users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
-DEBUG:  generating subplan 52_1 for CTE q1: SELECT user_id FROM public.users_table
-DEBUG:  generating subplan 52_2 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_1 for CTE q1: SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('52_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) q1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('52_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) q1.user_id)
  valid
 ---------------------------------------------------------------------
@@ -559,7 +559,7 @@ SELECT true AS valid FROM explain_json_2($$
                     users_table, events_table
                 WHERE
                     users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
-DEBUG:  generating subplan 55_1 for CTE q1: SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for CTE q1: SELECT user_id FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('55_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) q1, (SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) q1.user_id)
  valid
 ---------------------------------------------------------------------
@@ -570,8 +570,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 SELECT true AS valid FROM explain_json_2($$
     (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) UNION
     (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8));$$);
-DEBUG:  generating subplan 57_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 57_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('57_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('57_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
  valid
 ---------------------------------------------------------------------
@@ -606,12 +606,12 @@ FROM (
 ) q
 ORDER BY 2 DESC, 1;
 $$);
-DEBUG:  generating subplan 60_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 60_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 OPERATOR(pg_catalog.>=) 5) AND (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('60_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) LIMIT 5
-DEBUG:  generating subplan 60_3 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 60_4 for subquery SELECT DISTINCT ON ((e.event_type)::text) (e.event_type)::text AS event, e."time", e.user_id FROM public.users_table u, public.events_table e, (SELECT intermediate_result.user_id FROM read_intermediate_result('60_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('60_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
-DEBUG:  generating subplan 60_5 for subquery SELECT t.event, array_agg(t.user_id) AS events_table FROM (SELECT intermediate_result.event, intermediate_result."time", intermediate_result.user_id FROM read_intermediate_result('60_4'::text, 'binary'::citus_copy_format) intermediate_result(event text, "time" timestamp without time zone, user_id integer)) t, public.users_table WHERE (users_table.value_1 OPERATOR(pg_catalog.=) (t.event)::integer) GROUP BY t.event
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 OPERATOR(pg_catalog.>=) 5) AND (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('60_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) LIMIT 5
+DEBUG:  generating subplan XXX_3 for subquery SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_4 for subquery SELECT DISTINCT ON ((e.event_type)::text) (e.event_type)::text AS event, e."time", e.user_id FROM public.users_table u, public.events_table e, (SELECT intermediate_result.user_id FROM read_intermediate_result('60_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('60_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+DEBUG:  generating subplan XXX_5 for subquery SELECT t.event, array_agg(t.user_id) AS events_table FROM (SELECT intermediate_result.event, intermediate_result."time", intermediate_result.user_id FROM read_intermediate_result('60_4'::text, 'binary'::citus_copy_format) intermediate_result(event text, "time" timestamp without time zone, user_id integer)) t, public.users_table WHERE (users_table.value_1 OPERATOR(pg_catalog.=) (t.event)::integer) GROUP BY t.event
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT event, array_length(events_table, 1) AS array_length FROM (SELECT intermediate_result.event, intermediate_result.events_table FROM read_intermediate_result('60_5'::text, 'binary'::citus_copy_format) intermediate_result(event text, events_table integer[])) q ORDER BY (array_length(events_table, 1)) DESC, event
  valid
 ---------------------------------------------------------------------
@@ -627,7 +627,7 @@ SELECT true AS valid FROM explain_json_2($$
     FROM
         (users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1);
 $$);
-DEBUG:  generating subplan 66_1 for subquery SELECT value_1, random() AS random FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_1, random() AS random FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((public.users_table u1 JOIN public.users_table u2 USING (value_1)) a(value_1, user_id, "time", value_2, value_3, value_4, user_id_1, time_1, value_2_1, value_3_1, value_4_1) JOIN (SELECT intermediate_result.value_1, intermediate_result.random FROM read_intermediate_result('66_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, random double precision)) u3 USING (value_1))
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- a very similar query to the above
@@ -639,7 +639,7 @@ SELECT true AS valid FROM explain_json_2($$
     FROM
         (SELECT * FROM users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1);
 $$);
-DEBUG:  generating subplan 68_1 for subquery SELECT u1.value_1, u1.user_id, u1."time", u1.value_2, u1.value_3, u1.value_4, u2.user_id, u2."time", u2.value_2, u2.value_3, u2.value_4 FROM (public.users_table u1 JOIN public.users_table u2 USING (value_1))
+DEBUG:  generating subplan XXX_1 for subquery SELECT u1.value_1, u1.user_id, u1."time", u1.value_2, u1.value_3, u1.value_4, u2.user_id, u2."time", u2.value_2, u2.value_3, u2.value_4 FROM (public.users_table u1 JOIN public.users_table u2 USING (value_1))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.value_1, intermediate_result.user_id, intermediate_result."time", intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4, intermediate_result.user_id_1 AS user_id, intermediate_result.time_1 AS "time", intermediate_result.value_2_1 AS value_2, intermediate_result.value_3_1 AS value_3, intermediate_result.value_4_1 AS value_4 FROM read_intermediate_result('68_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, user_id integer, "time" timestamp without time zone, value_2 integer, value_3 double precision, value_4 bigint, user_id_1 integer, time_1 timestamp without time zone, value_2_1 integer, value_3_1 double precision, value_4_1 bigint)) a(value_1, user_id, "time", value_2, value_3, value_4, user_id_1, time_1, value_2_1, value_3_1, value_4_1) JOIN (SELECT users_table.value_1, random() AS random FROM public.users_table) u3 USING (value_1))
  valid
 ---------------------------------------------------------------------
@@ -658,7 +658,7 @@ SELECT true AS valid FROM explain_json_2($$
         events_table
             using (value_2);
 $$);
-DEBUG:  generating subplan 70_1 for subquery SELECT value_2, random() AS random FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_2, random() AS random FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('70_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u1 JOIN public.events_table USING (value_2))
  valid
 ---------------------------------------------------------------------
@@ -676,7 +676,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT value_2, random() FROM users_table) as u2
             USING(value_2);
 $$);
-DEBUG:  generating subplan 72_1 for subquery SELECT value_2, random() AS random FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_2, random() AS random FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT users_table.value_2, random() AS random FROM public.users_table) u1 LEFT JOIN (SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('72_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u2 USING (value_2))
  valid
 ---------------------------------------------------------------------
@@ -696,7 +696,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT value_2, random() FROM users_table) as u2
             USING(value_2);
 $$);
-DEBUG:  generating subplan 74_1 for subquery SELECT value_2, random() AS random FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_2, random() AS random FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT users_table.value_2, random() AS random FROM public.users_table) u1 RIGHT JOIN (SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('74_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u2 USING (value_2))
 ERROR:  cannot pushdown the subquery
 -- set operations may produce not very efficient plans
@@ -715,10 +715,10 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT value_1 FROM users_table) as foo ON (a.user_id = foo.value_1)
     );
 $$);
-DEBUG:  generating subplan 77_1 for subquery SELECT user_id FROM public.users_table
-DEBUG:  generating subplan 77_2 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('77_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('77_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  generating subplan 76_1 for subquery SELECT users_table.user_id FROM public.users_table UNION SELECT users_table.user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table UNION SELECT users_table.user_id FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.user_id, foo.value_1 FROM ((SELECT intermediate_result.user_id FROM read_intermediate_result('76_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) a JOIN (SELECT users_table.value_1 FROM public.users_table) foo ON ((a.user_id OPERATOR(pg_catalog.=) foo.value_1)))
  valid
 ---------------------------------------------------------------------
@@ -739,10 +739,10 @@ SELECT true AS valid FROM explain_json_2($$
         users_table as foo ON (a.user_id = foo.value_1)
     );
 $$);
-DEBUG:  generating subplan 81_1 for subquery SELECT user_id FROM public.users_table
-DEBUG:  generating subplan 81_2 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('81_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  generating subplan 80_1 for subquery SELECT users_table.user_id FROM public.users_table UNION SELECT users_table.user_id FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id FROM public.users_table UNION SELECT users_table.user_id FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.user_id, foo.user_id, foo."time", foo.value_1, foo.value_2, foo.value_3, foo.value_4 FROM ((SELECT intermediate_result.user_id FROM read_intermediate_result('80_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) a JOIN public.users_table foo ON ((a.user_id OPERATOR(pg_catalog.=) foo.value_1)))
  valid
 ---------------------------------------------------------------------
@@ -772,7 +772,7 @@ SELECT true AS valid FROM explain_json_2($$
          ON(foo.user_id = bar.value_1)
     );
 $$);
-DEBUG:  generating subplan 84_1 for subquery SELECT value_1 FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_1 FROM public.users_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id, a.user_id, bar.value_1 FROM (((SELECT users_table.user_id FROM public.users_table) foo JOIN (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) UNION SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) a ON ((a.user_id OPERATOR(pg_catalog.=) foo.user_id))) JOIN (SELECT intermediate_result.value_1 FROM read_intermediate_result('84_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) bar ON ((foo.user_id OPERATOR(pg_catalog.=) bar.value_1)))
  valid
 ---------------------------------------------------------------------
@@ -811,11 +811,11 @@ SELECT true AS valid FROM explain_json_2($$
     WHERE
         non_colocated_subquery.value_2 != non_colocated_subquery_2.cnt
 $$);
-DEBUG:  generating subplan 86_1 for CTE non_colocated_subquery: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
-DEBUG:  generating subplan 87_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_1 for CTE non_colocated_subquery: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.value_2 FROM read_intermediate_result('87_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
-DEBUG:  generating subplan 86_2 for CTE non_colocated_subquery_2: SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT events_table_1.event_type FROM public.events_table events_table_1 WHERE (events_table_1.user_id OPERATOR(pg_catalog.<) 4)))
-DEBUG:  generating subplan 89_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
+DEBUG:  generating subplan XXX_2 for CTE non_colocated_subquery_2: SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT events_table_1.event_type FROM public.events_table events_table_1 WHERE (events_table_1.user_id OPERATOR(pg_catalog.<) 4)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('89_1'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT non_colocated_subquery.value_2, non_colocated_subquery_2.cnt FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('86_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) non_colocated_subquery, (SELECT intermediate_result.cnt FROM read_intermediate_result('86_2'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) non_colocated_subquery_2 WHERE (non_colocated_subquery.value_2 OPERATOR(pg_catalog.<>) non_colocated_subquery_2.cnt)
  valid
@@ -836,8 +836,8 @@ SELECT true AS valid FROM explain_json_2($$
         AND
         foo.value_2 = baz.value_2
 $$);
-DEBUG:  generating subplan 91_1 for subquery SELECT users_table_local.value_2 FROM non_colocated_subquery.users_table_local, non_colocated_subquery.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  generating subplan 91_2 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table_local.value_2 FROM non_colocated_subquery.users_table_local, non_colocated_subquery.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[9, 10, 11, 12])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.value_2 FROM read_intermediate_result('91_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('91_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz WHERE ((foo.value_2 OPERATOR(pg_catalog.=) bar.value_2) AND (foo.value_2 OPERATOR(pg_catalog.=) baz.value_2))
  valid
 ---------------------------------------------------------------------
@@ -871,9 +871,9 @@ SELECT true AS valid FROM explain_json_2($$
             AND
         foo.user_id IN (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2))
 $$);
-DEBUG:  generating subplan 93_1 for subquery SELECT value_1, value_2 FROM public.users_table
-DEBUG:  generating subplan 93_2 for subquery SELECT value_1 FROM public.users_table WHERE (value_2 OPERATOR(pg_catalog.<) 1)
-DEBUG:  generating subplan 93_3 for subquery SELECT value_2 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.<) 2)
+DEBUG:  generating subplan XXX_1 for subquery SELECT value_1, value_2 FROM public.users_table
+DEBUG:  generating subplan XXX_2 for subquery SELECT value_1 FROM public.users_table WHERE (value_2 OPERATOR(pg_catalog.<) 1)
+DEBUG:  generating subplan XXX_3 for subquery SELECT value_2 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.<) 2)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT users_table.user_id FROM public.users_table) foo JOIN (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) UNION SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) a ON ((a.user_id OPERATOR(pg_catalog.=) foo.user_id))) JOIN (SELECT intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('93_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer, value_2 integer)) bar ON ((foo.user_id OPERATOR(pg_catalog.=) bar.value_1))) WHERE ((bar.value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_1 FROM read_intermediate_result('93_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))) AND (bar.value_1 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('93_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))) AND (foo.user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2]))))))
  valid
 ---------------------------------------------------------------------
@@ -893,7 +893,7 @@ SELECT true AS valid FROM explain_json_2($$
       users_table_ref.user_id = foo.user_id
       AND foo.user_id = bar.value_2;
 $$);
-DEBUG:  generating subplan 97_1 for subquery SELECT user_id, value_2 FROM public.events_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_2 FROM public.events_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.users_reference_table users_table_ref, (SELECT users_table.user_id FROM public.users_table) foo, (SELECT intermediate_result.user_id, intermediate_result.value_2 FROM read_intermediate_result('97_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_2 integer)) bar WHERE ((users_table_ref.user_id OPERATOR(pg_catalog.=) foo.user_id) AND (foo.user_id OPERATOR(pg_catalog.=) bar.value_2))
  valid
 ---------------------------------------------------------------------
@@ -917,7 +917,7 @@ JOIN LATERAL
    LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 99_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table OFFSET 0
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
@@ -976,19 +976,19 @@ JOIN LATERAL
         LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 102_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 102_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 102_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 102_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
+DEBUG:  generating subplan XXX_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 102_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
+DEBUG:  generating subplan XXX_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 102_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan XXX_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT users_table_limited.user_id, users_table_limited."time", users_table_limited.value_1, users_table_limited.value_2, users_table_limited.value_3, users_table_limited.value_4, foo.user_id, foo."time", foo.event_type, foo.value_2, foo.value_3, foo.value_4, foo.user_id_1 AS user_id, foo.time_1 AS "time", foo.value_1, foo.value_2_1 AS value_2, foo.value_3_1 AS value_3, foo.value_4_1 AS value_4 FROM ((SELECT users_table_union.user_id, users_table_union."time", users_table_union.value_1, users_table_union.value_2, users_table_union.value_3, users_table_union.value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) users_table_union) users_table_limited JOIN LATERAL (SELECT bar.user_id, bar."time", bar.event_type, bar.value_2, bar.value_3, bar.value_4, u2.user_id, u2."time", u2.value_1, u2.value_2, u2.value_3, u2.value_4 FROM ((SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('102_6'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)) events_table WHERE (events_table.user_id OPERATOR(pg_catalog.=) users_table_limited.user_id)) bar LEFT JOIN public.users_table u2 ON ((u2.user_id OPERATOR(pg_catalog.=) bar.value_2)))) foo(user_id, "time", event_type, value_2, value_3, value_4, user_id_1, time_1, value_1, value_2_1, value_3_1, value_4_1) ON (true))
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
@@ -1023,19 +1023,19 @@ SELECT count(*) FROM events_table WHERE user_id NOT IN
   );
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 109_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 109_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_1 OPERATOR(pg_catalog.>) 2)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 109_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint) EXCEPT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 109_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
+DEBUG:  generating subplan XXX_4 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_3 OPERATOR(pg_catalog.>) (4)::double precision)
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 109_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
+DEBUG:  generating subplan XXX_5 for subquery SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table WHERE (value_2 OPERATOR(pg_catalog.>) 2)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 109_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
+DEBUG:  generating subplan XXX_6 for subquery SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint) INTERSECT SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.event_type, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('109_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, event_type integer, value_2 integer, value_3 double precision, value_4 bigint)
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 -- make sure that non-colocated subquery joins work fine in
@@ -1063,14 +1063,14 @@ SELECT create_distributed_table('table1','tenant_id');
 UPDATE table2 SET id=20 FROM table1_view WHERE table1_view.id=table2.id;
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 117_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  generating subplan XXX_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('117_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 UPDATE table2_p1 SET id=20 FROM table1_view WHERE table1_view.id=table2_p1.id;
 DEBUG:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 119_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
+DEBUG:  generating subplan XXX_1 for subquery SELECT table1.id, table1.tenant_id FROM non_colocated_subquery.table1 WHERE (table1.id OPERATOR(pg_catalog.<) 100)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE non_colocated_subquery.table2_p1 SET id = 20 FROM (SELECT intermediate_result.id, intermediate_result.tenant_id FROM read_intermediate_result('119_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, tenant_id integer)) table1_view WHERE (table1_view.id OPERATOR(pg_catalog.=) table2_p1.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

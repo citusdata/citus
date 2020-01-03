@@ -267,7 +267,7 @@ FROM
 WHERE
 	cte1.data > single_hash_repartition_first.id;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 7_1 for CTE cte1: SELECT ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) AS data FROM single_hash_repartition.single_hash_repartition_first t1, single_hash_repartition.single_hash_repartition_second t2 WHERE ((t1.id OPERATOR(pg_catalog.=) t2.sum) AND (t1.sum OPERATOR(pg_catalog.>) 5000)) ORDER BY ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) DESC LIMIT 50
+DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) AS data FROM single_hash_repartition.single_hash_repartition_first t1, single_hash_repartition.single_hash_repartition_second t2 WHERE ((t1.id OPERATOR(pg_catalog.=) t2.sum) AND (t1.sum OPERATOR(pg_catalog.>) 5000)) ORDER BY ((t1.id)::double precision OPERATOR(pg_catalog.*) t2.avg) DESC LIMIT 50
 DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "single_hash_repartition_first" ][ single hash partition join "single_hash_repartition_second" ]
 DEBUG:  push down of limit count: 50

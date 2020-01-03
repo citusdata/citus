@@ -117,12 +117,12 @@ DETAIL:  distribution column value: 1
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
 DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
-DEBUG:  generating subplan 18_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan XXX_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-DEBUG:  generating subplan 18_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
+DEBUG:  generating subplan XXX_2 for CTE t2: SELECT key, value_1, value_2 FROM fast_path_router_modify.modify_fast_path
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT intermediate_result.key, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('18_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value_1 integer, value_2 text)) t2
 DEBUG:  Creating router plan

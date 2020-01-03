@@ -42,7 +42,7 @@ FROM
 		lineitem_subquery
 	GROUP BY
 		l_suppkey) AS order_counts;
-DEBUG:  generating subplan 2_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
+DEBUG:  generating subplan XXX_1 for subquery SELECT l_suppkey, count(*) AS order_count FROM public.lineitem_subquery GROUP BY l_suppkey
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT avg(order_count) AS avg FROM (SELECT intermediate_result.l_suppkey, intermediate_result.order_count FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(l_suppkey integer, order_count bigint)) order_counts
         avg
 ---------------------------------------------------------------------
@@ -82,10 +82,10 @@ SELECT count(*) FROM
 ) b;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 7_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 7_2 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION ALL SELECT (1)::bigint AS int8
+DEBUG:  generating subplan XXX_2 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION ALL SELECT (1)::bigint AS int8
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -102,12 +102,12 @@ SELECT count(*) FROM
 ) b;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 10_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT l_orderkey FROM public.lineitem_subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 10_2 for subquery SELECT l_partkey FROM public.lineitem_subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT l_partkey FROM public.lineitem_subquery
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 10_3 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION SELECT intermediate_result.l_partkey FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(l_partkey integer)
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint) UNION SELECT intermediate_result.l_partkey FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(l_partkey integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) b
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
