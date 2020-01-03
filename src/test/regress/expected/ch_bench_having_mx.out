@@ -34,7 +34,7 @@ order by s_i_id;
          Group Key: s_i_id
          Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan 1_1
+               ->  Distributed Subplan XXX_1
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
@@ -43,7 +43,7 @@ order by s_i_id;
                                        Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
-               ->  Distributed Subplan 1_2
+               ->  Distributed Subplan XXX_2
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
@@ -80,7 +80,7 @@ order by s_i_id;
          Group Key: s_i_id
          Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan 4_1
+               ->  Distributed Subplan XXX_1
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
@@ -111,7 +111,7 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
    InitPlan 1 (returns $0)
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 6_1
+         ->  Distributed Subplan XXX_1
                ->  Aggregate
                      ->  Custom Scan (Citus Adaptive)
                            Task Count: 4

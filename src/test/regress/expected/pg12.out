@@ -171,7 +171,7 @@ $Q$);
              coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan 7_1
+   ->  Distributed Subplan XXX_1
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (4 rows)
@@ -216,7 +216,7 @@ $Q$);
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 10_1
+         ->  Distributed Subplan XXX_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)
@@ -237,7 +237,7 @@ $Q$);
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 12_1
+         ->  Distributed Subplan XXX_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)

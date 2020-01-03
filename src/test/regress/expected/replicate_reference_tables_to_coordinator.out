@@ -288,7 +288,7 @@ $Q$);
                 coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan 24_1
+   ->  Distributed Subplan XXX_1
          ->  Seq Scan on local_table
                Filter: ((a >= 1) AND (a <= 10))
    Task Count: 1

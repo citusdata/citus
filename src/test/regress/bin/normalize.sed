@@ -84,4 +84,4 @@ s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\
 s/DEBUG:  Plan [0-9]+/DEBUG:  Plan XXX/g
 s/generating subplan [0-9]+\_/generating subplan XXX\_/g
 s/read_intermediate_result\('[0-9]+_/read_intermediate_result('XXX_/g
-#s/Subplan [0-9]+\_/Subplan XXX\_/g
+s/Subplan [0-9]+\_/Subplan XXX\_/g

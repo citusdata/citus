@@ -1262,7 +1262,7 @@ SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
 Custom Scan (Citus Adaptive)
   Output: remote_scan.l_orderkey
-  ->  Distributed Subplan 60_1
+  ->  Distributed Subplan XXX_1
         ->  HashAggregate
               Output: remote_scan.l_orderkey
               Group Key: remote_scan.l_orderkey
@@ -1277,7 +1277,7 @@ Custom Scan (Citus Adaptive)
                                 Group Key: lineitem_hash_part.l_orderkey
                                 ->  Seq Scan on public.lineitem_hash_part_360041 lineitem_hash_part
                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-  ->  Distributed Subplan 60_2
+  ->  Distributed Subplan XXX_2
         ->  Function Scan on pg_catalog.generate_series s
               Output: s
               Function Call: generate_series(1, 10)
