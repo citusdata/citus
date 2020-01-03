@@ -71,8 +71,8 @@ DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290000 lineitem JOIN orders_290002 orders ON ((lineitem.l_orderkey OPERATOR(pg_catalog.=) orders.o_orderkey))) WHERE ((lineitem.l_partkey OPERATOR(pg_catalog.<) 1000) AND (orders.o_totalprice OPERATOR(pg_catalog.>) 10.0))"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290001 lineitem JOIN orders_290003 orders ON ((lineitem.l_orderkey OPERATOR(pg_catalog.=) orders.o_orderkey))) WHERE ((lineitem.l_partkey OPERATOR(pg_catalog.<) 1000) AND (orders.o_totalprice OPERATOR(pg_catalog.>) 10.0))"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  generated sql query for task 2
@@ -83,8 +83,8 @@ DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 3
 DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 6
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 4 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -103,9 +103,9 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  assigned task 4 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 2 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 3
 DEBUG:  completed cleanup query for job 3
 DEBUG:  completed cleanup query for job 2
@@ -161,14 +161,14 @@ DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290000 lineitem WHERE (l_quantity OPERATOR(pg_catalog.<) 5.0)"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290001 lineitem WHERE (l_quantity OPERATOR(pg_catalog.<) 5.0)"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE (o_totalprice OPERATOR(pg_catalog.<>) 4.0)"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE (o_totalprice OPERATOR(pg_catalog.<>) 4.0)"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -205,10 +205,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 9 to node localhost:xxxxx
-DEBUG:  assigned task 12 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 6
 DEBUG:  completed cleanup query for job 6
 DEBUG:  completed cleanup query for job 4
@@ -235,14 +235,14 @@ DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -279,10 +279,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 9 to node localhost:xxxxx
-DEBUG:  assigned task 12 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 9
 DEBUG:  completed cleanup query for job 9
 DEBUG:  completed cleanup query for job 7
@@ -311,14 +311,14 @@ DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -355,10 +355,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 9 to node localhost:xxxxx
-DEBUG:  assigned task 12 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 12
 DEBUG:  completed cleanup query for job 12
 DEBUG:  completed cleanup query for job 10
@@ -385,14 +385,14 @@ DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -429,10 +429,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 9 to node localhost:xxxxx
-DEBUG:  assigned task 12 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 15
 DEBUG:  completed cleanup query for job 15
 DEBUG:  completed cleanup query for job 13
@@ -461,10 +461,10 @@ DEBUG:  generated sql query for task 3
 DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690006 stock WHERE true"
 DEBUG:  generated sql query for task 4
 DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690007 stock WHERE true"
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 1 to node localhost:xxxxx
-DEBUG:  assigned task 4 to node localhost:xxxxx
-DEBUG:  assigned task 3 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT ol_i_id FROM order_line_690000 order_line WHERE true"
 DEBUG:  generated sql query for task 2
@@ -473,10 +473,10 @@ DEBUG:  generated sql query for task 3
 DETAIL:  query string: "SELECT ol_i_id FROM order_line_690002 order_line WHERE true"
 DEBUG:  generated sql query for task 4
 DETAIL:  query string: "SELECT ol_i_id FROM order_line_690003 order_line WHERE true"
-DEBUG:  assigned task 1 to node localhost:xxxxx
-DEBUG:  assigned task 2 to node localhost:xxxxx
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 4 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
@@ -513,10 +513,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
-DEBUG:  assigned task 3 to node localhost:xxxxx
-DEBUG:  assigned task 6 to node localhost:xxxxx
-DEBUG:  assigned task 9 to node localhost:xxxxx
-DEBUG:  assigned task 12 to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  completed cleanup query for job 18
 DEBUG:  completed cleanup query for job 18
 DEBUG:  completed cleanup query for job 16
