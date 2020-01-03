@@ -108,7 +108,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
-ERROR:  could not make changes to shard 100950 on any node
+ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
 ----+-----------------
@@ -166,7 +166,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
-ERROR:  could not make changes to shard 100950 on any node
+ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
 ----+-----------------
@@ -217,7 +217,7 @@ WARNING:  connection error: localhost:xxxxx
 WARNING:  connection not open
 WARNING:  connection not open
 COMMIT;
-ERROR:  could not make changes to shard 100950 on any node
+ERROR:  could not make changes to shard xxxxx on any node
 SELECT * FROM artists WHERE id=6;
  id | name 
 ----+------

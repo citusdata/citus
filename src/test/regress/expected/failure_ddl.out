@@ -232,8 +232,8 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  could not commit transaction for shard 100802 on any active node
-WARNING:  could not commit transaction for shard 100800 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------

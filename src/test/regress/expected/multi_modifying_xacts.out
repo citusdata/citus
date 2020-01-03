@@ -380,7 +380,7 @@ WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1200001 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
 -- verify everyhing including delete is rolled back
@@ -666,8 +666,8 @@ WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1200002 on any active node
-WARNING:  could not commit transaction for shard 1200003 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
@@ -705,7 +705,7 @@ INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1200002 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
 SELECT * FROM objects WHERE id = 1;

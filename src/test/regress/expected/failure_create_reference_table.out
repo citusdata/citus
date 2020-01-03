@@ -110,7 +110,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 3").kill()');
 
 SELECT create_reference_table('ref_table');
 NOTICE:  Copying data from local table...
-ERROR:  failed to COPY to shard 10000005 on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count 
 -------

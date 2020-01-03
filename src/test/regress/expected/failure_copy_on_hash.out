@@ -69,7 +69,7 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard 1710000 on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -124,7 +124,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 1").kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard 1710002 on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -377,7 +377,7 @@ SELECT create_distributed_table('test_table_2','id');
 (1 row)
 
 -- When kill on copying data, it will be rollbacked and placements won't be labaled as invalid.
--- Note that now we sent data to shard 210007, yet it is not marked as invalid.
+-- Note that now we sent data to shard xxxxx, yet it is not marked as invalid.
 -- You can check the issue about this behaviour: https://github.com/citusdata/citus/issues/1933
 SELECT citus.mitmproxy('conn.onCopyData().kill()');
  mitmproxy 
@@ -386,7 +386,7 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard 1710012 on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------

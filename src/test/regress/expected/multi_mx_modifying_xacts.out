@@ -343,8 +343,8 @@ INSERT INTO labs_mx VALUES (9, 'Umbrella Corporation');
 COMMIT;
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1220103 on any active node
-WARNING:  could not commit transaction for shard 1220102 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
@@ -371,8 +371,8 @@ INSERT INTO labs_mx VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1220103 on any active node
-WARNING:  could not commit transaction for shard 1220102 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 1;
@@ -396,8 +396,8 @@ INSERT INTO labs_mx VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard 1220103 on any active node
-WARNING:  could not commit transaction for shard 1220102 on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- no data should persists
 SELECT * FROM objects_mx WHERE id = 1;

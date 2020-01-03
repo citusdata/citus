@@ -104,7 +104,7 @@ SELECT load_shard_interval_array(540004, ''::text);
 
 -- should see error for non-existent shard
 SELECT load_shard_interval_array(540005, 0);
-ERROR:  could not find valid entry for shard 540005
+ERROR:  could not find valid entry for shard xxxxx
 -- should see two placements
 SELECT load_shard_placement_array(540001, false);
     load_shard_placement_array     

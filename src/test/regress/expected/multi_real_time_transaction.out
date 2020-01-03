@@ -448,7 +448,7 @@ SELECT * FROM co_test_table ORDER BY id, col_1;
 
 \c - - - :worker_1_port
 SET search_path = 'multi_real_time_transaction';
--- shard 1610004 contains data from tenant id 1
+-- shard xxxxx contains data from tenant id 1
 SELECT * FROM co_test_table_1610004 ORDER BY id, col_1;
  id | col_1 | col_2  
 ----+-------+--------
@@ -463,7 +463,7 @@ SELECT * FROM co_test_table_1610006 ORDER BY id, col_1;
 
 \c - - - :worker_2_port
 SET search_path = 'multi_real_time_transaction';
--- shard 1610005 contains data from tenant id 3
+-- shard xxxxx contains data from tenant id 3
 SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
  id | col_1 | col_2  
 ----+-------+--------
@@ -472,7 +472,7 @@ SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
   3 |    40 | 'cc10'
 (3 rows)
 
--- shard 1610007 contains data from tenant id 2
+-- shard xxxxx contains data from tenant id 2
 SELECT * FROM co_test_table_1610007 ORDER BY id, col_1;
  id | col_1 | col_2  
 ----+-------+--------

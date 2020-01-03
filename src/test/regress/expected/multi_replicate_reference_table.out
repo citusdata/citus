@@ -70,7 +70,7 @@ SELECT create_reference_table('replicate_reference_table_unhealthy');
 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-ERROR:  could not find any healthy placement for shard 1370000
+ERROR:  could not find any healthy placement for shard xxxxx
 -- verify node is not added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count 

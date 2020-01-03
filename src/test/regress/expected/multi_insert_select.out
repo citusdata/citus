@@ -1834,11 +1834,11 @@ SET client_min_messages TO DEBUG2;
 -- this should fail
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Insert query cannot be executed on all placements for shard 13300000
+DETAIL:  Insert query cannot be executed on all placements for shard xxxxx
 -- this should also fail
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
 ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Insert query cannot be executed on all placements for shard 13300000
+DETAIL:  Insert query cannot be executed on all placements for shard xxxxx
 -- but this should work given that it hits different shard
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 6;
 DEBUG:  Skipping target shard interval 13300000 since SELECT query for it pruned away

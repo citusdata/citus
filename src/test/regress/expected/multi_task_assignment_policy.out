@@ -39,7 +39,7 @@ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, s
 	SELECT pg_class.oid, series.index, 'r', 1, 1000
 	FROM pg_class, generate_series(200, 202) AS series(index)
 	WHERE pg_class.relname = 'task_assignment_test_table';
--- Create shard placements for shard 200 and 201
+-- Create shard placements for shard xxxxx and 201
 INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
        SELECT 200, 1, 1, nodename, nodeport
        FROM pg_dist_shard_placement
@@ -52,7 +52,7 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
        GROUP BY nodename, nodeport
        ORDER BY nodename, nodeport ASC
        LIMIT 2;
--- Create shard placements for shard 202
+-- Create shard placements for shard xxxxx
 INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
        SELECT 202, 1, 1, nodename, nodeport
        FROM pg_dist_shard_placement

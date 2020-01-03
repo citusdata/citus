@@ -83,7 +83,7 @@ UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_
 UPDATE pg_dist_shard_placement SET shardstate = 3
    WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_unhealthy'::regclass::oid);
 SELECT upgrade_to_reference_table('upgrade_reference_table_unhealthy');
-ERROR:  could not find any healthy placement for shard 1360006
+ERROR:  could not find any healthy placement for shard xxxxx
 DROP TABLE upgrade_reference_table_unhealthy;
 -- test with table containing composite type
 CREATE TYPE upgrade_test_composite_type AS (key1 text, key2 text);
