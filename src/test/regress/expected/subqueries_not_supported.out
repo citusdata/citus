@@ -77,7 +77,7 @@ FROM
     ORDER BY 1 DESC;
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo ORDER BY user_id DESC
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo ORDER BY user_id DESC
 ERROR:  cannot handle complex subqueries when the router executor is disabled
 SET citus.enable_router_execution TO true;
 -- window functions are not allowed if they're not partitioned on the distribution column
@@ -112,7 +112,7 @@ FROM
 	ON(foo.value_2 = bar.value_2);
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) LIMIT 5
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM ((SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo LEFT JOIN (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar ON ((foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM ((SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo LEFT JOIN (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar ON ((foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- Aggregates in subquery without partition column can be planned recursively

@@ -17,7 +17,7 @@ FROM
 ) as bar
 WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 15) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
      0
@@ -36,7 +36,7 @@ FROM
 ) as bar
 WHERE foo.counter = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) 15)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.counter OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.=) 15)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.counter OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
      0
@@ -54,7 +54,7 @@ FROM
 ) as bar
 WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.<>) 15) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
   1612
@@ -73,7 +73,7 @@ FROM
 ) as bar
 WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
     58
@@ -100,7 +100,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.users_t
 DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
 DEBUG:  generating subplan XXX_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (users_table.user_id OPERATOR(pg_catalog.<) 2))
 DEBUG:  generating subplan XXX_4 for subquery SELECT user_id FROM subquery_executor.users_table_local WHERE (user_id OPERATOR(pg_catalog.=) 2)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) baw WHERE ((foo.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (baz.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (bar.user_id OPERATOR(pg_catalog.=) baw.user_id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) baw WHERE ((foo.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (baz.value_2 OPERATOR(pg_catalog.=) bar.user_id) AND (bar.user_id OPERATOR(pg_catalog.=) baw.user_id))
  count
 ---------------------------------------------------------------------
      0
@@ -120,7 +120,7 @@ FROM
 WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
 DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 2) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('14_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
     18
@@ -138,7 +138,7 @@ FROM
 ) as bar
 WHERE foo.value_2 = bar.user_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) 1) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.<>) 2)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table WHERE (users_table.user_id OPERATOR(pg_catalog.<>) 2)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.user_id)
  count
 ---------------------------------------------------------------------
    103

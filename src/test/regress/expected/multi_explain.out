@@ -1293,13 +1293,13 @@ Custom Scan (Citus Adaptive)
                     Sort Key: intermediate_result.s
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
                           Output: intermediate_result.s
-                          Function Call: read_intermediate_result('60_2'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format)
               ->  Sort
                     Output: intermediate_result_1.l_orderkey
                     Sort Key: intermediate_result_1.l_orderkey
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
                           Output: intermediate_result_1.l_orderkey
-                          Function Call: read_intermediate_result('60_1'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
 SELECT true AS valid FROM explain_json($$
   WITH result AS (
     SELECT l_quantity, count(*) count_quantity FROM lineitem
