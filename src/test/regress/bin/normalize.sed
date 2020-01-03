@@ -12,7 +12,7 @@ s/ port=[0-9]+ / port=xxxxx /g
 s/placement [0-9]+/placement xxxxx/g
 s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
-#s/node group [12] (but|does)/node group \1/
+s/node group [12] (but|does)/node group \1/
 #
 ## Differing names can have differing table column widths
 #s/(-+\|)+-+/---/g

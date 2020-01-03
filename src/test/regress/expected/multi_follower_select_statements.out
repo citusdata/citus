@@ -60,7 +60,7 @@ order by s_i_id;
 -- (this is :follower_master_port but substitution doesn't work here)
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
 SELECT * FROM the_table;
-ERROR:  node group 1 does not have a secondary node
+ERROR:  node group does not have a secondary node
 -- add the secondary nodes and try again, the SELECT statement should work this time
 \c - - - :master_port
 SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
@@ -117,13 +117,13 @@ ORDER BY
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 -- there are no secondary nodes in this cluster, so this should fail!
 SELECT * FROM the_table;
-ERROR:  there is a shard placement in node group 1 but there are no nodes in that group
+ERROR:  there is a shard placement in node group but there are no nodes in that group
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-ERROR:  there is a shard placement in node group 1 but there are no nodes in that group
+ERROR:  there is a shard placement in node group but there are no nodes in that group
 -- now move the secondary nodes into the new cluster and see that the follower, finally
 -- correctly configured, can run select queries involving them
 \c - - - :master_port
