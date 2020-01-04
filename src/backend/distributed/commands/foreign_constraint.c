@@ -562,6 +562,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 
 		if (!IsDistributedTable(referencedTableId))
 		{
+			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
 
