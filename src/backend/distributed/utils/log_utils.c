@@ -26,10 +26,10 @@ IsLoggableLevel(int logLevel)
 
 
 /*
- * ApplyLogRedaction is only supported in Citus Enterprise
+ * HashLogMessage is only supported in Citus Enterprise
  */
 char *
-ApplyLogRedaction(const char *logText)
+HashLogMessage(const char *logText)
 {
 	return (char *) logText;
 }
