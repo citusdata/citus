@@ -28,6 +28,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/listutils.h"
@@ -36,6 +37,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
@@ -72,6 +74,7 @@ static uint64 DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationI
 										   char *sizeQuery);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
+static ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
 
 /* exports for SQL callable functions */
@@ -1175,6 +1178,89 @@ DeleteShardPlacementRow(uint64 placementId)
 
 	CommandCounterIncrement();
 	heap_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdatePartitionShardPlacementStates gets a shard placement which is asserted to belong
+ * to partitioned table. The function goes over the corresponding placements of its
+ * partitions, and sets their state to the input shardState.
+ */
+void
+UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char shardState)
+{
+	ShardInterval *parentShardInterval =
+		LoadShardInterval(parentShardPlacement->shardId);
+	Oid partitionedTableOid = parentShardInterval->relationId;
+
+	/* this function should only be called for partitioned tables */
+	Assert(PartitionedTable(partitionedTableOid));
+
+	ListCell *partitionOidCell = NULL;
+	List *partitionList = PartitionList(partitionedTableOid);
+	foreach(partitionOidCell, partitionList)
+	{
+		Oid partitionOid = lfirst_oid(partitionOidCell);
+		uint64 partitionShardId =
+			ColocatedShardIdInRelation(partitionOid, parentShardInterval->shardIndex);
+
+		ShardPlacement *partitionPlacement =
+			ShardPlacementOnGroup(partitionShardId, parentShardPlacement->groupId);
+
+		/* the partition should have a placement with the same group */
+		Assert(partitionPlacement != NULL);
+
+		UpdateShardPlacementState(partitionPlacement->placementId, shardState);
+	}
+}
+
+
+/*
+ * ShardPlacementOnGroup gets a shardInterval and a groupId, returns a placement
+ * of the shard on the given group. If no such placement exists, the function
+ * return NULL.
+ */
+static ShardPlacement *
+ShardPlacementOnGroup(uint64 shardId, int groupId)
+{
+	List *placementList = ShardPlacementList(shardId);
+	ListCell *placementCell = NULL;
+
+	foreach(placementCell, placementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
+
+		if (placement->groupId == groupId)
+		{
+			return placement;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * MarkShardPlacementInactive is a wrapper around UpdateShardPlacementState where
+ * the state is set to invalid (e.g.,  FILE_INACTIVE). It also marks the partitions
+ * of the shard placements as inactive if the shardPlacement belongs to a partitioned
+ * table.
+ */
+void
+MarkShardPlacementInactive(ShardPlacement *shardPlacement)
+{
+	UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+
+	/*
+	 * In case the shard belongs to a partitioned table, we make sure to update
+	 * the states of its partitions. Repairing shards already ensures to recreate
+	 * all the partitions.
+	 */
+	ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
+	if (PartitionedTable(shardInterval->relationId))
+	{
+		UpdatePartitionShardPlacementStates(shardPlacement, FILE_INACTIVE);
+	}
 }
 
 
