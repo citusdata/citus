@@ -313,6 +313,7 @@ test: distributed_procedure
 # deparsing logic tests
 # ---------
 test: multi_deparse_function multi_deparse_procedure
+test: multi_row_insert
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last
