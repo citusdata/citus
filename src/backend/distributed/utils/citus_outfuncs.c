@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
- * Portions Copyright (c) 2012-2016, Citus Data, Inc.
+ * Portions Copyright (c) Citus Data, Inc.
  *
  * NOTES
  *	  This is a wrapper around postgres' nodeToString() that additionally
@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -30,7 +31,11 @@
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
+#endif
 #include "utils/datum.h"
 
 
@@ -176,21 +181,20 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_NODE_TYPE("DISTRIBUTEDPLAN");
 
 	WRITE_UINT64_FIELD(planId);
-	WRITE_INT_FIELD(operation);
+	WRITE_ENUM_FIELD(modLevel, RowModifyLevel);
 	WRITE_BOOL_FIELD(hasReturning);
+	WRITE_BOOL_FIELD(routerExecutable);
 
 	WRITE_NODE_FIELD(workerJob);
 	WRITE_NODE_FIELD(masterQuery);
-	WRITE_BOOL_FIELD(routerExecutable);
 	WRITE_UINT64_FIELD(queryId);
 	WRITE_NODE_FIELD(relationIdList);
-
-	WRITE_NODE_FIELD(insertSelectSubquery);
-	WRITE_NODE_FIELD(insertTargetList);
 	WRITE_OID_FIELD(targetRelationId);
+	WRITE_NODE_FIELD(insertSelectQuery);
 	WRITE_STRING_FIELD(intermediateResultIdPrefix);
 
 	WRITE_NODE_FIELD(subPlanList);
+	WRITE_NODE_FIELD(usedSubPlanNodeList);
 
 	WRITE_NODE_FIELD(planningError);
 }
@@ -317,7 +321,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_NODE_FIELD(jobQuery);
 	WRITE_NODE_FIELD(taskList);
-	WRITE_NODE_FIELD(dependedJobList);
+	WRITE_NODE_FIELD(dependentJobList);
 	WRITE_BOOL_FIELD(subqueryPushdown);
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
@@ -461,18 +465,18 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(queryString);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
-	WRITE_NODE_FIELD(dependedTaskList);
+	WRITE_NODE_FIELD(dependentTaskList);
 	WRITE_UINT_FIELD(partitionId);
 	WRITE_UINT_FIELD(upstreamTaskId);
 	WRITE_NODE_FIELD(shardInterval);
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
-	WRITE_BOOL_FIELD(upsertQuery);
 	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(modifyWithSubquery);
 	WRITE_NODE_FIELD(relationShardList);
 	WRITE_NODE_FIELD(relationRowLockList);
 	WRITE_NODE_FIELD(rowValuesLists);
+	WRITE_BOOL_FIELD(partiallyLocalOrRemote);
 }
 
 
@@ -491,11 +495,9 @@ OutTaskExecution(OUTFUNC_ARGS)
 	WRITE_INT_ARRAY(connectionIdArray, node->nodeCount);
 	WRITE_INT_ARRAY(fileDescriptorArray, node->nodeCount);
 
-	WRITE_INT64_FIELD(connectStartTime);
 	WRITE_UINT_FIELD(currentNodeIndex);
 	WRITE_UINT_FIELD(querySourceNodeIndex);
 	WRITE_UINT_FIELD(failureCount);
-	WRITE_BOOL_FIELD(criticalErrorOccurred);
 }
 
 

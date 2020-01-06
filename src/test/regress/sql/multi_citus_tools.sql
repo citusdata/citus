@@ -9,9 +9,9 @@ SET citus.next_shard_id TO 1240000;
 -- test with invalid port, prevent OS dependent warning from being displayed
 SET client_min_messages to ERROR;
 -- PG 9.5 does not show context for plpgsql raise
--- message whereas PG 9.6 shows. disabling it 
+-- message whereas PG 9.6 shows. disabling it
 -- for this test only to have consistent behavior
--- b/w PG 9.6+ and PG 9.5. 
+-- b/w PG 9.6+ and PG 9.5.
 \set SHOW_CONTEXT never
 
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
@@ -44,7 +44,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   false);
-								   
+
 -- send multiple queries
 SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY[:node_port, :node_port]::int[],
@@ -109,7 +109,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['drop table second_table']::text[],
 								   false);
-	
+
 -- verify table is dropped
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
@@ -133,7 +133,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select a from generate_series(1,2) a']::text[],
 								   true);
-								   
+
 -- send multiple queries
 SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   ARRAY[:node_port, :node_port]::int[],
@@ -220,38 +220,30 @@ DROP TABLE check_placements CASCADE;
 -- make sure run_on_all_colocated_placements correctly detects colocation
 CREATE TABLE check_colocated (key int);
 SELECT create_distributed_table('check_colocated', 'key', 'hash');
-CREATE TABLE second_table (key int);
 
 SET citus.shard_count TO 4;
+CREATE TABLE second_table (key int);
 SELECT create_distributed_table('second_table', 'key', 'hash');
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
 												  'select 1');
 -- even when the difference is in replication factor, an error is thrown
-SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
-SELECT master_create_worker_shards('second_table', 5, 1);
+DROP TABLE second_table;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 5;
+CREATE TABLE second_table (key int);
+SELECT create_distributed_table('second_table', 'key', 'hash');
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
 												  'select 1');
 -- when everything matches, the command is run!
-SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
-SELECT master_create_worker_shards('second_table', 5, 2);
+DROP TABLE second_table;
+SET citus.shard_replication_factor TO 2;
+SET citus.shard_count TO 5;
+CREATE TABLE second_table (key int);
+SELECT create_distributed_table('second_table', 'key', 'hash');
+
 SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
 												  'select 1');
--- when a placement is invalid considers the tables to not be colocated
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
-		SELECT shardid FROM pg_dist_shard
-		WHERE nodeport = :worker_1_port AND logicalrelid = 'second_table'::regclass
-		ORDER BY 1 ASC LIMIT 1
-);
-SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
-												  'select 1');
--- when matching placement is also invalid, considers the tables to be colocated
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
-		SELECT shardid FROM pg_dist_shard
-		WHERE nodeport = :worker_1_port AND logicalrelid = 'check_colocated'::regclass
-		ORDER BY 1 ASC LIMIT 1
-);
-SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
-												  'select 1');
+
 DROP TABLE check_colocated CASCADE;
 DROP TABLE second_table CASCADE;
 

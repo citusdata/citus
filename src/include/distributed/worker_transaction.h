@@ -4,7 +4,7 @@
  *	  Type and function declarations used in performing transactions across
  *	  workers.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -13,6 +13,7 @@
 #define WORKER_TRANSACTION_H
 
 #include "distributed/worker_manager.h"
+#include "storage/lockdefs.h"
 
 
 /*
@@ -29,16 +30,25 @@ typedef enum TargetWorkerSet
 
 /* Functions declarations for worker transactions */
 extern List * GetWorkerTransactions(void);
-extern void SendCommandToWorker(char *nodeName, int32 nodePort, char *command);
-extern void SendCommandToFirstWorker(char *command);
-extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command);
-extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
-										 List *commandList);
-extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
-									   int parameterCount, const Oid *parameterTypes,
-									   const char *const *parameterValues);
-extern void SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort,
-													   char *nodeUser, List *commandList);
+extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode);
+extern void SendCommandToWorker(char *nodeName, int32 nodePort, const char *command);
+extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const
+									   char *nodeUser,
+									   const char *command);
+extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
+									  const char *nodeUser, const char *command);
+extern void SendCommandToWorkersWithMetadata(const char *command);
+extern void SendBareCommandListToMetadataWorkers(List *commandList);
+extern int SendBareOptionalCommandListToAllWorkersAsUser(List *commandList,
+														 const char *user);
+extern void EnsureNoModificationsHaveBeenDone(void);
+extern void SendCommandListToAllWorkers(List *commandList, char *superuser);
+extern void SendOptionalCommandListToAllWorkers(List *commandList, char *superuser);
+extern void SendCommandToAllWorkers(char *command, char *superuser);
+extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
+													   int32 nodePort,
+													   const char *nodeUser,
+													   List *commandList);
 extern void RemoveWorkerTransaction(char *nodeName, int32 nodePort);
 
 /* helper functions for worker transactions */

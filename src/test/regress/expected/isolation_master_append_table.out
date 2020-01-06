@@ -5,27 +5,26 @@ step s1-begin:
     BEGIN;
 
 step s2-begin: 
-	BEGIN;
+ BEGIN;
 
 step s1-master_append_table_to_shard: 
-   	SELECT	
-   		master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
-	FROM
-		pg_dist_shard
-	WHERE
-		'table_to_append'::regclass::oid = logicalrelid;
+    SELECT
+     master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
+ FROM
+  pg_dist_shard
+ WHERE
+  'table_to_append'::regclass::oid = logicalrelid;
 
 master_append_table_to_shard
 
 0.0426667      
 step s2-master_append_table_to_shard: 
-
-   	SELECT	
-   		master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
-	FROM
-		pg_dist_shard
-	WHERE
-		'table_to_append'::regclass::oid = logicalrelid;
+    SELECT
+     master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
+ FROM
+  pg_dist_shard
+ WHERE
+  'table_to_append'::regclass::oid = logicalrelid;
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -35,5 +34,5 @@ master_append_table_to_shard
 
 0.064          
 step s2-commit: 
-	COMMIT;
+ COMMIT;
 

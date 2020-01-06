@@ -4,7 +4,6 @@
 -- master_disable_node and master_add_inactive_node can not be
 -- tested as they don't create network activity
 --
- 
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -206,9 +205,9 @@ ORDER BY placementid;
 -- it does not create any network activity therefore can not
 -- be injected failure through network
 SELECT master_add_inactive_node('localhost', :worker_2_proxy_port);
-             master_add_inactive_node             
---------------------------------------------------
- (3,3,localhost,9060,default,f,f,primary,default)
+ master_add_inactive_node 
+--------------------------
+                        3
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
@@ -292,9 +291,9 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SELECT master_add_node('localhost', :worker_2_proxy_port);
 NOTICE:  Replicating reference table "user_table" to the node localhost:9060
-                 master_add_node                  
---------------------------------------------------
- (6,6,localhost,9060,default,f,t,primary,default)
+ master_add_node 
+-----------------
+               6
 (1 row)
 
 -- verify node is added
@@ -349,9 +348,9 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SELECT master_add_node('localhost', :worker_1_port);
 NOTICE:  Replicating reference table "user_table" to the node localhost:57637
-                  master_add_node                  
----------------------------------------------------
- (8,8,localhost,57637,default,f,t,primary,default)
+ master_add_node 
+-----------------
+               8
 (1 row)
 
 -- verify node is added

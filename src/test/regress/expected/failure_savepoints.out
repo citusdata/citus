@@ -40,18 +40,16 @@ INSERT INTO artists VALUES (5, 'Asher Lev');
 SAVEPOINT s1;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-DELETE FROM artists WHERE id=4;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 WARNING:  connection error: localhost:9060
 DETAIL:  connection not open
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
-ERROR:  could not modify any active placements
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:9060
+DELETE FROM artists WHERE id=4;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 RELEASE SAVEPOINT s1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
@@ -131,12 +129,18 @@ RELEASE SAVEPOINT s1;
 SAVEPOINT s2;
 INSERT INTO artists VALUES (5, 'Jacob Kahn');
 RELEASE SAVEPOINT s2;
+WARNING:  AbortSubTransaction while in COMMIT state
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:9060
+WARNING:  connection error: localhost:9060
+DETAIL:  connection not open
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:9060
 WARNING:  connection not open
+CONTEXT:  while executing command on localhost:9060
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:9060
 COMMIT;
-ERROR:  could not make changes to shard 100950 on any node
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name       
 ----+-----------------
@@ -208,6 +212,10 @@ INSERT INTO artists VALUES (7, 'Emily Carr');
 ROLLBACK TO SAVEPOINT s1;
 WARNING:  connection not open
 WARNING:  connection not open
+WARNING:  connection not open
+WARNING:  connection error: localhost:9060
+WARNING:  connection not open
+WARNING:  connection not open
 COMMIT;
 ERROR:  could not make changes to shard 100950 on any node
 SELECT * FROM artists WHERE id=6;
@@ -240,24 +248,22 @@ BEGIN;
 INSERT INTO researchers VALUES (7, 4, 'Jan Plaza');
 SAVEPOINT s1;
 WARNING:  connection not open
-WARNING:  connection not open
-INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
-ROLLBACK TO s1;
-WARNING:  connection not open
 WARNING:  connection error: localhost:9060
 WARNING:  connection not open
 WARNING:  connection not open
+ERROR:  connection not open
+INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK TO s1;
+ERROR:  savepoint "s1" does not exist
 RELEASE SAVEPOINT s1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
-WARNING:  connection not open
-WARNING:  connection not open
-WARNING:  connection not open
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
- id | lab_id |   name    
-----+--------+-----------
-  7 |      4 | Jan Plaza
-(1 row)
+ id | lab_id | name 
+----+--------+------
+(0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardstate = 3 AND shardid IN (
@@ -265,8 +271,7 @@ WHERE shardstate = 3 AND shardid IN (
 ) RETURNING placementid;
  placementid 
 -------------
-         152
-(1 row)
+(0 rows)
 
 TRUNCATE researchers;
 -- fail at rollback
@@ -285,15 +290,12 @@ WARNING:  connection not open
 WARNING:  connection not open
 RELEASE SAVEPOINT s1;
 COMMIT;
-WARNING:  connection not open
-WARNING:  connection not open
-WARNING:  connection not open
+ERROR:  failure on connection marked as essential: localhost:9060
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
- id | lab_id |   name    
-----+--------+-----------
-  7 |      4 | Jan Plaza
-(1 row)
+ id | lab_id | name 
+----+--------+------
+(0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardstate = 3 AND shardid IN (
@@ -301,8 +303,7 @@ WHERE shardstate = 3 AND shardid IN (
 ) RETURNING placementid;
  placementid 
 -------------
-         152
-(1 row)
+(0 rows)
 
 TRUNCATE researchers;
 -- fail at release
@@ -318,18 +319,19 @@ SAVEPOINT s1;
 INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
 ROLLBACK TO s1;
 RELEASE SAVEPOINT s1;
+WARNING:  AbortSubTransaction while in COMMIT state
+WARNING:  connection not open
+WARNING:  connection error: localhost:9060
 WARNING:  connection not open
 WARNING:  connection not open
+WARNING:  savepoint "savepoint_3" does not exist
+ERROR:  connection not open
 COMMIT;
-WARNING:  connection not open
-WARNING:  connection not open
-WARNING:  connection not open
 -- should see correct results from healthy placement and one bad placement
 SELECT * FROM researchers WHERE lab_id = 4;
- id | lab_id |   name    
-----+--------+-----------
-  7 |      4 | Jan Plaza
-(1 row)
+ id | lab_id | name 
+----+--------+------
+(0 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardstate = 3 AND shardid IN (
@@ -337,8 +339,7 @@ WHERE shardstate = 3 AND shardid IN (
 ) RETURNING placementid;
  placementid 
 -------------
-         152
-(1 row)
+(0 rows)
 
 TRUNCATE researchers;
 -- clean up

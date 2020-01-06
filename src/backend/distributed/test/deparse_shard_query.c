@@ -5,7 +5,7 @@
  * This file contains functions to exercise deparsing of INSERT .. SELECT queries
  * for distributed tables.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -50,10 +50,10 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 	{
 		Node *parsetree = (Node *) lfirst(parseTreeCell);
 		ListCell *queryTreeCell = NULL;
-		List *queryTreeList = NIL;
 
-		queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree, queryStringChar,
-											   NULL, 0, NULL);
+		List *queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree,
+													 queryStringChar,
+													 NULL, 0, NULL);
 
 		foreach(queryTreeCell, queryTreeList)
 		{

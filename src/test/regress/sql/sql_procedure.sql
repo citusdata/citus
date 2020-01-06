@@ -3,10 +3,6 @@
 --
 -- Tests basic PROCEDURE functionality with SQL and PLPGSQL procedures.
 --
--- print whether we're using version > 10 to make version-specific tests clear
-
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 SET citus.next_shard_id TO 100500;
 
@@ -166,6 +162,8 @@ call test_procedure(1,1);
 call test_procedure(20, 20);
 SELECT * from test_table;
 
+\set VERBOSITY terse
 DROP SCHEMA procedure_schema CASCADE;
+\set VERBOSITY default
 
 RESET SEARCH_PATH;

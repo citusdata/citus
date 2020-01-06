@@ -2,8 +2,10 @@ SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 750000;
 SET citus.next_placement_id TO 750000;
 
+CREATE SCHEMA multi_modifications;
+
 -- some failure messages that comes from the worker nodes
--- might change due to parallel exectuions, so supress those
+-- might change due to parallel executions, so suppress those
 -- using \set VERBOSITY terse
 
 -- ===================================================================
@@ -88,11 +90,9 @@ INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:5
 									   20.69);
 -- ensure the values are where we put them and query to ensure they are properly pruned
 SET client_min_messages TO 'DEBUG2';
-RESET citus.task_executor_type;
 SELECT * FROM range_partitioned WHERE id = 32743;
 SELECT * FROM append_partitioned WHERE id = 414123;
 SET client_min_messages TO DEFAULT;
-SET citus.task_executor_type TO DEFAULT;
 
 -- try inserting without a range-partitioned shard to receive the value
 INSERT INTO range_partitioned VALUES (999999, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
@@ -262,10 +262,16 @@ INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 
--- Connect back to master node
+-- Verify the insert failed and both placements are healthy
+-- or the insert succeeded and placement marked unhealthy
+\c - - - :worker_1_port
+SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
+
+\c - - - :worker_2_port
+SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
+
 \c - - - :master_port
 
--- Verify the insert failed and both placements are healthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
 
 SELECT count(*)
@@ -540,6 +546,15 @@ INSERT INTO raw_table VALUES (2, 500);
 
 INSERT INTO summary_table VALUES (1);
 INSERT INTO summary_table VALUES (2);
+
+-- test noop deletes and updates
+DELETE FROM summary_table WHERE false;
+DELETE FROM summary_table WHERE null;
+DELETE FROM summary_table WHERE null > jsonb_build_array();
+
+UPDATE summary_table SET uniques = 0 WHERE false;
+UPDATE summary_table SET uniques = 0 WHERE null;
+UPDATE summary_table SET uniques = 0 WHERE null > jsonb_build_array();
 
 SELECT * FROM summary_table ORDER BY id;
 
@@ -854,7 +869,24 @@ INSERT INTO summary_table (id) VALUES (5), ((SELECT id FROM summary_table));
 INSERT INTO reference_summary_table (id) VALUES ((SELECT id FROM summary_table));
 INSERT INTO summary_table (id) VALUES ((SELECT id FROM reference_summary_table));
 
+-- subqueries that would be eliminated by = null clauses
+DELETE FROM summary_table WHERE (
+    SELECT 1 FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+DELETE FROM summary_table WHERE (
+    SELECT (select action_statement from information_schema.triggers)
+    FROM pg_catalog.pg_statio_sys_sequences
+) = null;
+
+DELETE FROM summary_table WHERE id < (
+    SELECT 0 FROM pg_dist_node
+);
+
+CREATE TABLE multi_modifications.local (a int default 1, b int);
+INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
+
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
 DROP TABLE reference_summary_table;
+DROP SCHEMA multi_modifications CASCADE;

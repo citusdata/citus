@@ -4,7 +4,7 @@
  * This file contains functions helper functions for planning
  * queries with colocated tables and subqueries.
  *
- * Copyright (c) 2017-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -31,7 +31,7 @@ extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
 											   plannerRestrictionContext);
 extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 
-extern List * RelationIdList(Query *query);
+extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);

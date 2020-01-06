@@ -4,7 +4,7 @@
  *    Data structure for distributed transaction id and related function
  *    declarations.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

@@ -7,7 +7,7 @@ CREATE TABLE with_partitioning.local_users_2 (user_id int, event_type int);
 INSERT INTO local_users_2 VALUES (0, 0), (1, 4), (1, 7), (2, 1), (3, 3), (5, 4), (6, 2), (10, 7);
 
 CREATE TABLE with_partitioning.partitioning_test(id int, time date) PARTITION BY RANGE (time);
- 
+
 -- create its partitions
 CREATE TABLE with_partitioning.partitioning_test_2017 PARTITION OF partitioning_test FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
 CREATE TABLE with_partitioning.partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
@@ -54,7 +54,7 @@ SELECT DISTINCT ON (event_type) event_type, cte_joined_2.user_id FROM events_tab
 
 
 -- Join a partitioned table with a local table (both in CTEs)
--- and then with a distributed table. After all join with a 
+-- and then with a distributed table. After all join with a
 -- partitioned table again
 WITH cte AS (
 	SELECT id, time FROM partitioning_test

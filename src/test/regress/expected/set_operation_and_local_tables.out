@@ -326,7 +326,7 @@ DEBUG:  Plan is router executable
  2
 (2 rows)
 
-SET citus.enable_repartition_joins TO ON;
+SET citus.task_executor_type TO 'task-tracker';
 --  repartition is recursively planned before the set operation
 (SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 2) INTERSECT (((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)) ORDER BY 1 DESC; 
 DEBUG:  Local tables cannot be used in distributed queries.
@@ -360,8 +360,6 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
-DEBUG:  cannot use real time executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 53_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x OPERATOR(pg_catalog.=) t2.y) LIMIT 2
 DEBUG:  generating subplan 53_2 for subquery SELECT x FROM recursive_set_local.local_test
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -377,7 +375,7 @@ DEBUG:  Plan is router executable
  1
 (2 rows)
 
-SET citus.enable_repartition_joins TO OFF;
+SET citus.task_executor_type TO 'adaptive';
 RESET client_min_messages;
 DROP SCHEMA recursive_set_local CASCADE;
 NOTICE:  drop cascades to 3 other objects

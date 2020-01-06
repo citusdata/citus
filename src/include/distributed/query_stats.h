@@ -3,7 +3,7 @@
  * stats_statements.h
  *    Statement-level statistics for distributed queries.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

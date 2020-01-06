@@ -4,7 +4,7 @@
  *	  Header for shared declarations that are used for caching remote resources
  *	  on worker nodes, and also for applying distributed execution primitives.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -14,12 +14,15 @@
 #ifndef WORKER_PROTOCOL_H
 #define WORKER_PROTOCOL_H
 
+#include "postgres.h"
+
 #include "fmgr.h"
 #include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "storage/fd.h"
 #include "utils/array.h"
+#include "distributed/version_compat.h"
 
 
 /* Number of rows to prefetch when reading data with a cursor */
@@ -91,7 +94,7 @@ typedef struct HashPartitionContext
  */
 typedef struct FileOutputStream
 {
-	File fileDescriptor;
+	FileCompat fileCompat;
 	StringInfo fileBuffer;
 	StringInfo filePath;
 } FileOutputStream;
@@ -130,12 +133,15 @@ extern int64 WorkerExecuteSqlTask(Query *query, char *taskFilename,
 /* Function declarations shared with the master planner */
 extern StringInfo TaskFilename(StringInfo directoryName, uint32 taskId);
 extern StringInfo UserTaskFilename(StringInfo directoryName, uint32 taskId);
-extern List * ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
-								 StringInfo queryString);
 extern List * ColumnDefinitionList(List *columnNameList, List *columnTypeList);
 extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionList);
 extern CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);
-extern Datum CompareCall2(FmgrInfo *funcInfo, Datum leftArgument, Datum rightArgument);
+extern DestReceiver * CreateFileDestReceiver(char *filePath,
+											 MemoryContext tupleContext,
+											 bool binaryCopyFormat);
+extern void FileDestReceiverStats(DestReceiver *dest,
+								  uint64 *rowsSent,
+								  uint64 *bytesSent);
 
 /* Function declaration for parsing tree node */
 extern Node * ParseTreeNode(const char *ddlCommand);
@@ -148,6 +154,7 @@ extern Datum worker_apply_shard_ddl_command(PG_FUNCTION_ARGS);
 extern Datum worker_range_partition_table(PG_FUNCTION_ARGS);
 extern Datum worker_hash_partition_table(PG_FUNCTION_ARGS);
 extern Datum worker_merge_files_into_table(PG_FUNCTION_ARGS);
+extern Datum worker_create_schema(PG_FUNCTION_ARGS);
 extern Datum worker_merge_files_and_run_query(PG_FUNCTION_ARGS);
 extern Datum worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS);
 

@@ -3,7 +3,7 @@
  * utility_hook.h
  *	  Citus utility hook and related functionality.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -12,9 +12,11 @@
 
 #include "postgres.h"
 
-#include "distributed/version_compat.h"
 #include "utils/relcache.h"
 #include "tcop/utility.h"
+
+#include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 
 typedef enum
 {
@@ -26,6 +28,9 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
+extern bool EnableDependencyCreation;
+extern bool EnableCreateTypePropagation;
+extern bool EnableAlterRolePropagation;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or
@@ -37,7 +42,6 @@ typedef struct DDLJob
 {
 	Oid targetRelationId;      /* oid of the target distributed relation */
 	bool concurrentIndexCmd;   /* related to a CONCURRENTLY index command? */
-	bool executeSequentially;
 	const char *commandString; /* initial (coordinator) DDL command string */
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
@@ -53,6 +57,8 @@ extern void CitusProcessUtility(Node *node, const char *queryString,
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
+extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
+extern bool DropSchemaOrDBInProgress(void);
 
 #endif /* MULTI_UTILITY_H */

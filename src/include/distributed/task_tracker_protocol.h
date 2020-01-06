@@ -5,7 +5,7 @@
  * Header and type declarations for assigning tasks to and removing tasks from
  * the task tracker running on this node.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -17,6 +17,7 @@
 
 #include "fmgr.h"
 
+extern void CreateJobSchema(StringInfo schemaName);
 
 /* Function declarations for distributed task management */
 extern Datum task_tracker_assign_task(PG_FUNCTION_ARGS);

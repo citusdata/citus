@@ -2,12 +2,12 @@
  *
  * multi_server_executor.c
  *
- * Function definitions for distributed task execution for real-time
+ * Function definitions for distributed task execution for adaptive
  * and task-tracker executors, and routines common to both. The common
  * routines are implement backend-side logic; and they trigger executions
  * on the client-side via function hooks that they load.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -24,8 +24,10 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/master_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/log_utils.h"
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
@@ -33,6 +35,8 @@ int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
+
+static bool HasReplicatedDistributedTable(List *relationOids);
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -45,17 +49,13 @@ MultiExecutorType
 JobExecutorType(DistributedPlan *distributedPlan)
 {
 	Job *job = distributedPlan->workerJob;
-	List *workerNodeList = NIL;
-	int workerNodeCount = 0;
-	int taskCount = 0;
-	double tasksPerNode = 0.;
 	MultiExecutorType executorType = TaskExecutorType;
 	bool routerExecutablePlan = distributedPlan->routerExecutable;
 
-	/* check if can switch to router executor */
+	/* debug distribution column value */
 	if (routerExecutablePlan)
 	{
-		if (log_min_messages <= DEBUG2 || client_min_messages <= DEBUG2)
+		if (IsLoggableLevel(DEBUG2))
 		{
 			Const *partitionValueConst = job->partitionKeyValue;
 
@@ -76,15 +76,10 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			}
 		}
 
-		if (TaskExecutorType == MULTI_EXECUTOR_ADAPTIVE)
-		{
-			return TaskExecutorType;
-		}
-
-		return MULTI_EXECUTOR_ROUTER;
+		return MULTI_EXECUTOR_ADAPTIVE;
 	}
 
-	if (distributedPlan->insertSelectSubquery != NULL)
+	if (distributedPlan->insertSelectQuery != NULL)
 	{
 		/*
 		 * Even if adaptiveExecutorEnabled, we go through
@@ -95,51 +90,16 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
-	Assert(distributedPlan->operation == CMD_SELECT);
+	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
 
-	workerNodeList = ActiveReadableNodeList();
-	workerNodeCount = list_length(workerNodeList);
-	taskCount = list_length(job->taskList);
-	tasksPerNode = taskCount / ((double) workerNodeCount);
 
-	if (executorType == MULTI_EXECUTOR_REAL_TIME)
+	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
 	{
-		double reasonableConnectionCount = 0;
-
-		/* if we need to open too many connections per worker, warn the user */
-		if (tasksPerNode >= MaxConnections)
-		{
-			ereport(WARNING, (errmsg("this query uses more connections than the "
-									 "configured max_connections limit"),
-							  errhint("Consider increasing max_connections or setting "
-									  "citus.task_executor_type to "
-									  "\"task-tracker\".")));
-		}
-
-		/*
-		 * If we need to open too many outgoing connections, warn the user.
-		 * The real-time executor caps the number of tasks it starts by the same limit,
-		 * but we still issue this warning because it degrades performance.
-		 */
-		reasonableConnectionCount = MaxMasterConnectionCount();
-		if (taskCount >= reasonableConnectionCount)
-		{
-			ereport(WARNING, (errmsg("this query uses more file descriptors than the "
-									 "configured max_files_per_process limit"),
-							  errhint("Consider increasing max_files_per_process or "
-									  "setting citus.task_executor_type to "
-									  "\"task-tracker\".")));
-		}
-	}
-
-	if (executorType == MULTI_EXECUTOR_REAL_TIME ||
-		executorType == MULTI_EXECUTOR_ADAPTIVE)
-	{
-		/* if we have repartition jobs with real time executor and repartition
+		/* if we have repartition jobs with adaptive executor and repartition
 		 * joins are not enabled, error out. Otherwise, switch to task-tracker
 		 */
-		int dependedJobCount = list_length(job->dependedJobList);
-		if (dependedJobCount > 0)
+		int dependentJobCount = list_length(job->dependentJobList);
+		if (dependentJobCount > 0)
 		{
 			if (!EnableRepartitionJoins)
 			{
@@ -148,16 +108,20 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-
-			ereport(DEBUG1, (errmsg(
-								 "cannot use real time executor with repartition jobs"),
-							 errhint("Since you enabled citus.enable_repartition_joins "
-									 "Citus chose to use task-tracker.")));
-			return MULTI_EXECUTOR_TASK_TRACKER;
+			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
+			{
+				return MULTI_EXECUTOR_TASK_TRACKER;
+			}
+			return MULTI_EXECUTOR_ADAPTIVE;
 		}
 	}
 	else
 	{
+		List *workerNodeList = ActiveReadableWorkerNodeList();
+		int workerNodeCount = list_length(workerNodeList);
+		int taskCount = list_length(job->taskList);
+		double tasksPerNode = taskCount / ((double) workerNodeCount);
+
 		/* if we have more tasks per node than what can be tracked, warn the user */
 		if (tasksPerNode >= MaxTrackedTasksPerNode)
 		{
@@ -167,6 +131,35 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return executorType;
+}
+
+
+/*
+ * HasReplicatedDistributedTable returns true if there is any
+ * table in the given list that is:
+ * - not a reference table
+ * - has replication factor > 1
+ */
+static bool
+HasReplicatedDistributedTable(List *relationOids)
+{
+	ListCell *oidCell = NULL;
+
+	foreach(oidCell, relationOids)
+	{
+		Oid oid = lfirst_oid(oidCell);
+		char partitionMethod = PartitionMethod(oid);
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+		uint32 tableReplicationFactor = TableShardReplicationFactor(oid);
+		if (tableReplicationFactor > 1)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -209,14 +202,12 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 {
 	/* each task placement (assignment) corresponds to one worker node */
 	uint32 nodeCount = list_length(task->taskPlacementList);
-	uint32 nodeIndex = 0;
 
 	TaskExecution *taskExecution = CitusMakeNode(TaskExecution);
 
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;
-	taskExecution->connectStartTime = 0;
 	taskExecution->currentNodeIndex = 0;
 	taskExecution->failureCount = 0;
 
@@ -225,7 +216,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->connectionIdArray = palloc0(nodeCount * sizeof(int32));
 	taskExecution->fileDescriptorArray = palloc0(nodeCount * sizeof(int32));
 
-	for (nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
+	for (uint32 nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
 	{
 		taskExecution->taskStatusArray[nodeIndex] = initialTaskExecStatus;
 		taskExecution->transmitStatusArray[nodeIndex] = EXEC_TRANSMIT_UNASSIGNED;
@@ -245,8 +236,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 void
 CleanupTaskExecution(TaskExecution *taskExecution)
 {
-	uint32 nodeIndex = 0;
-	for (nodeIndex = 0; nodeIndex < taskExecution->nodeCount; nodeIndex++)
+	for (uint32 nodeIndex = 0; nodeIndex < taskExecution->nodeCount; nodeIndex++)
 	{
 		int32 connectionId = taskExecution->connectionIdArray[nodeIndex];
 		int32 fileDescriptor = taskExecution->fileDescriptorArray[nodeIndex];
@@ -284,11 +274,6 @@ CleanupTaskExecution(TaskExecution *taskExecution)
 bool
 TaskExecutionFailed(TaskExecution *taskExecution)
 {
-	if (taskExecution->criticalErrorOccurred)
-	{
-		return true;
-	}
-
 	if (taskExecution->failureCount >= MAX_TASK_EXECUTION_FAILURES)
 	{
 		return true;
@@ -329,14 +314,12 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 bool
 CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats)
 {
-	uint64 maxIntermediateResultInBytes = 0;
-
 	if (!SubPlanLevel || MaxIntermediateResult < 0)
 	{
 		return false;
 	}
 
-	maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+	uint64 maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
 	if (executionStats->totalIntermediateResultSize < maxIntermediateResultInBytes)
 	{
 		return false;

@@ -14,7 +14,7 @@
  * subquery or function RTEs. For modify queries, Citus try to use query pushdown
  * planner if the query accesses multiple tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -24,17 +24,25 @@
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/query_utils.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/makefuncs.h"
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/var.h"
+#endif
 #include "nodes/pg_list.h"
 #include "optimizer/clauses.h"
-#include "optimizer/var.h"
 #include "parser/parsetree.h"
 
 
@@ -61,7 +69,6 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
 static bool IsFunctionRTE(Node *node);
-static bool IsNodeQuery(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -91,21 +98,20 @@ static List * CreateSubqueryTargetEntryList(List *columnList);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													RelOptInfo *relationInfo);
 
-
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
  * subquery pushdown to plan the query based on the original and
  * rewritten query.
  */
 bool
-ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
+ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
+						  PlannerRestrictionContext *plannerRestrictionContext)
 {
-	List *qualifierList = NIL;
 	StringInfo errorMessage = NULL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
-	 * given that if postgres already flattened the subqueries, MultiPlanTree()
+	 * given that if postgres already flattened the subqueries, MultiNodeTree()
 	 * can plan corresponding distributed plan.
 	 */
 	if (JoinTreeContainsSubquery(rewrittenQuery))
@@ -114,15 +120,34 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	}
 
 	/*
-	 * We also check the existence of subqueries in WHERE clause. Note that
-	 * this check needs to be done on the original query given that
-	 * standard_planner() may replace the sublinks with anti/semi joins and
-	 * MultiPlanTree() cannot plan such queries.
+	 * We check the existence of subqueries in WHERE and HAVING clause on the
+	 * modified query. In some cases subqueries in the original query are
+	 * converted into inner joins and in those cases MultiNodeTree() can plan
+	 * the rewritten plan.
 	 */
-	if (WhereClauseContainsSubquery(originalQuery))
+	if (WhereOrHavingClauseContainsSubquery(rewrittenQuery))
 	{
 		return true;
 	}
+
+	/*
+	 * We check if postgres planned any semi joins, MultiNodeTree doesn't
+	 * support these so we fail. Postgres is able to replace some IN/ANY
+	 * subqueries with semi joins and then replace those with inner joins (ones
+	 * where the subquery returns unique results). This allows MultiNodeTree to
+	 * execute these subqueries (because they are converted to inner joins).
+	 * However, even in that case the rewrittenQuery still contains join nodes
+	 * with jointype JOIN_SEMI because Postgres doesn't actually update these.
+	 * The way we find out instead if it actually planned semi joins, is by
+	 * checking the joins that were sent to multi_join_restriction_hook. If no
+	 * joins of type JOIN_SEMI are sent it is safe to convert all JOIN_SEMI
+	 * nodes to JOIN_INNER nodes (which is what is done in MultiNodeTree).
+	 */
+	if (plannerRestrictionContext->hasSemiJoin)
+	{
+		return true;
+	}
+
 
 	/*
 	 * We process function RTEs as subqueries, since the join order planner
@@ -150,8 +175,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 */
 	if (FindNodeCheck((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
-		/* Assert what _should_ be only situation this occurs in. */
-		Assert(JoinTreeContainsSubquery(originalQuery));
 		return true;
 	}
 
@@ -159,7 +182,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */
-	qualifierList = QualifierList(rewrittenQuery->jointree);
+	List *qualifierList = QualifierList(rewrittenQuery->jointree);
 	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
 	{
 		return true;
@@ -195,6 +218,32 @@ JoinTreeContainsSubquery(Query *query)
 
 
 /*
+ * HasEmptyJoinTree returns whether the query selects from anything.
+ */
+bool
+HasEmptyJoinTree(Query *query)
+{
+	if (query->rtable == NIL)
+	{
+		return true;
+	}
+
+#if PG_VERSION_NUM >= 120000
+	else if (list_length(query->rtable) == 1)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) linitial(query->rtable);
+		if (rte->rtekind == RTE_RESULT)
+		{
+			return true;
+		}
+	}
+#endif
+
+	return false;
+}
+
+
+/*
  * JoinTreeContainsSubqueryWalker returns true if the input joinTreeNode
  * references to a subquery. Otherwise, recurses into the expression.
  */
@@ -226,23 +275,38 @@ JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context)
 
 
 /*
- * WhereClauseContainsSubquery returns true if the input query contains
- * any subqueries in the WHERE clause.
+ * WhereOrHavingClauseContainsSubquery returns true if the input query contains
+ * any subqueries in the WHERE or HAVING clause.
  */
 bool
-WhereClauseContainsSubquery(Query *query)
+WhereOrHavingClauseContainsSubquery(Query *query)
 {
 	FromExpr *joinTree = query->jointree;
-	Node *queryQuals = NULL;
+
+	if (FindNodeCheck(query->havingQual, IsNodeSubquery))
+	{
+		return true;
+	}
 
 	if (!joinTree)
 	{
 		return false;
 	}
 
-	queryQuals = joinTree->quals;
+	Node *queryQuals = joinTree->quals;
 
-	return FindNodeCheck(queryQuals, IsNodeQuery);
+	return FindNodeCheck(queryQuals, IsNodeSubquery);
+}
+
+
+/*
+ * TargetList returns true if the input query contains
+ * any subqueries in the WHERE clause.
+ */
+bool
+TargetListContainsSubquery(Query *query)
+{
+	return FindNodeCheck((Node *) query->targetList, IsNodeSubquery);
 }
 
 
@@ -267,17 +331,34 @@ IsFunctionRTE(Node *node)
 
 
 /*
- * IsNodeQuery returns true if the given node is a Query.
+ * IsNodeSubquery returns true if the given node is a Query or SubPlan or a
+ * Param node with paramkind PARAM_EXEC.
+ *
+ * The check for SubPlan is needed whev this is used on a already rewritten
+ * query. Such a query has SubPlan nodes instead of SubLink nodes (which
+ * contain a Query node).
+ * The check for PARAM_EXEC is needed because some very simple subqueries like
+ * (select 1) are converted to init plans in the rewritten query. In this case
+ * the only thing left in the query tree is a Param node with type PARAM_EXEC.
  */
-static bool
-IsNodeQuery(Node *node)
+bool
+IsNodeSubquery(Node *node)
 {
 	if (node == NULL)
 	{
 		return false;
 	}
 
-	return IsA(node, Query);
+	if (IsA(node, Query) || IsA(node, SubPlan))
+	{
+		return true;
+	}
+
+	if (!IsA(node, Param))
+	{
+		return false;
+	}
+	return ((Param *) node)->paramkind == PARAM_EXEC;
 }
 
 
@@ -367,15 +448,13 @@ WindowPartitionOnDistributionColumn(Query *query)
 	foreach(windowClauseCell, windowClauseList)
 	{
 		WindowClause *windowClause = lfirst(windowClauseCell);
-		List *groupTargetEntryList = NIL;
-		bool partitionOnDistributionColumn = false;
 		List *partitionClauseList = windowClause->partitionClause;
 		List *targetEntryList = query->targetList;
 
-		groupTargetEntryList =
+		List *groupTargetEntryList =
 			GroupTargetEntryList(partitionClauseList, targetEntryList);
 
-		partitionOnDistributionColumn =
+		bool partitionOnDistributionColumn =
 			TargetListOnPartitionColumn(query, groupTargetEntryList);
 
 		if (!partitionOnDistributionColumn)
@@ -412,14 +491,13 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
-	DeferredErrorMessage *subqueryPushdownError = NULL;
-	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/*
 	 * This is a generic error check that applies to both subquery pushdown
 	 * and single table repartition subquery.
 	 */
-	unsupportedQueryError = DeferErrorIfQueryNotSupported(originalQuery);
+	DeferredErrorMessage *unsupportedQueryError = DeferErrorIfQueryNotSupported(
+		originalQuery);
 	if (unsupportedQueryError != NULL)
 	{
 		RaiseDeferredError(unsupportedQueryError, ERROR);
@@ -430,38 +508,35 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	 * to create a logical plan, continue with trying the single table
 	 * repartition subquery planning.
 	 */
-	subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
-																	plannerRestrictionContext);
+	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
+		originalQuery,
+		plannerRestrictionContext);
 	if (!subqueryPushdownError)
 	{
 		multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
 	}
 	else if (subqueryPushdownError)
 	{
-		bool singleRelationRepartitionSubquery = false;
-		RangeTblEntry *subqueryRangeTableEntry = NULL;
-		Query *subqueryTree = NULL;
-		DeferredErrorMessage *repartitionQueryError = NULL;
-		List *subqueryEntryList = NULL;
-
 		/*
 		 * If not eligible for single relation repartition query, we should raise
 		 * subquery pushdown error.
 		 */
-		singleRelationRepartitionSubquery =
+		bool singleRelationRepartitionSubquery =
 			SingleRelationRepartitionSubquery(originalQuery);
 		if (!singleRelationRepartitionSubquery)
 		{
 			RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
 		}
 
-		subqueryEntryList = SubqueryEntryList(queryTree);
-		subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
+		List *subqueryEntryList = SubqueryEntryList(queryTree);
+		RangeTblEntry *subqueryRangeTableEntry = (RangeTblEntry *) linitial(
+			subqueryEntryList);
 		Assert(subqueryRangeTableEntry->rtekind == RTE_SUBQUERY);
 
-		subqueryTree = subqueryRangeTableEntry->subquery;
+		Query *subqueryTree = subqueryRangeTableEntry->subquery;
 
-		repartitionQueryError = DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
+		DeferredErrorMessage *repartitionQueryError =
+			DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
 		if (repartitionQueryError)
 		{
 			RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
@@ -491,7 +566,6 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	bool outerMostQueryHasLimit = false;
 	ListCell *subqueryCell = NULL;
 	List *subqueryList = NIL;
-	DeferredErrorMessage *error = NULL;
 
 	if (originalQuery->limitCount != NULL)
 	{
@@ -522,12 +596,12 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "complex joins are only supported when all distributed tables are "
-							 "joined on their distribution columns with equal operator",
+							 "co-located and joined on their distribution columns",
 							 NULL, NULL);
 	}
 
 	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
-	error = DeferErrorIfFromClauseRecurs(originalQuery);
+	DeferredErrorMessage *error = DeferErrorIfFromClauseRecurs(originalQuery);
 	if (error)
 	{
 		return error;
@@ -583,14 +657,12 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 static DeferredErrorMessage *
 DeferErrorIfFromClauseRecurs(Query *queryTree)
 {
-	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
-
 	if (!queryTree->hasSubLinks)
 	{
 		return NULL;
 	}
 
-	recurType = FromClauseRecurringTupleType(queryTree);
+	RecurringTuplesType recurType = FromClauseRecurringTupleType(queryTree);
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -651,7 +723,7 @@ FromClauseRecurringTupleType(Query *queryTree)
 {
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 
-	if (queryTree->rtable == NIL)
+	if (HasEmptyJoinTree(queryTree))
 	{
 		return RECURRING_TUPLES_EMPTY_JOIN_TREE;
 	}
@@ -809,15 +881,15 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
 	StringInfo errorInfo = NULL;
-	DeferredErrorMessage *deferredError = NULL;
 
-	deferredError = DeferErrorIfUnsupportedTableCombination(subqueryTree);
+	DeferredErrorMessage *deferredError = DeferErrorIfUnsupportedTableCombination(
+		subqueryTree);
 	if (deferredError)
 	{
 		return deferredError;
 	}
 
-	if (subqueryTree->rtable == NIL &&
+	if (HasEmptyJoinTree(subqueryTree) &&
 		contain_mutable_functions((Node *) subqueryTree->targetList))
 	{
 		preconditionsSatisfied = false;
@@ -982,7 +1054,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *joinTreeTableIndexList = NIL;
-	ListCell *joinTreeTableIndexCell = NULL;
+	int joinTreeTableIndex = 0;
 	bool unsupportedTableCombination = false;
 	char *errorDetail = NULL;
 
@@ -992,13 +1064,12 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 	 */
 	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 
-	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
+	foreach_int(joinTreeTableIndex, joinTreeTableIndexList)
 	{
 		/*
 		 * Join tree's range table index starts from 1 in the query tree. But,
 		 * list indexes start from 0.
 		 */
-		int joinTreeTableIndex = lfirst_int(joinTreeTableIndexCell);
 		int rangeTableListIndex = joinTreeTableIndex - 1;
 
 		RangeTblEntry *rangeTableEntry =
@@ -1009,7 +1080,11 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 * subquery, or immutable function.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
-			rangeTableEntry->rtekind == RTE_SUBQUERY)
+			rangeTableEntry->rtekind == RTE_SUBQUERY
+#if PG_VERSION_NUM >= 120000
+			|| rangeTableEntry->rtekind == RTE_RESULT
+#endif
+			)
 		{
 			/* accepted */
 		}
@@ -1101,9 +1176,8 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 
 		if (IsA(leftArg, RangeTblRef))
 		{
-			Query *leftArgSubquery = NULL;
 			leftArgRTI = ((RangeTblRef *) leftArg)->rtindex;
-			leftArgSubquery = rt_fetch(leftArgRTI, subqueryTree->rtable)->subquery;
+			Query *leftArgSubquery = rt_fetch(leftArgRTI, subqueryTree->rtable)->subquery;
 			recurType = FromClauseRecurringTupleType(leftArgSubquery);
 			if (recurType != RECURRING_TUPLES_INVALID)
 			{
@@ -1113,9 +1187,9 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 
 		if (IsA(rightArg, RangeTblRef))
 		{
-			Query *rightArgSubquery = NULL;
 			rightArgRTI = ((RangeTblRef *) rightArg)->rtindex;
-			rightArgSubquery = rt_fetch(rightArgRTI, subqueryTree->rtable)->subquery;
+			Query *rightArgSubquery = rt_fetch(rightArgRTI,
+											   subqueryTree->rtable)->subquery;
 			recurType = FromClauseRecurringTupleType(rightArgSubquery);
 			if (recurType != RECURRING_TUPLES_INVALID)
 			{
@@ -1165,7 +1239,6 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 static bool
 ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
 {
-	bool walkerResult = false;
 	if (node == NULL)
 	{
 		return false;
@@ -1178,8 +1251,8 @@ ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
 		(*setOperationList) = lappend(*setOperationList, setOperation);
 	}
 
-	walkerResult = expression_tree_walker(node, ExtractSetOperationStatmentWalker,
-										  setOperationList);
+	bool walkerResult = expression_tree_walker(node, ExtractSetOperationStatmentWalker,
+											   setOperationList);
 
 	return walkerResult;
 }
@@ -1332,7 +1405,7 @@ static bool
 IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 {
 	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
-							  QTW_EXAMINE_RTES);
+							  QTW_EXAMINE_RTES_BEFORE);
 }
 
 
@@ -1388,6 +1461,13 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			 */
 			return true;
 		}
+#if PG_VERSION_NUM >= 120000
+		else if (rangeTableEntry->rtekind == RTE_RESULT)
+		{
+			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
+			return true;
+		}
+#endif
 
 		return false;
 	}
@@ -1395,7 +1475,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 	{
 		Query *query = (Query *) node;
 
-		if (query->rtable == NIL)
+		if (HasEmptyJoinTree(query))
 		{
 			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
 
@@ -1407,7 +1487,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		}
 
 		return query_tree_walker((Query *) node, HasRecurringTuples,
-								 recurType, QTW_EXAMINE_RTES);
+								 recurType, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	return expression_tree_walker(node, HasRecurringTuples, recurType);
@@ -1429,21 +1509,11 @@ static MultiNode *
 SubqueryPushdownMultiNodeTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
-	List *columnList = NIL;
-	List *flattenedExprList = NIL;
-	List *targetColumnList = NIL;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
-	MultiTable *subqueryNode = NULL;
-	MultiProject *projectNode = NULL;
-	MultiExtendedOp *extendedOpNode = NULL;
-	MultiNode *currentTopNode = NULL;
-	Query *pushedDownQuery = NULL;
-	List *subqueryTargetEntryList = NIL;
-	List *havingClauseColumnList = NIL;
-	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	DeferredErrorMessage *unsupportedQueryError = DeferErrorIfQueryNotSupported(
+		queryTree);
 	if (unsupportedQueryError != NULL)
 	{
 		RaiseDeferredError(unsupportedQueryError, ERROR);
@@ -1495,14 +1565,14 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * columnList. Columns mentioned in multiProject node and multiExtendedOp
 	 * node are indexed with their respective position in columnList.
 	 */
-	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
-	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
-	columnList = list_concat(targetColumnList, havingClauseColumnList);
+	List *targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+	List *havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
+	List *columnList = list_concat(targetColumnList, havingClauseColumnList);
 
-	flattenedExprList = FlattenJoinVars(columnList, queryTree);
+	List *flattenedExprList = FlattenJoinVars(columnList, queryTree);
 
 	/* create a target entry for each unique column */
-	subqueryTargetEntryList = CreateSubqueryTargetEntryList(flattenedExprList);
+	List *subqueryTargetEntryList = CreateSubqueryTargetEntryList(flattenedExprList);
 
 	/*
 	 * Update varno/varattno fields of columns in columnList to
@@ -1512,7 +1582,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 									   subqueryTargetEntryList);
 
 	/* new query only has target entries, join tree, and rtable*/
-	pushedDownQuery = makeNode(Query);
+	Query *pushedDownQuery = makeNode(Query);
 	pushedDownQuery->commandType = queryTree->commandType;
 	pushedDownQuery->targetList = subqueryTargetEntryList;
 	pushedDownQuery->jointree = copyObject(queryTree->jointree);
@@ -1521,13 +1591,13 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	pushedDownQuery->querySource = queryTree->querySource;
 	pushedDownQuery->hasSubLinks = queryTree->hasSubLinks;
 
-	subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
+	MultiTable *subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
 
 	SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
-	currentTopNode = (MultiNode *) subqueryCollectNode;
+	MultiNode *currentTopNode = (MultiNode *) subqueryCollectNode;
 
 	/* build project node for the columns to project */
-	projectNode = MultiProjectNode(targetEntryList);
+	MultiProject *projectNode = MultiProjectNode(targetEntryList);
 	SetChild((MultiUnaryNode *) projectNode, currentTopNode);
 	currentTopNode = (MultiNode *) projectNode;
 
@@ -1537,7 +1607,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	extendedOpNode = MultiExtendedOpNode(queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree);
 
 	/*
 	 * Postgres standard planner converts having qual node to a list of and
@@ -1631,8 +1701,6 @@ FlattenJoinVarsMutator(Node *node, Query *queryTree)
 		RangeTblEntry *rte = rt_fetch(column->varno, queryTree->rtable);
 		if (rte->rtekind == RTE_JOIN)
 		{
-			Node *newColumn = NULL;
-
 			/*
 			 * if join has an alias, it is copied over join RTE. We should
 			 * reference this RTE.
@@ -1644,7 +1712,7 @@ FlattenJoinVarsMutator(Node *node, Query *queryTree)
 
 			/* join RTE does not have and alias defined at this level, deeper look is needed */
 			Assert(column->varattno > 0);
-			newColumn = (Node *) list_nth(rte->joinaliasvars, column->varattno - 1);
+			Node *newColumn = (Node *) list_nth(rte->joinaliasvars, column->varattno - 1);
 			Assert(newColumn != NULL);
 
 			/*
@@ -1801,7 +1869,6 @@ UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr, List *target
 static MultiTable *
 MultiSubqueryPushdownTable(Query *subquery)
 {
-	MultiTable *subqueryTableNode = NULL;
 	StringInfo rteName = makeStringInfo();
 	List *columnNamesList = NIL;
 	ListCell *targetEntryCell = NULL;
@@ -1814,7 +1881,7 @@ MultiSubqueryPushdownTable(Query *subquery)
 		columnNamesList = lappend(columnNamesList, makeString(targetEntry->resname));
 	}
 
-	subqueryTableNode = CitusMakeNode(MultiTable);
+	MultiTable *subqueryTableNode = CitusMakeNode(MultiTable);
 	subqueryTableNode->subquery = subquery;
 	subqueryTableNode->relationId = SUBQUERY_PUSHDOWN_RELATION_ID;
 	subqueryTableNode->rangeTableId = SUBQUERY_RANGE_TABLE_ID;

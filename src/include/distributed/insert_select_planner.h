@@ -5,7 +5,7 @@
  * Declarations for public functions and types related to planning
  * INSERT..SELECT commands.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -24,6 +24,7 @@
 
 
 extern bool InsertSelectIntoDistributedTable(Query *query);
+extern bool CheckInsertSelectQuery(Query *query);
 extern bool InsertSelectIntoLocalTable(Query *query);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,

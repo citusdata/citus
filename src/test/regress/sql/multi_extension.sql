@@ -8,7 +8,6 @@
 
 
 SET citus.next_shard_id TO 580000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 
 CREATE SCHEMA test;
 
@@ -46,71 +45,19 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
 
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
 \c
 
+-- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
+SET citus.enable_object_propagation TO 'false';
+
 SET citus.enable_version_checks TO 'false';
 
--- Create extension in oldest version
-CREATE EXTENSION citus VERSION '5.0';
-ALTER EXTENSION citus UPDATE TO '5.0-1';
-ALTER EXTENSION citus UPDATE TO '5.0-2';
-ALTER EXTENSION citus UPDATE TO '5.1-1';
-ALTER EXTENSION citus UPDATE TO '5.1-2';
-ALTER EXTENSION citus UPDATE TO '5.1-3';
-ALTER EXTENSION citus UPDATE TO '5.1-4';
-ALTER EXTENSION citus UPDATE TO '5.1-5';
-ALTER EXTENSION citus UPDATE TO '5.1-6';
-ALTER EXTENSION citus UPDATE TO '5.1-7';
-ALTER EXTENSION citus UPDATE TO '5.1-8';
-ALTER EXTENSION citus UPDATE TO '5.2-1';
-ALTER EXTENSION citus UPDATE TO '5.2-2';
-ALTER EXTENSION citus UPDATE TO '5.2-3';
-ALTER EXTENSION citus UPDATE TO '5.2-4';
-ALTER EXTENSION citus UPDATE TO '6.0-1';
-ALTER EXTENSION citus UPDATE TO '6.0-2';
-ALTER EXTENSION citus UPDATE TO '6.0-3';
-ALTER EXTENSION citus UPDATE TO '6.0-4';
-ALTER EXTENSION citus UPDATE TO '6.0-5';
-ALTER EXTENSION citus UPDATE TO '6.0-6';
-ALTER EXTENSION citus UPDATE TO '6.0-7';
-ALTER EXTENSION citus UPDATE TO '6.0-8';
-ALTER EXTENSION citus UPDATE TO '6.0-9';
-ALTER EXTENSION citus UPDATE TO '6.0-10';
-ALTER EXTENSION citus UPDATE TO '6.0-11';
-ALTER EXTENSION citus UPDATE TO '6.0-12';
-ALTER EXTENSION citus UPDATE TO '6.0-13';
-ALTER EXTENSION citus UPDATE TO '6.0-14';
-ALTER EXTENSION citus UPDATE TO '6.0-15';
-ALTER EXTENSION citus UPDATE TO '6.0-16';
-ALTER EXTENSION citus UPDATE TO '6.0-17';
-ALTER EXTENSION citus UPDATE TO '6.0-18';
-ALTER EXTENSION citus UPDATE TO '6.1-1';
-ALTER EXTENSION citus UPDATE TO '6.1-2';
-ALTER EXTENSION citus UPDATE TO '6.1-3';
-ALTER EXTENSION citus UPDATE TO '6.1-4';
-ALTER EXTENSION citus UPDATE TO '6.1-5';
-ALTER EXTENSION citus UPDATE TO '6.1-6';
-ALTER EXTENSION citus UPDATE TO '6.1-7';
-ALTER EXTENSION citus UPDATE TO '6.1-8';
-ALTER EXTENSION citus UPDATE TO '6.1-9';
-ALTER EXTENSION citus UPDATE TO '6.1-10';
-ALTER EXTENSION citus UPDATE TO '6.1-11';
-ALTER EXTENSION citus UPDATE TO '6.1-12';
-ALTER EXTENSION citus UPDATE TO '6.1-13';
-ALTER EXTENSION citus UPDATE TO '6.1-14';
-ALTER EXTENSION citus UPDATE TO '6.1-15';
-ALTER EXTENSION citus UPDATE TO '6.1-16';
-ALTER EXTENSION citus UPDATE TO '6.1-17';
-ALTER EXTENSION citus UPDATE TO '6.2-1';
-ALTER EXTENSION citus UPDATE TO '6.2-2';
-ALTER EXTENSION citus UPDATE TO '6.2-3';
-ALTER EXTENSION citus UPDATE TO '6.2-4';
-ALTER EXTENSION citus UPDATE TO '7.0-1';
+CREATE EXTENSION citus VERSION '7.0-1';
 ALTER EXTENSION citus UPDATE TO '7.0-2';
 ALTER EXTENSION citus UPDATE TO '7.0-3';
 ALTER EXTENSION citus UPDATE TO '7.0-4';
@@ -161,6 +108,11 @@ ALTER EXTENSION citus UPDATE TO '8.2-1';
 ALTER EXTENSION citus UPDATE TO '8.2-2';
 ALTER EXTENSION citus UPDATE TO '8.2-3';
 ALTER EXTENSION citus UPDATE TO '8.2-4';
+ALTER EXTENSION citus UPDATE TO '8.3-1';
+ALTER EXTENSION citus UPDATE TO '9.0-1';
+ALTER EXTENSION citus UPDATE TO '9.0-2';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
+ALTER EXTENSION citus UPDATE TO '9.2-1';
 
 -- show running version
 SHOW citus.version;
@@ -173,16 +125,16 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 DROP EXTENSION citus;
-CREATE EXTENSION citus VERSION '5.0';
+CREATE EXTENSION citus VERSION '7.0-1';
 
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
-CREATE EXTENSION citus VERSION '6.2-1';
+CREATE EXTENSION citus VERSION '7.1-1';
 SET citus.enable_version_checks TO 'true';
 
 -- Test CREATE TABLE
@@ -214,8 +166,8 @@ ORDER BY 1;
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 
 -- This function will cause fail in next ALTER EXTENSION
-CREATE OR REPLACE FUNCTION pg_catalog.citus_table_size(table_name regclass)
-RETURNS bigint LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()
+RETURNS void LANGUAGE plpgsql
 AS $function$
 BEGIN
 END;
@@ -223,14 +175,14 @@ $function$;
 
 SET citus.enable_version_checks TO 'false';
 -- This will fail because of previous function declaration
-ALTER EXTENSION citus UPDATE TO '6.2-2';
+ALTER EXTENSION citus UPDATE TO '8.1-1';
 
 -- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
 SET citus.enable_version_checks TO 'true';
-DROP FUNCTION citus_table_size(regclass);
+DROP FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate();
 
 SET citus.enable_version_checks TO 'false';
-ALTER EXTENSION citus UPDATE TO '6.2-2';
+ALTER EXTENSION citus UPDATE TO '8.1-1';
 
 -- Test updating to the latest version without specifying the version number
 ALTER EXTENSION citus UPDATE;
@@ -245,7 +197,7 @@ CREATE EXTENSION citus;
 
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
-CREATE EXTENSION citus VERSION '5.2-4';
+CREATE EXTENSION citus VERSION '7.0-1';
 SET citus.enable_version_checks TO 'true';
 -- during ALTER EXTENSION, we should invalidate the cache
 ALTER EXTENSION citus UPDATE;
@@ -312,7 +264,7 @@ CREATE SCHEMA test_deamon;
 
 -- we create a similar function on the regression database
 -- note that this function checks for the existence of the daemon
--- when not found, returns true else tries for 5 times and 
+-- when not found, returns true else tries for 5 times and
 -- returns false
 CREATE OR REPLACE FUNCTION test_deamon.maintenance_deamon_died(p_dbname text)
     RETURNS boolean
@@ -336,9 +288,9 @@ $$;
 
 -- drop the database and see that the deamon is dead
 DROP DATABASE another;
-SELECT 
+SELECT
     *
-FROM 
+FROM
     test_deamon.maintenance_deamon_died('another');
 
 -- we don't need the schema and the function anymore

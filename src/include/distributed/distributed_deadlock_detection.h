@@ -4,7 +4,7 @@
  *	  Type and function declarations used for performing distributed deadlock
  *	  detection.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

@@ -5,7 +5,7 @@
  * This file contains functions to exercise distributed deadlock detection
  * related lower level functionality.
  *
- * Copyright (c) 20167, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -21,6 +21,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
 #include "nodes/pg_list.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
@@ -38,14 +39,8 @@ PG_FUNCTION_INFO_V1(get_adjacency_list_wait_graph);
 Datum
 get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	MemoryContext perQueryContext = NULL;
-	MemoryContext oldContext = NULL;
 
-	WaitGraph *waitGraph = NULL;
-	HTAB *adjacencyList = NULL;
 	HASH_SEQ_STATUS status;
 	TransactionNode *transactionNode = NULL;
 
@@ -54,42 +49,9 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	/* check to see if caller supports us returning a tuplestore */
-	if (returnSetInfo == NULL || !IsA(returnSetInfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context " \
-						"that cannot accept a set")));
-	}
-
-	if (!(returnSetInfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
-
-	/* build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
-
-	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
-
-	oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	returnSetInfo->returnMode = SFRM_Materialize;
-	returnSetInfo->setResult = tupleStore;
-	returnSetInfo->setDesc = tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
-
-	waitGraph = BuildGlobalWaitGraph();
-	adjacencyList = BuildAdjacencyListsForWaitGraph(waitGraph);
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+	HTAB *adjacencyList = BuildAdjacencyListsForWaitGraph(waitGraph);
 
 	/* iterate on all nodes */
 	hash_seq_init(&status, adjacencyList);

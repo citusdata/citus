@@ -3,7 +3,7 @@
  * rename.c
  *    Commands for renaming objects related to distributed tables
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -30,8 +30,6 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 {
 	Oid objectRelationId = InvalidOid; /* SQL Object OID */
 	Oid tableRelationId = InvalidOid; /* Relation OID, maybe not the same. */
-	bool isDistributedRelation = false;
-	DDLJob *ddlJob = NULL;
 
 	/*
 	 * We only support some of the PostgreSQL supported RENAME statements, and
@@ -97,7 +95,7 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 			return NIL;
 	}
 
-	isDistributedRelation = IsDistributedTable(tableRelationId);
+	bool isDistributedRelation = IsDistributedTable(tableRelationId);
 	if (!isDistributedRelation)
 	{
 		return NIL;
@@ -110,7 +108,7 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	 */
 	ErrorIfUnsupportedRenameStmt(renameStmt);
 
-	ddlJob = palloc0(sizeof(DDLJob));
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = tableRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = renameCommand;

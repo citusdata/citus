@@ -1,3 +1,195 @@
+### citus v9.1.2 (December 30, 2019) ###
+
+* Fixes a bug that prevents installation from source
+
+### citus v9.1.1 (December 18, 2019) ###
+
+* Fixes a bug causing SQL-executing UDFs to crash when passing in DDL
+
+* Fixes a bug that caused column_to_column_name to crash for invalid input
+
+* Fixes a bug that caused inserts into local tables w/ dist. subqueries to crash
+
+* Fixes a bug that caused some noop DML statements to fail
+
+* Fixes a bug that prevents dropping reference table columns
+
+* Fixes a crash in IN (.., NULL) queries
+
+* Fixes a crash when calling a distributed function from PL/pgSQL
+
+* Fixes an issue that caused CTEs to sometimes leak connections
+
+* Fixes strange errors in DML with unreachable sublinks
+
+* Prevents statements in SQL functions to run outside of a transaction
+
+### citus v9.1.0 (November 21, 2019) ###
+
+* Adds extensions to distributed object propagation infrastructure
+
+* Adds support for ALTER ROLE propagation
+
+* Adds support for aggregates in create_distributed_function
+
+* Adds support for expressions in reference joins
+
+* Adds support for returning RECORD in multi-shard queries
+
+* Adds support for simple IN subqueries on unique cols in repartition joins
+
+* Adds support for subqueries in HAVING clauses
+
+* Automatically distributes unary aggs w/ combinefunc and non-internal stype
+
+* Disallows distributed func creation when replication_model is 'statement'
+
+* Drops support for deprecated real-time and router executors
+
+* Fixes a bug in local execution that could cause missing rows in RETURNING
+
+* Fixes a bug that caused maintenance daemon to fail on standby nodes
+
+* Fixes a bug that caused other CREATE EXTENSION commands to take longer
+
+* Fixes a bug that prevented REFRESH MATERIALIZED VIEW
+
+* Fixes a bug when view is used in modify statements
+
+* Fixes a memory leak in adaptive executor when query returns many columns
+
+* Fixes underflow init of default values in worker extended op node creation
+
+* Fixes potential segfault in standard_planner inlining functions
+
+* Fixes an issue that caused failures in RHEL 6 builds
+
+* Fixes queries with repartition joins and group by unique column
+
+* Improves CTE/Subquery performance by pruning intermediate rslt broadcasting
+
+* Removes `citus.worker_list_file` GUC
+
+* Revokes usage from the citus schema from public
+
+### citus v9.0.1 (October 25, 2019) ###
+
+* Fixes a memory leak in the executor
+
+* Revokes usage from the citus schema from public
+
+### citus v9.0.0 (October 7, 2019) ###
+
+* Adds support for PostgreSQL 12
+
+* Adds UDFs to help with PostgreSQL upgrades
+
+* Distributes types to worker nodes
+
+* Introduces `create_distributed_function` UDF
+
+* Introduces local query execution for Citus MX
+
+* Implements infrastructure for routing `CALL` to MX workers
+
+* Implements infrastructure for routing `SELECT function()` to MX workers
+
+* Adds support for foreign key constraints between reference tables
+
+* Adds a feature flag to turn off `CREATE TYPE` propagation
+
+* Adds option `citus.single_shard_commit_protocol`
+
+* Adds support for `EXPLAIN SUMMARY`
+
+* Adds support for `GENERATE ALWAYS AS STORED`
+
+* Adds support for `serial` and `smallserial` in MX mode
+
+* Adds support for anon composite types on the target list in router queries
+
+* Avoids race condition between `create_reference_table` & `master_add_node`
+
+* Fixes a bug in schemas of distributed sequence definitions
+
+* Fixes a bug that caused `run_command_on_colocated_placements` to fail
+
+* Fixes a bug that leads to various issues when a connection is lost
+
+* Fixes a schema leak on `CREATE INDEX` statement
+
+* Fixes assert failure in bare `SELECT FROM reference table FOR UPDATE` in MX
+
+* Makes `master_update_node` MX compatible
+
+* Prevents `pg_dist_colocation` from multiple records for reference tables
+
+* Prevents segfault in `worker_partition_protocol` edgecase
+
+* Propagates `ALTER FUNCTION` statements for distributed functions
+
+* Propagates `CREATE OR REPLACE FUNCTION` for distributed functions
+
+* Propagates `REINDEX` on tables & indexes
+
+* Provides a GUC to turn of the new dependency propagation functionality
+
+* Uses 2PC in adaptive executor when dealing with replication factors above 1
+
+### citus v8.3.2 (August 09, 2019) ###
+
+* Fixes performance issues by skipping unnecessary relation access recordings
+
+### citus v8.3.1 (July 29, 2019) ###
+
+* Improves Adaptive Executor performance
+
+### citus v8.3.0 (July 10, 2019) ###
+
+* Adds a new distributed executor: Adaptive Executor
+
+* citus.enable_statistics_collection defaults to off (opt-in)
+
+* Adds support for CTEs in router planner for modification queries
+
+* Adds support for propagating SET LOCAL at xact start
+
+* Adds option to force master_update_node during failover
+
+* Deprecates master_modify_multiple_shards
+
+* Improves round robin logic on router queries
+
+* Creates all distributed schemas as superuser on a separate connection
+
+* Makes COPY adapt to connection use behaviour of previous commands
+
+* Replaces SESSION_LIFESPAN with configurable number of connections at xact end
+
+* Propagates ALTER FOREIGN TABLE commands to workers
+
+* Don't schedule tasks on inactive nodes
+
+* Makes DROP/VALIDATE CONSTRAINT tolerant of ambiguous shard extension
+
+* Fixes an issue with subquery map merge jobs as non-root
+
+* Fixes null pointers caused by partial initialization of ConnParamsHashEntry
+
+* Fixes errors caused by joins with shadowed aliases
+
+* Fixes a regression in outer joining subqueries introduced in 8.2.0
+
+* Fixes a crash that can occur under high memory load
+
+* Fixes a bug that selects wrong worker when using round-robin assignment
+
+* Fixes savepoint rollback after multi-shard modify/copy failure
+
+* Fixes bad foreign constraint name search
+
+* Fixes a bug that prevents stack size to be adjusted
+
 ### citus v8.2.2 (June 11, 2019) ###
 
 * Fixes a bug in outer joins wrapped in subqueries

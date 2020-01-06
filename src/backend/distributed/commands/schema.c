@@ -3,7 +3,7 @@
  * schema.c
  *    Commands for creating and altering schemas for distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -104,25 +104,73 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 
 
 /*
- * PlanAlterObjectSchemaStmt determines whether a given ALTER ... SET SCHEMA
+ * PlanAlterObjectSchemaStmt is called by citus' utility hook for AlterObjectSchemaStmt
+ * parsetrees. It dispatches the statement based on the object type for which the schema
+ * is being altered.
+ *
+ * A (potentially empty) list of DDLJobs is being returned with the jobs on how to
+ * distribute the change into the cluster.
+ */
+List *
+PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+{
+	switch (stmt->objectType)
+	{
+		case OBJECT_TYPE:
+		{
+			return PlanAlterTypeSchemaStmt(stmt, queryString);
+		}
+
+		case OBJECT_COLLATION:
+		{
+			return PlanAlterCollationSchemaStmt(stmt, queryString);
+		}
+
+		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
+		case OBJECT_FUNCTION:
+		{
+			return PlanAlterFunctionSchemaStmt(stmt, queryString);
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			return PlanAlterExtensionSchemaStmt(stmt, queryString);
+		}
+
+		default:
+		{
+			/* do nothing for unsupported objects */
+			break;
+		}
+	}
+
+	/*
+	 * old behaviour, needs to be reconciled to the above switch statement for all
+	 * objectType's relating to tables. Maybe it is as easy to support
+	 * ALTER TABLE ... SET SCHEMA
+	 */
+	return PlanAlterTableSchemaStmt(stmt, queryString);
+}
+
+
+/*
+ * PlanAlterTableSchemaStmt determines whether a given ALTER ... SET SCHEMA
  * statement involves a distributed table and issues a warning if so. Because
  * we do not support distributed ALTER ... SET SCHEMA, this function always
  * returns NIL.
  */
 List *
-PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
-						  const char *alterObjectSchemaCommand)
+PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	Oid relationId = InvalidOid;
-
-	if (alterObjectSchemaStmt->relation == NULL)
+	if (stmt->relation == NULL)
 	{
 		return NIL;
 	}
 
-	relationId = RangeVarGetRelid(alterObjectSchemaStmt->relation,
-								  AccessExclusiveLock,
-								  alterObjectSchemaStmt->missing_ok);
+	Oid relationId = RangeVarGetRelid(stmt->relation,
+									  AccessExclusiveLock,
+									  stmt->missing_ok);
 
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
@@ -141,50 +189,46 @@ PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 
 
 /*
- * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
- * and creates the schema of the given relationId. The function errors out if the
- * command cannot be executed in any of the worker nodes.
+ * ProcessAlterObjectSchemaStmt is called by multi_ProcessUtility _after_ the command has
+ * been applied to the local postgres. It is useful to create potentially new dependencies
+ * of this object (the new schema) on the workers before the command gets applied to the
+ * remote objects.
  */
 void
-EnsureSchemaExistsOnAllNodes(Oid relationId)
+ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
-	ListCell *workerNodeCell = NULL;
-
-	foreach(workerNodeCell, workerNodeList)
+	switch (stmt->objectType)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
+		case OBJECT_TYPE:
+		{
+			ProcessAlterTypeSchemaStmt(stmt, queryString);
+			return;
+		}
 
-		EnsureSchemaExistsOnNode(relationId, nodeName, nodePort);
+		case OBJECT_COLLATION:
+		{
+			ProcessAlterCollationSchemaStmt(stmt, queryString);
+			return;
+		}
+
+		case OBJECT_PROCEDURE:
+		case OBJECT_AGGREGATE:
+		case OBJECT_FUNCTION:
+		{
+			ProcessAlterFunctionSchemaStmt(stmt, queryString);
+			return;
+		}
+
+		case OBJECT_EXTENSION:
+		{
+			ProcessAlterExtensionSchemaStmt(stmt, queryString);
+			return;
+		}
+
+		default:
+		{
+			/* do nothing for unsupported objects */
+			return;
+		}
 	}
-}
-
-
-/*
- * EnsureSchemaExistsOnNode connects to one node with citus extension user
- * and creates the schema of the given relationId. The function errors out if the
- * command cannot be executed in the node.
- */
-void
-EnsureSchemaExistsOnNode(Oid relationId, char *nodeName, int32 nodePort)
-{
-	uint64 connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = NULL;
-
-	/* if the schema creation command is not provided, create it */
-	Oid schemaId = get_rel_namespace(relationId);
-	char *schemaCreationDDL = CreateSchemaDDLCommand(schemaId);
-
-	/* if the relation lives in public namespace, no need to perform any queries in workers */
-	if (schemaCreationDDL == NULL)
-	{
-		return;
-	}
-
-	connection = GetNodeUserDatabaseConnection(connectionFlag, nodeName,
-											   nodePort, CitusExtensionOwnerName(), NULL);
-
-	ExecuteCriticalRemoteCommand(connection, schemaCreationDDL);
 }

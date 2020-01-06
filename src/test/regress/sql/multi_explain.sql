@@ -4,10 +4,6 @@
 
 SET citus.next_shard_id TO 570000;
 
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 \a\t
 
 RESET citus.task_executor_type;
@@ -84,6 +80,11 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -103,6 +104,14 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
+
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+BEGIN;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+ROLLBACk;
 
 -- Test delete
 EXPLAIN (COSTS FALSE)
@@ -377,12 +386,12 @@ SELECT true AS valid FROM explain_xml($$
 
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
-	
+
 -- Test multi shard update
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12;
-	
+
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
@@ -391,6 +400,11 @@ EXPLAIN (COSTS FALSE)
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
+
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 SET citus.explain_all_tasks TO off;
 
@@ -450,8 +464,8 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 
--- make sure that EXPLAIN works without 
--- problems for queries that inlvolves only 
+-- make sure that EXPLAIN works without
+-- problems for queries that inlvolves only
 -- reference tables
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)
@@ -532,11 +546,12 @@ EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 
+-- WHERE EXISTS forces pg12 to materialize cte
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
-WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
-SELECT s FROM cte1;
+WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
+SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part

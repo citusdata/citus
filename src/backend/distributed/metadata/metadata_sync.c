@@ -4,7 +4,7 @@
  *
  * Routines for synchronizing metadata to all workers.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -38,55 +38,63 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "nodes/pg_list.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
+static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum,
+								   bool value);
 static List * SequenceDDLCommandsForTable(Oid relationId);
-static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
-static Oid TypeOfColumn(Oid tableId, int16 columnId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
+static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 
 
 /*
- * start_metadata_sync_to_node function creates the metadata in a worker for preparing the
- * worker for accepting queries. The function first sets the localGroupId of the worker
- * so that the worker knows which tuple in pg_dist_node table represents itself. After
- * that, SQL statetemens for re-creating metadata of MX-eligible distributed tables are
- * sent to the worker. Finally, the hasmetadata column of the target node in pg_dist_node
- * is marked as true.
+ * start_metadata_sync_to_node function sets hasmetadata column of the given
+ * node to true, and then synchronizes the metadata on the node.
  */
 Datum
 start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+
 	char *nodeNameString = text_to_cstring(nodeName);
-	char *extensionOwner = CitusExtensionOwnerName();
+
+	StartMetadatSyncToNode(nodeNameString, nodePort);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * StartMetadatSyncToNode is the internal API for
+ * start_metadata_sync_to_node().
+ */
+void
+StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
+{
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
-	WorkerNode *workerNode = NULL;
-	char *localGroupIdUpdateCommand = NULL;
-	List *recreateMetadataSnapshotCommandList = NIL;
-	List *dropMetadataCommandList = NIL;
-	List *createMetadataCommandList = NIL;
+	/* fail if metadata synchronization doesn't succeed */
+	bool raiseInterrupts = true;
 
 	EnsureCoordinator();
 	EnsureSuperUser();
@@ -95,7 +103,9 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	PreventInTransactionBlock(true, "start_metadata_sync_to_node");
 
-	workerNode = FindWorkerNode(nodeNameString, nodePort);
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -113,43 +123,27 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 								escapedNodeName, nodePort)));
 	}
 
+	if (NodeIsCoordinator(workerNode))
+	{
+		ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
+								"metadata, skipping syncing the metadata",
+								nodeNameString, nodePort)));
+		return;
+	}
+
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
-	if (!WorkerNodeIsPrimary(workerNode))
+	if (!NodeIsPrimary(workerNode))
 	{
 		/*
 		 * If this is a secondary node we can't actually sync metadata to it; we assume
 		 * the primary node is receiving metadata.
 		 */
-		PG_RETURN_VOID();
+		return;
 	}
 
-	/* generate and add the local group id's update query */
-	localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
-
-	/* generate the queries which drop the metadata */
-	dropMetadataCommandList = MetadataDropCommands();
-
-	/* generate the queries which create the metadata from scratch */
-	createMetadataCommandList = MetadataCreateCommands();
-
-	recreateMetadataSnapshotCommandList = lappend(recreateMetadataSnapshotCommandList,
-												  localGroupIdUpdateCommand);
-	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
-													  dropMetadataCommandList);
-	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
-													  createMetadataCommandList);
-
-	/*
-	 * Send the snapshot recreation commands in a single remote transaction and
-	 * error out in any kind of failure. Note that it is not required to send
-	 * createMetadataSnapshotCommandList in the same transaction that we send
-	 * nodeDeleteCommand and nodeInsertCommand commands below.
-	 */
-	SendCommandListToWorkerInSingleTransaction(nodeNameString, nodePort, extensionOwner,
-											   recreateMetadataSnapshotCommandList);
-
-	PG_RETURN_VOID();
+	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
+	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 }
 
 
@@ -164,13 +158,14 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-	WorkerNode *workerNode = NULL;
 
 	EnsureCoordinator();
 	EnsureSuperUser();
 	CheckCitusVersion(ERROR);
 
-	workerNode = FindWorkerNode(nodeNameString, nodePort);
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -178,6 +173,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	}
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
+	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
 
 	PG_RETURN_VOID();
 }
@@ -238,6 +234,105 @@ ShouldSyncTableMetadata(Oid relationId)
 
 
 /*
+ * SyncMetadataSnapshotToNode does the following:
+ *  1. Sets the localGroupId on the worker so the worker knows which tuple in
+ *     pg_dist_node represents itself.
+ *  2. Recreates the distributed metadata on the given worker.
+ * If raiseOnError is true, it errors out if synchronization fails.
+ */
+static bool
+SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
+{
+	char *extensionOwner = CitusExtensionOwnerName();
+
+	/* generate and add the local group id's update query */
+	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
+
+	/* generate the queries which drop the metadata */
+	List *dropMetadataCommandList = MetadataDropCommands();
+
+	/* generate the queries which create the metadata from scratch */
+	List *createMetadataCommandList = MetadataCreateCommands();
+
+	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
+	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
+													  dropMetadataCommandList);
+	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
+													  createMetadataCommandList);
+
+	/*
+	 * Send the snapshot recreation commands in a single remote transaction and
+	 * if requested, error out in any kind of failure. Note that it is not
+	 * required to send createMetadataSnapshotCommandList in the same transaction
+	 * that we send nodeDeleteCommand and nodeInsertCommand commands below.
+	 */
+	if (raiseOnError)
+	{
+		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+												   workerNode->workerPort,
+												   extensionOwner,
+												   recreateMetadataSnapshotCommandList);
+		return true;
+	}
+	else
+	{
+		bool success =
+			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+														 workerNode->workerPort,
+														 extensionOwner,
+														 recreateMetadataSnapshotCommandList);
+		return success;
+	}
+}
+
+
+/*
+ * SendOptionalCommandListToWorkerInTransaction sends the given command list to
+ * the given worker in a single transaction. If any of the commands fail, it
+ * rollbacks the transaction, and otherwise commits.
+ */
+bool
+SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
+											 char *nodeUser, List *commandList)
+{
+	ListCell *commandCell = NULL;
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	bool failed = false;
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
+
+	RemoteTransactionBegin(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	foreach(commandCell, commandList)
+	{
+		char *commandString = lfirst(commandCell);
+
+		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) != 0)
+		{
+			failed = true;
+			break;
+		}
+	}
+
+	if (failed)
+	{
+		RemoteTransactionAbort(workerConnection);
+	}
+	else
+	{
+		RemoteTransactionCommit(workerConnection);
+	}
+
+	CloseConnection(workerConnection);
+
+	return !failed;
+}
+
+
+/*
  * MetadataCreateCommands returns list of queries that are
  * required to create the current metadata snapshot of the node that the
  * function is called. The metadata snapshot commands includes the
@@ -257,16 +352,15 @@ MetadataCreateCommands(void)
 	List *distributedTableList = DistributedTableList();
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
-	List *workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
+	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 	ListCell *distributedTableCell = NULL;
-	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;
 
 	/* make sure we have deterministic output for our tests */
-	SortList(workerNodeList, CompareWorkerNodes);
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* generate insert command for pg_dist_node table */
-	nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
+	char *nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  nodeListInsertCommand);
 
@@ -287,18 +381,20 @@ MetadataCreateCommands(void)
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		Oid relationId = cacheEntry->relationId;
+		ObjectAddress tableAddress = { 0 };
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		/*
-		 * Ensure schema exists on each worker node. We can not run this function
-		 * transactionally, since we may create shards over separate sessions and
-		 * shard creation depends on the schema being present and visible from all
-		 * sessions.
+		 * Distributed tables might have dependencies on different objects, since we
+		 * create shards for a distributed table via multiple sessions these objects will
+		 * be created via their own connection and committed immediately so they become
+		 * visible to all sessions creating shards.
 		 */
-		EnsureSchemaExistsOnAllNodes(relationId);
+		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+		EnsureDependenciesExistsOnAllNodes(&tableAddress);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
@@ -342,26 +438,22 @@ MetadataCreateCommands(void)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		List *shardIntervalList = NIL;
-		List *shardCreateCommandList = NIL;
-		char *metadataCommand = NULL;
-		char *truncateTriggerCreateCommand = NULL;
 		Oid clusteredTableId = cacheEntry->relationId;
 
 		/* add the table metadata command first*/
-		metadataCommand = DistributionCreateCommand(cacheEntry);
+		char *metadataCommand = DistributionCreateCommand(cacheEntry);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
 		/* add the truncate trigger command after the table became distributed */
-		truncateTriggerCreateCommand =
+		char *truncateTriggerCreateCommand =
 			TruncateTriggerCreateCommand(cacheEntry->relationId);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  truncateTriggerCreateCommand);
 
 		/* add the pg_dist_shard{,placement} entries */
-		shardIntervalList = LoadShardIntervalList(clusteredTableId);
-		shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
+		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
+		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  shardCreateCommandList);
@@ -382,44 +474,36 @@ GetDistributedTableDDLEvents(Oid relationId)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
-	List *shardIntervalList = NIL;
 	List *commandList = NIL;
-	List *foreignConstraintCommands = NIL;
-	List *shardMetadataInsertCommandList = NIL;
-	List *sequenceDDLCommands = NIL;
-	List *tableDDLCommands = NIL;
-	char *tableOwnerResetCommand = NULL;
-	char *metadataCommand = NULL;
-	char *truncateTriggerCreateCommand = NULL;
 	bool includeSequenceDefaults = true;
 
 	/* commands to create sequences */
-	sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+	List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 	commandList = list_concat(commandList, sequenceDDLCommands);
 
 	/* commands to create the table */
-	tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
+	List *tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	commandList = list_concat(commandList, tableDDLCommands);
 
 	/* command to reset the table owner */
-	tableOwnerResetCommand = TableOwnerResetCommand(relationId);
+	char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 	commandList = lappend(commandList, tableOwnerResetCommand);
 
 	/* command to insert pg_dist_partition entry */
-	metadataCommand = DistributionCreateCommand(cacheEntry);
+	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+	char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
 	commandList = lappend(commandList, truncateTriggerCreateCommand);
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
-	shardIntervalList = LoadShardIntervalList(relationId);
-	shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
 
 	/* commands to create foreign key constraints */
-	foreignConstraintCommands = GetTableForeignConstraintCommands(relationId);
+	List *foreignConstraintCommands = GetTableForeignConstraintCommands(relationId);
 	commandList = list_concat(commandList, foreignConstraintCommands);
 
 	/* commands to create partitioning hierarchy */
@@ -498,13 +582,14 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, isactive, noderole, nodecluster) VALUES ");
+					 "noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
+		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
@@ -512,13 +597,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
 						 workerNode->workerPort,
 						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadataString,
+						 metadataSyncedString,
 						 isActiveString,
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster));
@@ -557,7 +643,7 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	}
 	else
 	{
-		char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		char *partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
 		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 quote_literal_cstr(partitionKeyColumnName));
@@ -585,10 +671,9 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 char *
 DistributionDeleteCommand(char *schemaName, char *tableName)
 {
-	char *distributedRelationName = NULL;
 	StringInfo deleteDistributionCommand = makeStringInfo();
 
-	distributedRelationName = quote_qualified_identifier(schemaName, tableName);
+	char *distributedRelationName = quote_qualified_identifier(schemaName, tableName);
 
 	appendStringInfo(deleteDistributionCommand,
 					 "SELECT worker_drop_distributed_table(%s)",
@@ -749,11 +834,9 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 {
 	uint64 shardId = shardInterval->shardId;
 	List *commandList = NIL;
-	StringInfo deletePlacementCommand = NULL;
-	StringInfo deleteShardCommand = NULL;
 
 	/* create command to delete shard placements */
-	deletePlacementCommand = makeStringInfo();
+	StringInfo deletePlacementCommand = makeStringInfo();
 	appendStringInfo(deletePlacementCommand,
 					 "DELETE FROM pg_dist_placement WHERE shardid = " UINT64_FORMAT,
 					 shardId);
@@ -761,7 +844,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	commandList = lappend(commandList, deletePlacementCommand->data);
 
 	/* create command to delete shard */
-	deleteShardCommand = makeStringInfo();
+	StringInfo deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
 					 "DELETE FROM pg_dist_shard WHERE shardid = " UINT64_FORMAT, shardId);
 
@@ -801,6 +884,24 @@ NodeStateUpdateCommand(uint32 nodeId, bool isActive)
 	appendStringInfo(nodeStateUpdateCommand,
 					 "UPDATE pg_dist_node SET isactive = %s "
 					 "WHERE nodeid = %u", isActiveString, nodeId);
+
+	return nodeStateUpdateCommand->data;
+}
+
+
+/*
+ * ShouldHaveShardsUpdateCommand generates a command that can be executed to
+ * update the shouldhaveshards column of a node in pg_dist_node table.
+ */
+char *
+ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards)
+{
+	StringInfo nodeStateUpdateCommand = makeStringInfo();
+	char *shouldHaveShardsString = shouldHaveShards ? "TRUE" : "FALSE";
+
+	appendStringInfo(nodeStateUpdateCommand,
+					 "UPDATE pg_catalog.pg_dist_node SET shouldhaveshards = %s "
+					 "WHERE nodeid = %u", shouldHaveShardsString, nodeId);
 
 	return nodeStateUpdateCommand->data;
 }
@@ -861,34 +962,56 @@ LocalGroupIdUpdateCommand(int32 groupId)
 
 /*
  * MarkNodeHasMetadata function sets the hasmetadata column of the specified worker in
- * pg_dist_node to true.
+ * pg_dist_node to hasMetadata.
+ */
+void
+MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
+{
+	UpdateDistNodeBoolAttr(nodeName, nodePort,
+						   Anum_pg_dist_node_hasmetadata,
+						   hasMetadata);
+}
+
+
+/*
+ * MarkNodeMetadataSynced function sets the metadatasynced column of the
+ * specified worker in pg_dist_node to the given value.
+ */
+void
+MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced)
+{
+	UpdateDistNodeBoolAttr(nodeName, nodePort,
+						   Anum_pg_dist_node_metadatasynced,
+						   synced);
+}
+
+
+/*
+ * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
+ * to the given value.
  */
 static void
-MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
+UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum, bool value)
 {
 	const bool indexOK = false;
 
-	Relation pgDistNode = NULL;
-	TupleDesc tupleDescriptor = NULL;
 	ScanKeyData scanKey[2];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
 
-	pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
-	tupleDescriptor = RelationGetDescr(pgDistNode);
+	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 
-	scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-										NULL, 2, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
+													NULL, 2, scanKey);
 
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
@@ -897,9 +1020,9 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 
 	memset(replace, 0, sizeof(replace));
 
-	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(hasMetadata);
-	isnull[Anum_pg_dist_node_hasmetadata - 1] = false;
-	replace[Anum_pg_dist_node_hasmetadata - 1] = true;
+	values[attrNum - 1] = BoolGetDatum(value);
+	isnull[attrNum - 1] = false;
+	replace[attrNum - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -938,13 +1061,15 @@ SequenceDDLCommandsForTable(Oid relationId)
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-
-		EnsureSupportedSequenceColumnType(sequenceOid);
+		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
+		Oid sequenceTypeOid = sequenceData->seqtypid;
+		char *typeName = format_type_be(sequenceTypeOid);
 
 		/* create schema if needed */
 		appendStringInfo(wrappedSequenceDef,
 						 WORKER_APPLY_SEQUENCE_COMMAND,
-						 escapedSequenceDef);
+						 escapedSequenceDef,
+						 quote_literal_cstr(typeName));
 
 		appendStringInfo(sequenceGrantStmt,
 						 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
@@ -966,78 +1091,18 @@ char *
 CreateSchemaDDLCommand(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
-	StringInfo schemaNameDef = NULL;
-	const char *ownerName = NULL;
-	const char *quotedSchemaName = NULL;
 
 	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{
 		return NULL;
 	}
 
-	schemaNameDef = makeStringInfo();
-	quotedSchemaName = quote_identifier(schemaName);
-	ownerName = quote_identifier(SchemaOwnerName(schemaId));
+	StringInfo schemaNameDef = makeStringInfo();
+	const char *quotedSchemaName = quote_identifier(schemaName);
+	const char *ownerName = quote_identifier(SchemaOwnerName(schemaId));
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, quotedSchemaName, ownerName);
 
 	return schemaNameDef->data;
-}
-
-
-/*
- * EnsureSupportedSequenceColumnType looks at the column which depends on this sequence
- * (which it Assert's exists) and makes sure its type is suitable for use in a disributed
- * manner.
- *
- * Any column which depends on a sequence (and will therefore be replicated) but which is
- * not a bigserial cannot be used for an mx table, because there aren't enough values to
- * ensure that generated numbers are globally unique.
- */
-static void
-EnsureSupportedSequenceColumnType(Oid sequenceOid)
-{
-	Oid tableId = InvalidOid;
-	Oid columnType = InvalidOid;
-	int32 columnId = 0;
-	bool shouldSyncMetadata = false;
-	bool hasMetadataWorkers = HasMetadataWorkers();
-
-	/* call sequenceIsOwned in order to get the tableId and columnId */
-	bool sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_AUTO, &tableId,
-										 &columnId);
-	if (!sequenceOwned)
-	{
-		sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_INTERNAL, &tableId,
-										&columnId);
-	}
-
-	Assert(sequenceOwned);
-
-	shouldSyncMetadata = ShouldSyncTableMetadata(tableId);
-
-	columnType = TypeOfColumn(tableId, (int16) columnId);
-
-	if (columnType != INT8OID && shouldSyncMetadata && hasMetadataWorkers)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create an mx table with a serial or smallserial "
-							   "column "),
-						errdetail("Only bigserial is supported in mx tables.")));
-	}
-}
-
-
-/*
- * TypeOfColumn returns the Oid of the type of the provided column of the provided table.
- */
-static Oid
-TypeOfColumn(Oid tableId, int16 columnId)
-{
-	Relation tableRelation = relation_open(tableId, NoLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(tableRelation);
-	Form_pg_attribute attrForm = TupleDescAttr(tupleDescriptor, columnId - 1);
-	relation_close(tableRelation, NoLock);
-	return attrForm->atttypid;
 }
 
 
@@ -1065,11 +1130,9 @@ TruncateTriggerCreateCommand(Oid relationId)
 static char *
 SchemaOwnerName(Oid objectId)
 {
-	HeapTuple tuple = NULL;
 	Oid ownerId = InvalidOid;
-	char *ownerName = NULL;
 
-	tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(objectId));
+	HeapTuple tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(objectId));
 	if (HeapTupleIsValid(tuple))
 	{
 		ownerId = ((Form_pg_namespace) GETSTRUCT(tuple))->nspowner;
@@ -1079,7 +1142,7 @@ SchemaOwnerName(Oid objectId)
 		ownerId = GetUserId();
 	}
 
-	ownerName = GetUserNameFromId(ownerId, false);
+	char *ownerName = GetUserNameFromId(ownerId, false);
 
 	ReleaseSysCache(tuple);
 
@@ -1095,7 +1158,7 @@ SchemaOwnerName(Oid objectId)
 static bool
 HasMetadataWorkers(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerNodeCell = NULL;
 
 	foreach(workerNodeCell, workerNodeList)
@@ -1125,14 +1188,14 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	ListCell *commandCell = NULL;
 
 	/* prevent recursive propagation */
-	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	foreach(commandCell, commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
 
-		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+		SendCommandToWorkersWithMetadata(command);
 	}
 }
 
@@ -1158,7 +1221,6 @@ DetachPartitionCommandList(void)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		List *partitionList = NIL;
 		ListCell *partitionCell = NULL;
 
 		if (!PartitionedTable(cacheEntry->relationId))
@@ -1166,7 +1228,7 @@ DetachPartitionCommandList(void)
 			continue;
 		}
 
-		partitionList = PartitionList(cacheEntry->relationId);
+		List *partitionList = PartitionList(cacheEntry->relationId);
 		foreach(partitionCell, partitionList)
 		{
 			Oid partitionRelationId = lfirst_oid(partitionCell);
@@ -1188,10 +1250,62 @@ DetachPartitionCommandList(void)
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling
-	 * DDL propagation to swtich back to original state.
+	 * DDL propagation to switch back to original state.
 	 */
 	detachPartitionCommandList = lappend(detachPartitionCommandList,
 										 ENABLE_DDL_PROPAGATION);
 
 	return detachPartitionCommandList;
+}
+
+
+/*
+ * SyncMetadataToNodes tries recreating the metadata snapshot in the
+ * metadata workers that are out of sync. Returns the result of
+ * synchronization.
+ */
+MetadataSyncResult
+SyncMetadataToNodes(void)
+{
+	ListCell *workerCell = NULL;
+	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
+
+	if (!IsCoordinator())
+	{
+		return METADATA_SYNC_SUCCESS;
+	}
+
+	/*
+	 * Request a RowExclusiveLock so we don't run concurrently with other
+	 * functions updating pg_dist_node, but allow concurrency with functions
+	 * which are just reading from pg_dist_node.
+	 */
+	if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
+	{
+		return METADATA_SYNC_FAILED_LOCK;
+	}
+
+	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
+
+	foreach(workerCell, workerList)
+	{
+		WorkerNode *workerNode = lfirst(workerCell);
+
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
+		{
+			bool raiseInterrupts = false;
+
+			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
+			{
+				result = METADATA_SYNC_FAILED_SYNC;
+			}
+			else
+			{
+				MarkNodeMetadataSynced(workerNode->workerName,
+									   workerNode->workerPort, true);
+			}
+		}
+	}
+
+	return result;
 }

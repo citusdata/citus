@@ -41,11 +41,12 @@
  * Finally, the union of the shards found by each pruning instance is
  * returned.
  *
- * Copyright (c) 2014-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "fmgr.h"
 
 #include "distributed/shard_pruning.h"
 
@@ -59,6 +60,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
@@ -138,6 +140,16 @@ typedef struct PendingPruningInstance
 	Node *continueAt;
 } PendingPruningInstance;
 
+#if PG_VERSION_NUM >= 120000
+typedef union \
+{ \
+	FunctionCallInfoBaseData fcinfo; \
+	/* ensure enough space for nargs args is available */ \
+	char fcinfo_data[SizeForFunctionCallInfo(2)]; \
+} FunctionCall2InfoData;
+#else
+typedef FunctionCallInfoData FunctionCall2InfoData;
+#endif
 
 /*
  * Data necessary to perform a single PruneShards().
@@ -161,11 +173,11 @@ typedef struct ClauseWalkerContext
 
 	/*
 	 * Information about function calls we need to perform. Re-using the same
-	 * FunctionCallInfoData, instead of using FunctionCall2Coll, is often
+	 * FunctionCall2InfoData, instead of using FunctionCall2Coll, is often
 	 * cheaper.
 	 */
-	FunctionCallInfoData compareValueFunctionCall;
-	FunctionCallInfoData compareIntervalFunctionCall;
+	FunctionCall2InfoData compareValueFunctionCall;
+	FunctionCall2InfoData compareIntervalFunctionCall;
 } ClauseWalkerContext;
 
 static void PrunableExpressions(Node *originalNode, ClauseWalkerContext *context);
@@ -184,9 +196,9 @@ static void AddNewConjuction(ClauseWalkerContext *context, OpExpr *op);
 static PruningInstance * CopyPartialPruningInstance(PruningInstance *sourceInstance);
 static List * ShardArrayToList(ShardInterval **shardArray, int length);
 static List * DeepCopyShardIntervalList(List *originalShardIntervalList);
-static int PerformValueCompare(FunctionCallInfoData *compareFunctionCall, Datum a,
+static int PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a,
 							   Datum b);
-static int PerformCompare(FunctionCallInfoData *compareFunctionCall);
+static int PerformCompare(FunctionCallInfo compareFunctionCall);
 
 static List * PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 					   PruningInstance *prune);
@@ -201,11 +213,11 @@ static bool ExhaustivePruneOne(ShardInterval *curInterval,
 							   PruningInstance *prune);
 static int UpperShardBoundary(Datum partitionColumnValue,
 							  ShardInterval **shardIntervalCache,
-							  int shardCount, FunctionCallInfoData *compareFunction,
+							  int shardCount, FunctionCallInfo compareFunction,
 							  bool includeMin);
 static int LowerShardBoundary(Datum partitionColumnValue,
 							  ShardInterval **shardIntervalCache,
-							  int shardCount, FunctionCallInfoData *compareFunction,
+							  int shardCount, FunctionCallInfo compareFunction,
 							  bool includeMax);
 
 
@@ -261,9 +273,10 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	if (cacheEntry->shardIntervalCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoData(context.compareIntervalFunctionCall,
+		InitFunctionCallInfoData(*(FunctionCallInfo) &
+								 context.compareIntervalFunctionCall,
 								 cacheEntry->shardIntervalCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -274,9 +287,10 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	if (cacheEntry->shardColumnCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoData(context.compareValueFunctionCall,
+		InitFunctionCallInfoData(*(FunctionCallInfo) &
+								 context.compareValueFunctionCall,
 								 cacheEntry->shardColumnCompareFunction,
-								 2, DEFAULT_COLLATION_OID, NULL, NULL);
+								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
 	else
 	{
@@ -294,7 +308,6 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	foreach(pruneCell, context.pruningInstances)
 	{
 		PruningInstance *prune = (PruningInstance *) lfirst(pruneCell);
-		List *pruneOneList;
 
 		/*
 		 * If this is a partial instance, a fully built one has also been
@@ -344,7 +357,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			}
 		}
 
-		pruneOneList = PruneOne(cacheEntry, &context, prune);
+		List *pruneOneList = PruneOne(cacheEntry, &context, prune);
 
 		if (prunedList)
 		{
@@ -449,7 +462,7 @@ PrunableExpressions(Node *node, ClauseWalkerContext *context)
 	 * be pending.
 	 *
 	 * We copy the partial PruningInstance, and continue adding information by
-	 * calling PrunableExpressionsWalker() on the copy, continuing at the the
+	 * calling PrunableExpressionsWalker() on the copy, continuing at the
 	 * node stored in PendingPruningInstance->continueAt.
 	 */
 	while (context->pendingInstances != NIL)
@@ -629,12 +642,9 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 		equal(strippedLeftOpExpression, context->partitionColumn) &&
 		IsA(arrayArgument, Const))
 	{
-		ArrayType *array = NULL;
 		int16 typlen = 0;
 		bool typbyval = false;
 		char typalign = '\0';
-		Oid elementType = 0;
-		ArrayIterator arrayIterator = NULL;
 		Datum arrayElement = 0;
 		Datum inArray = ((Const *) arrayArgument)->constvalue;
 		bool isNull = false;
@@ -645,32 +655,40 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 			return;
 		}
 
-		array = DatumGetArrayTypeP(((Const *) arrayArgument)->constvalue);
+		ArrayType *array = DatumGetArrayTypeP(((Const *) arrayArgument)->constvalue);
 
 		/* get the necessary information from array type to iterate over it */
-		elementType = ARR_ELEMTYPE(array);
+		Oid elementType = ARR_ELEMTYPE(array);
 		get_typlenbyvalalign(elementType,
 							 &typlen,
 							 &typbyval,
 							 &typalign);
 
 		/* Iterate over the righthand array of expression */
-		arrayIterator = array_create_iterator(array, 0, NULL);
+		ArrayIterator arrayIterator = array_create_iterator(array, 0, NULL);
 		while (array_iterate(arrayIterator, &arrayElement, &isNull))
 		{
-			OpExpr *arrayEqualityOp = NULL;
+			if (isNull)
+			{
+				/*
+				 * We can ignore IN (NULL) clauses because a value is never
+				 * equal to NULL.
+				 */
+				continue;
+			}
+
 			Const *constElement = makeConst(elementType, -1,
 											DEFAULT_COLLATION_OID, typlen, arrayElement,
 											isNull, typbyval);
 
 			/* build partcol = arrayelem operator */
-			arrayEqualityOp = makeNode(OpExpr);
+			OpExpr *arrayEqualityOp = makeNode(OpExpr);
 			arrayEqualityOp->opno = arrayOperatorExpression->opno;
 			arrayEqualityOp->opfuncid = arrayOperatorExpression->opfuncid;
 			arrayEqualityOp->inputcollid = arrayOperatorExpression->inputcollid;
 			arrayEqualityOp->opresulttype = get_func_rettype(
 				arrayOperatorExpression->opfuncid);
-			arrayEqualityOp->opcollid = DEFAULT_COLLATION_OID;
+			arrayEqualityOp->opcollid = context->partitionColumn->varcollid;
 			arrayEqualityOp->location = -1;
 			arrayEqualityOp->args = list_make2(strippedLeftOpExpression, constElement);
 
@@ -720,7 +738,6 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 									 Var *partitionColumn, Const *constantClause)
 {
 	PruningInstance *prune = context->currentPruningInstance;
-	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
 	bool matchedOp = false;
 
@@ -742,7 +759,7 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	/* at this point, we'd better be able to pass binary Datums to comparison functions */
 	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
 
-	btreeInterpretationList = get_op_btree_interpretation(opClause->opno);
+	List *btreeInterpretationList = get_op_btree_interpretation(opClause->opno);
 	foreach(btreeInterpretationCell, btreeInterpretationList)
 	{
 		OpBtreeInterpretation *btreeInterpretation =
@@ -753,7 +770,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 			case BTLessStrategyNumber:
 			{
 				if (!prune->lessConsts ||
-					PerformValueCompare(&context->compareValueFunctionCall,
+					PerformValueCompare((FunctionCallInfo) &
+										context->compareValueFunctionCall,
 										constantClause->constvalue,
 										prune->lessConsts->constvalue) < 0)
 				{
@@ -766,7 +784,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 			case BTLessEqualStrategyNumber:
 			{
 				if (!prune->lessEqualConsts ||
-					PerformValueCompare(&context->compareValueFunctionCall,
+					PerformValueCompare((FunctionCallInfo) &
+										context->compareValueFunctionCall,
 										constantClause->constvalue,
 										prune->lessEqualConsts->constvalue) < 0)
 				{
@@ -782,7 +801,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 				{
 					prune->equalConsts = constantClause;
 				}
-				else if (PerformValueCompare(&context->compareValueFunctionCall,
+				else if (PerformValueCompare((FunctionCallInfo) &
+											 context->compareValueFunctionCall,
 											 constantClause->constvalue,
 											 prune->equalConsts->constvalue) != 0)
 				{
@@ -796,7 +816,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 			case BTGreaterEqualStrategyNumber:
 			{
 				if (!prune->greaterEqualConsts ||
-					PerformValueCompare(&context->compareValueFunctionCall,
+					PerformValueCompare((FunctionCallInfo) &
+										context->compareValueFunctionCall,
 										constantClause->constvalue,
 										prune->greaterEqualConsts->constvalue) > 0
 					)
@@ -810,7 +831,8 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 			case BTGreaterStrategyNumber:
 			{
 				if (!prune->greaterConsts ||
-					PerformValueCompare(&context->compareValueFunctionCall,
+					PerformValueCompare((FunctionCallInfo) &
+										context->compareValueFunctionCall,
 										constantClause->constvalue,
 										prune->greaterConsts->constvalue) > 0)
 				{
@@ -905,13 +927,12 @@ AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 							 Var *varClause, Const *constantClause)
 {
 	PruningInstance *prune = context->currentPruningInstance;
-	List *btreeInterpretationList = NULL;
 	ListCell *btreeInterpretationCell = NULL;
 
 	/* be paranoid */
 	Assert(IsBinaryCoercible(constantClause->consttype, INT4OID));
 
-	btreeInterpretationList =
+	List *btreeInterpretationList =
 		get_op_btree_interpretation(opClause->opno);
 	foreach(btreeInterpretationCell, btreeInterpretationList)
 	{
@@ -967,9 +988,8 @@ static List *
 ShardArrayToList(ShardInterval **shardArray, int length)
 {
 	List *shardIntervalList = NIL;
-	int shardIndex;
 
-	for (shardIndex = 0; shardIndex < length; shardIndex++)
+	for (int shardIndex = 0; shardIndex < length; shardIndex++)
 	{
 		ShardInterval *shardInterval =
 			shardArray[shardIndex];
@@ -1049,13 +1069,12 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	 */
 	if (prune->hashedEqualConsts)
 	{
-		int shardIndex = INVALID_SHARD_INDEX;
 		ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
 
 		Assert(context->partitionMethod == DISTRIBUTE_BY_HASH);
 
-		shardIndex = FindShardIntervalIndex(prune->hashedEqualConsts->constvalue,
-											cacheEntry);
+		int shardIndex = FindShardIntervalIndex(prune->hashedEqualConsts->constvalue,
+												cacheEntry);
 
 		if (shardIndex == INVALID_SHARD_INDEX)
 		{
@@ -1133,7 +1152,7 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
  * unexpected NULL returns.
  */
 static int
-PerformCompare(FunctionCallInfoData *compareFunctionCall)
+PerformCompare(FunctionCallInfo compareFunctionCall)
 {
 	Datum result = FunctionCallInvoke(compareFunctionCall);
 
@@ -1151,12 +1170,10 @@ PerformCompare(FunctionCallInfoData *compareFunctionCall)
  * NULL returns.
  */
 static int
-PerformValueCompare(FunctionCallInfoData *compareFunctionCall, Datum a, Datum b)
+PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a, Datum b)
 {
-	compareFunctionCall->arg[0] = a;
-	compareFunctionCall->argnull[0] = false;
-	compareFunctionCall->arg[1] = b;
-	compareFunctionCall->argnull[1] = false;
+	fcSetArg(compareFunctionCall, 0, a);
+	fcSetArg(compareFunctionCall, 1, b);
 
 	return PerformCompare(compareFunctionCall);
 }
@@ -1168,7 +1185,7 @@ PerformValueCompare(FunctionCallInfoData *compareFunctionCall, Datum a, Datum b)
  */
 static int
 LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-				   int shardCount, FunctionCallInfoData *compareFunction, bool includeMax)
+				   int shardCount, FunctionCallInfo compareFunction, bool includeMax)
 {
 	int lowerBoundIndex = 0;
 	int upperBoundIndex = shardCount;
@@ -1176,21 +1193,17 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	Assert(shardCount != 0);
 
 	/* setup partitionColumnValue argument once */
-	compareFunction->arg[0] = partitionColumnValue;
-	compareFunction->argnull[0] = false;
+	fcSetArg(compareFunction, 0, partitionColumnValue);
 
 	while (lowerBoundIndex < upperBoundIndex)
 	{
 		int middleIndex = lowerBoundIndex + ((upperBoundIndex - lowerBoundIndex) / 2);
-		int maxValueComparison = 0;
-		int minValueComparison = 0;
 
 		/* setup minValue as argument */
-		compareFunction->arg[1] = shardIntervalCache[middleIndex]->minValue;
-		compareFunction->argnull[1] = false;
+		fcSetArg(compareFunction, 1, shardIntervalCache[middleIndex]->minValue);
 
 		/* execute cmp(partitionValue, lowerBound) */
-		minValueComparison = PerformCompare(compareFunction);
+		int minValueComparison = PerformCompare(compareFunction);
 
 		/* and evaluate results */
 		if (minValueComparison < 0)
@@ -1201,11 +1214,10 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 		}
 
 		/* setup maxValue as argument */
-		compareFunction->arg[1] = shardIntervalCache[middleIndex]->maxValue;
-		compareFunction->argnull[1] = false;
+		fcSetArg(compareFunction, 1, shardIntervalCache[middleIndex]->maxValue);
 
 		/* execute cmp(partitionValue, upperBound) */
-		maxValueComparison = PerformCompare(compareFunction);
+		int maxValueComparison = PerformCompare(compareFunction);
 
 		if ((maxValueComparison == 0 && !includeMax) ||
 			maxValueComparison > 0)
@@ -1249,7 +1261,7 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
  */
 static int
 UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-				   int shardCount, FunctionCallInfoData *compareFunction, bool includeMin)
+				   int shardCount, FunctionCallInfo compareFunction, bool includeMin)
 {
 	int lowerBoundIndex = 0;
 	int upperBoundIndex = shardCount;
@@ -1257,21 +1269,17 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	Assert(shardCount != 0);
 
 	/* setup partitionColumnValue argument once */
-	compareFunction->arg[0] = partitionColumnValue;
-	compareFunction->argnull[0] = false;
+	fcSetArg(compareFunction, 0, partitionColumnValue);
 
 	while (lowerBoundIndex < upperBoundIndex)
 	{
 		int middleIndex = lowerBoundIndex + ((upperBoundIndex - lowerBoundIndex) / 2);
-		int maxValueComparison = 0;
-		int minValueComparison = 0;
 
 		/* setup minValue as argument */
-		compareFunction->arg[1] = shardIntervalCache[middleIndex]->minValue;
-		compareFunction->argnull[1] = false;
+		fcSetArg(compareFunction, 1, shardIntervalCache[middleIndex]->minValue);
 
 		/* execute cmp(partitionValue, lowerBound) */
-		minValueComparison = PerformCompare(compareFunction);
+		int minValueComparison = PerformCompare(compareFunction);
 
 		/* and evaluate results */
 		if ((minValueComparison == 0 && !includeMin) ||
@@ -1283,11 +1291,10 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 		}
 
 		/* setup maxValue as argument */
-		compareFunction->arg[1] = shardIntervalCache[middleIndex]->maxValue;
-		compareFunction->argnull[1] = false;
+		fcSetArg(compareFunction, 1, shardIntervalCache[middleIndex]->maxValue);
 
 		/* execute cmp(partitionValue, upperBound) */
-		maxValueComparison = PerformCompare(compareFunction);
+		int maxValueComparison = PerformCompare(compareFunction);
 
 		if (maxValueComparison > 0)
 		{
@@ -1344,8 +1351,8 @@ PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *contex
 	bool upperBoundInclusive = false;
 	int lowerBoundIdx = -1;
 	int upperBoundIdx = -1;
-	int curIdx = 0;
-	FunctionCallInfo compareFunctionCall = &context->compareIntervalFunctionCall;
+	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) &
+										   context->compareIntervalFunctionCall;
 
 	if (prune->greaterEqualConsts)
 	{
@@ -1430,7 +1437,7 @@ PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *contex
 	/*
 	 * Build list of all shards that are in the range of shards (possibly 0).
 	 */
-	for (curIdx = lowerBoundIdx; curIdx <= upperBoundIdx; curIdx++)
+	for (int curIdx = lowerBoundIdx; curIdx <= upperBoundIdx; curIdx++)
 	{
 		remainingShardList = lappend(remainingShardList,
 									 sortedShardIntervalArray[curIdx]);
@@ -1451,9 +1458,8 @@ ExhaustivePrune(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	List *remainingShardList = NIL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
-	int curIdx = 0;
 
-	for (curIdx = 0; curIdx < shardCount; curIdx++)
+	for (int curIdx = 0; curIdx < shardCount; curIdx++)
 	{
 		ShardInterval *curInterval = sortedShardIntervalArray[curIdx];
 
@@ -1476,7 +1482,8 @@ ExhaustivePruneOne(ShardInterval *curInterval,
 				   ClauseWalkerContext *context,
 				   PruningInstance *prune)
 {
-	FunctionCallInfo compareFunctionCall = &context->compareIntervalFunctionCall;
+	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) &
+										   context->compareIntervalFunctionCall;
 	Datum compareWith = 0;
 
 	/* NULL boundaries can't be compared to */

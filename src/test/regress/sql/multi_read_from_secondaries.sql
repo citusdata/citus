@@ -19,7 +19,7 @@ INSERT INTO dest_table (a, b) VALUES (2, 1);
 INSERT INTO source_table (a, b) VALUES (10, 10);
 
 -- simluate actually having secondary nodes
-SELECT * FROM pg_dist_node;
+SELECT nodeid, groupid, nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node;
 UPDATE pg_dist_node SET noderole = 'secondary';
 
 \c "dbname=regression options='-c\ citus.use_secondary_nodes=always'"
@@ -40,12 +40,12 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT dest_table.a 
-	     FROM 
-	     	dest_table, source_table 
-	     WHERE 
-	     	source_table.a = dest_table.a AND 
+	    SELECT
+	    	DISTINCT dest_table.a
+	     FROM
+	     	dest_table, source_table
+	     WHERE
+	     	source_table.a = dest_table.a AND
 	     dest_table.b IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC LIMIT 5
      ) as foo ORDER BY 1;

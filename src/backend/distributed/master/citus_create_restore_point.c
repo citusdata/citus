@@ -4,7 +4,7 @@
  *
  * UDF for creating a consistent restore point across all nodes.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -30,7 +30,7 @@
 
 
 /* local functions forward declarations */
-static List * OpenConnectionsToAllNodes(void);
+static List * OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode);
 static void BlockDistributedTransactions(void);
 static void CreateRemoteRestorePoints(char *restoreName, List *connectionList);
 
@@ -49,9 +49,6 @@ Datum
 citus_create_restore_point(PG_FUNCTION_ARGS)
 {
 	text *restoreNameText = PG_GETARG_TEXT_P(0);
-	char *restoreNameString = NULL;
-	XLogRecPtr localRestorePoint = InvalidXLogRecPtr;
-	List *connectionList = NIL;
 
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
@@ -74,7 +71,7 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
 						 "start.")));
 	}
 
-	restoreNameString = text_to_cstring(restoreNameText);
+	char *restoreNameString = text_to_cstring(restoreNameText);
 	if (strlen(restoreNameString) >= MAXFNAMELEN)
 	{
 		ereport(ERROR,
@@ -83,8 +80,11 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
 						MAXFNAMELEN - 1)));
 	}
 
-	/* establish connections to all nodes before taking any locks */
-	connectionList = OpenConnectionsToAllNodes();
+	/*
+	 * establish connections to all nodes before taking any locks
+	 * ShareLock prevents new nodes being added, rendering connectionList incomplete
+	 */
+	List *connectionList = OpenConnectionsToAllWorkerNodes(ShareLock);
 
 	/*
 	 * Send a BEGIN to bust through pgbouncer. We won't actually commit since
@@ -97,7 +97,7 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
 	BlockDistributedTransactions();
 
 	/* do local restore point first to bail out early if something goes wrong */
-	localRestorePoint = XLogRestorePoint(restoreNameString);
+	XLogRecPtr localRestorePoint = XLogRestorePoint(restoreNameString);
 
 	/* run pg_create_restore_point on all nodes */
 	CreateRemoteRestorePoints(restoreNameString, connectionList);
@@ -111,22 +111,21 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
  * of connections.
  */
 static List *
-OpenConnectionsToAllNodes(void)
+OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 {
 	List *connectionList = NIL;
-	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-	workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
 
 	foreach(workerNodeCell, workerNodeList)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		MultiConnection *connection = NULL;
 
-		connection = StartNodeConnection(connectionFlags, workerNode->workerName,
-										 workerNode->workerPort);
+		MultiConnection *connection = StartNodeConnection(connectionFlags,
+														  workerNode->workerName,
+														  workerNode->workerPort);
 		MarkRemoteTransactionCritical(connection);
 
 		connectionList = lappend(connectionList, connection);

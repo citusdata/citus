@@ -2,20 +2,20 @@
 -- Hide shard names on MX worker nodes
 --
 
-SET citus.next_shard_id TO 1130000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1130000;
 
 
 -- make sure that the signature of the citus_table_is_visible
 -- and pg_table_is_visible are the same since the logic
 -- relies on that
-SELECT 
-	proname, proisstrict, proretset, provolatile, 
-	proparallel, pronargs, pronargdefaults ,prorettype, 
-	proargtypes, proacl 
-FROM 
-	pg_proc 
-WHERE 
-	proname LIKE '%table_is_visible%' 
+SELECT
+	proname, proisstrict, proretset, provolatile,
+	proparallel, pronargs, pronargdefaults ,prorettype,
+	proargtypes, proacl
+FROM
+	pg_proc
+WHERE
+	proname LIKE '%table_is_visible%'
 ORDER BY 1;
 
 CREATE SCHEMA mx_hide_shard_names;
@@ -36,7 +36,7 @@ SELECT create_distributed_table('test_table', 'id');
 SELECT * FROM citus_shards_on_worker;
 SELECT * FROM citus_shard_indexes_on_worker;
 
--- now show that we see the shards, but not the 
+-- now show that we see the shards, but not the
 -- indexes as there are no indexes
 \c - - - :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
@@ -46,14 +46,14 @@ SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 -- also show that nested calls to pg_table_is_visible works fine
 -- if both of the calls to the pg_table_is_visible haven't been
 -- replaced, we would get 0 rows in the output
-SELECT 
-	pg_table_is_visible((SELECT 
-								"t1"."Name"::regclass 
-						 FROM 
-						 	citus_shards_on_worker as t1 
-						 WHERE 
-						 	NOT pg_table_is_visible("t1"."Name"::regclass) 
-						 LIMIT 
+SELECT
+	pg_table_is_visible((SELECT
+								"t1"."Name"::regclass
+						 FROM
+						 	citus_shards_on_worker as t1
+						 WHERE
+						 	NOT pg_table_is_visible("t1"."Name"::regclass)
+						 LIMIT
 						 	1));
 
 -- now create an index
@@ -61,14 +61,14 @@ SELECT
 SET search_path TO 'mx_hide_shard_names';
 CREATE INDEX test_index ON mx_hide_shard_names.test_table(id);
 
--- now show that we see the shards, and the 
+-- now show that we see the shards, and the
 -- indexes as well
 \c - - - :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
--- we should be able to select from the shards directly if we 
+-- we should be able to select from the shards directly if we
 -- know the name of the tables
 SELECT count(*) FROM test_table_1130000;
 
@@ -95,7 +95,7 @@ SET search_path TO 'mx_hide_shard_names';
 
 -- existing shard ids appended to a local table name
 -- note that we cannot create a distributed or local table
--- with the same name since a table with the same 
+-- with the same name since a table with the same
 -- name already exists :)
 CREATE TABLE test_table_2_1130000(id int, time date);
 

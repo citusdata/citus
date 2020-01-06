@@ -9,6 +9,11 @@ SET citus.next_shard_id TO 10000000;
 
 SELECT citus.mitmproxy('conn.allow()');
 
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
+
 CREATE TABLE ref_table(id int);
 INSERT INTO ref_table VALUES(1),(2),(3);
 
@@ -75,6 +80,8 @@ SET client_min_messages TO NOTICE;
 
 SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE ref_table;
+DROP SCHEMA failure_reference_table;
+CREATE SCHEMA failure_reference_table;
 CREATE TABLE ref_table(id int);
 INSERT INTO ref_table VALUES(1),(2),(3);
 

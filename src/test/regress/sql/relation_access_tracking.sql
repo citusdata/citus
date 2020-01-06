@@ -2,8 +2,6 @@
 ---
 --- tests around access tracking within transaction blocks
 ---
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 10 AS version_ten_or_above;
 
 CREATE SCHEMA access_tracking;
 SET search_path TO 'access_tracking';
@@ -23,16 +21,33 @@ CREATE OR REPLACE FUNCTION relation_ddl_access_mode(relationId Oid)
     LANGUAGE C STABLE STRICT
     AS 'citus', $$relation_ddl_access_mode$$;
 
+CREATE OR REPLACE FUNCTION distributed_relation(relation_name text)
+RETURNS bool AS
+$$
+DECLARE
+	part_method char;
+BEGIN
+		 select partmethod INTO part_method from pg_dist_partition  WHERE logicalrelid = relation_name::regclass;
+         IF part_method = 'h' THEN
+                RETURN true;
+         ELSE
+                RETURN false;
+         END IF;
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION relation_access_mode_to_text(relationShardAccess int)
+
+CREATE OR REPLACE FUNCTION relation_access_mode_to_text(relation_name text, relationShardAccess int)
 RETURNS text AS
 $$
 BEGIN
-	 IF relationShardAccess = 0 THEN
+	 IF relationShardAccess = 0 and distributed_relation(relation_name) THEN
+	 	RETURN 'not_parallel_accessed';
+	 ELSIF relationShardAccess = 0 and NOT distributed_relation(relation_name) THEN
 	 	RETURN 'not_accessed';
 	 ELSIF relationShardAccess = 1 THEN
-	 	RETURN 'sequential_access';
-	 ELSE 
+	 	RETURN 'reference_table_access';
+	 ELSE
 		RETURN 'parallel_access';
 	 END IF;
 END;
@@ -40,12 +55,12 @@ $$ LANGUAGE 'plpgsql' IMMUTABLE;
 
 
 
-CREATE VIEW relation_acesses AS 
-	SELECT table_name, 
-			relation_access_mode_to_text(relation_select_access_mode(table_name::regclass)) as select_access,
-			relation_access_mode_to_text(relation_dml_access_mode(table_name::regclass)) as dml_access,
-			relation_access_mode_to_text(relation_ddl_access_mode(table_name::regclass)) as ddl_access
-	FROM 
+CREATE VIEW relation_acesses AS
+	SELECT table_name,
+			relation_access_mode_to_text(table_name, relation_select_access_mode(table_name::regclass)) as select_access,
+			relation_access_mode_to_text(table_name, relation_dml_access_mode(table_name::regclass)) as dml_access,
+			relation_access_mode_to_text(table_name, relation_ddl_access_mode(table_name::regclass)) as ddl_access
+	FROM
 		((SELECT 'table_' || i as table_name FROM generate_series(1, 7) i) UNION (SELECT 'partitioning_test') UNION (SELECT 'partitioning_test_2009') UNION (SELECT 'partitioning_test_2010')) tables;
 
 SET citus.shard_replication_factor TO 1;
@@ -85,7 +100,7 @@ COMMIT;
 SELECT count(*) FROM table_1;
 SELECT * FROM relation_acesses WHERE table_name = 'table_1';
 
--- a very simple test that first checks sequential 
+-- a very simple test that first checks sequential
 -- and parallel SELECTs,DMLs, and DDLs
 BEGIN;
 	SELECT * FROM relation_acesses WHERE table_name = 'table_1';
@@ -126,12 +141,12 @@ ROLLBACK;
 
 -- a simple join touches single shard per table
 BEGIN;
-	SELECT 
-		count(*) 
-	FROM 
+	SELECT
+		count(*)
+	FROM
 		table_1, table_2, table_3, table_4, table_5
 	WHERE
-		table_1.key = table_2.key AND table_2.key = table_3.key AND 
+		table_1.key = table_2.key AND table_2.key = table_3.key AND
 		table_3.key = table_4.key AND table_4.key = table_5.key AND
 		table_1.key = 1;
 
@@ -140,9 +155,9 @@ ROLLBACK;
 
 -- a simple real-time join touches all shard per table
 BEGIN;
-	SELECT 
-		count(*) 
-	FROM 
+	SELECT
+		count(*)
+	FROM
 		table_1, table_2
 	WHERE
 		table_1.key = table_2.key;
@@ -155,9 +170,9 @@ ROLLBACK;
 BEGIN;
 
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-	SELECT 
-		count(*) 
-	FROM 
+	SELECT
+		count(*)
+	FROM
 		table_1, table_2
 	WHERE
 		table_1.key = table_2.key;
@@ -167,17 +182,17 @@ ROLLBACK;
 
 -- a simple subquery pushdown that touches all shards
 BEGIN;
-	SELECT 
-		count(*) 
-	FROM 
+	SELECT
+		count(*)
+	FROM
 	(
 
-		SELECT 
+		SELECT
 			random()
-		FROM 
+		FROM
 			table_1, table_2, table_3, table_4, table_5
 		WHERE
-			table_1.key = table_2.key AND table_2.key = table_3.key AND 
+			table_1.key = table_2.key AND table_2.key = table_3.key AND
 			table_3.key = table_4.key AND table_4.key = table_5.key
 	) as foo;
 
@@ -185,7 +200,7 @@ BEGIN;
 ROLLBACK;
 
 -- simple multi shard update both sequential and parallel modes
--- note that in multi shard modify mode we always add select 
+-- note that in multi shard modify mode we always add select
 -- access for all the shards accessed. But, sequential mode is OK
 BEGIN;
 	UPDATE table_1 SET value = 15;
@@ -197,8 +212,8 @@ ROLLBACK;
 
 -- now UPDATE/DELETE with subselect pushdown
 BEGIN;
-	UPDATE 
-		table_1 SET value = 15 
+	UPDATE
+		table_1 SET value = 15
 	WHERE key IN (SELECT key FROM table_2 JOIN table_3 USING (key) WHERE table_2.value = 15);
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2', 'table_3')  ORDER BY 1;
 ROLLBACK;
@@ -222,22 +237,22 @@ BEGIN;
 	INSERT INTO table_2 SELECT * FROM table_1 OFFSET 0;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
 ROLLBACK;
-	
+
 
 
 -- recursively planned SELECT
 BEGIN;
-	SELECT 
-		count(*) 
-	FROM 
+	SELECT
+		count(*)
+	FROM
 	(
 
-		SELECT 
+		SELECT
 			random()
-		FROM 
+		FROM
 			table_1, table_2
 		WHERE
-			table_1.key = table_2.key 
+			table_1.key = table_2.key
 			OFFSET 0
 	) as foo;
 
@@ -247,35 +262,35 @@ ROLLBACK;
 -- recursively planned SELECT and coordinator INSERT .. SELECT
 BEGIN;
 	INSERT INTO table_3 (key)
-	SELECT 
+	SELECT
 		*
-	FROM 
+	FROM
 	(
 
-		SELECT 
+		SELECT
 			random() * 1000
-		FROM 
+		FROM
 			table_1, table_2
 		WHERE
-			table_1.key = table_2.key 
+			table_1.key = table_2.key
 			OFFSET 0
 	) as foo;
 
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2', 'table_3')  ORDER BY 1;
 ROLLBACK;
 
--- recursively planned SELECT and coordinator INSERT .. SELECT 
+-- recursively planned SELECT and coordinator INSERT .. SELECT
 -- but modifies single shard, marked as sequential operation
 BEGIN;
 	INSERT INTO table_3 (key)
-	SELECT 
+	SELECT
 		*
-	FROM 
+	FROM
 	(
 
-		SELECT 
+		SELECT
 			random() * 1000
-		FROM 
+		FROM
 			table_1, table_2
 		WHERE
 			table_1.key = table_2.key
@@ -290,16 +305,16 @@ ROLLBACK;
 BEGIN;
 	DELETE FROM table_3 where key IN
 	(
-		SELECT 
+		SELECT
 			*
-		FROM 
+		FROM
 		(
-			SELECT 
+			SELECT
 				table_1.key
-			FROM 
+			FROM
 				table_1, table_2
 			WHERE
-				table_1.key = table_2.key 
+				table_1.key = table_2.key
 				OFFSET 0
 		) as foo
 	) AND value IN (SELECT key FROM table_4);
@@ -341,7 +356,7 @@ BEGIN;
 	UPDATE table_6 SET value = 15;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6');
 
-	ALTER TABLE table_6 ADD COLUMN x INT;	
+	ALTER TABLE table_6 ADD COLUMN x INT;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_6');
 ROLLBACK;
 
@@ -498,15 +513,15 @@ BEGIN;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
 ROLLBACK;
 
--- CTEs with SELECT only should work fine 
+-- CTEs with SELECT only should work fine
 BEGIN;
-	
+
 	WITH cte AS (SELECT count(*) FROM table_1)
 	SELECT * FROM cte;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
 COMMIT;
 
--- CTEs with SELECT only in sequential mode should work fine 
+-- CTEs with SELECT only in sequential mode should work fine
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode = 'sequential';
 
@@ -517,7 +532,7 @@ COMMIT;
 
 -- modifying CTEs should work fine with multi-row inserts, which are by default in sequential
 BEGIN;
-	
+
 	WITH cte_1 AS (INSERT INTO table_1 VALUES (1000,1000), (1001, 1001), (1002, 1002) RETURNING *)
 	SELECT * FROM cte_1 ORDER BY 1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
@@ -525,7 +540,7 @@ ROLLBACK;
 
 -- modifying CTEs should work fine with parallel mode
 BEGIN;
-	
+
 	WITH cte_1 AS (UPDATE table_1 SET value = 15 RETURNING *)
 	SELECT count(*) FROM cte_1 ORDER BY 1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
@@ -533,19 +548,19 @@ ROLLBACK;
 
 -- modifying CTEs should work fine with sequential mode
 BEGIN;
-	
+
 	WITH cte_1 AS (UPDATE table_1 SET value = 15 RETURNING *)
 	SELECT count(*) FROM cte_1 ORDER BY 1;
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_1')  ORDER BY 1;
 ROLLBACK;
 
--- create distributed table with data loading 
+-- create distributed table with data loading
 -- should mark both parallel dml and parallel ddl
 DROP TABLE table_3;
 CREATE TABLE table_3 (key int, value int);
 INSERT INTO table_3 SELECT i, i FROM generate_series(0,100) i;
 BEGIN;
-	SELECT create_distributed_table('table_3', 'key'); 
+	SELECT create_distributed_table('table_3', 'key');
 	SELECT * FROM relation_acesses  WHERE table_name IN ('table_3')  ORDER BY 1;
 COMMIT;
 

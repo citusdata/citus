@@ -40,9 +40,9 @@ WITH users_events AS (
   WHERE
     u_events.user_id = events_table.user_id
   )
-SELECT 
-  * 
-FROM 
+SELECT
+  *
+FROM
   users_events
 ORDER BY
   1, 2
@@ -67,17 +67,17 @@ WITH users_events AS (
               GROUP BY
                   users_table.user_id,
                   events_table.event_type
-            
+
             )
-            SELECT 
+            SELECT
                 uid, event_type, value_2, value_3
             FROM
                (
                 (
-                  SELECT 
+                  SELECT
                     user_id as uid
-                  FROM 
-                    users_events 
+                  FROM
+                    users_events
                 ) users
                 join
                   events_table
@@ -85,45 +85,45 @@ WITH users_events AS (
                   users.uid = events_table.event_type
                 ) a
             )
-          SELECT 
-            * 
-          FROM 
+          SELECT
+            *
+          FROM
             users_events
           ORDER BY
             1, 3, 2, 4
           LIMIT 100
         )
-        SELECT 
-          * 
-        FROM 
+        SELECT
+          *
+        FROM
           users_events
         LIMIT 90
       )
-      SELECT 
-        * 
-      FROM 
+      SELECT
+        *
+      FROM
         users_events
       LIMIT 50
     )
-    SELECT 
+    SELECT
       uid, event_type, value_2, sum(value_3) as sum_3
-    FROM 
+    FROM
       users_events
     GROUP BY
       1, 2, 3
     LIMIT 40
   )
-  SELECT 
+  SELECT
     uid, event_type, sum(value_2) as sum_2, sum(sum_3) as sum_3
-  FROM 
+  FROM
     users_events
   GROUP BY
     1, 2
-  LIMIT 30   
+  LIMIT 30
 )
-SELECT 
+SELECT
   uid, avg(event_type), sum(sum_2), sum(sum_3)
-FROM 
+FROM
   users_events
 GROUP BY
   1;
@@ -182,7 +182,7 @@ WITH users_events AS (
         *
       FROM
         users_events_2_3
-    UNION 
+    UNION
       SELECT
         *
       FROM
@@ -193,8 +193,8 @@ WITH users_events AS (
   FROM
     merged_users
 )
-SELECT 
-  * 
+SELECT
+  *
 FROM
   users_events
 ORDER BY
@@ -255,14 +255,14 @@ WITH users_events AS (
         *
       FROM
         users_events_2_3
-  UNION 
+  UNION
       SELECT
         *
      FROM
        users_events_4
 )
-SELECT 
-  * 
+SELECT
+  *
 FROM
   users_events
 ORDER BY
@@ -321,7 +321,7 @@ cte2 AS (
     )
     SELECT user_id, time, value_1, min(count) FROM cte2_1_1 GROUP BY 1, 2, 3 ORDER BY 1,2,3
   )
-  SELECT * FROM cte2_1 LIMIT 3 OFFSET 2
+  SELECT * FROM cte2_1 ORDER BY 1,2,3,4 LIMIT 3 OFFSET 2
 )
 SELECT * FROM cte2;
 

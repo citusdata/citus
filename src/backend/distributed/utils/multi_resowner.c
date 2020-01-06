@@ -10,7 +10,7 @@
  * probably rather use a hash table using the pointer value of the resource
  * owner as key.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -113,10 +113,8 @@ ResourceOwnerEnlargeJobDirectories(ResourceOwner owner)
 void
 ResourceOwnerRememberJobDirectory(ResourceOwner owner, uint64 jobId)
 {
-	JobDirectoryEntry *entry = NULL;
-
 	Assert(NumRegisteredJobDirectories + 1 <= NumAllocatedJobDirectories);
-	entry = &RegisteredJobDirectories[NumRegisteredJobDirectories];
+	JobDirectoryEntry *entry = &RegisteredJobDirectories[NumRegisteredJobDirectories];
 	entry->owner = owner;
 	entry->jobId = jobId;
 	NumRegisteredJobDirectories++;
@@ -128,9 +126,8 @@ void
 ResourceOwnerForgetJobDirectory(ResourceOwner owner, uint64 jobId)
 {
 	int lastJobIndex = NumRegisteredJobDirectories - 1;
-	int jobIndex = 0;
 
-	for (jobIndex = lastJobIndex; jobIndex >= 0; jobIndex--)
+	for (int jobIndex = lastJobIndex; jobIndex >= 0; jobIndex--)
 	{
 		JobDirectoryEntry *entry = &RegisteredJobDirectories[jobIndex];
 

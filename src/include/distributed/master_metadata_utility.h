@@ -4,7 +4,7 @@
  *	  Type and function declarations used for reading and modifying master
  *    node's metadata.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -14,10 +14,13 @@
 #ifndef MASTER_METADATA_UTILITY_H
 #define MASTER_METADATA_UTILITY_H
 
+#include "postgres.h"
+
 #include "access/heapam.h"
 #include "access/htup.h"
 #include "access/tupdesc.h"
 #include "catalog/indexing.h"
+#include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
@@ -31,27 +34,6 @@
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
-
-#if (PG_VERSION_NUM < 100000)
-static inline void
-CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
-{
-	simple_heap_update(heapRel, otid, tup);
-	CatalogUpdateIndexes(heapRel, tup);
-}
-
-
-static inline Oid
-CatalogTupleInsert(Relation heapRel, HeapTuple tup)
-{
-	Oid oid = simple_heap_insert(heapRel, tup);
-	CatalogUpdateIndexes(heapRel, tup);
-
-	return oid;
-}
-
-
-#endif
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -130,6 +112,8 @@ extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
+extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+														char *sizeQuery);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -145,15 +129,15 @@ extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void UpdateColocationGroupReplicationFactor(uint32 colocationId,
-												   int replicationFactor);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
-extern void EnsureSchemaExistsOnAllNodes(Oid relationId);
-extern void EnsureSchemaExistsOnNode(Oid relationId, char *nodeName,
-									 int32 nodePort);
+
+extern void EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target);
+extern bool ShouldPropagate(void);
+extern bool ShouldPropagateObject(const ObjectAddress *address);
+extern void ReplicateAllDependenciesToNode(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */
 extern char * TableOwner(Oid relationId);
@@ -161,6 +145,7 @@ extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureSequenceOwner(Oid sequenceOid);
+extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool RegularTable(Oid relationId);
@@ -168,6 +153,13 @@ extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
-
+extern int CompareShardPlacementsByWorker(const void *leftElement,
+										  const void *rightElement);
+extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
+															 bool *isNullArray,
+															 Oid intervalTypeId,
+															 int32 intervalTypeMod);
+extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
+								Oid *intervalTypeId, int32 *intervalTypeMod);
 
 #endif   /* MASTER_METADATA_UTILITY_H */

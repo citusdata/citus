@@ -3,7 +3,7 @@
  * hash_helpers.c
  *   Helpers for dynahash.c style hash tables.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -30,5 +30,20 @@ hash_delete_all(HTAB *htab)
 
 		hash_search(htab, entry, HASH_REMOVE, &found);
 		Assert(found);
+	}
+}
+
+
+/*
+ * foreach_htab_cleanup cleans up the hash iteration state after the iteration
+ * is done. This is only needed when break statements are present in the
+ * foreach block.
+ */
+void
+foreach_htab_cleanup(void *var, HASH_SEQ_STATUS *status)
+{
+	if ((var) != NULL)
+	{
+		hash_seq_term(status);
 	}
 }

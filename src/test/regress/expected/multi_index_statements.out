@@ -3,13 +3,6 @@
 --
 -- Check that we can run CREATE INDEX and DROP INDEX statements on distributed
 -- tables.
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS major_version;
- major_version 
----------------
-            11
-(1 row)
-
 --
 -- CREATE TEST TABLES
 --
@@ -204,6 +197,14 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public     | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
 (16 rows)
 
+--
+-- REINDEX
+--
+REINDEX INDEX lineitem_orderkey_index;
+REINDEX TABLE lineitem;
+REINDEX SCHEMA public;
+REINDEX DATABASE regression;
+REINDEX SYSTEM regression;
 --
 -- DROP INDEX
 --

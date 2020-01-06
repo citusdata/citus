@@ -4,7 +4,7 @@
  *
  * Some test UDF for tracking relation accesses within transaction blocks.
  *
- * Copyright (c) 2014-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

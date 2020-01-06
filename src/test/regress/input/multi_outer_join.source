@@ -347,7 +347,7 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
 
@@ -357,7 +357,7 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
 
@@ -367,7 +367,7 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
 
@@ -428,11 +428,11 @@ WHERE
 	r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC, 3 DESC;
 
--- Test joinExpr aliases by performing an outer-join. 
-SELECT 
+-- Test joinExpr aliases by performing an outer-join.
+SELECT
 	t_custkey
-FROM   
-	(multi_outer_join_right r1 
+FROM
+	(multi_outer_join_right r1
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
@@ -476,10 +476,10 @@ SELECT
 FROM
 	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
 
-SELECT 
+SELECT
 	t_custkey
-FROM   
-	(multi_outer_join_right r1 
+FROM
+	(multi_outer_join_right r1
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);

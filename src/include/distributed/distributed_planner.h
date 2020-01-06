@@ -3,18 +3,26 @@
  * distributed_planner.h
  *	  General Citus planner code.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
 #ifndef DISTRIBUTED_PLANNER_H
 #define DISTRIBUTED_PLANNER_H
 
+#include "postgres.h"
+
 #include "nodes/plannodes.h"
+
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
+#endif
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* values used by jobs and tasks which do not require identifiers */
@@ -23,6 +31,11 @@
 #define MULTI_TASK_QUERY_INFO_OFF 0  /* do not log multi-task queries */
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
+
+
+/* level of planner calls */
+extern int PlannerLevel;
+
 
 typedef struct RelationRestrictionContext
 {
@@ -76,6 +89,7 @@ typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
 	JoinRestrictionContext *joinRestrictionContext;
+	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 
@@ -100,7 +114,7 @@ extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
-											Index index, RangeTblEntry *rte);
+											Index restrictionIndex, RangeTblEntry *rte);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,
@@ -108,13 +122,12 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										JoinType jointype,
 										JoinPathExtraData *extra);
 extern bool IsModifyCommand(Query *query);
-extern bool IsUpdateOrDelete(struct DistributedPlan *distributedPlan);
 extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
-extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
+extern int32 BlessRecordExpression(Expr *expr);
 
 #endif /* DISTRIBUTED_PLANNER_H */

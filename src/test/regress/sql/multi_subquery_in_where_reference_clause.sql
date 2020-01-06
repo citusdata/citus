@@ -2,17 +2,17 @@
 -- queries to test the subquery pushdown on reference tables
 
 -- subqueries in WHERE with IN operator
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 IN  
-          (SELECT 
-              value_2 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id
           )
 GROUP BY user_id
@@ -21,36 +21,36 @@ LIMIT 3;
 
 -- subqueries in WHERE with NOT EXISTS operator, should work since
 -- reference table in the inner part of the join
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  NOT EXISTS  
-      (SELECT 
-          value_2 
-       FROM 
-          events_reference_table  
-       WHERE 
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_reference_table
+       WHERE
           users_table.user_id = events_reference_table.user_id
       )
 GROUP BY user_id
 ORDER BY user_id
 LIMIT 3;
 
--- subqueries in WHERE with NOT EXISTS operator, should not work since 
+-- subqueries in WHERE with NOT EXISTS operator, should not work since
 -- there is a correlated subquery in WHERE clause
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_reference_table
-WHERE 
-  NOT EXISTS  
-      (SELECT 
-          value_2 
-       FROM 
-          events_table  
-       WHERE 
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
@@ -77,7 +77,7 @@ LIMIT 3;
 SELECT
   user_id
 FROM
-  (SELECT  5 AS user_id) users_reference_table
+  (SELECT  5 AS user_id UNION ALL SELECT 6) users_reference_table
 WHERE
   NOT EXISTS
       (SELECT
@@ -144,17 +144,17 @@ ORDER BY user_id
 LIMIT 3;
 
 -- subqueries in WHERE with IN operator without equality
-SELECT 
+SELECT
   users_table.user_id, count(*)
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 IN  
-          (SELECT 
-              value_2 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id > events_reference_table.user_id
           )
 GROUP BY users_table.user_id
@@ -324,38 +324,38 @@ SELECT user_id, value_2 FROM users_table WHERE
 ORDER BY 1, 2;
 
 -- non-partition key equality with reference table
- SELECT 
-  user_id, count(*) 
-FROM 
-  users_table 
-WHERE 
-  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 1 AND value_1 <= 2) 
+ SELECT
+  user_id, count(*)
+FROM
+  users_table
+WHERE
+  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 1 AND value_1 <= 2)
  GROUP BY 1 ORDER BY 2 DESC, 1 DESC LIMIT 5;
 
 
 -- non-partition key comparison with reference table
-SELECT 
+SELECT
   user_id, count(*)
-FROM 
+FROM
   events_table as e1
 WHERE
   event_type IN
-            (SELECT 
+            (SELECT
                 event_type
-             FROM 
+             FROM
               events_reference_table as e2
              WHERE
               value_2 = 2 AND
               value_3 > 3 AND
               e1.value_2 > e2.value_2
-            ) 
+            )
 GROUP BY 1
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 
 -- subqueries in both WHERE and FROM clauses
--- should work since reference table is on the 
--- inner part of the join 
+-- should work since reference table is on the
+-- inner part of the join
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
@@ -422,17 +422,17 @@ SET client_min_messages TO DEBUG1;
 
 -- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT
-  count(*) 
-FROM 
-  users_reference_table 
-WHERE user_id 
+  count(*)
+FROM
+  users_reference_table
+WHERE user_id
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
 
 -- recursively planning subqueries in WHERE clause due to recurring table in FROM
 SELECT count(*)
 FROM
-  (SELECT 
+  (SELECT
       user_id, random() FROM users_reference_table) AS vals
     WHERE vals.user_id NOT IN
     (SELECT users_table.value_2
@@ -470,17 +470,17 @@ LIMIT 5;
 SET client_min_messages TO DEFAULT;
 
 -- not supported since GROUP BY references to an upper level query
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               users_table.user_id
@@ -492,17 +492,17 @@ LIMIT 5;
 
 -- similar query with slightly more complex group by
 -- though the error message is a bit confusing
-SELECT 
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_reference_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_reference_table
+           WHERE
               users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               (users_table.user_id * 2)

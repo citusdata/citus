@@ -3,7 +3,7 @@
  * cluster.c
  *    Commands for CLUSTER statement
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -28,11 +28,10 @@ PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand)
 	}
 	else
 	{
-		Oid relationId = InvalidOid;
 		bool missingOK = false;
 
-		relationId = RangeVarGetRelid(clusterStmt->relation, AccessShareLock,
-									  missingOK);
+		Oid relationId = RangeVarGetRelid(clusterStmt->relation, AccessShareLock,
+										  missingOK);
 
 		if (OidIsValid(relationId))
 		{

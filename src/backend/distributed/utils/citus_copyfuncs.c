@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
- * Portions Copyright (c) 2012-2017, Citus Data, Inc.
+ * Portions Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -33,8 +33,8 @@ CitusSetTag(Node *node, int tag)
 
 
 #define DECLARE_FROM_AND_NEW_NODE(nodeTypeName) \
-	nodeTypeName *newnode = (nodeTypeName *) \
-							CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
+	nodeTypeName *newnode = \
+		(nodeTypeName *) CitusSetTag((Node *) target_node, T_ ## nodeTypeName); \
 	nodeTypeName *from = (nodeTypeName *) source_node
 
 /* Copy a simple scalar field (int, float, bool, enum, etc) */
@@ -80,7 +80,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(jobId);
 	COPY_NODE_FIELD(jobQuery);
 	COPY_NODE_FIELD(taskList);
-	COPY_NODE_FIELD(dependedJobList);
+	COPY_NODE_FIELD(dependentJobList);
 	COPY_SCALAR_FIELD(subqueryPushdown);
 	COPY_SCALAR_FIELD(requiresMasterEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
@@ -103,21 +103,20 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	DECLARE_FROM_AND_NEW_NODE(DistributedPlan);
 
 	COPY_SCALAR_FIELD(planId);
-	COPY_SCALAR_FIELD(operation);
+	COPY_SCALAR_FIELD(modLevel);
 	COPY_SCALAR_FIELD(hasReturning);
+	COPY_SCALAR_FIELD(routerExecutable);
 
 	COPY_NODE_FIELD(workerJob);
 	COPY_NODE_FIELD(masterQuery);
-	COPY_SCALAR_FIELD(routerExecutable);
 	COPY_SCALAR_FIELD(queryId);
 	COPY_NODE_FIELD(relationIdList);
-
-	COPY_NODE_FIELD(insertSelectSubquery);
-	COPY_NODE_FIELD(insertTargetList);
 	COPY_SCALAR_FIELD(targetRelationId);
+	COPY_NODE_FIELD(insertSelectQuery);
 	COPY_STRING_FIELD(intermediateResultIdPrefix);
 
 	COPY_NODE_FIELD(subPlanList);
+	COPY_NODE_FIELD(usedSubPlanNodeList);
 
 	COPY_NODE_FIELD(planningError);
 }
@@ -168,7 +167,6 @@ void
 CopyNodeMapMergeJob(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(MapMergeJob);
-	int arrayLength = 0;
 
 	copyJobInfo(&newnode->job, &from->job);
 
@@ -178,7 +176,7 @@ CopyNodeMapMergeJob(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(partitionCount);
 	COPY_SCALAR_FIELD(sortedShardIntervalArrayLength);
 
-	arrayLength = from->sortedShardIntervalArrayLength;
+	int arrayLength = from->sortedShardIntervalArrayLength;
 
 	/* now build & read sortedShardIntervalArray */
 	COPY_NODE_ARRAY(sortedShardIntervalArray, ShardInterval, arrayLength);
@@ -251,18 +249,18 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_STRING_FIELD(queryString);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);
-	COPY_NODE_FIELD(dependedTaskList);
+	COPY_NODE_FIELD(dependentTaskList);
 	COPY_SCALAR_FIELD(partitionId);
 	COPY_SCALAR_FIELD(upstreamTaskId);
 	COPY_NODE_FIELD(shardInterval);
 	COPY_SCALAR_FIELD(assignmentConstrained);
 	COPY_NODE_FIELD(taskExecution);
-	COPY_SCALAR_FIELD(upsertQuery);
 	COPY_SCALAR_FIELD(replicationModel);
 	COPY_SCALAR_FIELD(modifyWithSubquery);
 	COPY_NODE_FIELD(relationShardList);
 	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
+	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 }
 
 
@@ -280,11 +278,9 @@ CopyNodeTaskExecution(COPYFUNC_ARGS)
 	COPY_SCALAR_ARRAY(connectionIdArray, int32, from->nodeCount);
 	COPY_SCALAR_ARRAY(fileDescriptorArray, int32, from->nodeCount);
 
-	COPY_SCALAR_FIELD(connectStartTime);
 	COPY_SCALAR_FIELD(currentNodeIndex);
 	COPY_SCALAR_FIELD(querySourceNodeIndex);
 	COPY_SCALAR_FIELD(failureCount);
-	COPY_SCALAR_FIELD(criticalErrorOccurred);
 }
 
 

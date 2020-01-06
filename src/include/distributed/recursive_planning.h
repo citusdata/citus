@@ -3,7 +3,7 @@
  * recursive_planning.h
  *	  General Citus planner code.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -12,11 +12,15 @@
 
 
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
-
+#endif
 
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
@@ -24,6 +28,6 @@ extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *origina
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 extern Query * BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList,
 									   char *resultId);
-
+extern bool GeneratingSubplans(void);
 
 #endif /* RECURSIVE_PLANNING_H */

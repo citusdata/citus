@@ -4,23 +4,28 @@
  * information that is shared among both the worker and master extended
  * op nodes.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
 
 #include "distributed/extended_op_node_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
+#include "optimizer/restrictinfo.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 
 
-static bool GroupedByDisjointPartitionColumn(List *tableNodeList,
-											 MultiExtendedOp *opNode);
+static bool GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode);
 static bool ExtendedOpNodeContainsRepartitionSubquery(MultiExtendedOp *originalOpNode);
 
 static bool HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
@@ -40,28 +45,19 @@ ExtendedOpNodeProperties
 BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
-	List *tableNodeList = NIL;
-	List *targetList = NIL;
-	Node *havingQual = NULL;
 
-	bool groupedByDisjointPartitionColumn = false;
-	bool repartitionSubquery = false;
-	bool hasNonPartitionColumnDistinctAgg = false;
-	bool pullDistinctColumns = false;
-	bool pushDownWindowFunctions = false;
+	List *tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
+	bool groupedByDisjointPartitionColumn =
+		GroupedByPartitionColumn((MultiNode *) extendedOpNode, extendedOpNode);
 
-	tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
-	groupedByDisjointPartitionColumn = GroupedByDisjointPartitionColumn(tableNodeList,
-																		extendedOpNode);
+	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
 
-	repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
-
-	targetList = extendedOpNode->targetList;
-	havingQual = extendedOpNode->havingQual;
-	hasNonPartitionColumnDistinctAgg =
+	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
+	bool hasNonPartitionColumnDistinctAgg =
 		HasNonPartitionColumnDistinctAgg(targetList, havingQual, tableNodeList);
 
-	pullDistinctColumns =
+	bool pullDistinctColumns =
 		ShouldPullDistinctColumn(repartitionSubquery, groupedByDisjointPartitionColumn,
 								 hasNonPartitionColumnDistinctAgg);
 
@@ -70,7 +66,7 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 	 * using hasWindowFuncs is safe for now. However, this should be fixed
 	 * when we support pull-to-master window functions.
 	 */
-	pushDownWindowFunctions = extendedOpNode->hasWindowFuncs;
+	bool pushDownWindowFunctions = extendedOpNode->hasWindowFuncs;
 
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
@@ -85,42 +81,86 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode)
 
 
 /*
- * GroupedByDisjointPartitionColumn returns true if the query is grouped by the
- * partition column of a table whose shards have disjoint sets of partition values.
+ * GroupedByPartitionColumn returns true if a GROUP BY in the opNode contains
+ * the partition column of the underlying relation, which is determined by
+ * searching the MultiNode tree for a MultiTable and MultiPartition with
+ * a matching column.
+ *
+ * When there is a re-partition join, the search terminates at the
+ * MultiPartition node. Hence we can push down the GROUP BY if the join
+ * column is in the GROUP BY.
  */
 static bool
-GroupedByDisjointPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
+GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode)
 {
-	bool result = false;
-	ListCell *tableNodeCell = NULL;
-
-	foreach(tableNodeCell, tableNodeList)
+	if (node == NULL)
 	{
-		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
-		Oid relationId = tableNode->relationId;
-		char partitionMethod = 0;
+		return false;
+	}
 
-		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
+	if (CitusIsA(node, MultiTable))
+	{
+		MultiTable *tableNode = (MultiTable *) node;
+
+		Oid relationId = tableNode->relationId;
+
+		if (relationId == SUBQUERY_RELATION_ID ||
+			relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
 		{
-			continue;
+			/* ignore subqueries for now */
+			return false;
 		}
 
-		partitionMethod = PartitionMethod(relationId);
+		char partitionMethod = PartitionMethod(relationId);
 		if (partitionMethod != DISTRIBUTE_BY_RANGE &&
 			partitionMethod != DISTRIBUTE_BY_HASH)
 		{
-			continue;
+			/* only range- and hash-distributed tables are strictly partitioned  */
+			return false;
 		}
 
 		if (GroupedByColumn(opNode->groupClauseList, opNode->targetList,
 							tableNode->partitionColumn))
 		{
-			result = true;
-			break;
+			/* this node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (CitusIsA(node, MultiPartition))
+	{
+		MultiPartition *partitionNode = (MultiPartition *) node;
+
+		if (GroupedByColumn(opNode->groupClauseList, opNode->targetList,
+							partitionNode->partitionColumn))
+		{
+			/* this node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (UnaryOperator(node))
+	{
+		MultiNode *childNode = ((MultiUnaryNode *) node)->childNode;
+
+		if (GroupedByPartitionColumn(childNode, opNode))
+		{
+			/* a child node is partitioned by a column in the GROUP BY */
+			return true;
+		}
+	}
+	else if (BinaryOperator(node))
+	{
+		MultiNode *leftChildNode = ((MultiBinaryNode *) node)->leftChildNode;
+		MultiNode *rightChildNode = ((MultiBinaryNode *) node)->rightChildNode;
+
+		if (GroupedByPartitionColumn(leftChildNode, opNode) ||
+			GroupedByPartitionColumn(rightChildNode, opNode))
+		{
+			/* a child node is partitioned by a column in the GROUP BY */
+			return true;
 		}
 	}
 
-	return result;
+	return false;
 }
 
 
@@ -168,12 +208,8 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 	foreach(aggregateCheckCell, aggregateCheckList)
 	{
 		Node *targetNode = lfirst(aggregateCheckCell);
-		Aggref *targetAgg = NULL;
-		List *varList = NIL;
 		ListCell *varCell = NULL;
 		bool isPartitionColumn = false;
-		TargetEntry *firstTargetEntry = NULL;
-		Node *firstTargetExprNode = NULL;
 
 		if (IsA(targetNode, Var))
 		{
@@ -181,7 +217,7 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		}
 
 		Assert(IsA(targetNode, Aggref));
-		targetAgg = (Aggref *) targetNode;
+		Aggref *targetAgg = (Aggref *) targetNode;
 		if (targetAgg->aggdistinct == NIL)
 		{
 			continue;
@@ -196,14 +232,15 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 			return true;
 		}
 
-		firstTargetEntry = linitial_node(TargetEntry, targetAgg->args);
-		firstTargetExprNode = strip_implicit_coercions((Node *) firstTargetEntry->expr);
+		TargetEntry *firstTargetEntry = linitial_node(TargetEntry, targetAgg->args);
+		Node *firstTargetExprNode = strip_implicit_coercions(
+			(Node *) firstTargetEntry->expr);
 		if (!IsA(firstTargetExprNode, Var))
 		{
 			return true;
 		}
 
-		varList = pull_var_clause_default((Node *) targetAgg->args);
+		List *varList = pull_var_clause_default((Node *) targetAgg->args);
 		foreach(varCell, varList)
 		{
 			Node *targetVar = (Node *) lfirst(varCell);

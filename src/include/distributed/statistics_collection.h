@@ -2,7 +2,7 @@
  *
  * statistics_collection.h
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -32,7 +32,6 @@ extern bool EnableStatisticsCollection;
 
 extern void WarnIfSyncDNS(void);
 extern bool CollectBasicUsageStatistics(void);
-extern void CheckForUpdates(void);
 
 #endif /* HAVE_LIBCURL */
 

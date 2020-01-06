@@ -12,7 +12,7 @@
  * can then perform work like deadlock detection, prepared transaction
  * recovery, and cleanup.
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -66,7 +66,6 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 	BackgroundWorkerHandle *handle = NULL;
 	LockAcquireHelperArgs args;
 	BackgroundWorker worker;
-	MemoryContextCallback *workerCleanup = NULL;
 	memset(&args, 0, sizeof(args));
 	memset(&worker, 0, sizeof(worker));
 
@@ -78,9 +77,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 	snprintf(worker.bgw_name, BGW_MAXLEN,
 			 "Citus Lock Acquire Helper: %d/%u",
 			 backendToHelp, MyDatabaseId);
-#if PG_VERSION_NUM >= 110000
 	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
-#endif
 
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
@@ -106,7 +103,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 						errhint("Increasing max_worker_processes might help.")));
 	}
 
-	workerCleanup = palloc0(sizeof(MemoryContextCallback));
+	MemoryContextCallback *workerCleanup = palloc0(sizeof(MemoryContextCallback));
 	workerCleanup->func = EnsureStopLockAcquireHelper;
 	workerCleanup->arg = handle;
 
@@ -158,16 +155,14 @@ lock_acquire_helper_sigterm(SIGNAL_ARGS)
 static bool
 ShouldAcquireLock(long sleepms)
 {
-	int rc;
-
 	/* early escape in case we already got the signal to stop acquiring the lock */
 	if (got_sigterm)
 	{
 		return false;
 	}
 
-	rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-				   sleepms * 1L, PG_WAIT_EXTENSION);
+	int rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					   sleepms * 1L, PG_WAIT_EXTENSION);
 	ResetLatch(MyLatch);
 
 	/* emergency bailout if postmaster has died */
@@ -248,7 +243,6 @@ LockAcquireHelperMain(Datum main_arg)
 	while (ShouldAcquireLock(100))
 	{
 		int row = 0;
-		int spiStatus = 0;
 
 		elog(LOG, "canceling competing backends for backend %d", backendPid);
 
@@ -261,24 +255,23 @@ LockAcquireHelperMain(Datum main_arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pgstat_report_activity(STATE_RUNNING, sql.data);
 
-		spiStatus = SPI_execute_with_args(sql.data, paramCount, paramTypes, paramValues,
-										  NULL, false, 0);
+		int spiStatus = SPI_execute_with_args(sql.data, paramCount, paramTypes,
+											  paramValues,
+											  NULL, false, 0);
 
 		if (spiStatus == SPI_OK_SELECT)
 		{
 			for (row = 0; row < SPI_processed; row++)
 			{
-				int terminatedPid = 0;
-				bool isTerminated = false;
 				bool isnull = false;
 
-				terminatedPid = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
-															SPI_tuptable->tupdesc,
-															1, &isnull));
+				int terminatedPid = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
+																SPI_tuptable->tupdesc,
+																1, &isnull));
 
-				isTerminated = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[0],
-														  SPI_tuptable->tupdesc,
-														  2, &isnull));
+				bool isTerminated = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[0],
+															   SPI_tuptable->tupdesc,
+															   2, &isnull));
 
 				if (isTerminated)
 				{

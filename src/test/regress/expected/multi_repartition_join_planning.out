@@ -7,12 +7,36 @@
 -- executor here, as we cannot run repartition jobs with real time executor.
 SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
- version_above_nine 
---------------------
- t
+create schema repartition_join;
+DROP TABLE IF EXISTS repartition_join.order_line;
+NOTICE:  table "order_line" does not exist, skipping
+CREATE TABLE order_line (
+  ol_w_id int NOT NULL,
+  ol_d_id int NOT NULL,
+  ol_o_id int NOT NULL,
+  ol_number int NOT NULL,
+  ol_i_id int NOT NULL,
+  ol_quantity decimal(2,0) NOT NULL,
+  PRIMARY KEY (ol_w_id,ol_d_id,ol_o_id,ol_number)
+);
+DROP TABLE IF EXISTS repartition_join.stock;
+NOTICE:  table "stock" does not exist, skipping
+CREATE TABLE stock (
+  s_w_id int NOT NULL,
+  s_i_id int NOT NULL,
+  s_quantity decimal(4,0) NOT NULL,
+  PRIMARY KEY (s_w_id,s_i_id)
+);
+SELECT create_distributed_table('order_line','ol_w_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('stock','s_w_id');
+ create_distributed_table 
+--------------------------
+ 
 (1 row)
 
 BEGIN;
@@ -195,6 +219,315 @@ DEBUG:  completed cleanup query for job 5
 -----------+------------+-------
 (0 rows)
 
+-- Check that grouping by primary key allows o_shippriority to be in the target list
+SELECT
+	o_orderkey, o_shippriority, count(*)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey
+ORDER BY
+	o_orderkey;
+DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT "pg_merge_job_0008.task_000003".intermediate_column_8_0 AS o_orderkey, any_value("pg_merge_job_0008.task_000003".intermediate_column_8_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0007.task_000003 "pg_merge_job_0007.task_000003" JOIN pg_merge_job_0008.task_000003 "pg_merge_job_0008.task_000003" ON (("pg_merge_job_0007.task_000003".intermediate_column_7_0 OPERATOR(pg_catalog.=) "pg_merge_job_0008.task_000003".intermediate_column_8_1))) WHERE true GROUP BY "pg_merge_job_0008.task_000003".intermediate_column_8_0"
+DEBUG:  generated sql query for task 6
+DETAIL:  query string: "SELECT "pg_merge_job_0008.task_000006".intermediate_column_8_0 AS o_orderkey, any_value("pg_merge_job_0008.task_000006".intermediate_column_8_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0007.task_000006 "pg_merge_job_0007.task_000006" JOIN pg_merge_job_0008.task_000006 "pg_merge_job_0008.task_000006" ON (("pg_merge_job_0007.task_000006".intermediate_column_7_0 OPERATOR(pg_catalog.=) "pg_merge_job_0008.task_000006".intermediate_column_8_1))) WHERE true GROUP BY "pg_merge_job_0008.task_000006".intermediate_column_8_0"
+DEBUG:  generated sql query for task 9
+DETAIL:  query string: "SELECT "pg_merge_job_0008.task_000009".intermediate_column_8_0 AS o_orderkey, any_value("pg_merge_job_0008.task_000009".intermediate_column_8_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0007.task_000009 "pg_merge_job_0007.task_000009" JOIN pg_merge_job_0008.task_000009 "pg_merge_job_0008.task_000009" ON (("pg_merge_job_0007.task_000009".intermediate_column_7_0 OPERATOR(pg_catalog.=) "pg_merge_job_0008.task_000009".intermediate_column_8_1))) WHERE true GROUP BY "pg_merge_job_0008.task_000009".intermediate_column_8_0"
+DEBUG:  generated sql query for task 12
+DETAIL:  query string: "SELECT "pg_merge_job_0008.task_000012".intermediate_column_8_0 AS o_orderkey, any_value("pg_merge_job_0008.task_000012".intermediate_column_8_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0007.task_000012 "pg_merge_job_0007.task_000012" JOIN pg_merge_job_0008.task_000012 "pg_merge_job_0008.task_000012" ON (("pg_merge_job_0007.task_000012".intermediate_column_7_0 OPERATOR(pg_catalog.=) "pg_merge_job_0008.task_000012".intermediate_column_8_1))) WHERE true GROUP BY "pg_merge_job_0008.task_000012".intermediate_column_8_0"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  completed cleanup query for job 9
+DEBUG:  completed cleanup query for job 9
+DEBUG:  completed cleanup query for job 7
+DEBUG:  completed cleanup query for job 7
+DEBUG:  completed cleanup query for job 8
+DEBUG:  completed cleanup query for job 8
+ o_orderkey | o_shippriority | count 
+------------+----------------+-------
+(0 rows)
+
+-- Check that grouping by primary key allows o_shippriority to be in the target
+-- list
+-- Postgres removes o_shippriority from the group by clause here
+SELECT
+	o_orderkey, o_shippriority, count(*)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey, o_shippriority
+ORDER BY
+	o_orderkey;
+DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT "pg_merge_job_0011.task_000003".intermediate_column_11_0 AS o_orderkey, any_value("pg_merge_job_0011.task_000003".intermediate_column_11_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0010.task_000003 "pg_merge_job_0010.task_000003" JOIN pg_merge_job_0011.task_000003 "pg_merge_job_0011.task_000003" ON (("pg_merge_job_0010.task_000003".intermediate_column_10_0 OPERATOR(pg_catalog.=) "pg_merge_job_0011.task_000003".intermediate_column_11_1))) WHERE true GROUP BY "pg_merge_job_0011.task_000003".intermediate_column_11_0"
+DEBUG:  generated sql query for task 6
+DETAIL:  query string: "SELECT "pg_merge_job_0011.task_000006".intermediate_column_11_0 AS o_orderkey, any_value("pg_merge_job_0011.task_000006".intermediate_column_11_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0010.task_000006 "pg_merge_job_0010.task_000006" JOIN pg_merge_job_0011.task_000006 "pg_merge_job_0011.task_000006" ON (("pg_merge_job_0010.task_000006".intermediate_column_10_0 OPERATOR(pg_catalog.=) "pg_merge_job_0011.task_000006".intermediate_column_11_1))) WHERE true GROUP BY "pg_merge_job_0011.task_000006".intermediate_column_11_0"
+DEBUG:  generated sql query for task 9
+DETAIL:  query string: "SELECT "pg_merge_job_0011.task_000009".intermediate_column_11_0 AS o_orderkey, any_value("pg_merge_job_0011.task_000009".intermediate_column_11_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0010.task_000009 "pg_merge_job_0010.task_000009" JOIN pg_merge_job_0011.task_000009 "pg_merge_job_0011.task_000009" ON (("pg_merge_job_0010.task_000009".intermediate_column_10_0 OPERATOR(pg_catalog.=) "pg_merge_job_0011.task_000009".intermediate_column_11_1))) WHERE true GROUP BY "pg_merge_job_0011.task_000009".intermediate_column_11_0"
+DEBUG:  generated sql query for task 12
+DETAIL:  query string: "SELECT "pg_merge_job_0011.task_000012".intermediate_column_11_0 AS o_orderkey, any_value("pg_merge_job_0011.task_000012".intermediate_column_11_1) AS o_shippriority, count(*) AS count FROM (pg_merge_job_0010.task_000012 "pg_merge_job_0010.task_000012" JOIN pg_merge_job_0011.task_000012 "pg_merge_job_0011.task_000012" ON (("pg_merge_job_0010.task_000012".intermediate_column_10_0 OPERATOR(pg_catalog.=) "pg_merge_job_0011.task_000012".intermediate_column_11_1))) WHERE true GROUP BY "pg_merge_job_0011.task_000012".intermediate_column_11_0"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57637
+DEBUG:  assigned task 12 to node localhost:57638
+DEBUG:  completed cleanup query for job 12
+DEBUG:  completed cleanup query for job 12
+DEBUG:  completed cleanup query for job 10
+DEBUG:  completed cleanup query for job 10
+DEBUG:  completed cleanup query for job 11
+DEBUG:  completed cleanup query for job 11
+ o_orderkey | o_shippriority | count 
+------------+----------------+-------
+(0 rows)
+
+-- Check that calling any_value manually works as well
+SELECT
+	o_orderkey, any_value(o_shippriority)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority
+GROUP BY
+	o_orderkey, o_shippriority
+ORDER BY
+	o_orderkey;
+DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290003 orders WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT "pg_merge_job_0014.task_000003".intermediate_column_14_0 AS o_orderkey, any_value("pg_merge_job_0014.task_000003".intermediate_column_14_1) AS any_value, any_value("pg_merge_job_0014.task_000003".intermediate_column_14_1) AS worker_column_3 FROM (pg_merge_job_0013.task_000003 "pg_merge_job_0013.task_000003" JOIN pg_merge_job_0014.task_000003 "pg_merge_job_0014.task_000003" ON (("pg_merge_job_0013.task_000003".intermediate_column_13_0 OPERATOR(pg_catalog.=) "pg_merge_job_0014.task_000003".intermediate_column_14_1))) WHERE true GROUP BY "pg_merge_job_0014.task_000003".intermediate_column_14_0"
+DEBUG:  generated sql query for task 6
+DETAIL:  query string: "SELECT "pg_merge_job_0014.task_000006".intermediate_column_14_0 AS o_orderkey, any_value("pg_merge_job_0014.task_000006".intermediate_column_14_1) AS any_value, any_value("pg_merge_job_0014.task_000006".intermediate_column_14_1) AS worker_column_3 FROM (pg_merge_job_0013.task_000006 "pg_merge_job_0013.task_000006" JOIN pg_merge_job_0014.task_000006 "pg_merge_job_0014.task_000006" ON (("pg_merge_job_0013.task_000006".intermediate_column_13_0 OPERATOR(pg_catalog.=) "pg_merge_job_0014.task_000006".intermediate_column_14_1))) WHERE true GROUP BY "pg_merge_job_0014.task_000006".intermediate_column_14_0"
+DEBUG:  generated sql query for task 9
+DETAIL:  query string: "SELECT "pg_merge_job_0014.task_000009".intermediate_column_14_0 AS o_orderkey, any_value("pg_merge_job_0014.task_000009".intermediate_column_14_1) AS any_value, any_value("pg_merge_job_0014.task_000009".intermediate_column_14_1) AS worker_column_3 FROM (pg_merge_job_0013.task_000009 "pg_merge_job_0013.task_000009" JOIN pg_merge_job_0014.task_000009 "pg_merge_job_0014.task_000009" ON (("pg_merge_job_0013.task_000009".intermediate_column_13_0 OPERATOR(pg_catalog.=) "pg_merge_job_0014.task_000009".intermediate_column_14_1))) WHERE true GROUP BY "pg_merge_job_0014.task_000009".intermediate_column_14_0"
+DEBUG:  generated sql query for task 12
+DETAIL:  query string: "SELECT "pg_merge_job_0014.task_000012".intermediate_column_14_0 AS o_orderkey, any_value("pg_merge_job_0014.task_000012".intermediate_column_14_1) AS any_value, any_value("pg_merge_job_0014.task_000012".intermediate_column_14_1) AS worker_column_3 FROM (pg_merge_job_0013.task_000012 "pg_merge_job_0013.task_000012" JOIN pg_merge_job_0014.task_000012 "pg_merge_job_0014.task_000012" ON (("pg_merge_job_0013.task_000012".intermediate_column_13_0 OPERATOR(pg_catalog.=) "pg_merge_job_0014.task_000012".intermediate_column_14_1))) WHERE true GROUP BY "pg_merge_job_0014.task_000012".intermediate_column_14_0"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 12
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  completed cleanup query for job 15
+DEBUG:  completed cleanup query for job 15
+DEBUG:  completed cleanup query for job 13
+DEBUG:  completed cleanup query for job 13
+DEBUG:  completed cleanup query for job 14
+DEBUG:  completed cleanup query for job 14
+ o_orderkey | any_value 
+------------+-----------
+(0 rows)
+
+-- Check that grouping by primary key allows s_quantity to be in the having
+-- list
+-- Postgres removes s_quantity from the group by clause here
+select  s_i_id
+    from  stock, order_line
+    where ol_i_id=s_i_id
+    group by s_i_id, s_w_id, s_quantity
+    having   s_quantity > random()
+;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690004 stock WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690005 stock WHERE true"
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690006 stock WHERE true"
+DEBUG:  generated sql query for task 4
+DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690007 stock WHERE true"
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 1 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  generated sql query for task 1
+DETAIL:  query string: "SELECT ol_i_id FROM order_line_690000 order_line WHERE true"
+DEBUG:  generated sql query for task 2
+DETAIL:  query string: "SELECT ol_i_id FROM order_line_690001 order_line WHERE true"
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT ol_i_id FROM order_line_690002 order_line WHERE true"
+DEBUG:  generated sql query for task 4
+DETAIL:  query string: "SELECT ol_i_id FROM order_line_690003 order_line WHERE true"
+DEBUG:  assigned task 1 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 4 to node localhost:57638
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  generated sql query for task 3
+DETAIL:  query string: "SELECT "pg_merge_job_0016.task_000005".intermediate_column_16_0 AS s_i_id, "pg_merge_job_0016.task_000005".intermediate_column_16_1 AS worker_column_2, any_value("pg_merge_job_0016.task_000005".intermediate_column_16_2) AS worker_column_3 FROM (pg_merge_job_0016.task_000005 "pg_merge_job_0016.task_000005" JOIN pg_merge_job_0017.task_000005 "pg_merge_job_0017.task_000005" ON (("pg_merge_job_0017.task_000005".intermediate_column_17_0 OPERATOR(pg_catalog.=) "pg_merge_job_0016.task_000005".intermediate_column_16_0))) WHERE true GROUP BY "pg_merge_job_0016.task_000005".intermediate_column_16_0, "pg_merge_job_0016.task_000005".intermediate_column_16_1 HAVING ((any_value("pg_merge_job_0016.task_000005".intermediate_column_16_2))::double precision OPERATOR(pg_catalog.>) random())"
+DEBUG:  generated sql query for task 6
+DETAIL:  query string: "SELECT "pg_merge_job_0016.task_000010".intermediate_column_16_0 AS s_i_id, "pg_merge_job_0016.task_000010".intermediate_column_16_1 AS worker_column_2, any_value("pg_merge_job_0016.task_000010".intermediate_column_16_2) AS worker_column_3 FROM (pg_merge_job_0016.task_000010 "pg_merge_job_0016.task_000010" JOIN pg_merge_job_0017.task_000010 "pg_merge_job_0017.task_000010" ON (("pg_merge_job_0017.task_000010".intermediate_column_17_0 OPERATOR(pg_catalog.=) "pg_merge_job_0016.task_000010".intermediate_column_16_0))) WHERE true GROUP BY "pg_merge_job_0016.task_000010".intermediate_column_16_0, "pg_merge_job_0016.task_000010".intermediate_column_16_1 HAVING ((any_value("pg_merge_job_0016.task_000010".intermediate_column_16_2))::double precision OPERATOR(pg_catalog.>) random())"
+DEBUG:  generated sql query for task 9
+DETAIL:  query string: "SELECT "pg_merge_job_0016.task_000015".intermediate_column_16_0 AS s_i_id, "pg_merge_job_0016.task_000015".intermediate_column_16_1 AS worker_column_2, any_value("pg_merge_job_0016.task_000015".intermediate_column_16_2) AS worker_column_3 FROM (pg_merge_job_0016.task_000015 "pg_merge_job_0016.task_000015" JOIN pg_merge_job_0017.task_000015 "pg_merge_job_0017.task_000015" ON (("pg_merge_job_0017.task_000015".intermediate_column_17_0 OPERATOR(pg_catalog.=) "pg_merge_job_0016.task_000015".intermediate_column_16_0))) WHERE true GROUP BY "pg_merge_job_0016.task_000015".intermediate_column_16_0, "pg_merge_job_0016.task_000015".intermediate_column_16_1 HAVING ((any_value("pg_merge_job_0016.task_000015".intermediate_column_16_2))::double precision OPERATOR(pg_catalog.>) random())"
+DEBUG:  generated sql query for task 12
+DETAIL:  query string: "SELECT "pg_merge_job_0016.task_000020".intermediate_column_16_0 AS s_i_id, "pg_merge_job_0016.task_000020".intermediate_column_16_1 AS worker_column_2, any_value("pg_merge_job_0016.task_000020".intermediate_column_16_2) AS worker_column_3 FROM (pg_merge_job_0016.task_000020 "pg_merge_job_0016.task_000020" JOIN pg_merge_job_0017.task_000020 "pg_merge_job_0017.task_000020" ON (("pg_merge_job_0017.task_000020".intermediate_column_17_0 OPERATOR(pg_catalog.=) "pg_merge_job_0016.task_000020".intermediate_column_16_0))) WHERE true GROUP BY "pg_merge_job_0016.task_000020".intermediate_column_16_0, "pg_merge_job_0016.task_000020".intermediate_column_16_1 HAVING ((any_value("pg_merge_job_0016.task_000020".intermediate_column_16_2))::double precision OPERATOR(pg_catalog.>) random())"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57637
+DEBUG:  assigned task 12 to node localhost:57638
+DEBUG:  completed cleanup query for job 18
+DEBUG:  completed cleanup query for job 18
+DEBUG:  completed cleanup query for job 16
+DEBUG:  completed cleanup query for job 16
+DEBUG:  completed cleanup query for job 17
+DEBUG:  completed cleanup query for job 17
+ s_i_id 
+--------
+(0 rows)
+
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
 COMMIT;
+drop schema repartition_join;

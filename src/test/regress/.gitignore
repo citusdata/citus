@@ -3,6 +3,10 @@
 
 # Generated subdirectories
 /tmp_check/
+/tmp_upgrade/
+/tmp_citus_upgrade/
+/tmp_citus_tarballs/
+/build/
 /results/
 /log/
 
@@ -15,3 +19,6 @@
 
 # Failure test side effets
 /proxy.output
+
+# python
+*.pyc

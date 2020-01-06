@@ -3,18 +3,21 @@
  * vacuum.c
  *    Commands for vacuuming distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
-#include "c.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "commands/defrem.h"
+#endif
+#include "commands/vacuum.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_router_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
@@ -22,13 +25,28 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
+/*
+ * Subset of VacuumParams we care about
+ */
+typedef struct CitusVacuumParams
+{
+	int options;
+#if PG_VERSION_NUM >= 120000
+	VacOptTernaryValue truncate;
+	VacOptTernaryValue index_cleanup;
+#endif
+} CitusVacuumParams;
+
 
 /* Local functions forward declarations for processing distributed table commands */
-static bool IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList);
-static List * VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList);
-static StringInfo DeparseVacuumStmtPrefix(int vacuumFlags);
+static bool IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList);
+static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
+							 List *vacuumColumnList);
+static StringInfo DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
-
+static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
+static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
+static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 
 /*
  * ProcessVacuumStmt processes vacuum statements that may need propagation to
@@ -44,12 +62,12 @@ void
 ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	int relationIndex = 0;
-	bool distributedVacuumStmt = false;
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
 	ListCell *vacuumRelationCell = NULL;
 	List *relationIdList = NIL;
 	ListCell *relationIdCell = NULL;
-	LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ? AccessExclusiveLock :
+	CitusVacuumParams vacuumParams = VacuumStmtParams(vacuumStmt);
+	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
 	int executedVacuumCount = 0;
 
@@ -60,7 +78,8 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
-	distributedVacuumStmt = IsDistributedVacuumStmt(vacuumStmt, relationIdList);
+	bool distributedVacuumStmt = IsDistributedVacuumStmt(vacuumParams.options,
+														 relationIdList);
 	if (!distributedVacuumStmt)
 	{
 		return;
@@ -72,17 +91,13 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		Oid relationId = lfirst_oid(relationIdCell);
 		if (IsDistributedTable(relationId))
 		{
-			List *vacuumColumnList = NIL;
-			List *taskList = NIL;
-			int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-
 			/*
 			 * VACUUM commands cannot run inside a transaction block, so we use
 			 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
 			 * commands can run inside a transaction block. Notice that we do this
 			 * once even if there are multiple distributed tables to be vacuumed.
 			 */
-			if (executedVacuumCount == 0 && (vacuumStmt->options & VACOPT_VACUUM) != 0)
+			if (executedVacuumCount == 0 && (vacuumParams.options & VACOPT_VACUUM) != 0)
 			{
 				/* save old commit protocol to restore at xact end */
 				Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
@@ -90,11 +105,11 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 				MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 			}
 
-			vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
-			taskList = VacuumTaskList(relationId, vacuumStmt->options, vacuumColumnList);
+			List *vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
+			List *taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
 
 			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(taskList, targetPoolSize, false);
+			ExecuteUtilityTaskListWithoutResults(taskList);
 			executedVacuumCount++;
 		}
 		relationIndex++;
@@ -111,19 +126,18 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
  * false otherwise.
  */
 static bool
-IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
+IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 {
-	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
 	ListCell *relationIdCell = NULL;
 	int distributedRelationCount = 0;
-	int vacuumedRelationCount = 0;
 
 	/*
 	 * No table in the vacuum statement means vacuuming all relations
 	 * which is not supported by citus.
 	 */
-	vacuumedRelationCount = list_length(vacuumRelationIdList);
+	int vacuumedRelationCount = list_length(vacuumRelationIdList);
 	if (vacuumedRelationCount == 0)
 	{
 		/* WARN for unqualified VACUUM commands */
@@ -167,21 +181,19 @@ IsDistributedVacuumStmt(VacuumStmt *vacuumStmt, List *vacuumRelationIdList)
  * a VacuumStmt which targets a distributed relation.
  */
 static List *
-VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
+VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColumnList)
 {
 	List *taskList = NIL;
-	List *shardIntervalList = NIL;
 	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
-	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumOptions);
-	const char *columnNames = NULL;
+	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumParams);
 	const int vacuumPrefixLen = vacuumString->len;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(relationId);
 
-	columnNames = DeparseVacuumColumnNames(vacuumColumnList);
+	const char *columnNames = DeparseVacuumColumnNames(vacuumColumnList);
 
 	/*
 	 * We obtain ShareUpdateExclusiveLock here to not conflict with INSERT's
@@ -191,7 +203,7 @@ VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
 	 */
 	LockRelationOid(relationId, ShareUpdateExclusiveLock);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = LoadShardIntervalList(relationId);
 
 	/* grab shard lock before getting placement list */
 	LockShardListMetadata(shardIntervalList, ShareLock);
@@ -200,7 +212,6 @@ VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		Task *task = NULL;
 
 		char *shardName = pstrdup(tableName);
 		AppendShardIdToName(&shardName, shardInterval->shardId);
@@ -210,12 +221,12 @@ VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
 		appendStringInfoString(vacuumString, shardName);
 		appendStringInfoString(vacuumString, columnNames);
 
-		task = CitusMakeNode(Task);
+		Task *task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = VACUUM_ANALYZE_TASK;
 		task->queryString = pstrdup(vacuumString->data);
-		task->dependedTaskList = NULL;
+		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
@@ -234,18 +245,12 @@ VacuumTaskList(Oid relationId, int vacuumOptions, List *vacuumColumnList)
  * statements.
  */
 static StringInfo
-DeparseVacuumStmtPrefix(int vacuumFlags)
+DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 {
+	int vacuumFlags = vacuumParams.options;
 	StringInfo vacuumPrefix = makeStringInfo();
-	const int unsupportedFlags PG_USED_FOR_ASSERTS_ONLY = ~(
-		VACOPT_ANALYZE |
-		VACOPT_DISABLE_PAGE_SKIPPING |
-		VACOPT_FREEZE |
-		VACOPT_FULL |
-		VACOPT_VERBOSE
-		);
 
-	/* determine actual command and block out its bit */
+	/* determine actual command and block out its bits */
 	if (vacuumFlags & VACOPT_VACUUM)
 	{
 		appendStringInfoString(vacuumPrefix, "VACUUM ");
@@ -253,6 +258,8 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 	}
 	else
 	{
+		Assert((vacuumFlags & VACOPT_ANALYZE) != 0);
+
 		appendStringInfoString(vacuumPrefix, "ANALYZE ");
 		vacuumFlags &= ~VACOPT_ANALYZE;
 
@@ -263,11 +270,13 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 		}
 	}
 
-	/* unsupported flags should have already been rejected */
-	Assert((vacuumFlags & unsupportedFlags) == 0);
-
 	/* if no flags remain, exit early */
-	if (vacuumFlags == 0)
+	if (vacuumFlags == 0
+#if PG_VERSION_NUM >= 120000
+		&& vacuumParams.truncate == VACOPT_TERNARY_DEFAULT &&
+		vacuumParams.index_cleanup == VACOPT_TERNARY_DEFAULT
+#endif
+		)
 	{
 		return vacuumPrefix;
 	}
@@ -299,6 +308,29 @@ DeparseVacuumStmtPrefix(int vacuumFlags)
 	{
 		appendStringInfoString(vacuumPrefix, "VERBOSE,");
 	}
+
+#if PG_VERSION_NUM >= 120000
+	if (vacuumFlags & VACOPT_SKIP_LOCKED)
+	{
+		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
+	}
+
+	if (vacuumParams.truncate != VACOPT_TERNARY_DEFAULT)
+	{
+		appendStringInfoString(vacuumPrefix,
+							   vacuumParams.truncate == VACOPT_TERNARY_ENABLED ?
+							   "TRUNCATE," : "TRUNCATE false,"
+							   );
+	}
+
+	if (vacuumParams.index_cleanup != VACOPT_TERNARY_DEFAULT)
+	{
+		appendStringInfoString(vacuumPrefix,
+							   vacuumParams.index_cleanup == VACOPT_TERNARY_ENABLED ?
+							   "INDEX_CLEANUP," : "INDEX_CLEANUP false,"
+							   );
+	}
+#endif
 
 	vacuumPrefix->data[vacuumPrefix->len - 1] = ')';
 
@@ -340,3 +372,142 @@ DeparseVacuumColumnNames(List *columnNameList)
 
 	return columnNames->data;
 }
+
+
+/*
+ * VacuumColumnList returns list of columns from relation
+ * in the vacuum statement at specified relationIndex.
+ */
+static List *
+VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex)
+{
+	VacuumRelation *vacuumRelation = (VacuumRelation *) list_nth(vacuumStmt->rels,
+																 relationIndex);
+
+	return vacuumRelation->va_cols;
+}
+
+
+/*
+ * ExtractVacuumTargetRels returns list of target
+ * relations from vacuum statement.
+ */
+static List *
+ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
+{
+	List *vacuumList = NIL;
+
+	ListCell *vacuumRelationCell = NULL;
+	foreach(vacuumRelationCell, vacuumStmt->rels)
+	{
+		VacuumRelation *vacuumRelation = (VacuumRelation *) lfirst(vacuumRelationCell);
+		vacuumList = lappend(vacuumList, vacuumRelation->relation);
+	}
+
+	return vacuumList;
+}
+
+
+/*
+ * VacuumStmtParams returns a CitusVacuumParams based on the supplied VacuumStmt.
+ */
+#if PG_VERSION_NUM >= 120000
+
+/*
+ * This is mostly ExecVacuum from Postgres's commands/vacuum.c
+ */
+static CitusVacuumParams
+VacuumStmtParams(VacuumStmt *vacstmt)
+{
+	CitusVacuumParams params;
+	bool verbose = false;
+	bool skip_locked = false;
+	bool analyze = false;
+	bool freeze = false;
+	bool full = false;
+	bool disable_page_skipping = false;
+	ListCell *lc;
+
+	/* Set default value */
+	params.index_cleanup = VACOPT_TERNARY_DEFAULT;
+	params.truncate = VACOPT_TERNARY_DEFAULT;
+
+	/* Parse options list */
+	foreach(lc, vacstmt->options)
+	{
+		DefElem *opt = (DefElem *) lfirst(lc);
+
+		/* Parse common options for VACUUM and ANALYZE */
+		if (strcmp(opt->defname, "verbose") == 0)
+		{
+			verbose = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "skip_locked") == 0)
+		{
+			skip_locked = defGetBoolean(opt);
+		}
+		else if (!vacstmt->is_vacuumcmd)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("unrecognized ANALYZE option \"%s\"", opt->defname)));
+		}
+
+		/* Parse options available on VACUUM */
+		else if (strcmp(opt->defname, "analyze") == 0)
+		{
+			analyze = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "freeze") == 0)
+		{
+			freeze = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "full") == 0)
+		{
+			full = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "disable_page_skipping") == 0)
+		{
+			disable_page_skipping = defGetBoolean(opt);
+		}
+		else if (strcmp(opt->defname, "index_cleanup") == 0)
+		{
+			params.index_cleanup = defGetBoolean(opt) ? VACOPT_TERNARY_ENABLED :
+								   VACOPT_TERNARY_DISABLED;
+		}
+		else if (strcmp(opt->defname, "truncate") == 0)
+		{
+			params.truncate = defGetBoolean(opt) ? VACOPT_TERNARY_ENABLED :
+							  VACOPT_TERNARY_DISABLED;
+		}
+		else
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("unrecognized VACUUM option \"%s\"", opt->defname)
+					));
+		}
+	}
+
+	params.options = (vacstmt->is_vacuumcmd ? VACOPT_VACUUM : VACOPT_ANALYZE) |
+					 (verbose ? VACOPT_VERBOSE : 0) |
+					 (skip_locked ? VACOPT_SKIP_LOCKED : 0) |
+					 (analyze ? VACOPT_ANALYZE : 0) |
+					 (freeze ? VACOPT_FREEZE : 0) |
+					 (full ? VACOPT_FULL : 0) |
+					 (disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
+	return params;
+}
+
+
+#else
+static CitusVacuumParams
+VacuumStmtParams(VacuumStmt *vacuumStmt)
+{
+	CitusVacuumParams params;
+	params.options = vacuumStmt->options;
+	return params;
+}
+
+
+#endif

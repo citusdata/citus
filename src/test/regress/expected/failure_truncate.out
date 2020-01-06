@@ -102,7 +102,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -156,10 +159,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -430,10 +433,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).kill()');
 (1 row)
 
 TRUNCATE reference_table CASCADE;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -632,7 +635,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -686,10 +692,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE truncate_failure.tes
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -1008,7 +1014,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  failure on connection marked as essential: localhost:9060
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -1062,10 +1071,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------

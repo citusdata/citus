@@ -10,8 +10,8 @@ SET citus.shard_count to 4;
 SET citus.shard_replication_factor to 1;
 
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
 
@@ -94,13 +94,13 @@ SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey IN (NULL) OR TRUE;
 
 SELECT count(*) FROM lineitem_hash_part
-	WHERE l_orderkey = ANY (NULL) OR TRUE;	
+	WHERE l_orderkey = ANY (NULL) OR TRUE;
 
 -- Check whether we support IN/ANY in subquery
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem_hash_part);
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderkey FROM lineitem_hash_part);
 
--- Check whether we support IN/ANY in subquery with append and range distributed table 
+-- Check whether we support IN/ANY in subquery with append and range distributed table
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY ('{1,2,3}');
 
@@ -108,7 +108,7 @@ SELECT count(*) FROM lineitem
 	WHERE l_orderkey IN (1,2,3);
 
 SELECT count(*) FROM lineitem
-	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+	WHERE l_orderkey = ANY(NULL) OR TRUE;
 
 SELECT count(*) FROM lineitem_range
 	WHERE l_orderkey = ANY ('{1,2,3}');
@@ -117,7 +117,7 @@ SELECT count(*) FROM lineitem_range
 	WHERE l_orderkey IN (1,2,3);
 
 SELECT count(*) FROM lineitem_range
-	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+	WHERE l_orderkey = ANY(NULL) OR TRUE;
 
 SET client_min_messages TO DEBUG2;
 
@@ -126,7 +126,7 @@ SET client_min_messages TO DEBUG2;
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey < ALL ('{1,2,3}');
 
--- Check that we don't give a spurious hint message when non-partition 
+-- Check that we don't give a spurious hint message when non-partition
 -- columns are used with ANY/IN/ALL
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_totalprice IN (2, 5);

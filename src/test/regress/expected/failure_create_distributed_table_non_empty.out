@@ -97,7 +97,7 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
  run_command_on_workers 
 ------------------------
- (localhost,9060,t,1)
+ (localhost,9060,t,0)
  (localhost,57637,t,1)
 (2 rows)
 
@@ -108,6 +108,15 @@ SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS create_distributed_table_n
  (localhost,57637,t,"DROP SCHEMA")
 (2 rows)
 
+-- this triggers a schema creation which prevents further transactions around dependency propagation
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
@@ -116,10 +125,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -150,13 +159,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-WARNING:  cancel requests are ignored during shard creation
-NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -166,7 +169,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
-     4
+     0
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
@@ -187,10 +190,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -343,6 +346,10 @@ SELECT recover_prepared_transactions();
 (1 row)
 
 DROP TABLE test_table ;
+-- since we want to interrupt the schema creation again we need to drop and recreate
+-- for citus to redistribute the dependency
+DROP SCHEMA create_distributed_table_non_empty_failure;
+CREATE SCHEMA create_distributed_table_non_empty_failure;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 -- cancel as soon as the coordinator sends COMMIT
@@ -461,7 +468,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -546,10 +555,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_apply_shard_ddl_comma
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -572,6 +581,8 @@ SELECT citus.mitmproxy('conn.allow()');
 
 DROP TABLE colocated_table;
 DROP TABLE test_table;
+DROP SCHEMA create_distributed_table_non_empty_failure;
+CREATE SCHEMA create_distributed_table_non_empty_failure;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
 SET citus.multi_shard_commit_protocol TO '1pc';
@@ -633,6 +644,15 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
  (localhost,57637,t,0)
 (2 rows)
 
+-- this triggers a schema creation which prevents further transactions around dependency propagation
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy 
+-----------
+ 
+(1 row)
+
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
  mitmproxy 
@@ -642,7 +662,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 SELECT create_distributed_table('test_table', 'id');
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -673,11 +695,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
- create_distributed_table 
---------------------------
- 
-(1 row)
-
+ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -687,7 +705,7 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
-     4
+     0
 (1 row)
 
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
@@ -708,10 +726,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------
@@ -923,7 +941,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 SELECT create_distributed_table('test_table', 'id', colocate_with => 'colocated_table');
 ERROR:  connection error: localhost:9060
-DETAIL:  connection not open
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count 
 -------

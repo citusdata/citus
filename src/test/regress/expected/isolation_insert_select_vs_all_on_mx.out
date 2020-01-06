@@ -1,0 +1,963 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-colocated-insert-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+15             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-colocated-insert-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+15             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-insert-select-via-coordinator s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+15             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-insert-select-via-coordinator s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+15             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-insert s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-insert: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table VALUES (5, 50), (6, 60)')
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+12             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table')
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-update: 
+        SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=55 WHERE id=5');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-update: 
+        SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=55 WHERE id=5');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-copy: 
+	SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+13             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-copy: 
+	SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+13             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-begin s2-coordinator-drop s1-commit-worker s2-commit s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-coordinator-drop: 
+	DROP TABLE dist_table;
+ <waiting ...>
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-coordinator-drop: <... completed>
+step s2-commit: 
+	COMMIT;
+
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+ERROR:  relation "dist_table" does not exist
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-begin s2-coordinator-drop s1-commit-worker s2-commit s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-coordinator-drop: 
+	DROP TABLE dist_table;
+ <waiting ...>
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-coordinator-drop: <... completed>
+step s2-commit: 
+	COMMIT;
+
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+ERROR:  relation "dist_table" does not exist
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-colocated-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-insert-select-via-coordinator: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM dist_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               

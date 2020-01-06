@@ -3,16 +3,11 @@
 --
 -- Tests which cover task assignment for MapMerge jobs for single range repartition
 -- and dual hash repartition joins. The tests also cover task assignment propagation
--- from a sql task to its depended tasks. Note that we set the executor type to task
+-- from a sql task to its dependent tasks. Note that we set the executor type to task
 -- tracker executor here, as we cannot run repartition jobs with real time executor.
 
 
 SET citus.next_shard_id TO 710000;
-
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
-
 
 BEGIN;
 SET client_min_messages TO DEBUG3;

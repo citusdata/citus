@@ -5,7 +5,7 @@
  * Type and function declarations for determining a left-only join order for a
  * distributed query plan.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -14,6 +14,8 @@
 
 #ifndef MULTI_JOIN_ORDER_H
 #define MULTI_JOIN_ORDER_H
+
+#include "postgres.h"
 
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -33,7 +35,8 @@ typedef enum JoinRuleType
 	SINGLE_HASH_PARTITION_JOIN = 3,
 	SINGLE_RANGE_PARTITION_JOIN = 4,
 	DUAL_PARTITION_JOIN = 5,
-	CARTESIAN_PRODUCT = 6,
+	CARTESIAN_PRODUCT_REFERENCE_JOIN = 6,
+	CARTESIAN_PRODUCT = 7,
 
 	/*
 	 * Add new join rule types above this comment. After adding, you must also
@@ -82,13 +85,18 @@ extern bool EnableSingleHashRepartitioning;
 /* Function declaration for determining table join orders */
 extern List * JoinExprList(FromExpr *fromExpr);
 extern List * JoinOrderList(List *rangeTableEntryList, List *joinClauseList);
+extern bool IsApplicableJoinClause(List *leftTableIdList, uint32 rightTableId,
+								   Node *joinClause);
 extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 									List *joinClauseList);
+extern bool NodeIsEqualsOpExpr(Node *node);
+extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
+									 bool rightIsReferenceTable);
 extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
-extern Var * LeftColumn(OpExpr *joinClause);
-extern Var * RightColumn(OpExpr *joinClause);
+extern Var * LeftColumnOrNULL(OpExpr *joinClause);
+extern Var * RightColumnOrNULL(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * DistPartitionKey(Oid relationId);
 extern char PartitionMethod(Oid relationId);

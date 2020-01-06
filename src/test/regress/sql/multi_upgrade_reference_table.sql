@@ -7,6 +7,13 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1360000;
 
+-- We run this twice, once with coordinator node in pg_dist_node and once without.
+-- Set client_min_messages to WARNING to discard NOTICE messages by
+-- upgrade_to_reference_table() to make the output consistent in both cases.
+-- We check that reference table placements were actually replicated by checking
+-- pg_dist_placement.
+SET client_min_messages TO WARNING;
+
 -- test with not distributed table
 CREATE TABLE upgrade_reference_table_local(column1 int);
 SELECT upgrade_to_reference_table('upgrade_reference_table_local');
@@ -48,17 +55,14 @@ DROP TABLE upgrade_reference_table_referenced;
 CREATE TABLE upgrade_reference_table_unhealthy(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_unhealthy', 'column1');
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_unhealthy'::regclass;
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1360006;
+UPDATE pg_dist_shard_placement SET shardstate = 3
+   WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_unhealthy'::regclass::oid);
 SELECT upgrade_to_reference_table('upgrade_reference_table_unhealthy');
 DROP TABLE upgrade_reference_table_unhealthy;
 
 -- test with table containing composite type
 CREATE TYPE upgrade_test_composite_type AS (key1 text, key2 text);
 
-\c - - - :worker_1_port
-CREATE TYPE upgrade_test_composite_type AS (key1 text, key2 text);
-
-\c - - - :master_port
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE upgrade_reference_table_composite(column1 int, column2 upgrade_test_composite_type);
@@ -66,6 +70,7 @@ SELECT create_distributed_table('upgrade_reference_table_composite', 'column1');
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_composite'::regclass;
 SELECT upgrade_to_reference_table('upgrade_reference_table_composite');
 DROP TABLE upgrade_reference_table_composite;
+DROP TYPE upgrade_test_composite_type;
 
 -- test with reference table
 CREATE TABLE upgrade_reference_table_reference(column1 int);
@@ -106,13 +111,17 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
 
+SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
+
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_append');
 
@@ -139,15 +148,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
-ORDER BY
-    nodeport;
-    
+GROUP BY shardid
+ORDER BY shardid;
+
 DROP TABLE upgrade_reference_table_append;
 
 -- test valid cases, shard exists at one worker
@@ -178,12 +187,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_worker');
 
@@ -210,22 +221,23 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
-ORDER BY
-    nodeport;
-    
+GROUP BY shardid
+ORDER BY shardid;
+
 DROP TABLE upgrade_reference_table_one_worker;
 
 -- test valid cases, shard exists at both workers but one is unhealthy
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE upgrade_reference_table_one_unhealthy(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_one_unhealthy', 'column1');
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1360010 AND nodeport = :worker_1_port;
+UPDATE pg_dist_shard_placement SET shardstate = 3
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass::oid) AND nodeport = :worker_1_port;
 
 -- situation before upgrade_reference_table
 SELECT
@@ -250,14 +262,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
-ORDER BY
-    nodeport;
+    AND shardstate = 1
+GROUP BY shardid
+ORDER BY shardid;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_unhealthy');
 
@@ -284,15 +297,16 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
-ORDER BY
-    nodeport;
-    
+    AND shardstate = 1
+GROUP BY shardid
+ORDER BY shardid;
+
 DROP TABLE upgrade_reference_table_one_unhealthy;
 
 -- test valid cases, shard exists at both workers and both are healthy
@@ -322,14 +336,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
-ORDER BY
-    nodeport;
+GROUP BY shardid
+ORDER BY shardid;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_both_healthy');
 
@@ -356,15 +370,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
-ORDER BY
-    nodeport;
-    
+GROUP BY shardid
+ORDER BY shardid;
+
 DROP TABLE upgrade_reference_table_both_healthy;
 
 -- test valid cases, do it in transaction and ROLLBACK
@@ -396,12 +410,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_rollback');
@@ -429,14 +445,17 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
 
+
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
-     
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
+
 DROP TABLE upgrade_reference_table_transaction_rollback;
 
 -- test valid cases, do it in transaction and COMMIT
@@ -468,12 +487,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
+GROUP BY shardid
+ORDER BY shardid;
 
 BEGIN;
 SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_commit');
@@ -502,14 +523,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
-ORDER BY
-    nodeport;
+GROUP BY shardid
+ORDER BY shardid;
 
 -- verify that shard is replicated to other worker
 \c - - - :worker_2_port
@@ -548,18 +569,19 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
-     
+GROUP BY shardid
+ORDER BY shardid;
+
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 
-     
+
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -583,13 +605,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
+GROUP BY shardid
+ORDER BY shardid;
 
 DROP TABLE upgrade_reference_table_mx;
 
@@ -599,10 +622,10 @@ SET citus.shard_replication_factor TO 2;
 RESET citus.replication_model;
 CREATE TABLE upgrade_reference_table_mx(column1 int);
 SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
-UPDATE pg_dist_shard_placement SET shardstate = 3 
-WHERE nodeport = :worker_2_port AND 
+UPDATE pg_dist_shard_placement SET shardstate = 3
+WHERE nodeport = :worker_2_port AND
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='upgrade_reference_table_mx'::regclass);
-	
+
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- situation before upgrade_reference_table
@@ -628,18 +651,19 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
-     
+GROUP BY shardid
+ORDER BY shardid;
 
+SET client_min_messages TO WARNING;
 SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 
-     
+
 -- situation after upgrade_reference_table
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
@@ -663,14 +687,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
-     
+GROUP BY shardid
+ORDER BY shardid;
+
 -- situation on metadata worker
 \c - - - :worker_1_port
 SELECT
@@ -688,15 +713,16 @@ WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
 
 SELECT
-    shardid, shardstate, shardlength, nodename, nodeport
+    shardid, count(distinct nodeport) = :active_primaries
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass)
-ORDER BY nodeport;
-     
+GROUP BY shardid
+ORDER BY shardid;
+
 \c - - - :master_port
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-
+RESET client_min_messages;

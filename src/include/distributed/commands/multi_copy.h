@@ -4,7 +4,7 @@
  *    Declarations for public functions and variables used in COPY for
  *    distributed tables.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -143,6 +143,8 @@ extern Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  const char *queryString);
 extern void CheckCopyPermissions(CopyStmt *copyStatement);
 extern bool IsCopyResultStmt(CopyStmt *copyStatement);
+extern void ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result);
+extern Datum CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath);
 
 
 #endif /* MULTI_COPY_H */

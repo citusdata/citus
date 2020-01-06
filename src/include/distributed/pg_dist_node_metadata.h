@@ -3,7 +3,7 @@
  * pg_dist_node_metadata.h
  *	  definition of the relation that holds the metadata table (pg_dist_node_metadata).
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

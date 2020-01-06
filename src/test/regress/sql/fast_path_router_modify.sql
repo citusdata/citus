@@ -5,8 +5,8 @@ SET search_path TO fast_path_router_modify;
 SET citus.next_shard_id TO 1840000;
 
 -- all the tests in this file is intended for testing fast-path
--- router planner, so we're explicitly enabling itin this file. 
--- We've bunch of other tests that triggers non-fast-path-router 
+-- router planner, so we're explicitly enabling itin this file.
+-- We've bunch of other tests that triggers non-fast-path-router
 -- planner (note this is already true by default)
 SET citus.enable_fast_path_router_planner TO true;
 
@@ -53,8 +53,14 @@ UPDATE modify_fast_path SET key = 1::float WHERE key = 1;
 UPDATE modify_fast_path SET key = 2 WHERE key = 1;
 UPDATE modify_fast_path SET key = 2::numeric WHERE key = 1;
 
--- returning is not supported via fast-path
+-- returning is supported via fast-path
+INSERT INTO modify_fast_path (key, value_1) VALUES (1,1);
 DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, key;
+DELETE FROM modify_fast_path WHERE key = 2 RETURNING value_1 * 15, value_1::numeric * 16;
+
+-- still, non-immutable functions are not supported
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, random() * key;
 
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
@@ -77,12 +83,12 @@ UPDATE modify_fast_path_reference SET value_1 = value_1 + value_2::int WHERE key
 
 
 -- joins are not supported via fast-path
-UPDATE modify_fast_path 
-	SET value_1 = 1 
-	FROM modify_fast_path_reference 
-	WHERE 
-		modify_fast_path.key = modify_fast_path_reference.key AND 
-		modify_fast_path.key  = 1 AND 
+UPDATE modify_fast_path
+	SET value_1 = 1
+	FROM modify_fast_path_reference
+	WHERE
+		modify_fast_path.key = modify_fast_path_reference.key AND
+		modify_fast_path.key  = 1 AND
 		modify_fast_path_reference.key = 1;
 
 PREPARE p1 (int, int, int) AS

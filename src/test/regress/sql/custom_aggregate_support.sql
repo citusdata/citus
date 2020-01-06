@@ -11,14 +11,6 @@ WHERE name = 'hll'
 
 :create_cmd;
 
-\c - - - :worker_1_port
-:create_cmd;
-
-\c - - - :worker_2_port
-:create_cmd;
-
-\c - - - :master_port
-
 SET citus.shard_count TO 4;
 
 CREATE TABLE raw_table (day date, user_id int);
@@ -27,44 +19,44 @@ CREATE TABLE daily_uniques(day date, unique_users hll);
 SELECT create_distributed_table('raw_table', 'user_id');
 SELECT create_distributed_table('daily_uniques', 'day');
 
-INSERT INTO raw_table 
-  SELECT day, user_id % 19 
+INSERT INTO raw_table
+  SELECT day, user_id % 19
   FROM generate_series('2018-05-24'::timestamp, '2018-06-24'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,100) as g(user_id);
-INSERT INTO raw_table 
-  SELECT day, user_id % 13 
-  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day), 
+INSERT INTO raw_table
+  SELECT day, user_id % 13
+  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,100) as g(user_id);
 
 -- Run hll on raw data
-SELECT hll_cardinality(hll_union_agg(agg)) 
+SELECT hll_cardinality(hll_union_agg(agg))
 FROM (
-  SELECT hll_add_agg(hll_hash_integer(user_id)) AS agg 
+  SELECT hll_add_agg(hll_hash_integer(user_id)) AS agg
   FROM raw_table)a;
 
 -- Aggregate the data into daily_uniques
-INSERT INTO daily_uniques 
-  SELECT day, hll_add_agg(hll_hash_integer(user_id)) 
+INSERT INTO daily_uniques
+  SELECT day, hll_add_agg(hll_hash_integer(user_id))
   FROM raw_table
   GROUP BY 1;
 
 -- Basic hll_cardinality check on aggregated data
-SELECT day, hll_cardinality(unique_users) 
-FROM daily_uniques 
-WHERE day >= '2018-06-20' and day <= '2018-06-30' 
-ORDER BY 2 DESC,1 
+SELECT day, hll_cardinality(unique_users)
+FROM daily_uniques
+WHERE day >= '2018-06-20' and day <= '2018-06-30'
+ORDER BY 2 DESC,1
 LIMIT 10;
 
 -- Union aggregated data for one week
-SELECT hll_cardinality(hll_union_agg(unique_users)) 
-FROM daily_uniques 
+SELECT hll_cardinality(hll_union_agg(unique_users))
+FROM daily_uniques
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date;
 
 
 SELECT EXTRACT(MONTH FROM day) AS month, hll_cardinality(hll_union_agg(unique_users))
 FROM daily_uniques
 WHERE day >= '2018-06-23' AND day <= '2018-07-01'
-GROUP BY 1 
+GROUP BY 1
 ORDER BY 1;
 
 -- These are going to be supported after window function support
@@ -160,51 +152,44 @@ WHERE name = 'topn'
 
 :create_topn;
 
-\c - - - :worker_1_port
-:create_topn;
-
-\c - - - :worker_2_port
-:create_topn;
-
-\c - - - :master_port
 CREATE TABLE customer_reviews (day date, user_id int, review int);
 CREATE TABLE popular_reviewer(day date, reviewers jsonb);
 
 SELECT create_distributed_table('customer_reviews', 'user_id');
 SELECT create_distributed_table('popular_reviewer', 'day');
 
-INSERT INTO customer_reviews 
+INSERT INTO customer_reviews
   SELECT day, user_id % 7, review % 5
   FROM generate_series('2018-05-24'::timestamp, '2018-06-24'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,30) as g(user_id), generate_series(0,30) AS r(review);
-INSERT INTO customer_reviews 
+INSERT INTO customer_reviews
   SELECT day, user_id % 13, review % 3
-  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day), 
+  FROM generate_series('2018-06-10'::timestamp, '2018-07-10'::timestamp, '1 day'::interval) as f(day),
        generate_series(1,30) as g(user_id), generate_series(0,30) AS r(review);
 
 -- Run topn on raw data
 SELECT (topn(agg, 10)).*
 FROM (
-  SELECT topn_add_agg(user_id::text) AS agg 
+  SELECT topn_add_agg(user_id::text) AS agg
   FROM customer_reviews
   )a
 ORDER BY 2 DESC, 1;
 
 -- Aggregate the data into popular_reviewer
-INSERT INTO popular_reviewer 
+INSERT INTO popular_reviewer
   SELECT day, topn_add_agg(user_id::text)
   FROM customer_reviews
   GROUP BY 1;
 
 -- Basic topn check on aggregated data
-SELECT day, (topn(reviewers, 10)).* 
-FROM popular_reviewer 
-WHERE day >= '2018-06-20' and day <= '2018-06-30' 
+SELECT day, (topn(reviewers, 10)).*
+FROM popular_reviewer
+WHERE day >= '2018-06-20' and day <= '2018-06-30'
 ORDER BY 3 DESC, 1, 2
 LIMIT 10;
 
 -- Union aggregated data for one week
-SELECT (topn(agg, 10)).* 
+SELECT (topn(agg, 10)).*
 FROM (
 	SELECT topn_union_agg(reviewers) AS agg
 	FROM popular_reviewer
@@ -212,7 +197,7 @@ FROM (
 	)a
 ORDER BY 2 DESC, 1;
 
-SELECT month, (topn(agg, 5)).* 
+SELECT month, (topn(agg, 5)).*
 FROM (
 	SELECT EXTRACT(MONTH FROM day) AS month, topn_union_agg(reviewers) AS agg
 	FROM popular_reviewer
@@ -224,7 +209,7 @@ ORDER BY 1, 3 DESC, 2;
 
 -- TODO the following queries will be supported after we fix #2265
 -- They work for PG9.6 but not for PG10
-SELECT (topn(topn_union_agg(reviewers), 10)).* 
+SELECT (topn(topn_union_agg(reviewers), 10)).*
 FROM popular_reviewer
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 ORDER BY 2 DESC, 1;

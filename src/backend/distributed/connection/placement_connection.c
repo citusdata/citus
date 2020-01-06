@@ -3,7 +3,7 @@
  * placement_connection.c
  *   Per placement connection handling.
  *
- * Copyright (c) 2016-2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -71,7 +71,7 @@ struct ColocatedPlacementsHashEntry;
  *
  * This stores a list of connections for each placement, because multiple
  * connections to the same placement may exist at the same time. E.g. a
- * real-time executor query may reference the same placement in several
+ * adaptive executor query may reference the same placement in several
  * sub-tasks.
  *
  * We keep track about a connection having executed DML or DDL, since we can
@@ -257,23 +257,6 @@ StartPlacementConnection(uint32 flags, ShardPlacement *placement, const char *us
 
 
 /*
- * GetPlacementListConnection establishes a connection for a set of placement
- * accesses.
- *
- * See StartPlacementListConnection for details.
- */
-MultiConnection *
-GetPlacementListConnection(uint32 flags, List *placementAccessList, const char *userName)
-{
-	MultiConnection *connection = StartPlacementListConnection(flags, placementAccessList,
-															   userName);
-
-	FinishConnectionEstablishment(connection);
-	return connection;
-}
-
-
-/*
  * StartPlacementListConnection returns a connection to a remote node suitable for
  * a placement accesses (SELECT, DML, DDL) or throws an error if no suitable
  * connection can be established if would cause a self-deadlock or consistency
@@ -284,14 +267,15 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 							 const char *userName)
 {
 	char *freeUserName = NULL;
-	MultiConnection *chosenConnection = NULL;
 
 	if (userName == NULL)
 	{
 		userName = freeUserName = CurrentUserName();
 	}
 
-	chosenConnection = FindPlacementListConnection(flags, placementAccessList, userName);
+	MultiConnection *chosenConnection = FindPlacementListConnection(flags,
+																	placementAccessList,
+																	userName);
 	if (chosenConnection == NULL)
 	{
 		/* use the first placement from the list to extract nodename and nodeport */
@@ -308,7 +292,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
 														   userName, NULL);
 
-		if (flags & CONNECTION_PER_PLACEMENT &&
+		if ((flags & CONNECTION_PER_PLACEMENT) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
 			/*
@@ -363,8 +347,6 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
-		ConnectionPlacementHashEntry *placementEntry = NULL;
-		ConnectionReference *placementConnection = NULL;
 
 		if (placement->shardId == INVALID_SHARD_ID)
 		{
@@ -378,8 +360,9 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 			continue;
 		}
 
-		placementEntry = FindOrCreatePlacementEntry(placement);
-		placementConnection = placementEntry->primaryConnection;
+		ConnectionPlacementHashEntry *placementEntry = FindOrCreatePlacementEntry(
+			placement);
+		ConnectionReference *placementConnection = placementEntry->primaryConnection;
 
 		if (placementConnection->connection == connection)
 		{
@@ -452,8 +435,9 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 			placementConnection->hadDML = true;
 		}
 
-		/* record the relation access mapping */
-		AssociatePlacementAccessWithRelation(placement, accessType);
+		/* record the relation access */
+		Oid relationId = RelationIdForShard(placement->shardId);
+		RecordRelationAccessIfReferenceTable(relationId, accessType);
 	}
 }
 
@@ -467,7 +451,6 @@ MultiConnection *
 GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 									   const char *userName)
 {
-	MultiConnection *connection = NULL;
 	char *freeUserName = NULL;
 
 	if (userName == NULL)
@@ -475,8 +458,8 @@ GetConnectionIfPlacementAccessedInXact(int flags, List *placementAccessList,
 		userName = freeUserName = CurrentUserName();
 	}
 
-	connection = FindPlacementListConnection(flags, placementAccessList,
-											 userName);
+	MultiConnection *connection = FindPlacementListConnection(flags, placementAccessList,
+															  userName);
 
 	if (freeUserName != NULL)
 	{
@@ -529,9 +512,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
-		ConnectionPlacementHashEntry *placementEntry = NULL;
-		ColocatedPlacementsHashEntry *colocatedEntry = NULL;
-		ConnectionReference *placementConnection = NULL;
 
 		if (placement->shardId == INVALID_SHARD_ID)
 		{
@@ -544,9 +524,10 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			continue;
 		}
 
-		placementEntry = FindOrCreatePlacementEntry(placement);
-		colocatedEntry = placementEntry->colocatedEntry;
-		placementConnection = placementEntry->primaryConnection;
+		ConnectionPlacementHashEntry *placementEntry = FindOrCreatePlacementEntry(
+			placement);
+		ColocatedPlacementsHashEntry *colocatedEntry = placementEntry->colocatedEntry;
+		ConnectionReference *placementConnection = placementEntry->primaryConnection;
 
 		/* note: the Asserts below are primarily for clarifying the conditions */
 
@@ -626,83 +607,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 				foundModifyingConnection = true;
 			}
 		}
-		else if (placementConnection->hadDDL)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and it executed
-			 * DDL. Any subsequent operation needs to be able to see the results of
-			 * the DDL command and thus cannot proceed if it cannot use the connection.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot establish a new connection for "
-							"placement " UINT64_FORMAT
-							", since DDL has been executed on a connection that is in use",
-							placement->placementId)));
-		}
-		else if (placementConnection->hadDML)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and it executed
-			 * DML. Any subsequent operation needs to be able to see the results of
-			 * the DML command and thus cannot proceed if it cannot use the connection.
-			 *
-			 * Note that this is not meaningfully different from the previous case. We
-			 * just produce a different error message based on whether DDL was or only
-			 * DML was executed.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot establish a new connection for "
-							"placement " UINT64_FORMAT
-							", since DML has been executed on a connection that is in use",
-							placement->placementId)));
-		}
-		else if (accessType == PLACEMENT_ACCESS_DDL)
-		{
-			/*
-			 * There is an existing connection, but we cannot use it and we want to
-			 * execute DDL. The operation on the existing connection might conflict
-			 * with the DDL statement.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-			Assert(!placementConnection->hadDML);
-
-			ereport(ERROR,
-					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-					 errmsg("cannot perform a parallel DDL command because multiple "
-							"placements have been accessed over the same connection")));
-		}
-		else
-		{
-			/*
-			 * The placement has a connection assigned to it, but it cannot be used,
-			 * most likely because it has been claimed exclusively. Fortunately, it
-			 * has only been used for reads and we're not performing a DDL command.
-			 * We can therefore use a different connection for this placement.
-			 */
-
-			Assert(placementConnection != NULL);
-			Assert(!CanUseExistingConnection(flags, userName, placementConnection));
-			Assert(!placementConnection->hadDDL);
-			Assert(!placementConnection->hadDML);
-			Assert(accessType != PLACEMENT_ACCESS_DDL);
-		}
-
-		/* record the relation access mapping */
-		AssociatePlacementAccessWithRelation(placement, accessType);
 	}
 
 	return chosenConnection;
@@ -719,12 +623,13 @@ static ConnectionPlacementHashEntry *
 FindOrCreatePlacementEntry(ShardPlacement *placement)
 {
 	ConnectionPlacementHashKey connKey;
-	ConnectionPlacementHashEntry *placementEntry = NULL;
 	bool found = false;
 
 	connKey.placementId = placement->placementId;
 
-	placementEntry = hash_search(ConnectionPlacementHash, &connKey, HASH_ENTER, &found);
+	ConnectionPlacementHashEntry *placementEntry = hash_search(ConnectionPlacementHash,
+															   &connKey, HASH_ENTER,
+															   &found);
 	if (!found)
 	{
 		/* no connection has been chosen for this placement */
@@ -737,15 +642,15 @@ FindOrCreatePlacementEntry(ShardPlacement *placement)
 			placement->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			ColocatedPlacementsHashKey coloKey;
-			ColocatedPlacementsHashEntry *colocatedEntry = NULL;
 
 			coloKey.nodeId = placement->nodeId;
 			coloKey.colocationGroupId = placement->colocationGroupId;
 			coloKey.representativeValue = placement->representativeValue;
 
 			/* look for a connection assigned to co-located placements */
-			colocatedEntry = hash_search(ColocatedPlacementsHash, &coloKey, HASH_ENTER,
-										 &found);
+			ColocatedPlacementsHashEntry *colocatedEntry = hash_search(
+				ColocatedPlacementsHash, &coloKey, HASH_ENTER,
+				&found);
 			if (!found)
 			{
 				void *conRef = MemoryContextAllocZero(TopTransactionContext,
@@ -876,7 +781,7 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 {
 	dlist_iter placementIter;
 
-	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_INVALID)
+	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
 	{
 		/*
 		 * When StartPlacementListConnection() is called, we set the
@@ -926,12 +831,12 @@ AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 							ShardPlacement *placement)
 {
 	ConnectionShardHashKey shardKey;
-	ConnectionShardHashEntry *shardEntry = NULL;
 	bool found = false;
 	dlist_iter placementIter;
 
 	shardKey.shardId = placement->shardId;
-	shardEntry = hash_search(ConnectionShardHash, &shardKey, HASH_ENTER, &found);
+	ConnectionShardHashEntry *shardEntry = hash_search(ConnectionShardHash, &shardKey,
+													   HASH_ENTER, &found);
 	if (!found)
 	{
 		dlist_init(&shardEntry->placementConnections);
@@ -979,7 +884,7 @@ CloseShardPlacementAssociation(struct MultiConnection *connection)
 
 		/*
 		 * Note that we don't reset ConnectionPlacementHashEntry's
-		 * primaryConnection here, that'd more complicated than it seems
+		 * primaryConnection here, that'd be more complicated than it seems
 		 * worth.  That means we'll error out spuriously if a DML/DDL
 		 * executing connection is closed earlier in a transaction.
 		 */
@@ -1124,7 +1029,6 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		ConnectionPlacementHashEntry *placementEntry =
 			dlist_container(ConnectionPlacementHashEntry, shardNode, placementIter.cur);
 		ConnectionReference *primaryConnection = placementEntry->primaryConnection;
-		MultiConnection *connection = NULL;
 
 		/* we only consider shards that are modified */
 		if (primaryConnection == NULL ||
@@ -1133,7 +1037,7 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 			continue;
 		}
 
-		connection = primaryConnection->connection;
+		MultiConnection *connection = primaryConnection->connection;
 
 		if (!connection || connection->remoteTransaction.transactionFailed)
 		{
@@ -1187,7 +1091,6 @@ void
 InitPlacementConnectionManagement(void)
 {
 	HASHCTL info;
-	uint32 hashFlags = 0;
 
 	/* create (placementId) -> [ConnectionReference] hash */
 	memset(&info, 0, sizeof(info));
@@ -1195,7 +1098,7 @@ InitPlacementConnectionManagement(void)
 	info.entrysize = sizeof(ConnectionPlacementHashEntry);
 	info.hash = tag_hash;
 	info.hcxt = ConnectionContext;
-	hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
 	ConnectionPlacementHash = hash_create("citus connection cache (placementid)",
 										  64, &info, hashFlags);
@@ -1232,9 +1135,8 @@ static uint32
 ColocatedPlacementsHashHash(const void *key, Size keysize)
 {
 	ColocatedPlacementsHashKey *entry = (ColocatedPlacementsHashKey *) key;
-	uint32 hash = 0;
 
-	hash = hash_uint32(entry->nodeId);
+	uint32 hash = hash_uint32(entry->nodeId);
 	hash = hash_combine(hash, hash_uint32(entry->colocationGroupId));
 	hash = hash_combine(hash, hash_uint32(entry->representativeValue));
 
@@ -1258,4 +1160,20 @@ ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize)
 	{
 		return 0;
 	}
+}
+
+
+/*
+ * AnyConnectionAccessedPlacements simply checks the number of entries in
+ * ConnectionPlacementHash. This is useful to detect whether we're in a
+ * distirbuted transaction and already executed at least one command that
+ * accessed to a placement.
+ */
+bool
+AnyConnectionAccessedPlacements(void)
+{
+	/* this is initialized on PG_INIT */
+	Assert(ConnectionPlacementHash != NULL);
+
+	return hash_get_num_entries(ConnectionPlacementHash) > 0;
 }

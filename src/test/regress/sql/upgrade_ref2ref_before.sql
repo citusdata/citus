@@ -1,0 +1,18 @@
+CREATE SCHEMA upgrade_ref2ref;
+SET search_path TO upgrade_ref2ref, public;
+CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
+SELECT create_reference_table('ref_table_1');
+
+CREATE TABLE ref_table_2(id int PRIMARY KEY, value int REFERENCES ref_table_1(id) ON DELETE CASCADE ON UPDATE CASCADE);
+SELECT create_reference_table('ref_table_2');
+
+CREATE TABLE ref_table_3(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
+SELECT create_reference_table('ref_table_3');
+
+CREATE TABLE dist_table(id int PRIMARY KEY, value int REFERENCES ref_table_2(id) ON DELETE CASCADE ON UPDATE CASCADE);
+SELECT create_distributed_table('dist_table', 'id');
+
+INSERT INTO ref_table_1 SELECT c, c FROM generate_series(1, 5) as c;
+INSERT INTO ref_table_2 SELECT * FROM ref_table_1;
+INSERT INTO ref_table_3 SELECT * FROM ref_table_2;
+INSERT INTO dist_table SELECT * FROM ref_table_3;

@@ -5,7 +5,7 @@
  * This file contains functions to test co-location functionality
  * within Citus.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -83,7 +83,6 @@ get_colocated_table_array(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
 
-	ArrayType *colocatedTablesArrayType = NULL;
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	ListCell *colocatedTableCell = NULL;
 	int colocatedTableCount = list_length(colocatedTableList);
@@ -100,8 +99,9 @@ get_colocated_table_array(PG_FUNCTION_ARGS)
 		colocatedTableIndex++;
 	}
 
-	colocatedTablesArrayType = DatumArrayToArrayType(colocatedTablesDatumArray,
-													 colocatedTableCount, arrayTypeId);
+	ArrayType *colocatedTablesArrayType = DatumArrayToArrayType(colocatedTablesDatumArray,
+																colocatedTableCount,
+																arrayTypeId);
 
 	PG_RETURN_ARRAYTYPE_P(colocatedTablesArrayType);
 }

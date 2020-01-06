@@ -11,7 +11,7 @@ SET citus.shard_count to 4;
 
 CREATE TABLE test_table(id int, value_1 int);
 
--- Kill connection before sending query to the worker 
+-- Kill connection before sending query to the worker
 SELECT citus.mitmproxy('conn.kill()');
 SELECT create_distributed_table('test_table','id');
 
@@ -29,6 +29,11 @@ SELECT create_distributed_table('test_table', 'id');
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'failure_create_table'$$);
+
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 
 -- Now, kill the connection while opening transaction on workers.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
@@ -104,10 +109,15 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- drop tables and schema and recreate to start from a non-distributed schema again
 DROP TABLE temp_table;
+DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
+CREATE TABLE test_table(id int, value_1 int);
 
 -- Test inside transaction
--- Kill connection before sending query to the worker 
+-- Kill connection before sending query to the worker
 SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;
@@ -117,6 +127,11 @@ ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
+
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
 
 -- Now, kill the connection while creating transaction on workers in transaction.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
@@ -143,7 +158,10 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- drop tables and schema and recreate to start from a non-distributed schema again
 DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
 CREATE TABLE test_table(id int, value_1 int);
 
 -- Test inside transaction and with 1PC
@@ -171,6 +189,11 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
+-- this is merely used to get the schema creation propagated. Without there are failures
+-- not related to reference tables but schema creation due to dependency creation on workers
+CREATE TYPE schema_proc AS (a int);
+DROP TYPE schema_proc;
+
 -- Now, kill the connection while opening transactions on workers with 1pc. Transaction will be opened due to BEGIN.
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 
@@ -196,14 +219,16 @@ SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
 DROP TABLE test_table;
+DROP SCHEMA failure_create_table;
+CREATE SCHEMA failure_create_table;
 
 -- Test master_create_worker_shards with 2pc
 SET citus.multi_shard_commit_protocol TO "2pc";
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_2', 'id', 'hash');
 
--- Kill connection before sending query to the worker 
-SELECT citus.mitmproxy('conn.kill()');
+-- Kill connection before sending query to the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 SELECT master_create_worker_shards('test_table_2', 4, 2);
 
 SELECT count(*) FROM pg_dist_shard;

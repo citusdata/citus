@@ -3,7 +3,7 @@
  * resource_lock.h
  *	  Locking Infrastructure for Citus.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -35,7 +35,8 @@ typedef enum AdvisoryLocktagClass
 	/* Citus lock types */
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,
-	ADV_LOCKTAG_CLASS_CITUS_JOB = 6
+	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7
 } AdvisoryLocktagClass;
 
 
@@ -63,6 +64,16 @@ typedef enum AdvisoryLocktagClass
 						 (uint32) (jobid), \
 						 ADV_LOCKTAG_CLASS_CITUS_JOB)
 
+/* reuse advisory lock, but with different, unused field 4 (7)
+ * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
+ * are local to each database */
+#define SET_LOCKTAG_REBALANCE_COLOCATION(tag, colocationOrTableId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((colocationOrTableId) >> 32), \
+						 (uint32) (colocationOrTableId), \
+						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
+
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -71,8 +82,8 @@ extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardInterva
 extern void BlockWritesToShardList(List *shardList);
 
 /* Lock shard/relation metadata of the referenced reference table if exists */
-extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE
-															 lock);
+extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId,
+															 LOCKMODE lock);
 
 /* Lock shard data, for DML commands or remote fetches */
 extern void LockShardResource(uint64 shardId, LOCKMODE lockmode);
@@ -89,10 +100,6 @@ extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
-
-/* Lock partitions of partitioned table */
-extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
-extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
 
 /* Lock parent table's colocated shard resource */
 extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);

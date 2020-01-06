@@ -4,7 +4,7 @@
  *	  Type declarations for multi-relational algebra operators, and function
  *	  declarations for building logical plans over distributed relations.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -16,6 +16,7 @@
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodes.h"
@@ -192,6 +193,8 @@ extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsDistributedTableRTE(Node *node);
 extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
+extern bool ContainsReadIntermediateResultArrayFunction(Node *node);
+extern char * FindIntermediateResultIdIfExists(RangeTblEntry *rte);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
 extern MultiNode * GrandChildNode(MultiUnaryNode *multiNode);
@@ -206,16 +209,12 @@ extern List * JoinClauseList(List *whereClauseList);
 extern bool IsJoinClause(Node *clause);
 extern List * SubqueryEntryList(Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfQueryNotSupported(Query *queryTree);
-extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 extern List * WhereClauseList(FromExpr *fromExpr);
 extern List * QualifierList(FromExpr *fromExpr);
 extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);
-extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
-extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
-extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
 extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 extern MultiProject * MultiProjectNode(List *targetEntryList);
 extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);

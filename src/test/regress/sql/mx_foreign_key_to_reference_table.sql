@@ -8,14 +8,13 @@ SET citus.replication_model TO streaming;
 
 -- Setup the view so that we can check if the foreign keys are created properly
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
-SELECT run_command_on_workers($$CREATE TYPE foreign_details AS (name text, relid text, refd_relid text)$$);
 
-CREATE VIEW table_fkeys_in_workers AS 
+CREATE VIEW table_fkeys_in_workers AS
 SELECT
-(json_populate_record(NULL::foreign_details, 
-  json_array_elements_text((run_command_on_workers( $$ 
+(json_populate_record(NULL::foreign_details,
+  json_array_elements_text((run_command_on_workers( $$
     SELECT
-      COALESCE(json_agg(row_to_json(d)), '[]'::json) 
+      COALESCE(json_agg(row_to_json(d)), '[]'::json)
     FROM
       (
         SELECT
@@ -23,7 +22,7 @@ SELECT
           relid::regclass::text,
           refd_relid::regclass::text
         FROM
-          table_fkey_cols 
+          table_fkey_cols
       )
       d $$ )).RESULT::json )::json )).* ;
 

@@ -4,7 +4,7 @@
  * Implements the functions for hiding shards on the Citus MX
  * worker (data) nodes.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 
 #include "postgres.h"
@@ -23,7 +23,6 @@
 /* Config variable managed via guc.c */
 bool OverrideTableVisibility = true;
 
-static bool RelationIsAKnownShard(Oid shardRelationId);
 static bool ReplaceTableVisibleFunctionWalker(Node *inputNode);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
@@ -39,10 +38,11 @@ Datum
 relation_is_a_known_shard(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+	bool onlySearchPath = true;
 
 	CheckCitusVersion(ERROR);
 
-	PG_RETURN_BOOL(RelationIsAKnownShard(relationId));
+	PG_RETURN_BOOL(RelationIsAKnownShard(relationId, onlySearchPath));
 }
 
 
@@ -56,6 +56,7 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	char relKind = '\0';
+	bool onlySearchPath = true;
 
 	CheckCitusVersion(ERROR);
 
@@ -68,7 +69,7 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	if (RelationIsAKnownShard(relationId))
+	if (RelationIsAKnownShard(relationId, onlySearchPath))
 	{
 		/*
 		 * If the input relation is an index we simply replace the
@@ -97,20 +98,16 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 
 /*
  * RelationIsAKnownShard gets a relationId, check whether it's a shard of
- * any distributed table in the current search path.
+ * any distributed table. If onlySearchPath is true, then it searches
+ * the current search path.
  *
  * We can only do that in MX since both the metadata and tables are only
  * present there.
  */
-static bool
-RelationIsAKnownShard(Oid shardRelationId)
+bool
+RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 {
-	int localGroupId = -1;
-	char *shardRelationName = NULL;
-	char *generatedRelationName = NULL;
 	bool missingOk = true;
-	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
 	char relKind = '\0';
 
 	if (!OidIsValid(shardRelationId))
@@ -119,18 +116,32 @@ RelationIsAKnownShard(Oid shardRelationId)
 		return false;
 	}
 
-	localGroupId = GetLocalGroupId();
+	int localGroupId = GetLocalGroupId();
 	if (localGroupId == 0)
 	{
-		/*
-		 * We're not interested in shards in the coordinator
-		 * or non-mx worker nodes.
-		 */
-		return false;
+		bool coordinatorIsKnown = false;
+		PrimaryNodeForGroup(0, &coordinatorIsKnown);
+
+		if (!coordinatorIsKnown)
+		{
+			/*
+			 * We're not interested in shards in the coordinator
+			 * or non-mx worker nodes, unless the coordinator is
+			 * in pg_dist_node.
+			 */
+			return false;
+		}
 	}
 
+	Relation relation = try_relation_open(shardRelationId, AccessShareLock);
+	if (relation == NULL)
+	{
+		return false;
+	}
+	relation_close(relation, NoLock);
+
 	/* we're not interested in the relations that are not in the search path */
-	if (!RelationIsVisible(shardRelationId))
+	if (!RelationIsVisible(shardRelationId) && onlySearchPath)
 	{
 		return false;
 	}
@@ -147,9 +158,9 @@ RelationIsAKnownShard(Oid shardRelationId)
 	}
 
 	/* get the shard's relation name */
-	shardRelationName = get_rel_name(shardRelationId);
+	char *shardRelationName = get_rel_name(shardRelationId);
 
-	shardId = ExtractShardIdFromTableName(shardRelationName, missingOk);
+	uint64 shardId = ExtractShardIdFromTableName(shardRelationName, missingOk);
 	if (shardId == INVALID_SHARD_ID)
 	{
 		/*
@@ -160,10 +171,16 @@ RelationIsAKnownShard(Oid shardRelationId)
 	}
 
 	/* try to get the relation id */
-	relationId = LookupShardRelation(shardId, true);
+	Oid relationId = LookupShardRelation(shardId, true);
 	if (!OidIsValid(relationId))
 	{
 		/* there is no such relation */
+		return false;
+	}
+
+	/* verify that their namespaces are the same */
+	if (get_rel_namespace(shardRelationId) != get_rel_namespace(relationId))
+	{
 		return false;
 	}
 
@@ -172,7 +189,7 @@ RelationIsAKnownShard(Oid shardRelationId)
 	 * to do that because otherwise a local table with a valid shardId
 	 * appended to its name could be misleading.
 	 */
-	generatedRelationName = get_rel_name(relationId);
+	char *generatedRelationName = get_rel_name(relationId);
 	AppendShardIdToName(&generatedRelationName, shardId);
 	if (strncmp(shardRelationName, generatedRelationName, NAMEDATALEN) == 0)
 	{

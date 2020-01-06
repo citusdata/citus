@@ -169,7 +169,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo3,
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (13,14,15,16)) as foo4,
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (17,18,19,20)) as foo5
-       
+
     WHERE
 
         foo1.user_id = foo4.user_id AND
@@ -197,7 +197,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo3,
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (13,14,15,16)) as foo4,
         (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (17,18,19,20)) as foo5
-       
+
         WHERE
 
         foo1.user_id = foo4.user_id AND
@@ -209,7 +209,7 @@ SELECT true AS valid FROM explain_json_2($$
 $$);
 
 
---  There are two non colocated joins, one is in the one of the leaf queries, 
+--  There are two non colocated joins, one is in the one of the leaf queries,
 -- the other is on the top-level subquery
 SELECT true AS valid FROM explain_json_2($$
 
@@ -222,7 +222,7 @@ SELECT true AS valid FROM explain_json_2($$
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (5,6,7,8)) as foo2,
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo3,
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (13,14,15,16)) as foo4,
-            (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (17,18,19,20)) as foo5   
+            (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (17,18,19,20)) as foo5
         WHERE
             foo1.user_id = foo4.user_id AND
             foo1.user_id = foo2.user_id AND
@@ -247,7 +247,7 @@ SELECT true AS valid FROM explain_json_2($$
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (5,6,7,8)) as foo2,
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo3,
             (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (13,14,15,16)) as foo4,
-            (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (17,18,19,20)) as foo5   
+            (SELECT users_table.user_id, users_table.value_1 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (17,18,19,20)) as foo5
         WHERE
             foo1.user_id = foo4.user_id AND
             foo1.user_id = foo2.user_id AND
@@ -260,8 +260,8 @@ $$);
 --  Deeper subqueries are non-colocated
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
-        count(*) 
+    SELECT
+        count(*)
     FROM
     (
         SELECT
@@ -270,7 +270,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as foo,
         (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
     WHERE
-        foo.user_id = bar.user_id) as foo_top JOIN 
+        foo.user_id = bar.user_id) as foo_top JOIN
 
     (
         SELECT
@@ -279,7 +279,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as foo,
         (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
     WHERE
-        foo.user_id = bar.user_id) as bar_top 
+        foo.user_id = bar.user_id) as bar_top
         ON (foo_top.user_id = bar_top.user_id);
 $$);
 
@@ -288,8 +288,8 @@ $$);
 --  Top level Subquery is not colocated
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
-        count(*) 
+    SELECT
+        count(*)
     FROM
     (
         SELECT
@@ -298,7 +298,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT DISTINCT users_table.user_id, users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as foo,
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
     WHERE
-        foo.user_id = bar.user_id) as foo_top JOIN 
+        foo.user_id = bar.user_id) as foo_top JOIN
 
     (
         SELECT
@@ -307,16 +307,16 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo,
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (13,14,15,16)) as bar
     WHERE
-        foo.user_id = bar.user_id) as bar_top 
-        ON (foo_top.value_2 = bar_top.user_id);  
+        foo.user_id = bar.user_id) as bar_top
+        ON (foo_top.value_2 = bar_top.user_id);
 
 $$);
 
 --  Top level Subquery is not colocated as the above
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
-        count(*) 
+    SELECT
+        count(*)
     FROM
     (
         SELECT
@@ -325,7 +325,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT DISTINCT users_table.user_id, users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as foo,
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
     WHERE
-        foo.user_id = bar.user_id) as foo_top JOIN 
+        foo.user_id = bar.user_id) as foo_top JOIN
     (
         SELECT
         foo.user_id
@@ -333,7 +333,7 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as foo,
         (SELECT DISTINCT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (13,14,15,16)) as bar
     WHERE
-        foo.user_id = bar.user_id) as bar_top 
+        foo.user_id = bar.user_id) as bar_top
     ON (foo_top.value_2 = bar_top.user_id);
 $$);
 
@@ -342,13 +342,13 @@ $$);
 --  non colocated joins are deep inside the query
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
+    SELECT
         count(*)
     FROM
         (
-            SELECT *  FROM 
-                (SELECT DISTINCT users_table.user_id FROM users_table, 
-                (SELECT events_table.user_id as my_users FROM events_table, users_table WHERE events_table.event_type = users_table.user_id) as foo 
+            SELECT *  FROM
+                (SELECT DISTINCT users_table.user_id FROM users_table,
+                (SELECT events_table.user_id as my_users FROM events_table, users_table WHERE events_table.event_type = users_table.user_id) as foo
                 WHERE foo.my_users = users_table.user_id) as mid_level_query
         ) as bar;
 $$);
@@ -359,9 +359,9 @@ $$);
 -- via regular repartitioning since PostgreSQL would pull the query up
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT count(*) FROM ( SELECT * FROM 
-        (SELECT DISTINCT users_table.user_id FROM users_table, 
-        (SELECT events_table.event_type as my_users, random() FROM events_table, users_table WHERE events_table.user_id = users_table.user_id) as foo 
+    SELECT count(*) FROM ( SELECT * FROM
+        (SELECT DISTINCT users_table.user_id FROM users_table,
+        (SELECT events_table.event_type as my_users, random() FROM events_table, users_table WHERE events_table.user_id = users_table.user_id) as foo
         WHERE foo.my_users = users_table.user_id) as mid_level_query   ) as bar;
 
 $$);
@@ -369,17 +369,17 @@ $$);
 
 -- same as the above query, but, one level deeper subquery
  SELECT true AS valid FROM explain_json_2($$
- 
-     SELECT 
+
+     SELECT
          count(*)
      FROM
          (
-             SELECT *  FROM 
-                 (SELECT DISTINCT users_table.user_id FROM users_table, 
-                     (SELECT events_table.user_id as my_users FROM events_table, 
+             SELECT *  FROM
+                 (SELECT DISTINCT users_table.user_id FROM users_table,
+                     (SELECT events_table.user_id as my_users FROM events_table,
                      (SELECT events_table.user_id, random() FROM users_table, events_table WHERE users_table.user_id = events_table.user_id) as selected_users
-                     WHERE events_table.event_type = selected_users.user_id) as foo 
- 
+                     WHERE events_table.event_type = selected_users.user_id) as foo
+
                  WHERE foo.my_users = users_table.user_id) as mid_level_query
          ) as bar;
  $$);
@@ -389,21 +389,21 @@ $$);
 -- the subquery on the distribution key
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
+    SELECT
         count(*)
     FROM
         (
-            SELECT *  FROM 
-                (SELECT DISTINCT users_table.user_id FROM users_table, 
-                
+            SELECT *  FROM
+                (SELECT DISTINCT users_table.user_id FROM users_table,
 
-                    (SELECT events_table.user_id as my_users FROM events_table, 
-                    (SELECT events_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND 
+
+                    (SELECT events_table.user_id as my_users FROM events_table,
+                    (SELECT events_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND
 
                             users_table.user_id IN (SELECT value_2 FROM events_table)
 
                         ) as selected_users
-                    WHERE events_table.user_id = selected_users.user_id) as foo 
+                    WHERE events_table.user_id = selected_users.user_id) as foo
 
                 WHERE foo.my_users = users_table.user_id) as mid_level_query
 
@@ -417,33 +417,33 @@ SELECT true AS valid FROM explain_json_2($$SELECT
 FROM
 	users_table
 WHERE
-	value_1 
+	value_1
 		IN
-	(SELECT 
-		users_table.user_id 
-	 FROM 
-	 	users_table, events_table 
-	 WHERE 
+	(SELECT
+		users_table.user_id
+	 FROM
+	 	users_table, events_table
+	 WHERE
 	 	users_table.user_id = events_table.value_2 AND event_type IN (5,6));$$);
 
 -- leaf subquery repartitioning should work fine when used with CTEs
 SELECT true AS valid FROM explain_json_2($$
-	WITH q1 AS (SELECT user_id FROM users_table) 
-SELECT count(*) FROM q1, (SELECT 
-					users_table.user_id, random() 
-				FROM 
-					users_table, events_table 
-				WHERE 
+	WITH q1 AS (SELECT user_id FROM users_table)
+SELECT count(*) FROM q1, (SELECT
+					users_table.user_id, random()
+				FROM
+					users_table, events_table
+				WHERE
 					users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
 
 -- subquery joins should work fine when used with CTEs
 SELECT true AS valid FROM explain_json_2($$
-    WITH q1 AS (SELECT user_id FROM users_table) 
- SELECT count(*) FROM q1, (SELECT 
-                    users_table.user_id, random() 
-                FROM 
-                    users_table, events_table 
-                WHERE 
+    WITH q1 AS (SELECT user_id FROM users_table)
+ SELECT count(*) FROM q1, (SELECT
+                    users_table.user_id, random()
+                FROM
+                    users_table, events_table
+                WHERE
                     users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
 
 
@@ -458,19 +458,19 @@ SELECT event, array_length(events_table, 1)
 FROM (
   SELECT event, array_agg(t.user_id) AS events_table
   FROM (
-    SELECT 
+    SELECT
     	DISTINCT ON(e.event_type::text) e.event_type::text as event, e.time, e.user_id
-    FROM 
+    FROM
     	users_table AS u,
         events_table AS e,
         (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (5,6,7,8)) as bar
-    WHERE u.user_id = e.user_id AND 
-    		u.user_id IN 
+    WHERE u.user_id = e.user_id AND
+    		u.user_id IN
     		(
-    			SELECT 
-    				user_id 
-    			FROM 
-    				users_table 
+    			SELECT
+    				user_id
+    			FROM
+    				users_table
     			WHERE value_2 >= 5
 			    AND  EXISTS (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4))
 				LIMIT 5
@@ -487,20 +487,20 @@ $$);
 -- the relations are joined under a join tree with an alias
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
-        count(*) 
+    SELECT
+        count(*)
     FROM
-        (users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1); 
+        (users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1);
 $$);
 
 -- a very similar query to the above
 -- however, this time we users a subquery instead of join alias, and it works
 SELECT true AS valid FROM explain_json_2($$
 
-    SELECT 
-        count(*) 
+    SELECT
+        count(*)
     FROM
-        (SELECT * FROM users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1); 
+        (SELECT * FROM users_table u1 JOIN users_table u2 using(value_1)) a JOIN (SELECT value_1, random() FROM users_table) as u3 USING (value_1);
 $$);
 
 -- a similar query to the above, this time subquery is on the left
@@ -557,9 +557,9 @@ SELECT true AS valid FROM explain_json_2($$
          SELECT user_id FROM users_table
             UNION
          SELECT user_id FROM users_table
-        ) a 
+        ) a
             JOIN
-        (SELECT value_1 FROM users_table) as foo ON (a.user_id = foo.value_1) 
+        (SELECT value_1 FROM users_table) as foo ON (a.user_id = foo.value_1)
     );
 $$);
 
@@ -572,33 +572,33 @@ SELECT true AS valid FROM explain_json_2($$
          SELECT user_id FROM users_table
             UNION
          SELECT user_id FROM users_table
-        ) a 
+        ) a
             JOIN
-        users_table as foo ON (a.user_id = foo.value_1) 
+        users_table as foo ON (a.user_id = foo.value_1)
     );
 $$);
 
--- this time the the plan is optimial, we are
+-- this time the plan is optimial, we are
 -- able to keep the UNION query given that foo
 -- is the anchor
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT * FROM
-    ( 
-        (SELECT user_id FROM users_table) as foo 
+    (
+        (SELECT user_id FROM users_table) as foo
             JOIN
         (
          SELECT user_id FROM users_table WHERE user_id IN (1,2,3,4)
             UNION
          SELECT user_id FROM users_table WHERE user_id IN (5,6,7,8)
-        ) a 
+        ) a
 
-        ON (a.user_id = foo.user_id) 
+        ON (a.user_id = foo.user_id)
         JOIN
 
          (SELECT value_1 FROM users_table) as bar
-        
-         ON(foo.user_id = bar.value_1) 
+
+         ON(foo.user_id = bar.value_1)
     );
 $$);
 
@@ -606,7 +606,7 @@ $$);
 -- inside a CTE
 SELECT true AS valid FROM explain_json_2($$
 
-    WITH non_colocated_subquery AS 
+    WITH non_colocated_subquery AS
     (
          SELECT
             foo.value_2
@@ -616,7 +616,7 @@ SELECT true AS valid FROM explain_json_2($$
         WHERE
             foo.value_2 = bar.value_2
     ),
-    non_colocated_subquery_2 AS 
+    non_colocated_subquery_2 AS
     (
         SELECT
             count(*) as cnt
@@ -627,11 +627,11 @@ SELECT true AS valid FROM explain_json_2($$
         IN
             (SELECT event_type FROM events_table WHERE user_id < 4)
     )
-    SELECT 
-        * 
-    FROM 
-        non_colocated_subquery, non_colocated_subquery_2 
-    WHERE 
+    SELECT
+        *
+    FROM
+        non_colocated_subquery, non_colocated_subquery_2
+    WHERE
         non_colocated_subquery.value_2 != non_colocated_subquery_2.cnt
 $$);
 
@@ -644,8 +644,8 @@ SELECT true AS valid FROM explain_json_2($$
         (SELECT users_table_local.value_2 FROM users_table_local, events_table_local WHERE users_table_local.user_id = events_table_local.user_id AND event_type IN (5,6,7,8)) as bar,
          (SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (9,10,11,12)) as baz
     WHERE
-        foo.value_2 = bar.value_2 
-        AND 
+        foo.value_2 = bar.value_2
+        AND
         foo.value_2 = baz.value_2
 $$);
 
@@ -655,20 +655,20 @@ SELECT true AS valid FROM explain_json_2($$
     SELECT
         count(*)
     FROM
-            (SELECT user_id FROM users_table) as foo 
+            (SELECT user_id FROM users_table) as foo
                 JOIN
             (
              SELECT user_id FROM users_table WHERE user_id IN (1,2,3,4)
                 UNION
              SELECT user_id FROM users_table WHERE user_id IN (5,6,7,8)
-            ) a 
+            ) a
 
-            ON (a.user_id = foo.user_id) 
+            ON (a.user_id = foo.user_id)
             JOIN
 
              (SELECT value_1, value_2 FROM users_table) as bar
 
-             ON(foo.user_id = bar.value_1) 
+             ON(foo.user_id = bar.value_1)
     WHERE
         value_2 IN (SELECT value_1 FROM users_table WHERE value_2 < 1)
             AND
@@ -677,16 +677,16 @@ SELECT true AS valid FROM explain_json_2($$
         foo.user_id IN (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2))
 $$);
 
--- make sure that we don't pick the refeence table as 
+-- make sure that we don't pick the refeence table as
 -- the anchor
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT count(*)
-    FROM 
+    FROM
       users_reference_table AS users_table_ref,
       (SELECT user_id FROM users_Table) AS foo,
       (SELECT user_id, value_2 FROM events_Table) AS bar
-    WHERE 
+    WHERE
       users_table_ref.user_id = foo.user_id
       AND foo.user_id = bar.value_2;
 $$);
@@ -707,7 +707,7 @@ JOIN LATERAL
       WHERE user_id = users_table.user_id) AS bar
    LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE;
 
--- similar to the above, make sure that we skip recursive plannig when
+-- similar to the above, make sure that we skip recursive planning when
 -- the subquery doesn't have any tables
 SELECT true AS valid FROM explain_json_2($$
 SELECT *
@@ -722,7 +722,7 @@ JOIN LATERAL
    LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
 $$);
 
--- similar to the above, make sure that we skip recursive plannig when
+-- similar to the above, make sure that we skip recursive planning when
 -- the subquery contains only intermediate results
 SELECT *
 FROM
@@ -740,7 +740,7 @@ JOIN LATERAL
   (SELECT *
    FROM
      (SELECT *
-      FROM 
+      FROM
           (SELECT *
        FROM events_table WHERE value_3 > 4
        INTERSECT
@@ -769,7 +769,7 @@ SELECT count(*) FROM events_table WHERE user_id NOT IN
       (SELECT *
        FROM
          (SELECT *
-          FROM 
+          FROM
               (SELECT *
            FROM events_table WHERE value_3 > 4
            INTERSECT
@@ -781,6 +781,24 @@ SELECT count(*) FROM events_table WHERE user_id NOT IN
             LEFT JOIN users_table u2 ON u2.user_id = bar.value_2) AS foo ON TRUE
   );
 
+
+-- make sure that non-colocated subquery joins work fine in
+-- modifications
+CREATE TABLE table1 (id int, tenant_id int);
+CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
+CREATE TABLE table2 (id int, tenant_id int) partition by range(tenant_id);
+CREATE TABLE table2_p1 PARTITION OF table2 FOR VALUES FROM (1) TO (10);
+
+-- modifications on the partitons are only allowed with rep=1
+SET citus.shard_replication_factor TO 1;
+
+SELECT create_distributed_table('table2','tenant_id');
+SELECT create_distributed_table('table1','tenant_id');
+
+-- all of the above queries are non-colocated subquery joins
+-- because the views are replaced with subqueries
+UPDATE table2 SET id=20 FROM table1_view WHERE table1_view.id=table2.id;
+UPDATE table2_p1 SET id=20 FROM table1_view WHERE table1_view.id=table2_p1.id;
 
 RESET client_min_messages;
 DROP FUNCTION explain_json_2(text);

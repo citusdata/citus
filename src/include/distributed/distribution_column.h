@@ -4,7 +4,7 @@
  *	  Type and function declarations used for handling the distribution
  *    column of distributed tables.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -21,6 +21,6 @@
 /* Remaining metadata utility functions  */
 extern Var * BuildDistributionKeyFromColumnName(Relation distributedRelation,
 												char *columnName);
-extern char * ColumnNameToColumn(Oid relationId, char *columnNodeString);
+extern char * ColumnToColumnName(Oid relationId, char *columnNodeString);
 
 #endif   /* DISTRIBUTION_COLUMN_H */

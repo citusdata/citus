@@ -7,6 +7,9 @@ SELECT create_distributed_table('test', 'x');
 CREATE TABLE recursive_union.ref (a int, b int);
 SELECT create_reference_table('ref');
 
+CREATE TABLE test_not_colocated (LIKE test);
+SELECT create_distributed_table('test_not_colocated', 'x', colocate_with := 'none');
+
 INSERT INTO test VALUES (1,1), (2,2);
 INSERT INTO ref VALUES (2,2), (3,3);
 
@@ -115,7 +118,7 @@ SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_w
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN test USING (x) ORDER BY 1,2;
 SELECT * FROM ((SELECT * FROM test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 
--- distributed table in WHERE clause is recursively planned 
+-- distributed table in WHERE clause is recursively planned
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT x FROM test))) u ORDER BY 1,2;
 
 -- subquery union in WHERE clause with partition column equality and implicit join is pushed down
@@ -137,17 +140,17 @@ SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test) ORDER BY 1,2 LIMI
 select count(DISTINCT t.x) FROM ((SELECT DISTINCT x FROM test) UNION (SELECT DISTINCT y FROM test)) as t(x) ORDER BY 1;
 select count(DISTINCT t.x) FROM ((SELECT count(DISTINCT x) FROM test) UNION (SELECT count(DISTINCT y) FROM test)) as t(x) ORDER BY 1;
 
--- other agg. distincts are also supported when group by includes partition key 
+-- other agg. distincts are also supported when group by includes partition key
 select avg(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY x) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY x)) as t(x) ORDER BY 1;
 
--- other agg. distincts are not supported when group by doesn't include partition key 
+-- other agg. distincts are not supported when group by doesn't include partition key
 select count(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY y) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY y)) as t(x) ORDER BY 1;
 
 -- one of the leaves is a repartition join
 SET citus.enable_repartition_joins TO ON;
 
 --  repartition is recursively planned before the set operation
-(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 0) ORDER BY 1 DESC; 
+(SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 0) ORDER BY 1 DESC;
 
 --  repartition is recursively planned with the set operation
 (SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y) ORDER BY 1 DESC;
@@ -166,8 +169,12 @@ SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 CREATE VIEW set_view_recursive_second AS SELECT u.x, test.y FROM ((SELECT x, y FROM test) UNION (SELECT 1, 1 FROM test)) u JOIN test USING (x) ORDER BY 1,2;
 SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 
--- this should create lots of recursive calls since both views and set operations lead to recursive plans :) 
+-- this should create lots of recursive calls since both views and set operations lead to recursive plans :)
 ((SELECT x FROM set_view_recursive_second) INTERSECT (SELECT * FROM set_view_recursive)) EXCEPT (SELECT * FROM set_view_pushdown);
+
+-- queries on non-colocated tables that would push down if they were not colocated are recursivelu planned
+SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test_not_colocated) u ORDER BY 1,2;
+SELECT * FROM (SELECT * FROM test UNION ALL SELECT * FROM test_not_colocated) u ORDER BY 1,2;
 
 RESET client_min_messages;
 DROP SCHEMA recursive_union CASCADE;

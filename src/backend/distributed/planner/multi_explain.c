@@ -3,7 +3,7 @@
  * multi_explain.c
  *	  Citus explain support.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -91,15 +92,6 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
-#if (PG_VERSION_NUM < 110000)
-static void ExplainOpenGroup(const char *objtype, const char *labelname,
-							 bool labeled, ExplainState *es);
-static void ExplainCloseGroup(const char *objtype, const char *labelname,
-							  bool labeled, ExplainState *es);
-static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
-static void ExplainJSONLineEnding(ExplainState *es);
-static void ExplainYAMLLineStarting(ExplainState *es);
-#endif
 
 
 /*
@@ -145,7 +137,8 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	Query *query = distributedPlan->insertSelectSubquery;
+	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
+	Query *query = BuildSelectForInsertSelect(insertSelectQuery);
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;
@@ -222,17 +215,17 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 static void
 ExplainJob(Job *job, ExplainState *es)
 {
-	List *dependedJobList = job->dependedJobList;
-	int dependedJobCount = list_length(dependedJobList);
-	ListCell *dependedJobCell = NULL;
+	List *dependentJobList = job->dependentJobList;
+	int dependentJobCount = list_length(dependentJobList);
+	ListCell *dependentJobCell = NULL;
 	List *taskList = job->taskList;
 	int taskCount = list_length(taskList);
 
 	ExplainOpenGroup("Job", "Job", true, es);
 
-	ExplainPropertyIntegerInternal("Task Count", NULL, taskCount, es);
+	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
 
-	if (dependedJobCount > 0)
+	if (dependentJobCount > 0)
 	{
 		ExplainPropertyText("Tasks Shown", "None, not supported for re-partition "
 										   "queries", es);
@@ -253,7 +246,7 @@ ExplainJob(Job *job, ExplainState *es)
 	 * We cannot fetch EXPLAIN plans for jobs that have dependencies, since the
 	 * intermediate tables have not been created.
 	 */
-	if (dependedJobCount == 0)
+	if (dependentJobCount == 0)
 	{
 		ExplainOpenGroup("Tasks", "Tasks", false, es);
 
@@ -263,20 +256,20 @@ ExplainJob(Job *job, ExplainState *es)
 	}
 	else
 	{
-		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainOpenGroup("Dependent Jobs", "Dependent Jobs", false, es);
 
-		/* show explain output for depended jobs, if any */
-		foreach(dependedJobCell, dependedJobList)
+		/* show explain output for dependent jobs, if any */
+		foreach(dependentJobCell, dependentJobList)
 		{
-			Job *dependedJob = (Job *) lfirst(dependedJobCell);
+			Job *dependentJob = (Job *) lfirst(dependentJobCell);
 
-			if (CitusIsA(dependedJob, MapMergeJob))
+			if (CitusIsA(dependentJob, MapMergeJob))
 			{
-				ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
+				ExplainMapMergeJob((MapMergeJob *) dependentJob, es);
 			}
 		}
 
-		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainCloseGroup("Dependent Jobs", "Dependent Jobs", false, es);
 	}
 
 	ExplainCloseGroup("Job", "Job", true, es);
@@ -292,9 +285,9 @@ ExplainJob(Job *job, ExplainState *es)
 static void
 ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 {
-	List *dependedJobList = mapMergeJob->job.dependedJobList;
-	int dependedJobCount = list_length(dependedJobList);
-	ListCell *dependedJobCell = NULL;
+	List *dependentJobList = mapMergeJob->job.dependentJobList;
+	int dependentJobCount = list_length(dependentJobList);
+	ListCell *dependentJobCell = NULL;
 	int mapTaskCount = list_length(mapMergeJob->mapTaskList);
 	int mergeTaskCount = list_length(mapMergeJob->mergeTaskList);
 
@@ -306,24 +299,24 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 	}
 
 	ExplainOpenGroup("MapMergeJob", NULL, true, es);
-	ExplainPropertyIntegerInternal("Map Task Count", NULL, mapTaskCount, es);
-	ExplainPropertyIntegerInternal("Merge Task Count", NULL, mergeTaskCount, es);
+	ExplainPropertyInteger("Map Task Count", NULL, mapTaskCount, es);
+	ExplainPropertyInteger("Merge Task Count", NULL, mergeTaskCount, es);
 
-	if (dependedJobCount > 0)
+	if (dependentJobCount > 0)
 	{
-		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainOpenGroup("Dependent Jobs", "Dependent Jobs", false, es);
 
-		foreach(dependedJobCell, dependedJobList)
+		foreach(dependentJobCell, dependentJobList)
 		{
-			Job *dependedJob = (Job *) lfirst(dependedJobCell);
+			Job *dependentJob = (Job *) lfirst(dependentJobCell);
 
-			if (CitusIsA(dependedJob, MapMergeJob))
+			if (CitusIsA(dependentJob, MapMergeJob))
 			{
-				ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
+				ExplainMapMergeJob((MapMergeJob *) dependentJob, es);
 			}
 		}
 
-		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
+		ExplainCloseGroup("Dependent Jobs", "Dependent Jobs", false, es);
 	}
 
 	ExplainCloseGroup("MapMergeJob", NULL, true, es);
@@ -352,9 +345,8 @@ ExplainTaskList(List *taskList, ExplainState *es)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		RemoteExplainPlan *remoteExplain = NULL;
 
-		remoteExplain = RemoteExplain(task, es);
+		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
 
 		if (!ExplainAllTasks)
@@ -376,39 +368,36 @@ ExplainTaskList(List *taskList, ExplainState *es)
 
 
 /*
- * RemoteExplain fetches the the remote EXPLAIN output for a single
+ * RemoteExplain fetches the remote EXPLAIN output for a single
  * task. It tries each shard placement until one succeeds or all
  * failed.
  */
 static RemoteExplainPlan *
 RemoteExplain(Task *task, ExplainState *es)
 {
-	StringInfo explainQuery = NULL;
 	List *taskPlacementList = task->taskPlacementList;
 	int placementCount = list_length(taskPlacementList);
-	int placementIndex = 0;
-	RemoteExplainPlan *remotePlan = NULL;
 
-	remotePlan = (RemoteExplainPlan *) palloc0(sizeof(RemoteExplainPlan));
-	explainQuery = BuildRemoteExplainQuery(task->queryString, es);
+	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
+		sizeof(RemoteExplainPlan));
+	StringInfo explainQuery = BuildRemoteExplainQuery(task->queryString, es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
 	 * such that we can set a savepoint.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
-	for (placementIndex = 0; placementIndex < placementCount; placementIndex++)
+	for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
-		MultiConnection *connection = NULL;
 		PGresult *queryResult = NULL;
 		int connectionFlags = 0;
-		int executeResult = 0;
 
 		remotePlan->placementIndex = placementIndex;
 
-		connection = GetPlacementConnection(connectionFlags, taskPlacement, NULL);
+		MultiConnection *connection = GetPlacementConnection(connectionFlags,
+															 taskPlacement, NULL);
 
 		/* try other placements if we fail to connect this one */
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
@@ -426,8 +415,8 @@ RemoteExplain(Task *task, ExplainState *es)
 		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
 
 		/* run explain query */
-		executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
-													 &queryResult);
+		int executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
+														 &queryResult);
 		if (executeResult != 0)
 		{
 			PQclear(queryResult);
@@ -526,11 +515,9 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 	foreach(explainOutputCell, explainOutputList)
 	{
 		StringInfo rowString = (StringInfo) lfirst(explainOutputCell);
-		int rowLength = 0;
-		char *lineStart = NULL;
 
-		rowLength = strlen(rowString->data);
-		lineStart = rowString->data;
+		int rowLength = strlen(rowString->data);
+		char *lineStart = rowString->data;
 
 		/* parse the lines in the remote EXPLAIN for proper indentation */
 		while (lineStart < rowString->data + rowLength)
@@ -616,13 +603,14 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
-					 "COSTS %s, BUFFERS %s, TIMING %s, "
+					 "COSTS %s, BUFFERS %s, TIMING %s, SUMMARY %s, "
 					 "FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
 					 es->timing ? "TRUE" : "FALSE",
+					 es->summary ? "TRUE" : "FALSE",
 					 formatStr,
 					 queryString);
 
@@ -648,23 +636,19 @@ ExplainOneQuery(Query *query, int cursorOptions,
 {
 	/* if an advisor plugin is present, let it manage things */
 	if (ExplainOneQuery_hook)
-#if (PG_VERSION_NUM >= 110000)
+	{
 		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
 								 queryString, params, queryEnv);
-#elif (PG_VERSION_NUM >= 100000)
-		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
-								 queryString, params);
-#endif
+	}
 	else
 	{
-		PlannedStmt *plan;
 		instr_time	planstart,
 					planduration;
 
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-		plan = pg_plan_query(query, cursorOptions, params);
+		PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
@@ -674,182 +658,3 @@ ExplainOneQuery(Query *query, int cursorOptions,
 					   &planduration);
 	}
 }
-
-#if (PG_VERSION_NUM < 110000)
-/*
- * Open a group of related objects.
- *
- * objtype is the type of the group object, labelname is its label within
- * a containing object (if any).
- *
- * If labeled is true, the group members will be labeled properties,
- * while if it's false, they'll be unlabeled objects.
- */
-static void
-ExplainOpenGroup(const char *objtype, const char *labelname,
-				 bool labeled, ExplainState *es)
-{
-	switch (es->format)
-	{
-		case EXPLAIN_FORMAT_TEXT:
-			/* nothing to do */
-			break;
-
-		case EXPLAIN_FORMAT_XML:
-			ExplainXMLTag(objtype, X_OPENING, es);
-			es->indent++;
-			break;
-
-		case EXPLAIN_FORMAT_JSON:
-			ExplainJSONLineEnding(es);
-			appendStringInfoSpaces(es->str, 2 * es->indent);
-			if (labelname)
-			{
-				escape_json(es->str, labelname);
-				appendStringInfoString(es->str, ": ");
-			}
-			appendStringInfoChar(es->str, labeled ? '{' : '[');
-
-			/*
-			 * In JSON format, the grouping_stack is an integer list.  0 means
-			 * we've emitted nothing at this grouping level, 1 means we've
-			 * emitted something (and so the next item needs a comma). See
-			 * ExplainJSONLineEnding().
-			 */
-			es->grouping_stack = lcons_int(0, es->grouping_stack);
-			es->indent++;
-			break;
-
-		case EXPLAIN_FORMAT_YAML:
-
-			/*
-			 * In YAML format, the grouping stack is an integer list.  0 means
-			 * we've emitted nothing at this grouping level AND this grouping
-			 * level is unlabelled and must be marked with "- ".  See
-			 * ExplainYAMLLineStarting().
-			 */
-			ExplainYAMLLineStarting(es);
-			if (labelname)
-			{
-				appendStringInfo(es->str, "%s: ", labelname);
-				es->grouping_stack = lcons_int(1, es->grouping_stack);
-			}
-			else
-			{
-				appendStringInfoString(es->str, "- ");
-				es->grouping_stack = lcons_int(0, es->grouping_stack);
-			}
-			es->indent++;
-			break;
-	}
-}
-
-
-/*
- * Close a group of related objects.
- * Parameters must match the corresponding ExplainOpenGroup call.
- */
-static void
-ExplainCloseGroup(const char *objtype, const char *labelname,
-				  bool labeled, ExplainState *es)
-{
-	switch (es->format)
-	{
-		case EXPLAIN_FORMAT_TEXT:
-			/* nothing to do */
-			break;
-
-		case EXPLAIN_FORMAT_XML:
-			es->indent--;
-			ExplainXMLTag(objtype, X_CLOSING, es);
-			break;
-
-		case EXPLAIN_FORMAT_JSON:
-			es->indent--;
-			appendStringInfoChar(es->str, '\n');
-			appendStringInfoSpaces(es->str, 2 * es->indent);
-			appendStringInfoChar(es->str, labeled ? '}' : ']');
-			es->grouping_stack = list_delete_first(es->grouping_stack);
-			break;
-
-		case EXPLAIN_FORMAT_YAML:
-			es->indent--;
-			es->grouping_stack = list_delete_first(es->grouping_stack);
-			break;
-	}
-}
-
-
-/*
- * Emit opening or closing XML tag.
- *
- * "flags" must contain X_OPENING, X_CLOSING, or X_CLOSE_IMMEDIATE.
- * Optionally, OR in X_NOWHITESPACE to suppress the whitespace we'd normally
- * add.
- *
- * XML tag names can't contain white space, so we replace any spaces in
- * "tagname" with dashes.
- */
-static void
-ExplainXMLTag(const char *tagname, int flags, ExplainState *es)
-{
-	const char *s;
-
-	if ((flags & X_NOWHITESPACE) == 0)
-		appendStringInfoSpaces(es->str, 2 * es->indent);
-	appendStringInfoCharMacro(es->str, '<');
-	if ((flags & X_CLOSING) != 0)
-		appendStringInfoCharMacro(es->str, '/');
-	for (s = tagname; *s; s++)
-		appendStringInfoCharMacro(es->str, (*s == ' ') ? '-' : *s);
-	if ((flags & X_CLOSE_IMMEDIATE) != 0)
-		appendStringInfoString(es->str, " /");
-	appendStringInfoCharMacro(es->str, '>');
-	if ((flags & X_NOWHITESPACE) == 0)
-		appendStringInfoCharMacro(es->str, '\n');
-}
-
-
-/*
- * Emit a JSON line ending.
- *
- * JSON requires a comma after each property but the last.  To facilitate this,
- * in JSON format, the text emitted for each property begins just prior to the
- * preceding line-break (and comma, if applicable).
- */
-static void
-ExplainJSONLineEnding(ExplainState *es)
-{
-	Assert(es->format == EXPLAIN_FORMAT_JSON);
-	if (linitial_int(es->grouping_stack) != 0)
-		appendStringInfoChar(es->str, ',');
-	else
-		linitial_int(es->grouping_stack) = 1;
-	appendStringInfoChar(es->str, '\n');
-}
-
-
-/*
- * Indent a YAML line.
- *
- * YAML lines are ordinarily indented by two spaces per indentation level.
- * The text emitted for each property begins just prior to the preceding
- * line-break, except for the first property in an unlabelled group, for which
- * it begins immediately after the "- " that introduces the group.  The first
- * property of the group appears on the same line as the opening "- ".
- */
-static void
-ExplainYAMLLineStarting(ExplainState *es)
-{
-	Assert(es->format == EXPLAIN_FORMAT_YAML);
-	if (linitial_int(es->grouping_stack) == 0)
-	{
-		linitial_int(es->grouping_stack) = 1;
-	}
-	else
-	{
-		appendStringInfoChar(es->str, '\n');
-		appendStringInfoSpaces(es->str, es->indent * 2);
-	}
-}
-#endif

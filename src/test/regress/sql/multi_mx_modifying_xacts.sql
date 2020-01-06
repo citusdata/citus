@@ -120,6 +120,7 @@ SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id a
 
 -- and the other way around is also allowed
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
@@ -136,6 +137,7 @@ SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id a
 
 -- and the other way around is also allowed
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
@@ -146,12 +148,14 @@ COMMIT;
 -- this logic doesn't apply to router SELECTs occurring after a modification:
 -- selecting from the modified node is fine...
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
 ABORT;
 
 -- doesn't apply to COPY after modifications
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 \copy labs_mx from stdin delimiter ','
 10,Weyland-Yutani-1
@@ -241,6 +245,7 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
 
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (2, 'BAD');
 INSERT INTO labs_mx VALUES (8, 'Aperture Science');
@@ -279,6 +284,7 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
 
 -- should be the same story as before, just at COMMIT time
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (2, 'BAD');
 INSERT INTO labs_mx VALUES (9, 'Umbrella Corporation');
@@ -297,6 +303,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
 
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (2, 'BAD');
 INSERT INTO labs_mx VALUES (8, 'Aperture Science');
@@ -313,6 +320,7 @@ SELECT * FROM labs_mx WHERE id = 8;
 DROP TRIGGER reject_bad_mx ON objects_mx_1220103;
 
 BEGIN;
+SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO labs_mx VALUES (8, 'Aperture Science');
 INSERT INTO labs_mx VALUES (9, 'BAD');

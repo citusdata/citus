@@ -40,8 +40,8 @@ FROM (
     SELECT u.user_id, e.event_type::text AS event, e.time
     FROM users_table AS u,
          events_table AS e
-    WHERE u.user_id = e.user_id AND 
-    (u.user_id = 1 OR u.user_id = 2) AND 
+    WHERE u.user_id = e.user_id AND
+    (u.user_id = 1 OR u.user_id = 2) AND
     (e.user_id = 1 OR e.user_id = 2)
       AND e.event_type IN (1, 2)
   ) t
@@ -87,10 +87,10 @@ FROM (
       AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
+
       WHERE  e.user_id >= 1
       AND e.user_id <= 2
       AND e.event_type IN (5, 6)
@@ -133,11 +133,11 @@ FROM (
       AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
-      WHERE 
+
+      WHERE
       (e.user_id = 2 OR e.user_id = 3)
       AND e.event_type IN (4, 5)
   ) t2 ON (t1.user_id = t2.user_id)
@@ -169,7 +169,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time
         FROM users_table
         WHERE
@@ -211,7 +211,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time
         FROM users_table
         WHERE
@@ -250,9 +250,9 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6)
     AND user_id = 1;
-    
+
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;  
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 
 ------------------------------------
 ------------------------------------
@@ -269,9 +269,9 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4 AND (user_id = 1 OR user_id = 2))
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6 AND (user_id = 1 OR user_id = 2))
     AND (user_id = 1 OR user_id = 2);
-    
+
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;  
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 
 ------------------------------------
 ------------------------------------
@@ -321,7 +321,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND user_id = 1
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id)
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 4 AND event_type <= 5 AND value_3 > 4 AND user_id=users_table.user_id);
-  
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 
@@ -338,7 +338,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND (user_id = 1 OR user_id = 2)
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id AND (user_id = 1 OR user_id = 2))
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 4 AND event_type <= 5 AND value_3 > 4 AND user_id=users_table.user_id AND (user_id = 1 OR user_id = 2));
-  
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 
@@ -351,23 +351,23 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
   WHERE  value_1 > 1
          AND value_1 < 3
-         AND value_2 >= 1 
+         AND value_2 >= 1
          AND user_id = 3
-         AND EXISTS (SELECT user_id 
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 1 
-                            AND event_type < 3 
+                     WHERE  event_type > 1
+                            AND event_type < 3
                             AND value_3 > 1
                             AND user_id = users_table.user_id
                             AND user_id = 3
-                     GROUP  BY user_id 
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
-                     
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 
@@ -379,22 +379,22 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
   WHERE  value_1 > 1
          AND value_1 < 3
          AND value_2 >= 1
          AND (user_id = 3 or user_id = 4)
-         AND EXISTS (SELECT user_id 
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type = 2 
-                            AND value_3 > 1 
+                     WHERE  event_type = 2
+                            AND value_3 > 1
                             AND user_id = users_table.user_id
                             AND (user_id = 3 or user_id = 4)
-                     GROUP  BY user_id 
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
-                     
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
-                                  
+

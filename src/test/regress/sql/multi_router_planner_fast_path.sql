@@ -5,14 +5,14 @@ SET search_path TO fast_path_router_select;
 SET citus.next_shard_id TO 1840000;
 
 -- all the tests in this file is intended for testing fast-path
--- router planner, so we're explicitly enabling itin this file. 
--- We've bunch of other tests that triggers non-fast-path-router 
+-- router planner, so we're explicitly enabling itin this file.
+-- We've bunch of other tests that triggers non-fast-path-router
 -- planner (note this is already true by default)
 SET citus.enable_fast_path_router_planner TO true;
 
 
 -- ===================================================================
--- test router planner functionality for via fast path on 
+-- test router planner functionality for via fast path on
 -- single shard select queries
 -- ===================================================================
 
@@ -103,8 +103,8 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash
 	ORDER BY sum(word_count) DESC;
 
 -- fast path planner only support = operator
-SELECT * FROM articles_hash WHERE author_id <= 1; 
-SELECT * FROM articles_hash WHERE author_id IN (1, 3); 
+SELECT * FROM articles_hash WHERE author_id <= 1;
+SELECT * FROM articles_hash WHERE author_id IN (1, 3);
 
 -- queries with CTEs cannot go through fast-path planning
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
@@ -116,12 +116,12 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 -- this is a different case where each CTE is recursively planned and those goes
--- through the fast-path router planner, but the top level join is not  
+-- through the fast-path router planner, but the top level join is not
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
-CREATE TABLE company_employees (company_id int, employee_id int, manager_id int); 
+CREATE TABLE company_employees (company_id int, employee_id int, manager_id int);
 SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
 
 -- do not print notices from workers since the order is not deterministic
@@ -144,7 +144,7 @@ INSERT INTO company_employees values(3, 3, 1);
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees
-		WHERE company_id = 1 and manager_id = 0 
+		WHERE company_id = 1 and manager_id = 0
 	UNION
 	SELECT ce.*, (h.level+1)
 		FROM hierarchy h JOIN company_employees ce
@@ -193,7 +193,7 @@ FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE tes
 ORDER BY test.word_count DESC, articles_hash.id LIMIT 5;
 
 SELECT articles_hash.id,test.word_count
-FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test 
+FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test
 WHERE test.id = articles_hash.id and articles_hash.author_id = 1
 ORDER BY articles_hash.id;
 
@@ -243,7 +243,7 @@ SELECT *
 	ORDER BY id desc
 	LIMIT 2
 	OFFSET 1;
-	
+
 -- single shard select with group by on non-partition column goes through fast-path planning
 SELECT id
 	FROM articles_hash
@@ -304,13 +304,13 @@ LIMIT 5;
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';
 
--- cannot go through fast-path if there is 
+-- cannot go through fast-path if there is
 -- explicit coercion
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1::bigint;
 
--- can go through fast-path if there is 
+-- can go through fast-path if there is
 -- implicit coercion
 -- This doesn't work see the related issue
 -- reported https://github.com/citusdata/citus/issues/2605
@@ -333,7 +333,7 @@ SELECT *
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 or id = 1;
-	
+
 -- goes through fast-path planning because
 -- the dist. key is ANDed with the rest of the
 -- filters
@@ -358,21 +358,21 @@ SELECT *
 SELECT *
 	FROM articles_hash
 	WHERE author_id = (random()::int  * 0 + 1);
-	
+
 -- Citus does not qualify this as a fast-path because
--- dist_key = func() 
+-- dist_key = func()
 SELECT *
 	FROM articles_hash
 	WHERE author_id = abs(-1);
 
 -- Citus does not qualify this as a fast-path because
--- dist_key = func() 
+-- dist_key = func()
 SELECT *
 	FROM articles_hash
 	WHERE 1 = abs(author_id);
 
 -- Citus does not qualify this as a fast-path because
--- dist_key = func() 
+-- dist_key = func()
 SELECT *
 	FROM articles_hash
 	WHERE author_id = abs(author_id - 2);
@@ -429,11 +429,11 @@ SELECT *
 	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
 
 -- window functions are supported with fast-path router plannable
-SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5;
 
-SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5
 	ORDER BY word_count DESC;
@@ -446,14 +446,14 @@ SELECT id, word_count, AVG(word_count) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1;
 
-SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
-	FROM articles_hash 
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
+	FROM articles_hash
 	WHERE author_id = 1;
 
 -- some more tests on complex target lists
 SELECT DISTINCT ON (author_id, id) author_id, id,
 	MIN(id) over (order by avg(word_count)) * AVG(id * 5.2 + (1.0/max(word_count))) over (order by max(word_count)) as t1,
-	count(*) FILTER (WHERE title LIKE 'al%') as cnt_with_filter, 
+	count(*) FILTER (WHERE title LIKE 'al%') as cnt_with_filter,
 	count(*) FILTER (WHERE '0300030' LIKE '%3%') as cnt_with_filter_2,
 	avg(case when id > 2 then char_length(word_count::text) * (id * strpos(word_count::text, '1')) end) as case_cnt,
 	COALESCE(strpos(avg(word_count)::text, '1'), 20)
@@ -464,47 +464,47 @@ SELECT DISTINCT ON (author_id, id) author_id, id,
 	ORDER BY author_id, id, sum(word_count) - avg(char_length(title)) DESC, COALESCE(array_upper(ARRAY[max(id)],1) * 5,0) DESC;
 
 -- where false queries are router plannable but not fast-path
-SELECT * 
+SELECT *
 	FROM articles_hash
 	WHERE false;
 
 -- fast-path with false
-SELECT * 
+SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and false;
 
 -- fast-path with false
-SELECT * 
+SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and 1=0;
 
-SELECT * 
+SELECT *
 	FROM articles_hash
 	WHERE null and author_id = 1;
 
 -- we cannot qualify dist_key = X operator Y via
 -- fast-path planning
-SELECT * 
+SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 + 1;
 
 -- where false with immutable function returning false
 -- goes through fast-path
-SELECT * 
+SELECT *
 	FROM articles_hash a
 	WHERE a.author_id = 10 and int4eq(1, 2);
 
 -- partition_column is null clause does not prune out any shards,
 -- all shards remain after shard pruning, not router plannable
 -- not fast-path router either
-SELECT * 
+SELECT *
 	FROM articles_hash a
 	WHERE a.author_id is null;
 
 -- partition_column equals to null clause prunes out all shards
 -- no shards after shard pruning, router plannable
 -- not fast-path router either
-SELECT * 
+SELECT *
 	FROM articles_hash a
 	WHERE a.author_id = null;
 
@@ -527,8 +527,8 @@ SELECT * FROM (
 ORDER BY id;
 
 -- window functions with where false
-SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
-	FROM articles_hash 
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
+	FROM articles_hash
 	WHERE author_id = 1 and 1=0;
 
 -- create a dummy function to be used in filtering
@@ -559,7 +559,7 @@ $$LANGUAGE plpgsql;
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse
 
--- fast path router plannable, but errors 
+-- fast path router plannable, but errors
 SELECT raise_failed_execution_f_router($$
 	SELECT * FROM articles_hash
 		WHERE
@@ -581,7 +581,7 @@ SET client_min_messages TO 'DEBUG2';
 -- complex query hitting a single shard and a fast-path
 SELECT
 	count(DISTINCT CASE
-			WHEN 
+			WHEN
 				word_count > 100
 			THEN
 				id
@@ -610,7 +610,7 @@ END;
 
 -- cursor queries are fast-path router plannable
 BEGIN;
-DECLARE test_cursor CURSOR FOR 
+DECLARE test_cursor CURSOR FOR
 	SELECT *
 		FROM articles_hash
 		WHERE author_id = 1
@@ -627,7 +627,7 @@ COPY (
 	FROM articles_hash
 	WHERE author_id = 1
 	ORDER BY id) TO STDOUT;
-	
+
 -- table creation queries inside can be fast-path router plannable
 CREATE TEMP TABLE temp_articles_hash as
 	SELECT *
@@ -678,8 +678,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- we don't want too many details. though we're omitting 
--- "DETAIL:  distribution column value:", we see it acceptable 
+-- we don't want too many details. though we're omitting
+-- "DETAIL:  distribution column value:", we see it acceptable
 -- since the query results verifies the correctness
 \set VERBOSITY terse
 
@@ -750,7 +750,7 @@ SELECT * FROM author_articles_id_word_count(1);
 -- insert .. select via coordinator could also
 -- use fast-path queries
 PREPARE insert_sel(int, int) AS
-INSERT INTO articles_hash 
+INSERT INTO articles_hash
 	SELECT * FROM articles_hash WHERE author_id = $2 AND word_count = $1 OFFSET 0;
 
 EXECUTE insert_sel(1,1);
@@ -763,10 +763,10 @@ EXECUTE insert_sel(1,1);
 -- one final interesting preperad statement
 -- where one of the filters is on the target list
 PREPARE fast_path_agg_filter(int, int) AS
-	SELECT 
-		count(*) FILTER (WHERE word_count=$1) 
-	FROM 
-		articles_hash 
+	SELECT
+		count(*) FILTER (WHERE word_count=$1)
+	FROM
+		articles_hash
 	WHERE author_id = $2;
 
 EXECUTE fast_path_agg_filter(1,1);
@@ -777,7 +777,7 @@ EXECUTE fast_path_agg_filter(5,5);
 EXECUTE fast_path_agg_filter(6,6);
 
 -- views internally become subqueries, so not fast-path router query
-CREATE VIEW test_view AS 
+CREATE VIEW test_view AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
 SELECT * FROM test_view;
 
@@ -811,7 +811,7 @@ CREATE TABLE collections_list (
 	value numeric
 ) PARTITION BY LIST (collection_id );
 
-CREATE TABLE collections_list_1 
+CREATE TABLE collections_list_1
 	PARTITION OF collections_list (key, ts, collection_id, value)
 	FOR VALUES IN ( 1 );
 

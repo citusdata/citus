@@ -3,7 +3,6 @@
 -- this file is intended to test multi shard update/delete queries
 --
 SET citus.next_shard_id TO 1440000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1440000;
 SET citus.shard_replication_factor to 1;
 SET citus.multi_shard_modify_mode to 'parallel';
 CREATE TABLE users_test_table(user_id int, value_1 int, value_2 int, value_3 int);
@@ -164,7 +163,7 @@ SELECT SUM(value_1), SUM(value_3) FROM users_test_table;
    0 |   0
 (1 row)
 
--- Test on append table (set executor mode to sequential, since with the append 
+-- Test on append table (set executor mode to sequential, since with the append
 -- distributed tables parallel executor may create tons of connections)
 SET citus.multi_shard_modify_mode to sequential;
 CREATE TABLE append_stage_table(id int, col_2 int);
@@ -251,7 +250,7 @@ INSERT INTO tt1 VALUES(7,7);
 INSERT INTO tt1 VALUES(9,8);
 BEGIN;
 -- Update rows from partititon tt1_1120
-UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20; 
+UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 -- Update rows from partititon tt1_510
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 COMMIT;
@@ -268,7 +267,7 @@ SELECT * FROM tt1 ORDER BY id;
 
 -- Modify main table and partition table within same transaction
 BEGIN;
-UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20; 
+UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 DELETE FROM tt1_510;
 DELETE FROM tt1_1120;
@@ -395,7 +394,7 @@ WHERE  user_id IN (SELECT user_id
               FROM   users_test_table
               UNION
               SELECT user_id
-              FROM   events_test_table) returning value_3; 
+              FROM   events_test_table) returning value_3;
  value_3 
 ---------
        0
@@ -435,33 +434,33 @@ WHERE  user_id IN (SELECT user_id
 
 UPDATE users_test_table
 SET value_1 = 5
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_test_table  
-           WHERE 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
               users_test_table.user_id = events_test_table.user_id
            GROUP BY
               user_id
           );
 UPDATE users_test_table
 SET value_3 = 1
-WHERE 
-  value_2 >  
-          (SELECT 
-              max(value_2) 
-           FROM 
-              events_test_table 
-           WHERE 
-              users_test_table.user_id = events_test_table.user_id AND 
+WHERE
+  value_2 >
+          (SELECT
+              max(value_2)
+           FROM
+              events_test_table
+           WHERE
+              users_test_table.user_id = events_test_table.user_id AND
               users_test_table.value_2 > events_test_table.value_2
            GROUP BY
               user_id
           );
 UPDATE users_test_table
-SET value_2 = 4 
+SET value_2 = 4
 WHERE
   value_1 > 1 AND value_1 < 3
   AND value_2 >= 1
@@ -542,7 +541,7 @@ WHERE  users_reference_copy_table.user_id = events_test_table.value_1;
 -- Both reference tables and hash distributed tables can be used in subquery
 UPDATE events_test_table as ett
 SET    value_2 = 6
-WHERE ett.value_3 IN (SELECT utt.value_3 
+WHERE ett.value_3 IN (SELECT utt.value_3
                                     FROM users_test_table as utt, users_reference_copy_table as uct
                                     WHERE utt.user_id = uct.user_id AND utt.user_id = ett.user_id);
 -- We don't need equality check with constant values in sub-select
@@ -657,7 +656,7 @@ WHERE  user_id IN (SELECT user_id
 UPDATE users_test_table
 SET    value_2 = (SELECT value_3
                   FROM   users_test_table);
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE users_test_table
 SET value_2 = 2
 WHERE
@@ -672,7 +671,7 @@ WHERE
            GROUP BY
               user_id
           );
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE users_test_table
 SET (value_1, value_2) = (2,1)
 WHERE  user_id IN
@@ -731,7 +730,7 @@ UPDATE events_test_table_local
 SET    value_2 = 5
 FROM   users_test_table
 WHERE  events_test_table_local.user_id = users_test_table.user_id;
-ERROR:  relation events_test_table_local is not distributed
+ERROR:  cannot plan modifications of local tables involving distributed tables
 -- Local tables in a subquery are supported through recursive planning
 UPDATE users_test_table
 SET    value_2 = 5
@@ -743,7 +742,7 @@ FROM   events_test_table_2
 WHERE  users_test_table.user_id = events_test_table_2.user_id;
 ERROR:  cannot push down this subquery
 DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
--- Should error out due to multiple row return from subquery, but we can not get this information within 
+-- Should error out due to multiple row return from subquery, but we can not get this information within
 -- subquery pushdown planner. This query will be sent to worker with recursive planner.
 \set VERBOSITY terse
 DELETE FROM users_test_table

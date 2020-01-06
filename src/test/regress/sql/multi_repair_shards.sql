@@ -28,7 +28,7 @@ INSERT INTO customer_engagements VALUES (1, '03-01-2015', 'third event');
 -- the following queries does the following:
 -- (i)    create a new shard
 -- (ii)   mark the second shard placements as unhealthy
--- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones 
+-- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones
 -- (iv)   do a successful master_copy_shard_placement from the first placement to the second
 -- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
 
@@ -62,15 +62,12 @@ SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'lo
 INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
 ROLLBACK;
 
--- add a fake healthy placement for the tests
-
-INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
-							 VALUES (:worker_2_group, :newshardid, 1, 0);
+-- deactivate placement
+UPDATE pg_dist_placement SET shardstate = 1 WHERE groupid = :worker_2_group and shardid = :newshardid;
 
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
-DELETE FROM pg_dist_placement
-  WHERE groupid = :worker_2_group AND shardid = :newshardid AND shardstate = 1;
+UPDATE pg_dist_placement SET shardstate = 3 WHERE groupid = :worker_2_group and shardid = :newshardid;
 
 -- also try to copy from an inactive placement
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port);

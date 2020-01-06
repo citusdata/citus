@@ -4,7 +4,7 @@
  *     This file contains implementation of CREATE and ALTER SEQUENCE
  *     statement functions to run in a distributed setting
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -56,7 +56,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 {
 	Oid sequenceId = RangeVarGetRelid(alterSeqStmt->sequence, AccessShareLock,
 									  alterSeqStmt->missing_ok);
-	bool sequenceOwned = false;
 	Oid ownedByTableId = InvalidOid;
 	Oid newOwnedByTableId = InvalidOid;
 	int32 ownedByColumnId = 0;
@@ -68,17 +67,13 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 		return;
 	}
 
-#if (PG_VERSION_NUM >= 100000)
-	sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
-									&ownedByColumnId);
+	bool sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
+										 &ownedByColumnId);
 	if (!sequenceOwned)
 	{
 		sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_INTERNAL, &ownedByTableId,
 										&ownedByColumnId);
 	}
-#else
-	sequenceOwned = sequenceIsOwned(sequenceId, &ownedByTableId, &ownedByColumnId);
-#endif
 
 	/* see whether the sequence is already owned by a distributed table */
 	if (sequenceOwned)

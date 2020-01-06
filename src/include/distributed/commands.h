@@ -5,7 +5,7 @@
  *    and DDL operations for citus. All declarations are grouped by the
  *    file that implements them.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -17,24 +17,64 @@
 
 #include "utils/rel.h"
 #include "nodes/parsenodes.h"
+#include "tcop/dest.h"
 
 
 /* cluster.c - forward declarations */
 extern List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand);
 
 
+/* call.c */
+extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
+
+/* collation.c - forward declarations */
+extern char * CreateCollationDDL(Oid collationId);
+extern List * CreateCollationDDLsIdempotent(Oid collationId);
+extern ObjectAddress AlterCollationOwnerObjectAddress(AlterOwnerStmt *stmt);
+extern List * PlanDropCollationStmt(DropStmt *stmt);
+extern List * PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern List * PlanAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt,
+										   const char *queryString);
+extern List * PlanRenameCollationStmt(RenameStmt *stmt, const char *queryString);
+extern ObjectAddress * RenameCollationStmtObjectAddress(RenameStmt *stmt,
+														bool missing_ok);
+extern ObjectAddress * AlterCollationSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															 bool missing_ok);
+extern void ProcessAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt,
+											const char *queryString);
+extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
+extern ObjectAddress * DefineCollationStmtObjectAddress(DefineStmt *stmt, bool
+														missing_ok);
+extern List * ProcessCollationDefineStmt(DefineStmt *stmt, const char *queryString);
+
 /* extension.c - forward declarations */
-extern bool IsCitusExtensionStmt(Node *parsetree);
+extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
+extern List * PlanCreateExtensionStmt(CreateExtensionStmt *stmt, const char *queryString);
+extern void ProcessCreateExtensionStmt(CreateExtensionStmt *stmt, const
+									   char *queryString);
+extern List * PlanDropExtensionStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+										   const char *queryString);
+extern void ProcessAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt,
+											const char *queryString);
+extern List * PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
+										   char *queryString);
+extern List * CreateExtensionDDLCommand(const ObjectAddress *extensionAddress);
+extern ObjectAddress * AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															 bool missing_ok);
+extern ObjectAddress * AlterExtensionUpdateStmtObjectAddress(
+	AlterExtensionStmt *alterExtensionStmt,
+	bool missing_ok);
 
 
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
 													Oid leftRelationId);
-extern void ErrorIfUnsupportedForeignConstraint(Relation relation, char
-												distributionMethod,
-												Var *distributionColumn, uint32
-												colocationId);
+extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation, char
+													  distributionMethod,
+													  Var *distributionColumn, uint32
+													  colocationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
@@ -42,6 +82,36 @@ extern bool HasForeignKeyToReferenceTable(Oid relationId);
 extern bool TableReferenced(Oid relationId);
 extern bool TableReferencing(Oid relationId);
 extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
+
+
+/* function.c - forward declarations */
+extern List * PlanCreateFunctionStmt(CreateFunctionStmt *stmt, const char *queryString);
+extern List * ProcessCreateFunctionStmt(CreateFunctionStmt *stmt, const
+										char *queryString);
+extern ObjectAddress * CreateFunctionStmtObjectAddress(CreateFunctionStmt *stmt,
+													   bool missing_ok);
+extern ObjectAddress * DefineAggregateStmtObjectAddress(DefineStmt *stmt, bool
+														missing_ok);
+extern List * PlanAlterFunctionStmt(AlterFunctionStmt *stmt, const char *queryString);
+extern ObjectAddress * AlterFunctionStmtObjectAddress(AlterFunctionStmt *stmt,
+													  bool missing_ok);
+extern List * PlanRenameFunctionStmt(RenameStmt *stmt, const char *queryString);
+extern ObjectAddress * RenameFunctionStmtObjectAddress(RenameStmt *stmt,
+													   bool missing_ok);
+extern List * PlanAlterFunctionOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern ObjectAddress * AlterFunctionOwnerObjectAddress(AlterOwnerStmt *stmt,
+													   bool missing_ok);
+extern List * PlanAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
+										  const char *queryString);
+extern ObjectAddress * AlterFunctionSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+															bool missing_ok);
+extern void ProcessAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt,
+										   const char *queryString);
+extern List * PlanDropFunctionStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt,
+										   const char *queryString);
+extern ObjectAddress * AlterFunctionDependsStmtObjectAddress(AlterObjectDependsStmt *stmt,
+															 bool missing_ok);
 
 
 /* grant.c - forward declarations */
@@ -52,6 +122,8 @@ extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PlanIndexStmt(IndexStmt *createIndexStatement,
 							const char *createIndexCommand);
+extern List * PlanReindexStmt(ReindexStmt *ReindexStatement,
+							  const char *ReindexCommand);
 extern List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								const char *dropIndexCommand);
 extern void PostProcessIndexStmt(IndexStmt *indexStmt);
@@ -81,10 +153,20 @@ extern List * PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand);
 extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 
 
+/* role.c - forward declarations*/
+extern List * ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString);
+extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
+
+
 /* schema.c - forward declarations */
 extern void ProcessDropSchemaStmt(DropStmt *dropSchemaStatement);
+extern List * PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
 extern List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										const char *alterObjectSchemaCommand);
+
+extern void ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt,
+										 const char *queryString);
 
 
 /* sequence.c - forward declarations */
@@ -92,11 +174,8 @@ extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 
 
-#if (PG_VERSION_NUM >= 100000)
-
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);
-#endif /* PG_VERSION_NUM >= 100000 */
 
 
 /* table.c - forward declarations */
@@ -119,6 +198,42 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 /* truncate.c - forward declarations */
 extern void ProcessTruncateStatement(TruncateStmt *truncateStatement);
 
+/* type.c - forward declarations */
+extern List * PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString);
+extern void ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString);
+extern List * PlanCreateEnumStmt(CreateEnumStmt *createEnumStmt, const char *queryString);
+extern void ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString);
+extern List * PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern void ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString);
+extern List * PlanDropTypeStmt(DropStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString);
+extern List * PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									  const char *queryString);
+extern List * PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
+extern void ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt,
+									   const char *queryString);
+extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
+extern ObjectAddress * CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool
+													  missing_ok);
+extern ObjectAddress * CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok);
+extern ObjectAddress * RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
+extern ObjectAddress * AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
+														bool missing_ok);
+extern ObjectAddress * RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool
+															missing_ok);
+extern ObjectAddress * AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok);
+extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
+extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
+
+/* function.c - forward declarations */
+extern List * CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress);
+extern char * GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace);
+extern char * GenerateBackupNameForProcCollision(const ObjectAddress *address);
+extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 
 /* vacuum.c - froward declarations */
 extern void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);

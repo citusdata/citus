@@ -14,7 +14,7 @@ SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 903
 -- We use the l_linenumber field for the following aggregations. We need to use
 -- an integer type, as aggregations on numerics or big integers return numerics
 -- of unknown length. When the numerics are read into our temporary table, they
--- trigger the the creation of toasted tables and indexes. This in turn prints
+-- trigger the creation of toasted tables and indexes. This in turn prints
 -- non-deterministic debug messages. To avoid this chain, we use l_linenumber.
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
@@ -92,6 +92,7 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 	LIMIT 1;
 
 -- Create composite type partitioned table
+RESET client_min_messages; -- avoid debug messages
 
 CREATE TYPE composite_type AS
 (
@@ -100,7 +101,6 @@ CREATE TYPE composite_type AS
 	varchar_column varchar(50)
 );
 
-RESET client_min_messages; -- avoid debug messages about toast index creation
 CREATE TABLE composite_partitioned_table
 (
 	composite_column composite_type

@@ -4,7 +4,7 @@
  *
  * Declarations for public functions and types related to router planning.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -15,6 +15,7 @@
 #include "c.h"
 
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -37,8 +38,9 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext,
 											  List **placementList, uint64 *anchorShardId,
-											  List **relationShardList, bool
-											  replacePrunedQueryWithDummy,
+											  List **relationShardList,
+											  List **prunedShardIntervalListList,
+											  bool replacePrunedQueryWithDummy,
 											  bool *multiShardModifyQuery,
 											  Const **partitionValueConst);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
@@ -61,7 +63,7 @@ extern RelationRestrictionContext * CopyRelationRestrictionContext(
 extern Oid ExtractFirstDistributedTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern Oid ModifyQueryResultRelationId(Query *query);
-extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
+extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,

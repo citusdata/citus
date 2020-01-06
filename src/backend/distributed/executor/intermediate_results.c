@@ -3,7 +3,7 @@
  * intermediate_results.c
  *   Functions for writing and reading intermediate results.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -23,10 +23,13 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
@@ -65,7 +68,7 @@ typedef struct RemoteFileDestReceiver
 
 	/* whether to write to a local file */
 	bool writeLocalFile;
-	File fileDesc;
+	FileCompat fileCompat;
 
 	/* state on how to copy out data types */
 	CopyOutState copyOutState;
@@ -79,7 +82,7 @@ typedef struct RemoteFileDestReceiver
 static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 										  TupleDesc inputTupleDescriptor);
 static StringInfo ConstructCopyResultStatement(const char *resultId);
-static void WriteToLocalFile(StringInfo copyData, File fileDesc);
+static void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 static bool RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
 static void BroadcastCopyData(StringInfo dataBuffer, List *connectionList);
 static void SendCopyDataOverConnection(StringInfo dataBuffer,
@@ -87,15 +90,22 @@ static void SendCopyDataOverConnection(StringInfo dataBuffer,
 static void RemoteFileDestReceiverShutdown(DestReceiver *destReceiver);
 static void RemoteFileDestReceiverDestroy(DestReceiver *destReceiver);
 
-static char * CreateIntermediateResultsDirectory(void);
 static char * IntermediateResultsDirectory(void);
-static char * QueryResultFileName(const char *resultId);
-
+static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
+												  char *copyFormat,
+												  Datum *resultIdArray,
+												  int resultCount);
+static uint64 FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId);
+static CopyStatus CopyDataFromConnection(MultiConnection *connection,
+										 FileCompat *fileCompat,
+										 uint64 *bytesReceived);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
+PG_FUNCTION_INFO_V1(read_intermediate_result_array);
 PG_FUNCTION_INFO_V1(broadcast_intermediate_result);
 PG_FUNCTION_INFO_V1(create_intermediate_result);
+PG_FUNCTION_INFO_V1(fetch_intermediate_results);
 
 
 /*
@@ -109,10 +119,7 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
 	char *queryString = text_to_cstring(queryText);
-	EState *estate = NULL;
-	List *nodeList = NIL;
 	bool writeLocalFile = false;
-	RemoteFileDestReceiver *resultDest = NULL;
 	ParamListInfo paramListInfo = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -123,13 +130,15 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
-	nodeList = ActivePrimaryNodeList();
-	estate = CreateExecutorState();
-	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
-																		 estate, nodeList,
-																		 writeLocalFile);
+	List *nodeList = ActivePrimaryWorkerNodeList(NoLock);
+	EState *estate = CreateExecutorState();
+	RemoteFileDestReceiver *resultDest =
+		(RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																estate,
+																nodeList,
+																writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -151,10 +160,8 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
 	char *queryString = text_to_cstring(queryText);
-	EState *estate = NULL;
 	List *nodeList = NIL;
 	bool writeLocalFile = true;
-	RemoteFileDestReceiver *resultDest = NULL;
 	ParamListInfo paramListInfo = NULL;
 
 	CheckCitusVersion(ERROR);
@@ -165,12 +172,14 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
-	estate = CreateExecutorState();
-	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
-																		 estate, nodeList,
-																		 writeLocalFile);
+	EState *estate = CreateExecutorState();
+	RemoteFileDestReceiver *resultDest =
+		(RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																estate,
+																nodeList,
+																writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -191,9 +200,8 @@ DestReceiver *
 CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 							 List *initialNodeList, bool writeLocalFile)
 {
-	RemoteFileDestReceiver *resultDest = NULL;
-
-	resultDest = (RemoteFileDestReceiver *) palloc0(sizeof(RemoteFileDestReceiver));
+	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) palloc0(
+		sizeof(RemoteFileDestReceiver));
 
 	/* set up the DestReceiver function pointers */
 	resultDest->pub.receiveSlot = RemoteFileDestReceiverReceive;
@@ -226,7 +234,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	const char *resultId = resultDest->resultId;
 
-	CopyOutState copyOutState = NULL;
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
@@ -238,7 +245,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	resultDest->tupleDescriptor = inputTupleDescriptor;
 
 	/* define how tuples will be serialised */
-	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
@@ -254,16 +261,15 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	{
 		const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 		const int fileMode = (S_IRUSR | S_IWUSR);
-		const char *fileName = NULL;
 
 		/* make sure the directory exists */
 		CreateIntermediateResultsDirectory();
 
-		fileName = QueryResultFileName(resultId);
+		const char *fileName = QueryResultFileName(resultId);
 
-		elog(DEBUG1, "writing to local file \"%s\"", fileName);
-
-		resultDest->fileDesc = FileOpenForTransmit(fileName, fileFlags, fileMode);
+		resultDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(fileName,
+																			 fileFlags,
+																			 fileMode));
 	}
 
 	foreach(initialNodeCell, initialNodeList)
@@ -271,7 +277,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		WorkerNode *workerNode = (WorkerNode *) lfirst(initialNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 
 		/*
 		 * We prefer to use a connection that is not associcated with
@@ -279,7 +284,9 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		 * exclusively and that would prevent the consecutive DML/DDL
 		 * use the same connection.
 		 */
-		connection = StartNonDataAccessConnection(nodeName, nodePort);
+		int flags = REQUIRE_SIDECHANNEL;
+
+		MultiConnection *connection = StartNodeConnection(flags, nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
 		MarkRemoteTransactionCritical(connection);
 
@@ -294,12 +301,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		StringInfo copyCommand = NULL;
-		bool querySent = false;
 
-		copyCommand = ConstructCopyResultStatement(resultId);
+		StringInfo copyCommand = ConstructCopyResultStatement(resultId);
 
-		querySent = SendRemoteCommand(connection, copyCommand->data);
+		bool querySent = SendRemoteCommand(connection, copyCommand->data);
 		if (!querySent)
 		{
 			ReportConnectionError(connection, ERROR);
@@ -329,7 +334,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 		if (resultDest->writeLocalFile)
 		{
-			WriteToLocalFile(copyOutState->fe_msgbuf, resultDest->fileDesc);
+			WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
 		}
 	}
 
@@ -369,8 +374,6 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	CopyOutState copyOutState = resultDest->copyOutState;
 	FmgrInfo *columnOutputFunctions = resultDest->columnOutputFunctions;
 
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
 	StringInfo copyData = copyOutState->fe_msgbuf;
 
 	EState *executorState = resultDest->executorState;
@@ -379,8 +382,8 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	slot_getallattrs(slot);
 
-	columnValues = slot->tts_values;
-	columnNulls = slot->tts_isnull;
+	Datum *columnValues = slot->tts_values;
+	bool *columnNulls = slot->tts_isnull;
 
 	resetStringInfo(copyData);
 
@@ -394,7 +397,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	/* write to local file (if applicable) */
 	if (resultDest->writeLocalFile)
 	{
-		WriteToLocalFile(copyOutState->fe_msgbuf, resultDest->fileDesc);
+		WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -411,9 +414,11 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
  * WriteToLocalResultsFile writes the bytes in a StringInfo to a local file.
  */
 static void
-WriteToLocalFile(StringInfo copyData, File fileDesc)
+WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat)
 {
-	int bytesWritten = FileWrite(fileDesc, copyData->data, copyData->len, PG_WAIT_IO);
+	int bytesWritten = FileWriteCompat(fileCompat, copyData->data,
+									   copyData->len,
+									   PG_WAIT_IO);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -444,7 +449,7 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 
 		if (resultDest->writeLocalFile)
 		{
-			WriteToLocalFile(copyOutState->fe_msgbuf, resultDest->fileDesc);
+			WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
 		}
 	}
 
@@ -453,7 +458,7 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 
 	if (resultDest->writeLocalFile)
 	{
-		FileClose(resultDest->fileDesc);
+		FileClose(resultDest->fileCompat.fd);
 	}
 }
 
@@ -511,6 +516,20 @@ RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 
 
 /*
+ * SendQueryResultViaCopy is called when a COPY "resultid" TO STDOUT
+ * WITH (format result) command is received from the client. The
+ * contents of the file are sent directly to the client.
+ */
+void
+SendQueryResultViaCopy(const char *resultId)
+{
+	const char *resultFileName = QueryResultFileName(resultId);
+
+	SendRegularFile(resultFileName);
+}
+
+
+/*
  * ReceiveQueryResultViaCopy is called when a COPY "resultid" FROM
  * STDIN WITH (format result) command is received from the client.
  * The command is followed by the raw copy data stream, which is
@@ -522,11 +541,9 @@ RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 void
 ReceiveQueryResultViaCopy(const char *resultId)
 {
-	const char *resultFileName = NULL;
-
 	CreateIntermediateResultsDirectory();
 
-	resultFileName = QueryResultFileName(resultId);
+	const char *resultFileName = QueryResultFileName(resultId);
 
 	RedirectCopyDataToRegularFile(resultFileName);
 }
@@ -537,7 +554,7 @@ ReceiveQueryResultViaCopy(const char *resultId)
  * directory for the current transaction if it does not exist and ensures
  * that the directory is removed at the end of the transaction.
  */
-static char *
+char *
 CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
@@ -572,7 +589,7 @@ CreateIntermediateResultsDirectory(void)
  * an intermediate result with the given key in the per transaction
  * result directory.
  */
-static char *
+char *
 QueryResultFileName(const char *resultId)
 {
 	StringInfo resultFileName = makeStringInfo();
@@ -667,12 +684,10 @@ RemoveIntermediateResultsDirectory(void)
 int64
 IntermediateResultSize(char *resultId)
 {
-	char *resultFileName = NULL;
 	struct stat fileStat;
-	int statOK = 0;
 
-	resultFileName = QueryResultFileName(resultId);
-	statOK = stat(resultFileName, &fileStat);
+	char *resultFileName = QueryResultFileName(resultId);
+	int statOK = stat(resultFileName, &fileStat);
 	if (statOK < 0)
 	{
 		return -1;
@@ -700,89 +715,298 @@ IntermediateResultSize(char *resultId)
 Datum
 read_intermediate_result(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-
-	text *resultIdText = PG_GETARG_TEXT_P(0);
-	char *resultIdString = text_to_cstring(resultIdText);
+	Datum resultId = PG_GETARG_DATUM(0);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
-	char *resultFileName = NULL;
-	struct stat fileStat;
-	int statOK = 0;
+	CheckCitusVersion(ERROR);
 
-	Tuplestorestate *tupstore = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	MemoryContext oldcontext = NULL;
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel, &resultId, 1);
+
+	PG_RETURN_DATUM(0);
+}
+
+
+/*
+ * read_intermediate_result_array returns the set of records in a set of given
+ * COPY-formatted intermediate result files.
+ *
+ * The usage and semantics of this is same as read_intermediate_result(), except
+ * that its first argument is an array of result ids.
+ */
+Datum
+read_intermediate_result_array(PG_FUNCTION_ARGS)
+{
+	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
+	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
+
+	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
+	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
 
 	CheckCitusVersion(ERROR);
 
-	resultFileName = QueryResultFileName(resultIdString);
-	statOK = stat(resultFileName, &fileStat);
-	if (statOK != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("result \"%s\" does not exist", resultIdString)));
-	}
+	int32 resultCount = ArrayGetNItems(ARR_NDIM(resultIdObject), ARR_DIMS(
+										   resultIdObject));
+	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
 
-	/* check to see if query supports us returning a tuplestore */
-	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "set-valued function called in context that cannot accept a set")));
-	}
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel,
+										  resultIdArray, resultCount);
 
-	if (!(rsinfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg(
-					 "materialize mode required, but it is not allowed in this context")));
-	}
+	PG_RETURN_DATUM(0);
+}
 
-	/* get a tuple descriptor for our result type */
-	switch (get_call_result_type(fcinfo, NULL, &tupleDescriptor))
+
+/*
+ * ReadIntermediateResultsIntoFuncOutput reads the given result files and stores
+ * them at the function's output tuple store. Errors out if any of the result files
+ * don't exist.
+ */
+static void
+ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
+									  Datum *resultIdArray, int resultCount)
+{
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+
+	for (int resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
-		case TYPEFUNC_COMPOSITE:
+		char *resultId = TextDatumGetCString(resultIdArray[resultIndex]);
+		char *resultFileName = QueryResultFileName(resultId);
+		struct stat fileStat;
+
+		int statOK = stat(resultFileName, &fileStat);
+		if (statOK != 0)
 		{
-			/* success */
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("result \"%s\" does not exist", resultId)));
+		}
+
+		ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor, tupleStore);
+	}
+
+	tuplestore_donestoring(tupleStore);
+}
+
+
+/*
+ * fetch_intermediate_results fetches a set of intermediate results defined in an
+ * array of result IDs from a remote node and writes them to a local intermediate
+ * result with the same ID.
+ */
+Datum
+fetch_intermediate_results(PG_FUNCTION_ARGS)
+{
+	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
+	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
+	int32 resultCount = ArrayObjectCount(resultIdObject);
+	text *remoteHostText = PG_GETARG_TEXT_P(1);
+	char *remoteHost = text_to_cstring(remoteHostText);
+	int remotePort = PG_GETARG_INT32(2);
+
+	int connectionFlags = 0;
+	int resultIndex = 0;
+	int64 totalBytesWritten = 0L;
+
+	CheckCitusVersion(ERROR);
+
+	if (resultCount == 0)
+	{
+		PG_RETURN_INT64(0);
+	}
+
+	if (!IsMultiStatementTransaction())
+	{
+		ereport(ERROR, (errmsg("fetch_intermediate_results can only be used in a "
+							   "distributed transaction")));
+	}
+
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results will be stored in a directory that is derived
+	 * from the distributed transaction ID.
+	 */
+	UseCoordinatedTransaction();
+
+	MultiConnection *connection = GetNodeConnection(connectionFlags, remoteHost,
+													remotePort);
+
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ereport(ERROR, (errmsg("cannot connect to %s:%d to fetch intermediate "
+							   "results",
+							   remoteHost, remotePort)));
+	}
+
+	RemoteTransactionBegin(connection);
+
+	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
+	{
+		char *resultId = TextDatumGetCString(resultIdArray[resultIndex]);
+
+		totalBytesWritten += FetchRemoteIntermediateResult(connection, resultId);
+	}
+
+	RemoteTransactionCommit(connection);
+	CloseConnection(connection);
+
+	PG_RETURN_INT64(totalBytesWritten);
+}
+
+
+/*
+ * FetchRemoteIntermediateResult fetches a remote intermediate result over
+ * the given connection.
+ */
+static uint64
+FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
+{
+	uint64 totalBytesWritten = 0;
+
+	StringInfo copyCommand = makeStringInfo();
+	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
+	const int fileMode = (S_IRUSR | S_IWUSR);
+
+	PGconn *pgConn = connection->pgConn;
+	int socket = PQsocket(pgConn);
+	bool raiseErrors = true;
+
+	CreateIntermediateResultsDirectory();
+
+	appendStringInfo(copyCommand, "COPY \"%s\" TO STDOUT WITH (format result)",
+					 resultId);
+
+	if (!SendRemoteCommand(connection, copyCommand->data))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+	if (PQresultStatus(result) != PGRES_COPY_OUT)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	PQclear(result);
+
+	char *localPath = QueryResultFileName(resultId);
+	File fileDesc = FileOpenForTransmit(localPath, fileFlags, fileMode);
+	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
+
+	while (true)
+	{
+		int waitFlags = WL_SOCKET_READABLE;
+
+		CopyStatus copyStatus = CopyDataFromConnection(connection, &fileCompat,
+													   &totalBytesWritten);
+		if (copyStatus == CLIENT_COPY_FAILED)
+		{
+			ereport(ERROR, (errmsg("failed to read result \"%s\" from node %s:%d",
+								   resultId, connection->hostname, connection->port)));
+		}
+		else if (copyStatus == CLIENT_COPY_DONE)
+		{
 			break;
 		}
 
-		case TYPEFUNC_RECORD:
+		Assert(copyStatus == CLIENT_COPY_MORE);
+
+		int rc = WaitLatchOrSocket(MyLatch, waitFlags, socket, 0, PG_WAIT_EXTENSION);
+		if (rc & WL_POSTMASTER_DEATH)
 		{
-			/* failed to determine actual type of RECORD */
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("function returning record called in context "
-							"that cannot accept type record")));
-			break;
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 		}
 
-		default:
+		if (rc & WL_LATCH_SET)
 		{
-			/* result type isn't composite */
-			elog(ERROR, "return type must be a row type");
-			break;
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
 		}
 	}
 
-	tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
+	FileClose(fileDesc);
 
-	oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
+	ClearResults(connection, raiseErrors);
 
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupleDescriptor;
-	MemoryContextSwitchTo(oldcontext);
+	return totalBytesWritten;
+}
 
-	ReadFileIntoTupleStore(resultFileName, copyFormatLabel, tupleDescriptor, tupstore);
 
-	tuplestore_donestoring(tupstore);
+/*
+ * CopyDataFromConnection reads a row of copy data from connection and writes it
+ * to the given file.
+ */
+static CopyStatus
+CopyDataFromConnection(MultiConnection *connection, FileCompat *fileCompat,
+					   uint64 *bytesReceived)
+{
+	/*
+	 * Consume input to handle the case where previous copy operation might have
+	 * received zero bytes.
+	 */
+	int consumed = PQconsumeInput(connection->pgConn);
+	if (consumed == 0)
+	{
+		return CLIENT_COPY_FAILED;
+	}
 
-	return (Datum) 0;
+	/* receive copy data message in an asynchronous manner */
+	char *receiveBuffer = NULL;
+	bool asynchronous = true;
+	int receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
+	while (receiveLength > 0)
+	{
+		/* received copy data; append these data to file */
+		errno = 0;
+
+		int bytesWritten = FileWriteCompat(fileCompat, receiveBuffer,
+										   receiveLength, PG_WAIT_IO);
+		if (bytesWritten != receiveLength)
+		{
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("could not append to file: %m")));
+		}
+
+		*bytesReceived += receiveLength;
+		PQfreemem(receiveBuffer);
+		receiveLength = PQgetCopyData(connection->pgConn, &receiveBuffer, asynchronous);
+	}
+
+	if (receiveLength == 0)
+	{
+		/* we cannot read more data without blocking */
+		return CLIENT_COPY_MORE;
+	}
+	else if (receiveLength == -1)
+	{
+		/* received copy done message */
+		bool raiseInterrupts = true;
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		ExecStatusType resultStatus = PQresultStatus(result);
+		CopyStatus copyStatus = 0;
+
+		if (resultStatus == PGRES_COMMAND_OK)
+		{
+			copyStatus = CLIENT_COPY_DONE;
+		}
+		else
+		{
+			copyStatus = CLIENT_COPY_FAILED;
+
+			ReportResultError(connection, result, WARNING);
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+
+		return copyStatus;
+	}
+	else
+	{
+		Assert(receiveLength == -2);
+		ReportConnectionError(connection, WARNING);
+
+		return CLIENT_COPY_FAILED;
+	}
 }

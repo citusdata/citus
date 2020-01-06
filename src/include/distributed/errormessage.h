@@ -3,7 +3,7 @@
  * errormessage.h
  *	  Error handling related support functionality.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -72,5 +72,3 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);
 
 #endif
-
-extern char * ApplyLogRedaction(const char *text);

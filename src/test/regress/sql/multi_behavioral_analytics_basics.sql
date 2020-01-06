@@ -56,7 +56,7 @@ FROM (
       AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
-      SELECT DISTINCT user_id, 
+      SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
       WHERE  e.user_id >= 1
@@ -123,7 +123,7 @@ SELECT
       users_table
     WHERE
       user_id >= 1 AND
-      user_id <= 3 AND    
+      user_id <= 3 AND
       users_table.value_1 > 3 AND users_table.value_1 < 5
     GROUP BY
       user_id
@@ -164,7 +164,7 @@ FROM (
         max(u.time) as user_lastseen,
         array_agg(event_type ORDER BY u.time) AS event_array
     FROM (
-        
+
         SELECT user_id, time
         FROM users_table
         WHERE
@@ -199,9 +199,9 @@ FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
-    
+
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;    
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 
 ------------------------------------
 ------------------------------------
@@ -283,7 +283,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   value_2 >= 3
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id)
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id=users_table.user_id);
-  
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 
@@ -295,24 +295,24 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_2_agg)
-  SELECT user_id, 
-         value_2 
+  SELECT user_id,
+         value_2
   FROM   users_table
   WHERE  value_1 > 1
-         AND value_1 < 3 
+         AND value_1 < 3
          AND value_2 >= 1
-         AND EXISTS (SELECT user_id 
+         AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 1 
-                            AND event_type < 3 
+                     WHERE  event_type > 1
+                            AND event_type < 3
                             AND value_3 > 1
-                            AND user_id = users_table.user_id 
-                     GROUP  BY user_id 
+                            AND user_id = users_table.user_id
+                     GROUP  BY user_id
                      HAVING Count(*) > 2);
-                     
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
-                                  
+
 ------------------------------------
 ------------------------------------
 -- Find me all users_table who logged in more than once
@@ -324,7 +324,7 @@ INSERT INTO agg_results(user_id, value_1_agg)
 SELECT user_id, value_1 from
 (
   SELECT user_id, value_1 From users_table
-  WHERE value_2 > 1 and user_id = 1 GROUP BY value_1, user_id HAVING count(*) > 1 
+  WHERE value_2 > 1 and user_id = 1 GROUP BY value_1, user_id HAVING count(*) > 1
 ) as a;
 
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -346,8 +346,8 @@ And user_id in
   (select user_id
    From users_table
    Where value_1 = 2
-   And value_2 > 1);  
- 
+   And value_2 > 1);
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 
@@ -365,27 +365,27 @@ GROUP BY user_id, event_type;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
-       
+
 ------------------------------------
 ------------------------------------
 -- Find me all the users_table who has done some event more than three times
 ------------------------------------
-------------------------------------    
+------------------------------------
 TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id)
 select user_id from
 (
-  select 
+  select
      user_id
-   from 
+   from
    	events_table
 where event_type = 4 group by user_id having count(*) > 3
 ) as a;
-   
+
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
-       
+
 ------------------------------------
 ------------------------------------
 -- Find my assets that have the highest probability and fetch their metadata
@@ -396,17 +396,17 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg, value_3_agg)
 SELECT
     users_table.user_id, users_table.value_1, prob
-FROM 
+FROM
    users_table
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, (GREATEST(coalesce(ma.value_4, 0.0) / 250 + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
     	users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
     	short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
-    ) temp 
-  ON users_table.user_id = temp.user_id 
+    ) temp
+  ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 3;
 
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -418,17 +418,17 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 SELECT
     DISTINCT users_ids.user_id
-FROM 
+FROM
    (SELECT DISTINCT user_id FROM users_table) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
     	users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
     	short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
-    ) temp 
-  ON users_ids.user_id = temp.user_id 
+    ) temp
+  ON users_ids.user_id = temp.user_id
   WHERE temp.value_1 < 3;
 
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -440,17 +440,17 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg, value_2_agg)
 SELECT
     DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
-FROM 
+FROM
    (SELECT DISTINCT user_id FROM users_table) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
-    ) temp 
-  ON users_ids.user_id = temp.user_id 
+    ) temp
+  ON users_ids.user_id = temp.user_id
   WHERE temp.value_1 < 3
   ORDER BY 1, 2;
 
@@ -462,16 +462,16 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg, value_2_agg)
 SELECT
     DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
-FROM 
+FROM
    (SELECT DISTINCT ON (user_id) user_id, value_2 FROM users_table ORDER BY 1,2) as users_ids
-        JOIN 
-   (SELECT  
+        JOIN
+   (SELECT
       ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
-    FROM 
+    FROM
       users_table AS ma, events_table as short_list
-    WHERE 
+    WHERE
       short_list.user_id = ma.user_id and ma.value_1 < 10 and short_list.event_type < 2
-    ) temp 
+    ) temp
   ON users_ids.user_id = temp.user_id
   ORDER BY 1, 2;
 

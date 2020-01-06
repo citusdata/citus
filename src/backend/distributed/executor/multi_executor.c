@@ -4,7 +4,7 @@
  *
  * Entrypoint into distributed query execution.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -14,25 +14,30 @@
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_class.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
+#include "parser/parse_oper.h"
 #include "storage/lmgr.h"
 #include "tcop/dest.h"
 #include "tcop/pquery.h"
@@ -43,17 +48,27 @@
 
 /*
  * Controls the connection type for multi shard modifications, DDLs
- * TRUNCATE and real-time SELECT queries.
+ * TRUNCATE and multi-shard SELECT queries.
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
 
 
+/* sort the returning to get consistent outputs, used only for testing */
+bool SortReturning = false;
+
+/*
+ * How many nested executors have we started? This can happen for SQL
+ * UDF calls. The outer query starts an executor, then postgres opens
+ * another executor to run the SQL UDF.
+ */
+int ExecutorLevel = 0;
+
+
 /* local function forward declarations */
-static bool IsCitusPlan(Plan *plan);
-static bool IsCitusCustomScan(Plan *plan);
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
+static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -107,123 +122,70 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
-	int originalLevel = FunctionCallLevel;
 
-	if (dest->mydest == DestSPI)
+	PG_TRY();
 	{
+		ExecutorLevel++;
+
+		if (CitusHasBeenLoaded())
+		{
+			if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
+				IsMultiStatementTransaction())
+			{
+				/*
+				 * Currently we don't support this to avoid problems with tuple
+				 * visibility, locking, etc. For example, change to the reference
+				 * table can go through a MultiConnection, which won't be visible
+				 * to the locally planned queries.
+				 */
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot join local tables and reference tables in "
+									   "a transaction block, udf block, or distributed "
+									   "CTE subquery")));
+			}
+		}
+
 		/*
-		 * If the query runs via SPI, we assume we're in a function call
-		 * and we should treat statements as part of a bigger transaction.
-		 * We reset this counter to 0 in the abort handler.
+		 * Disable execution of ALTER TABLE constraint validation queries. These
+		 * constraints will be validated in worker nodes, so running these queries
+		 * from the coordinator would be redundant.
+		 *
+		 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
+		 * partition doesn't violate constraints of the parent table, which
+		 * might involve running some SELECT queries.
+		 *
+		 * Ideally we'd completely skip these checks in the coordinator, but we don't
+		 * have any means to tell postgres to skip the checks. So the best we can do is
+		 * to not execute the queries and return an empty result set, as if this table has
+		 * no rows, so no constraints will be violated.
 		 */
-		FunctionCallLevel++;
-	}
+		if (AlterTableConstraintCheck(queryDesc))
+		{
+			EState *estate = queryDesc->estate;
 
-	/*
-	 * Disable execution of ALTER TABLE constraint validation queries. These
-	 * constraints will be validated in worker nodes, so running these queries
-	 * from the coordinator would be redundant.
-	 *
-	 * For example, ALTER TABLE ... ATTACH PARTITION checks that the new
-	 * partition doesn't violate constraints of the parent table, which
-	 * might involve running some SELECT queries.
-	 *
-	 * Ideally we'd completely skip these checks in the coordinator, but we don't
-	 * have any means to tell postgres to skip the checks. So the best we can do is
-	 * to not execute the queries and return an empty result set, as if this table has
-	 * no rows, so no constraints will be violated.
-	 */
-	if (AlterTableConstraintCheck(queryDesc))
+			estate->es_processed = 0;
+#if PG_VERSION_NUM < 120000
+			estate->es_lastoid = InvalidOid;
+#endif
+
+			/* start and shutdown tuple receiver to simulate empty result */
+			dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
+			dest->rShutdown(dest);
+		}
+		else
+		{
+			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		}
+
+		ExecutorLevel--;
+	}
+	PG_CATCH();
 	{
-		EState *estate = queryDesc->estate;
+		ExecutorLevel--;
 
-		estate->es_processed = 0;
-		estate->es_lastoid = InvalidOid;
-
-		/* start and shutdown tuple receiver to simulate empty result */
-		dest->rStartup(queryDesc->dest, CMD_SELECT, queryDesc->tupDesc);
-		dest->rShutdown(dest);
+		PG_RE_THROW();
 	}
-	else
-	{
-		standard_ExecutorRun(queryDesc, direction, count, execute_once);
-	}
-
-	if (dest->mydest == DestSPI)
-	{
-		/*
-		 * Restore the original value. It is not sufficient to decrease
-		 * the value because exceptions might cause us to go back a few
-		 * levels at once.
-		 */
-		FunctionCallLevel = originalLevel;
-	}
-}
-
-
-/*
- * IsCitusPlan returns whether a Plan contains a CustomScan generated by Citus
- * by recursively walking through the plan tree.
- */
-static bool
-IsCitusPlan(Plan *plan)
-{
-	if (plan == NULL)
-	{
-		return false;
-	}
-
-	if (IsCitusCustomScan(plan))
-	{
-		return true;
-	}
-
-	if (plan->lefttree != NULL && IsCitusPlan(plan->lefttree))
-	{
-		return true;
-	}
-
-	if (plan->righttree != NULL && IsCitusPlan(plan->righttree))
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
- * IsCitusCustomScan returns whether Plan node is a CustomScan generated by Citus.
- */
-static bool
-IsCitusCustomScan(Plan *plan)
-{
-	CustomScan *customScan = NULL;
-	Node *privateNode = NULL;
-
-	if (plan == NULL)
-	{
-		return false;
-	}
-
-	if (!IsA(plan, CustomScan))
-	{
-		return false;
-	}
-
-	customScan = (CustomScan *) plan;
-	if (list_length(customScan->custom_private) == 0)
-	{
-		return false;
-	}
-
-	privateNode = (Node *) linitial(customScan->custom_private);
-	if (!CitusIsA(privateNode, DistributedPlan))
-	{
-		return false;
-	}
-
-	return true;
+	PG_END_TRY();
 }
 
 
@@ -236,9 +198,6 @@ TupleTableSlot *
 ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
-	TupleTableSlot *resultSlot = NULL;
-	EState *executorState = NULL;
-	ScanDirection scanDirection = NoMovementScanDirection;
 	bool forwardScanDirection = true;
 
 	if (tupleStore == NULL)
@@ -246,8 +205,8 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		return NULL;
 	}
 
-	executorState = ScanStateGetExecutorState(scanState);
-	scanDirection = executorState->es_direction;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ScanDirection scanDirection = executorState->es_direction;
 	Assert(ScanDirectionIsValid(scanDirection));
 
 	if (ScanDirectionIsBackward(scanDirection))
@@ -255,7 +214,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		forwardScanDirection = false;
 	}
 
-	resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
+	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
 
 	return resultSlot;
@@ -263,7 +222,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 
 
 /*
- * Load data collected by real-time or task-tracker executors into the tuplestore
+ * Load data collected by task-tracker executor into the tuplestore
  * of CitusScanState. For that, we first create a tuple store, and then copy the
  * files one-by-one into the tuple store.
  *
@@ -274,13 +233,12 @@ void
 LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
 	List *workerTaskList = workerJob->taskList;
-	TupleDesc tupleDescriptor = NULL;
 	ListCell *workerTaskCell = NULL;
 	bool randomAccess = true;
 	bool interTransactions = false;
 	char *copyFormat = "text";
 
-	tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
 
 	Assert(citusScanState->tuplestorestate == NULL);
 	citusScanState->tuplestorestate =
@@ -294,11 +252,9 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 	foreach(workerTaskCell, workerTaskList)
 	{
 		Task *workerTask = (Task *) lfirst(workerTaskCell);
-		StringInfo jobDirectoryName = NULL;
-		StringInfo taskFilename = NULL;
 
-		jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
-		taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
+		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
+		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
 		ReadFileIntoTupleStore(taskFilename->data, copyFormat, tupleDescriptor,
 							   citusScanState->tuplestorestate);
@@ -317,8 +273,6 @@ void
 ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescriptor,
 					   Tuplestorestate *tupstore)
 {
-	CopyState copyState = NULL;
-
 	/*
 	 * Trick BeginCopyFrom into using our tuple descriptor by pretending it belongs
 	 * to a relation.
@@ -333,26 +287,23 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
 	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
-	DefElem *copyOption = NULL;
 	List *copyOptions = NIL;
 
 	int location = -1; /* "unknown" token location */
-	copyOption = makeDefElem("format", (Node *) makeString(copyFormat), location);
+	DefElem *copyOption = makeDefElem("format", (Node *) makeString(copyFormat),
+									  location);
 	copyOptions = lappend(copyOptions, copyOption);
 
-	copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-							  NULL, copyOptions);
+	CopyState copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
+										NULL, copyOptions);
 
 	while (true)
 	{
-		MemoryContext oldContext = NULL;
-		bool nextRowFound = false;
-
 		ResetPerTupleExprContext(executorState);
-		oldContext = MemoryContextSwitchTo(executorTupleContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-									columnValues, columnNulls, NULL);
+		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+											   columnValues, columnNulls);
 		if (!nextRowFound)
 		{
 			MemoryContextSwitchTo(oldContext);
@@ -366,6 +317,105 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 	EndCopyFrom(copyState);
 	pfree(columnValues);
 	pfree(columnNulls);
+}
+
+
+/*
+ * SortTupleStore gets a CitusScanState and sorts the tuplestore by all the
+ * entries in the target entry list, starting from the first one and
+ * ending with the last entry.
+ *
+ * The sorting is done in ASC order.
+ */
+void
+SortTupleStore(CitusScanState *scanState)
+{
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	Tuplestorestate *tupleStore = scanState->tuplestorestate;
+
+	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
+	uint32 expectedColumnCount = list_length(targetList);
+
+	/* Convert list-ish representation to arrays wanted by executor */
+	int numberOfSortKeys = expectedColumnCount;
+	AttrNumber *sortColIdx = (AttrNumber *) palloc(numberOfSortKeys * sizeof(AttrNumber));
+	Oid *sortOperators = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
+	Oid *collations = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
+	bool *nullsFirst = (bool *) palloc(numberOfSortKeys * sizeof(bool));
+
+	ListCell *targetCell = NULL;
+	int sortKeyIndex = 0;
+
+
+	/*
+	 * Iterate on the returning target list and generate the necessary information
+	 * for sorting the tuples.
+	 */
+	foreach(targetCell, targetList)
+	{
+		TargetEntry *returningEntry = (TargetEntry *) lfirst(targetCell);
+		Oid sortop = InvalidOid;
+
+		/* determine the sortop, we don't need anything else */
+		get_sort_group_operators(exprType((Node *) returningEntry->expr),
+								 true, false, false,
+								 &sortop, NULL, NULL,
+								 NULL);
+
+		sortColIdx[sortKeyIndex] = sortKeyIndex + 1;
+		sortOperators[sortKeyIndex] = sortop;
+		collations[sortKeyIndex] = exprCollation((Node *) returningEntry->expr);
+		nullsFirst[sortKeyIndex] = false;
+
+		sortKeyIndex++;
+	}
+
+	Tuplesortstate *tuplesortstate =
+		tuplesort_begin_heap(tupleDescriptor, numberOfSortKeys, sortColIdx, sortOperators,
+							 collations, nullsFirst, work_mem, NULL, false);
+
+	while (true)
+	{
+		TupleTableSlot *slot = ReturnTupleFromTuplestore(scanState);
+
+		if (TupIsNull(slot))
+		{
+			break;
+		}
+
+		/* tuplesort_puttupleslot copies the slot into sort context */
+		tuplesort_puttupleslot(tuplesortstate, slot);
+	}
+
+	/* perform the actual sort operation */
+	tuplesort_performsort(tuplesortstate);
+
+	/*
+	 * Truncate the existing tupleStore, because we'll fill it back
+	 * from the sorted tuplestore.
+	 */
+	tuplestore_clear(tupleStore);
+
+	/* iterate over all the sorted tuples, add them to original tuplestore */
+	while (true)
+	{
+		TupleTableSlot *newSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
+																 &TTSOpsMinimalTuple);
+		bool found = tuplesort_gettupleslot(tuplesortstate, true, false, newSlot, NULL);
+
+		if (!found)
+		{
+			break;
+		}
+
+		/* tuplesort_puttupleslot copies the slot into the tupleStore context */
+		tuplestore_puttupleslot(tupleStore, newSlot);
+	}
+
+	tuplestore_rescan(scanState->tuplestorestate);
+
+	/* terminate the sort, clear unnecessary resources */
+	tuplesort_end(tuplesortstate);
 }
 
 
@@ -395,7 +445,7 @@ void
 ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params,
 								   DestReceiver *dest)
 {
-	Query *query = ParseQueryString(queryString);
+	Query *query = ParseQueryString(queryString, NULL, 0);
 
 	ExecuteQueryIntoDestReceiver(query, params, dest);
 }
@@ -405,18 +455,18 @@ ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params
  * ParseQuery parses query string and returns a Query struct.
  */
 Query *
-ParseQueryString(const char *queryString)
+ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 {
-	Query *query = NULL;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+	List *queryTreeList =
+		pg_analyze_and_rewrite(rawStmt, queryString, paramOids, numParams, NULL);
 
 	if (list_length(queryTreeList) != 1)
 	{
 		ereport(ERROR, (errmsg("can only execute a single query")));
 	}
 
-	query = (Query *) linitial(queryTreeList);
+	Query *query = (Query *) linitial(queryTreeList);
 
 	return query;
 }
@@ -429,32 +479,34 @@ ParseQueryString(const char *queryString)
 void
 ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 {
-	PlannedStmt *queryPlan = NULL;
-	int cursorOptions = 0;
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
-	cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	if (query->commandType == CMD_UTILITY)
+	{
+		/* can only execute DML/SELECT via this path */
+		ereport(ERROR, (errmsg("cannot execute utility commands")));
+	}
 
 	/* plan the subquery, this may be another distributed query */
-	queryPlan = pg_plan_query(query, cursorOptions, params);
+	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, params);
 
 	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
 }
 
 
 /*
- * ExecuteIntoDestReceiver plans and executes a query and sends results to the given
+ * ExecutePlanIntoDestReceiver executes a query plan and sends results to the given
  * DestReceiver.
  */
 void
 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 							DestReceiver *dest)
 {
-	Portal portal = NULL;
 	int eflags = 0;
 	long count = FETCH_ALL;
 
 	/* create a new portal for executing the query */
-	portal = CreateNewPortal();
+	Portal portal = CreateNewPortal();
 
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
@@ -521,4 +573,112 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	}
 
 	return true;
+}
+
+
+/*
+ * IsLocalReferenceTableJoinPlan returns true if the given plan joins local tables
+ * with reference table shards.
+ *
+ * This should be consistent with IsLocalReferenceTableJoin() in distributed_planner.c.
+ */
+static bool
+IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
+{
+	bool hasReferenceTable = false;
+	bool hasLocalTable = false;
+	ListCell *rangeTableCell = NULL;
+	bool hasReferenceTableReplica = false;
+
+	/*
+	 * We only allow join between reference tables and local tables in the
+	 * coordinator.
+	 */
+	if (!IsCoordinator())
+	{
+		return false;
+	}
+
+	/*
+	 * All groups that have pg_dist_node entries, also have reference
+	 * table replicas.
+	 */
+	PrimaryNodeForGroup(GetLocalGroupId(), &hasReferenceTableReplica);
+
+	/*
+	 * If reference table doesn't have replicas on the coordinator, we don't
+	 * allow joins with local tables.
+	 */
+	if (!hasReferenceTableReplica)
+	{
+		return false;
+	}
+
+	/*
+	 * No need to check FOR UPDATE/SHARE or modifying subqueries, those have
+	 * already errored out in distributed_planner.c if they contain mix of
+	 * local and distributed tables.
+	 */
+	if (plan->commandType != CMD_SELECT)
+	{
+		return false;
+	}
+
+	/*
+	 * plan->rtable contains the flattened RTE lists of the plan tree, which
+	 * includes rtes in subqueries, CTEs, ...
+	 *
+	 * It doesn't contain optimized away table accesses (due to join optimization),
+	 * which is fine for our purpose.
+	 */
+	foreach(rangeTableCell, plan->rtable)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		bool onlySearchPath = false;
+
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning functions
+		 * in FROM clause locally. Early exit. We cannot use Assert() here since
+		 * all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->rtekind == RTE_FUNCTION)
+		{
+			return false;
+		}
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+		/*
+		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning reference
+		 * table and view join locally. Early exit. We cannot use Assert() here
+		 * since all non-Citus plans might pass through these checks.
+		 */
+		if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			return false;
+		}
+
+		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
+		{
+			/*
+			 * We don't allow joining non-reference distributed tables, so we
+			 * can skip checking that this is a reference table shard or not.
+			 */
+			hasReferenceTable = true;
+		}
+		else
+		{
+			hasLocalTable = true;
+		}
+
+		if (hasReferenceTable && hasLocalTable)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

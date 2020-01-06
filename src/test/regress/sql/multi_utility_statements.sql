@@ -10,7 +10,7 @@
 SET citus.next_shard_id TO 1000000;
 
 
-CREATE TEMP TABLE lineitem_pricing_summary AS 
+CREATE TEMP TABLE lineitem_pricing_summary AS
 (
      SELECT
 	l_returnflag,
@@ -39,7 +39,7 @@ SELECT * FROM lineitem_pricing_summary ORDER BY l_returnflag, l_linestatus;
 
 -- Test we can handle joins
 
-CREATE TABLE shipping_priority AS 
+CREATE TABLE shipping_priority AS
 (
     SELECT
 	l_orderkey,
@@ -106,20 +106,19 @@ COPY nation TO STDOUT;
 -- ensure individual cols can be copied out, too
 COPY nation(n_name) TO STDOUT;
 
--- Test that we can create on-commit drop tables, and also test creating with
--- oids, along with changing column names
+-- Test that we can create on-commit drop tables, along with changing column names
 
 BEGIN;
 
-CREATE TEMP TABLE customer_few (customer_key) WITH (OIDS) ON COMMIT DROP AS 
+CREATE TEMP TABLE customer_few (customer_key) ON COMMIT DROP AS
     (SELECT * FROM customer WHERE c_nationkey = 1 ORDER BY c_custkey LIMIT 10);
 
-SELECT customer_key, c_name, c_address 
+SELECT customer_key, c_name, c_address
        FROM customer_few ORDER BY customer_key LIMIT 5;
 
 COMMIT;
 
-SELECT customer_key, c_name, c_address 
+SELECT customer_key, c_name, c_address
        FROM customer_few ORDER BY customer_key LIMIT 5;
 
 -- Test DECLARE CURSOR .. WITH HOLD without parameters that calls ReScan on the top-level CustomScan
@@ -147,7 +146,7 @@ $$ LANGUAGE SQL;
 SELECT declares_cursor(5);
 
 CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
-RETURNS SETOF int AS $$                                                                                                                                                            
+RETURNS SETOF int AS $$
 DECLARE
   val int;
   my_cursor CURSOR (a INTEGER) FOR SELECT y FROM cursor_me WHERE x = $1 ORDER BY y;
@@ -176,7 +175,7 @@ DROP TABLE cursor_me;
 -- Test DECLARE CURSOR statement with SCROLL
 DECLARE holdCursor SCROLL CURSOR WITH HOLD FOR
         SELECT l_orderkey, l_linenumber, l_quantity, l_discount
-        FROM lineitem 
+        FROM lineitem
         ORDER BY l_orderkey, l_linenumber;
 
 FETCH NEXT FROM holdCursor;

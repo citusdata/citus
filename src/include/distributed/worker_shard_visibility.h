@@ -3,7 +3,7 @@
  * worker_shard_visibility.h
  *   Hide shard names on MX worker nodes.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -17,6 +17,7 @@ extern bool OverrideTableVisibility;
 
 
 extern void ReplaceTableVisibleFunction(Node *inputNode);
+extern bool RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath);
 
 
 #endif /* WORKER_SHARD_VISIBILITY_H */

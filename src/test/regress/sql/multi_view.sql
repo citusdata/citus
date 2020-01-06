@@ -7,10 +7,6 @@
 -- router queries, single row inserts, multi row inserts via insert
 -- into select, multi row insert via copy commands.
 
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 SELECT count(*) FROM lineitem_hash_part;
 
 SELECT count(*) FROM orders_hash_part;
@@ -89,35 +85,6 @@ RESET client_min_messages;
 
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
 
--- materialized views work
--- insert into... select works with views
-CREATE TABLE temp_lineitem(LIKE lineitem_hash_part);
-SELECT create_distributed_table('temp_lineitem', 'l_orderkey', 'hash', 'lineitem_hash_part');
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT count(*) FROM temp_lineitem;
--- following is a where false query, should not be inserting anything
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
-SELECT count(*) FROM temp_lineitem;
-
--- can create and query materialized views
-CREATE MATERIALIZED VIEW mode_counts
-AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
-
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
--- materialized views are local, cannot join with distributed tables
-SELECT count(*) FROM mode_counts JOIN temp_lineitem USING (l_shipmode);
-
--- new data is not immediately reflected in the view
-INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
--- refresh updates the materialised view with new data
-REFRESH MATERIALIZED VIEW mode_counts;
-SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
-
-DROP MATERIALIZED VIEW mode_counts;
-
 SET citus.task_executor_type to "task-tracker";
 
 -- single view repartition subqueries are not supported
@@ -154,10 +121,10 @@ SELECT * FROM  lineitems_by_shipping_method ORDER BY 1,2 LIMIT 5;
 
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
-	SELECT 
-		l_orderkey, count(*) 
-	FROM 
-		lineitem_hash_part 
+	SELECT
+		l_orderkey, count(*)
+	FROM
+		lineitem_hash_part
 	GROUP BY 1;
 
 -- this should work since we're able to push down this query
@@ -166,7 +133,6 @@ SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
 -- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
 
-DROP TABLE temp_lineitem CASCADE;
 
 DROP VIEW supp_count_view;
 DROP VIEW lineitems_by_orderkey;
@@ -181,7 +147,7 @@ DROP VIEW priority_orders;
 CREATE VIEW recent_users AS
 	SELECT user_id, max(time) as lastseen FROM users_table
 	GROUP BY user_id
-	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC; 
+	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC;
 SELECT * FROM recent_users ORDER BY 2 DESC, 1 DESC;
 
 -- create a view for recent_events
@@ -194,16 +160,16 @@ SELECT count(*) FROM recent_events;
 -- count number of events of recent_users
 SELECT count(*) FROM recent_users ru JOIN events_table et ON (ru.user_id = et.user_id);
 -- count number of events of per recent users order by count
-SELECT ru.user_id, count(*) 
-	FROM recent_users ru 
+SELECT ru.user_id, count(*)
+	FROM recent_users ru
 		JOIN events_table et
 		ON (ru.user_id = et.user_id)
 	GROUP BY ru.user_id
 	ORDER BY 2 DESC, 1;
 
 -- the same query with a left join however, it would still generate the same result
-SELECT ru.user_id, count(*) 
-	FROM recent_users ru 
+SELECT ru.user_id, count(*)
+	FROM recent_users ru
 		LEFT JOIN events_table et
 		ON (ru.user_id = et.user_id)
 	GROUP BY ru.user_id
@@ -211,8 +177,8 @@ SELECT ru.user_id, count(*)
 
 -- query wrapped inside a subquery, it needs another top level order by
 SELECT * FROM
-	(SELECT ru.user_id, count(*) 
-		FROM recent_users ru 
+	(SELECT ru.user_id, count(*)
+		FROM recent_users ru
 			JOIN events_table et
 			ON (ru.user_id = et.user_id)
 		GROUP BY ru.user_id
@@ -222,8 +188,8 @@ ORDER BY 2 DESC, 1;
 -- non-partition key joins are supported inside subquery
 -- via pull-push execution
 SELECT * FROM
-	(SELECT ru.user_id, count(*) 
-		FROM recent_users ru 
+	(SELECT ru.user_id, count(*)
+		FROM recent_users ru
 			JOIN events_table et
 			ON (ru.user_id = et.event_type)
 		GROUP BY ru.user_id
@@ -238,7 +204,7 @@ SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROU
 -- recent_events who are not done by recent users
 SELECT count(*) FROM (
 	SELECT re.*, ru.user_id AS recent_user
-		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu 
+		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu
 	WHERE recent_user IS NULL;
 
 -- same query with anti-join
@@ -289,7 +255,7 @@ SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 1);
 
 -- union between views is supported through recursive planning
-(SELECT user_id FROM recent_users) 
+(SELECT user_id FROM recent_users)
 UNION
 (SELECT user_id FROM selected_users)
 ORDER BY 1;
@@ -297,7 +263,7 @@ ORDER BY 1;
 -- wrapping it inside a SELECT * works
 SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0
@@ -306,7 +272,7 @@ SELECT *
 -- union all also works for views
 SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0
@@ -314,7 +280,7 @@ SELECT *
 
 SELECT count(*)
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -322,7 +288,7 @@ SELECT count(*)
 -- UNION ALL between views is supported through recursive planning
 SELECT count(*)
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -333,7 +299,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
 			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
-		) 
+		)
 		UNION
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -343,7 +309,7 @@ SELECT count(*)
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
 			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
-		) 
+		)
 		UNION ALL
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
@@ -360,7 +326,7 @@ SELECT * FROM distinct_value_1 ORDER BY 1 DESC LIMIT 5;
 
 -- CTEs are supported even if they are on views
 CREATE VIEW cte_view_1 AS
-WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
+WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4 AND EXISTS (SELECT * FROM c1);
 
 SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
 
@@ -411,7 +377,7 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
 
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (
-		(SELECT user_id FROM recent_users) 
+		(SELECT user_id FROM recent_users)
 		UNION
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 4 AND user_id > 1
@@ -433,3 +399,247 @@ DROP VIEW recent_selected_users;
 DROP VIEW selected_users;
 DROP VIEW recent_events;
 DROP VIEW recent_users;
+
+-- modify statements on/with views
+-- create two tables and a view
+CREATE TABLE large (id int, tenant_id int);
+-- constraint id to be unique for "insert into on conflict" test
+CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
+
+SELECT create_distributed_table('large','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT * from small where id < 100;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,5
+6,3
+7,4
+1,2
+\.
+
+\copy large FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+\.
+
+-- running modify statements "on" views is still not supported, hence below two statements will fail
+UPDATE small_view SET id = 1;
+DELETE FROM small_view;
+INSERT INTO small_view VALUES(8, 5) ON CONFLICT(tenant_id) DO UPDATE SET tenant_id=99;
+
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO small VALUES(14, 14);
+
+-- using views in subqueries within modify statements is still valid
+UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO large VALUES(99, 78);
+INSERT INTO small VALUES(99, 99);
+
+-- run these tests with RETURNING clause to observe the functionality
+-- print the columns from the "view" as well to test "rewrite resjunk" behaviour
+UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+-- below statement should not update anything. so it should return empty
+UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large WHERE id in (SELECT id FROM small_view);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_ids AS (SELECT id FROM small_view)
+DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- INSERT INTO views is still not supported
+INSERT INTO small_view VALUES(3, 3);
+
+DROP TABLE large;
+DROP TABLE small CASCADE;
+
+-- now, run the same modify statement tests on a partitioned table
+CREATE TABLE small (id int, tenant_id int);
+
+CREATE TABLE large_partitioned (id int, tenant_id int) partition by range(tenant_id);
+
+CREATE TABLE large_partitioned_p1 PARTITION OF large_partitioned FOR VALUES FROM (1) TO (10);
+CREATE TABLE large_partitioned_p2 PARTITION OF large_partitioned FOR VALUES FROM (10) TO (20);
+CREATE TABLE large_partitioned_p3 PARTITION OF large_partitioned FOR VALUES FROM (20) TO (100);
+
+SELECT create_distributed_table('large_partitioned','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT * from small where id < 100;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,2
+6,3
+7,4
+1,2
+\.
+
+\copy large_partitioned FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+29,15
+26,32
+60,51
+\.
+
+-- running modify statements "on" views is still not supported, hence below two statements will fail
+UPDATE small_view SET id = 1;
+DELETE FROM small_view;
+
+UPDATE large_partitioned SET id=27 FROM small_view WHERE small_view.tenant_id=large_partitioned.tenant_id;
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert identical rows to both tables
+INSERT INTO small VALUES(14, 14);
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large_partitioned SET id=28 FROM small_view WHERE small_view.id=large_partitioned.id and small_view.tenant_id=14 and large_partitioned.tenant_id=14;
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large_partitioned table
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large_partitioned WHERE tenant_id in (SELECT tenant_id FROM small_view);
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large_partitioned VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_tenant_ids AS (SELECT tenant_id FROM small_view)
+DELETE FROM large_partitioned WHERE tenant_id in (SELECT * FROM all_small_view_tenant_ids);
+SELECT * FROM large_partitioned ORDER BY 1, 2;
+
+DROP TABLE large_partitioned;
+DROP TABLE small CASCADE;
+
+-- perform similar tests with a little bit complicated view
+
+-- create two tables and a view
+CREATE TABLE large (id int, tenant_id int);
+-- constraint id to be unique for "insert into on conflict" test
+CREATE TABLE small (id int, tenant_id int, unique(tenant_id));
+
+SELECT create_distributed_table('large','tenant_id');
+SELECT create_distributed_table('small','tenant_id');
+
+CREATE VIEW small_view AS SELECT id, tenant_id FROM (SELECT *, id*2 FROM small WHERE id < 100 ORDER BY 1,2 LIMIT 5) as foo;
+
+\copy small FROM STDIN DELIMITER ','
+250, 25
+470, 13
+8,5
+6,3
+7,4
+1,2
+\.
+
+\copy large FROM STDIN DELIMITER ','
+1,2
+2,3
+5,4
+6,5
+\.
+
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO small VALUES(14, 14);
+
+-- using views in subqueries within modify statements is still valid
+UPDATE large SET id=23 FROM (SELECT *, id*2 from small_view ORDER BY 1,2 LIMIT 5) as small_view WHERE small_view.id=large.id;
+SELECT * FROM large order by 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- using views in modify statements' FROM / WHERE clauses is still valid
+UPDATE large SET id=27 FROM small_view WHERE small_view.tenant_id=large.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- test on a router executable update statement
+UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=14 and large.tenant_id=14;
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statements, then insert new rows to both tables
+INSERT INTO large VALUES(14, 14);
+INSERT INTO large VALUES(99, 78);
+INSERT INTO small VALUES(99, 99);
+
+-- run these tests with RETURNING clause to observe the functionality
+-- print the columns from the "view" as well to test "rewrite resjunk" behaviour
+UPDATE large SET id=36 FROM small_view WHERE small_view.id=large.id RETURNING large.id, large.tenant_id, small_view.tenant_id;
+SELECT * FROM large ORDER BY 1, 2;
+-- below statement should not update anything. so it should return empty
+UPDATE large SET id=46 FROM small_view WHERE small_view.id=large.id and large.id=15 RETURNING large.id, large.tenant_id;
+
+-- we should still have identical rows for next test statements, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement on large
+DELETE FROM large WHERE id in (SELECT id FROM small_view);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- we should still have identical rows for next test statement, then insert a new row to large table
+INSERT INTO large VALUES(14, 14);
+
+-- delete statement with CTE
+WITH all_small_view_ids AS (SELECT id FROM small_view)
+DELETE FROM large WHERE id in (SELECT * FROM all_small_view_ids);
+SELECT * FROM large ORDER BY 1, 2;
+
+-- INSERT INTO views is still not supported
+INSERT INTO small_view VALUES(3, 3);
+
+DROP TABLE large;
+DROP TABLE small CASCADE;

@@ -4,12 +4,13 @@
  *
  * Functions for execution subplans prior to distributed table execution.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
 #include "postgres.h"
 
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -35,8 +36,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	List *nodeList = NIL;
-	bool writeLocalFile = false;
 
 	if (subPlanList == NIL)
 	{
@@ -44,32 +43,58 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		return;
 	}
 
+	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
+	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
+
+
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.
 	 *
 	 * Intermediate results of subplans will be stored in a directory that is
 	 * derived from the distributed transaction ID.
 	 */
-	BeginOrContinueCoordinatedTransaction();
-
-	nodeList = ActiveReadableNodeList();
+	UseCoordinatedTransaction();
 
 	foreach(subPlanCell, subPlanList)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
-		DestReceiver *copyDest = NULL;
 		ParamListInfo params = NULL;
-		EState *estate = NULL;
-
+		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
+		List *workerNodeList =
+			FindAllWorkerNodesUsingSubplan(intermediateResultsHash, resultId);
+
+		/*
+		 * Write intermediate results to local file only if there is no worker
+		 * node that receives them.
+		 *
+		 * This could happen in two cases:
+		 * (a) Subquery in the having
+		 * (b) The intermediate result is not used, such as RETURNING of a
+		 *     modifying CTE is not used
+		 *
+		 * For SELECT, Postgres/Citus is clever enough to not execute the CTE
+		 * if it is not used at all, but for modifications we have to execute
+		 * the queries.
+		 */
+		if (workerNodeList == NIL)
+		{
+			writeLocalFile = true;
+
+			if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
+				IsLoggableLevel(DEBUG4))
+			{
+				elog(DEBUG1, "Subplan %s will be written to local file", resultId);
+			}
+		}
 
 		SubPlanLevel++;
-		estate = CreateExecutorState();
-		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
-																 nodeList,
-																 writeLocalFile);
+		EState *estate = CreateExecutorState();
+		DestReceiver *copyDest = CreateRemoteFileDestReceiver(resultId, estate,
+															  workerNodeList,
+															  writeLocalFile);
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 

@@ -3,7 +3,7 @@
  * function_utils.c
  *	  Utilities regarding calls to PG functions
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -11,11 +11,10 @@
 
 #include "catalog/namespace.h"
 #include "distributed/function_utils.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "utils/builtins.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "utils/regproc.h"
-#endif
 
 /*
  * FunctionOid searches for a function that has the given name and the given
@@ -40,18 +39,16 @@ Oid
 FunctionOidExtended(const char *schemaName, const char *functionName, int argumentCount,
 					bool missingOK)
 {
-	FuncCandidateList functionList = NULL;
-	Oid functionOid = InvalidOid;
-
 	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
 	List *qualifiedFunctionNameList = stringToQualifiedNameList(qualifiedFunctionName);
 	List *argumentList = NIL;
 	const bool findVariadics = false;
 	const bool findDefaults = false;
 
-	functionList = FuncnameGetCandidates(qualifiedFunctionNameList, argumentCount,
-										 argumentList, findVariadics,
-										 findDefaults, true);
+	FuncCandidateList functionList = FuncnameGetCandidates(qualifiedFunctionNameList,
+														   argumentCount,
+														   argumentList, findVariadics,
+														   findDefaults, true);
 
 	if (functionList == NULL)
 	{
@@ -70,7 +67,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 	}
 
 	/* get function oid from function list's head */
-	functionOid = functionList->oid;
+	Oid functionOid = functionList->oid;
 
 	return functionOid;
 }
@@ -83,7 +80,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 ReturnSetInfo *
 FunctionCallGetTupleStore1(PGFunction function, Oid functionId, Datum argument)
 {
-	FunctionCallInfoData fcinfo;
+	LOCAL_FCINFO(fcinfo, 1);
 	FmgrInfo flinfo;
 	ReturnSetInfo *rsinfo = makeNode(ReturnSetInfo);
 	EState *estate = CreateExecutorState();
@@ -91,12 +88,11 @@ FunctionCallGetTupleStore1(PGFunction function, Oid functionId, Datum argument)
 	rsinfo->allowedModes = SFRM_Materialize;
 
 	fmgr_info(functionId, &flinfo);
-	InitFunctionCallInfoData(fcinfo, &flinfo, 1, InvalidOid, NULL, (Node *) rsinfo);
+	InitFunctionCallInfoData(*fcinfo, &flinfo, 1, InvalidOid, NULL, (Node *) rsinfo);
 
-	fcinfo.arg[0] = argument;
-	fcinfo.argnull[0] = false;
+	fcSetArg(fcinfo, 0, argument);
 
-	(*function)(&fcinfo);
+	(*function)(fcinfo);
 
 	return rsinfo;
 }

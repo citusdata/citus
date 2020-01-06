@@ -4,6 +4,7 @@ test: failure_test_helpers
 # this should only be run by pg_regress_multi, you don't need it
 test: failure_setup
 test: multi_test_helpers
+test: multi_test_catalog_views
 test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently
@@ -23,10 +24,12 @@ test: failure_multi_dml
 test: failure_vacuum
 test: failure_single_select
 test: failure_ref_tables
-test: failure_real_time_select
 test: failure_insert_select_pushdown
 test: failure_single_mod
 test: failure_savepoints
 test: failure_multi_row_insert
 test: failure_mx_metadata_sync
 test: failure_connection_establishment
+
+# test that no tests leaked intermediate results. This should always be last
+test: ensure_no_intermediate_data_leak

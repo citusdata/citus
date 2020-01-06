@@ -5,7 +5,7 @@
  * Header and type declarations for coordinating execution of tasks and data
  * source transfers on worker nodes.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -103,13 +103,13 @@ typedef struct WorkerTasksSharedStateData
 {
 	/* Lock protecting workerNodesHash */
 	int taskHashTrancheId;
-#if (PG_VERSION_NUM >= 100000)
 	char *taskHashTrancheName;
-#endif
 	LWLock taskHashLock;
 	bool conninfosValid;
 } WorkerTasksSharedStateData;
 
+
+extern void TrackerCleanupJobDirectories(void);
 
 /* Config variables managed via guc.c */
 extern int TaskTrackerDelay;

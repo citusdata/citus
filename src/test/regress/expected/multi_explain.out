@@ -2,14 +2,6 @@
 -- MULTI_EXPLAIN
 --
 SET citus.next_shard_id TO 570000;
--- print whether we're using version > 9 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
- version_above_nine 
---------------------
- t
-(1 row)
-
 \a\t
 RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
@@ -43,10 +35,10 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -60,12 +52,12 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  GroupAggregate
         Group Key: remote_scan.l_quantity
         ->  Sort
               Sort Key: remote_scan.l_quantity
-              ->  Custom Scan (Citus Real-Time)
+              ->  Custom Scan (Citus Adaptive)
                     Task Count: 2
                     Tasks Shown: One of 2
                     ->  Task
@@ -83,7 +75,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
     "Plan": {
       "Node Type": "Sort",
       "Parallel Aware": false,
-      "Sort Key": ["COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "remote_scan.l_quantity"],
+      "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
           "Node Type": "Aggregate",
@@ -96,7 +88,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             {
               "Node Type": "Custom Scan",
               "Parent Relationship": "Outer",
-              "Custom Plan Provider": "Citus Real-Time",
+              "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Distributed Query": {
                 "Job": {
@@ -154,7 +146,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Node-Type>Sort</Node-Type>
       <Parallel-Aware>false</Parallel-Aware>
       <Sort-Key>
-        <Item>COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+        <Item>(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))</Item>
         <Item>remote_scan.l_quantity</Item>
       </Sort-Key>
       <Plans>
@@ -171,7 +163,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Custom-Plan-Provider>Citus Real-Time</Custom-Plan-Provider>
+              <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
               <Distributed-Query>
                 <Job>
@@ -228,7 +220,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Node Type: "Sort"
     Parallel Aware: false
     Sort Key: 
-      - "COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+      - "(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))"
       - "remote_scan.l_quantity"
     Plans: 
       - Node Type: "Aggregate"
@@ -241,7 +233,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
-            Custom Plan Provider: "Citus Real-Time"
+            Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
             Distributed Query: 
               Job: 
@@ -269,10 +261,10 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
   ->  HashAggregate
         Group Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -280,12 +272,29 @@ Sort
                     ->  HashAggregate
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=57638 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
         Task Count: 2
         Tasks Shown: One of 2
@@ -303,7 +312,7 @@ EXPLAIN (COSTS FALSE)
 Limit
   ->  Sort
         Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
@@ -320,7 +329,7 @@ Limit
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -332,7 +341,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -341,11 +350,28 @@ Custom Scan (Citus Router)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+BEGIN;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_partkey = 0;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_290000 lineitem (actual rows=0 loops=1)
+              ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=0 loops=1)
+                    Index Cond: (l_orderkey = 1)
+                    Filter: (l_partkey = 0)
+                    Rows Removed by Filter: 6
+ROLLBACk;
 -- Test delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -359,20 +385,20 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test zero-shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_orderkey = 0;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 0
   Tasks Shown: All
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -389,7 +415,7 @@ t
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
-Custom Scan (Citus Real-Time)
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
@@ -402,7 +428,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 Aggregate
   Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
   Filter: (sum(remote_scan.worker_column_4) > '100'::numeric)
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2", remote_scan.worker_column_4
         Task Count: 2
         Tasks Shown: One of 2
@@ -421,7 +447,7 @@ HashAggregate
   Output: remote_scan.l_quantity
   Group Key: remote_scan.l_quantity
   Filter: ((remote_scan.worker_column_2)::double precision > ('100'::double precision * random()))
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Output: remote_scan.l_quantity, remote_scan.worker_column_2
         Task Count: 2
         Tasks Shown: One of 2
@@ -459,7 +485,7 @@ FROM
 		tenant_id,
 		user_id) AS subquery;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -541,7 +567,7 @@ GROUP BY
 	hasdone;
 HashAggregate
   Group Key: remote_scan.hasdone
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -652,7 +678,53 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  bogus varattno for OUTER_VAR var: 3
+Sort
+  Sort Key: remote_scan.count_pay
+  ->  HashAggregate
+        Group Key: remote_scan.count_pay
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  GroupAggregate
+                          Group Key: subquery_top.count_pay
+                          ->  Sort
+                                Sort Key: subquery_top.count_pay
+                                ->  Subquery Scan on subquery_top
+                                      ->  GroupAggregate
+                                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                            Filter: (array_ndims(array_agg(('action=>1'::text) ORDER BY events.event_time)) > 0)
+                                            ->  Sort
+                                                  Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), subquery_2.count_pay
+                                                  ->  Hash Left Join
+                                                        Hash Cond: (users.composite_id = subquery_2.composite_id)
+                                                        ->  HashAggregate
+                                                              Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), users.composite_id, ('action=>1'::text), events.event_time
+                                                              ->  Append
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users.composite_id = events.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events
+                                                                                      Filter: ((event_type)::text = 'click'::text)
+                                                                    ->  Hash Join
+                                                                          Hash Cond: (users_1.composite_id = events_1.composite_id)
+                                                                          ->  Seq Scan on users_1400289 users_1
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                          ->  Hash
+                                                                                ->  Seq Scan on events_1400285 events_1
+                                                                                      Filter: ((event_type)::text = 'submit'::text)
+                                                        ->  Hash
+                                                              ->  Subquery Scan on subquery_2
+                                                                    ->  GroupAggregate
+                                                                          Group Key: events_2.composite_id
+                                                                          Filter: (count(*) > 2)
+                                                                          ->  Sort
+                                                                                Sort Key: events_2.composite_id
+                                                                                ->  Seq Scan on events_1400285 events_2
+                                                                                      Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
 SET citus.subquery_pushdown to ON;
@@ -709,7 +781,7 @@ LIMIT
 Limit
   ->  Sort
         Sort Key: remote_scan.user_lastseen DESC
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
@@ -738,7 +810,7 @@ SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -752,12 +824,11 @@ t
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
 t
-	
 -- Test multi shard update
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
@@ -776,12 +847,11 @@ Custom Scan (Citus Router)
         Node: host=localhost port=57638 dbname=regression
         ->  Update on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
-	
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 OR l_orderkey = 3;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: All
   ->  Task
@@ -797,7 +867,7 @@ Custom Scan (Citus Router)
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: All
   ->  Task
@@ -816,6 +886,28 @@ Custom Scan (Citus Router)
         Node: host=localhost port=57638 dbname=regression
         ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
+-- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tasks Shown: All
+              ->  Task
+                    Node: host=localhost port=57638 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290001 lineitem (actual rows=6000 loops=1)
 SET citus.explain_all_tasks TO off;
 -- Test update with subquery
 EXPLAIN (COSTS FALSE)
@@ -823,7 +915,7 @@ EXPLAIN (COSTS FALSE)
 	SET l_suppkey = 12
 	FROM orders_hash_part
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
@@ -839,7 +931,7 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part
 	USING orders_hash_part
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Task Count: 4
   Tasks Shown: One of 4
   ->  Task
@@ -903,11 +995,11 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             "Job": {
               "Task Count": 1,
               "Tasks Shown": "None, not supported for re-partition queries",
-              "Depended Jobs": [
+              "Dependent Jobs": [
                 {
                   "Map Task Count": 1,
                   "Merge Task Count": 1,
-                  "Depended Jobs": [
+                  "Dependent Jobs": [
                     {
                       "Map Task Count": 2,
                       "Merge Task Count": 1
@@ -952,18 +1044,18 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Job>
               <Task-Count>1</Task-Count>
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
-              <Depended-Jobs>
+              <Dependent-Jobs>
                 <MapMergeJob>
                   <Map-Task-Count>1</Map-Task-Count>
                   <Merge-Task-Count>1</Merge-Task-Count>
-                  <Depended-Jobs>
+                  <Dependent-Jobs>
                     <MapMergeJob>
                       <Map-Task-Count>2</Map-Task-Count>
                       <Merge-Task-Count>1</Merge-Task-Count>
                     </MapMergeJob>
-                  </Depended-Jobs>
+                  </Dependent-Jobs>
                 </MapMergeJob>
-              </Depended-Jobs>
+              </Dependent-Jobs>
             </Job>
           </Distributed-Query>
         </Plan>
@@ -978,8 +1070,8 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
--- make sure that EXPLAIN works without 
--- problems for queries that inlvolves only 
+-- make sure that EXPLAIN works without
+-- problems for queries that inlvolves only
 -- reference tables
 SELECT true AS valid FROM explain_xml($$
 	SELECT count(*)
@@ -1011,7 +1103,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
           Job: 
             Task Count: 1
             Tasks Shown: "None, not supported for re-partition queries"
-            Depended Jobs: 
+            Dependent Jobs: 
               - Map Task Count: 2
                 Merge Task Count: 1
 -- test parallel aggregates
@@ -1055,7 +1147,7 @@ Aggregate
 RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1066,7 +1158,7 @@ PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 Aggregate
-  ->  Custom Scan (Citus Real-Time)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -1078,7 +1170,7 @@ Aggregate
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1098,11 +1190,11 @@ INSERT INTO lineitem_hash_part
 SELECT o_orderkey FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Limit
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 SELECT true AS valid FROM explain_json($$
@@ -1115,11 +1207,11 @@ INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
 SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Limit
-        ->  Custom Scan (Citus Real-Time)
+        ->  Custom Scan (Citus Adaptive)
               Task Count: 4
               Tasks Shown: One of 4
               ->  Task
-                    Node: host=localhost port=57638 dbname=regression
+                    Node: host=localhost port=57637 dbname=regression
                     ->  Limit
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 EXPLAIN (COSTS OFF)
@@ -1127,18 +1219,27 @@ INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
   ->  Function Scan on generate_series s
+-- WHERE EXISTS forces pg12 to materialize cte
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
-WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
-SELECT s FROM cte1;
+WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
+SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 Custom Scan (Citus INSERT ... SELECT via coordinator)
-  ->  CTE Scan on cte1
+  ->  Result
+        One-Time Filter: $3
         CTE cte1
           ->  Function Scan on generate_series s
         CTE cte1
           ->  Limit
-                ->  CTE Scan on cte1 cte1_1
+                InitPlan 2 (returns $1)
+                  ->  CTE Scan on cte1 cte1_1
+                ->  Result
+                      One-Time Filter: $1
+                      ->  CTE Scan on cte1 cte1_2
+        InitPlan 4 (returns $3)
+          ->  CTE Scan on cte1 cte1_3
+        ->  CTE Scan on cte1
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
@@ -1159,13 +1260,13 @@ series AS (
 )
 SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
-Custom Scan (Citus Router)
+Custom Scan (Citus Adaptive)
   Output: remote_scan.l_orderkey
-  ->  Distributed Subplan 57_1
+  ->  Distributed Subplan 60_1
         ->  HashAggregate
               Output: remote_scan.l_orderkey
               Group Key: remote_scan.l_orderkey
-              ->  Custom Scan (Citus Real-Time)
+              ->  Custom Scan (Citus Adaptive)
                     Output: remote_scan.l_orderkey
                     Task Count: 4
                     Tasks Shown: One of 4
@@ -1176,7 +1277,7 @@ Custom Scan (Citus Router)
                                 Group Key: lineitem_hash_part.l_orderkey
                                 ->  Seq Scan on public.lineitem_hash_part_360041 lineitem_hash_part
                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-  ->  Distributed Subplan 57_2
+  ->  Distributed Subplan 60_2
         ->  Function Scan on pg_catalog.generate_series s
               Output: s
               Function Call: generate_series(1, 10)
@@ -1192,13 +1293,13 @@ Custom Scan (Citus Router)
                     Sort Key: intermediate_result.s
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
                           Output: intermediate_result.s
-                          Function Call: read_intermediate_result('57_2'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('60_2'::text, 'binary'::citus_copy_format)
               ->  Sort
                     Output: intermediate_result_1.l_orderkey
                     Sort Key: intermediate_result_1.l_orderkey
                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
                           Output: intermediate_result_1.l_orderkey
-                          Function Call: read_intermediate_result('57_1'::text, 'binary'::citus_copy_format)
+                          Function Call: read_intermediate_result('60_1'::text, 'binary'::citus_copy_format)
 SELECT true AS valid FROM explain_json($$
   WITH result AS (
     SELECT l_quantity, count(*) count_quantity FROM lineitem

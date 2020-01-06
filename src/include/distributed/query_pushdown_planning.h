@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * query_pushdown_planning.h
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *    Function declarations used in query pushdown logic.
  *
  *-------------------------------------------------------------------------
@@ -16,15 +16,20 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 
 
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 
 
-extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
+extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
+									  PlannerRestrictionContext *plannerRestrictionContext);
 extern bool JoinTreeContainsSubquery(Query *query);
-extern bool WhereClauseContainsSubquery(Query *query);
+extern bool IsNodeSubquery(Node *node);
+extern bool HasEmptyJoinTree(Query *query);
+extern bool WhereOrHavingClauseContainsSubquery(Query *query);
+extern bool TargetListContainsSubquery(Query *query);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,

@@ -5,9 +5,6 @@
 -- Check that we can run CREATE INDEX and DROP INDEX statements on distributed
 -- tables.
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS major_version;
-
 --
 -- CREATE TEST TABLES
 --
@@ -112,6 +109,16 @@ CREATE INDEX ON lineitem (l_orderkey);
 
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
+
+--
+-- REINDEX
+--
+
+REINDEX INDEX lineitem_orderkey_index;
+REINDEX TABLE lineitem;
+REINDEX SCHEMA public;
+REINDEX DATABASE regression;
+REINDEX SYSTEM regression;
 
 --
 -- DROP INDEX

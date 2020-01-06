@@ -2,6 +2,8 @@
 
 [![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
+[![Circleci Status](https://circleci.com/gh/citusdata/citus.svg?style=svg)](https://circleci.com/gh/citusdata/citus.svg?style=svg)
+[![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)
 
 ### What is Citus?
 
@@ -146,7 +148,7 @@ You can read more user stories about how they employ Citus to scale Postgres for
 
 ___
 
-Copyright © 2012–2019 Citus Data, Inc.
+Copyright © Citus Data, Inc.
 
 [faq]: https://www.citusdata.com/frequently-asked-questions
 [tutorial]: https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html

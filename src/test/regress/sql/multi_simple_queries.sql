@@ -2,8 +2,8 @@
 SET citus.next_shard_id TO 850000;
 
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
 -- ===================================================================
@@ -203,7 +203,7 @@ SELECT author_id FROM articles
 	HAVING author_id <= 2 OR author_id = 8
 	ORDER BY author_id;
 
-SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders 
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
 	GROUP BY o_orderstatus
 	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
 	ORDER BY o_orderstatus;
@@ -217,7 +217,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
 SET client_min_messages TO 'DEBUG2';
-SET citus.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'adaptive';
 
 -- start with the simple lookup query
 SELECT *
@@ -271,13 +271,26 @@ SELECT id
 -- copying from a single shard table does not require the master query
 COPY articles_single_shard TO stdout;
 
--- error out for queries with aggregates
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
 
+-- error out on unsupported aggregate
+SET client_min_messages to 'NOTICE';
+
+CREATE AGGREGATE public.invalid(int) (
+    sfunc = int4pl,
+    stype = int
+);
+
+SELECT invalid(word_count) FROM articles;
+
+DROP AGGREGATE invalid(int);
+
+SET client_min_messages to 'DEBUG2';
+
 -- max, min, sum, count is somehow implemented
--- differently in distributed planning 
+-- differently in distributed planning
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
@@ -312,6 +325,5 @@ SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
-
 
 SET client_min_messages to 'NOTICE';

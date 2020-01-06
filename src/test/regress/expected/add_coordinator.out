@@ -1,0 +1,22 @@
+--
+-- ADD_COORDINATOR
+--
+SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
+-- adding the same node again should return the existing nodeid
+SELECT master_add_node('localhost', :master_port, groupid => 0) = :master_nodeid;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- adding another node with groupid=0 should error out
+SELECT master_add_node('localhost', 12345, groupid => 0) = :master_nodeid;
+ERROR:  group 0 already has a primary node
+-- start_metadata_sync_to_node() for coordinator should raise a notice
+SELECT start_metadata_sync_to_node('localhost', :master_port);
+NOTICE:  localhost:57636 is the coordinator and already contains metadata, skipping syncing the metadata
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+

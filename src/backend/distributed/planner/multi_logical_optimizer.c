@@ -4,7 +4,7 @@
  *	  Routines for optimizing logical plan trees based on multi-relational
  *	  algebra.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -35,12 +35,17 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/var.h"
+#endif
 #include "parser/parse_agg.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
@@ -49,7 +54,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Config variable managed via guc.c */
@@ -246,14 +250,18 @@ static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 											WorkerAggregateWalkerContext *walkerContextry);
-static AggregateType GetAggregateType(Oid aggFunctionId);
+static AggregateType GetAggregateType(Aggref *aggregatExpression);
 static Oid AggregateArgumentType(Aggref *aggregate);
+static bool AggregateEnabledCustom(Aggref *aggregateExpression);
+static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
+static Oid WorkerPartialAggOid(void);
+static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
 
 /* Local functions forward declarations for count(distinct) approximations */
-static char * CountDistinctHashFunctionName(Oid argumentType);
+static const char * CountDistinctHashFunctionName(Oid argumentType);
 static int CountDistinctStorageSize(double approximationErrorRate);
 static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
@@ -263,8 +271,6 @@ static void ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode);
 static void ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression);
 static void ErrorIfUnsupportedJsonAggregate(AggregateType type,
 											Aggref *aggregateExpression);
-static void ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
-												  Aggref *aggregateExpression);
 static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 												MultiNode *logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
@@ -306,23 +312,20 @@ static bool HasOrderByHllType(List *sortClauseList, List *targetList);
 void
 MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 {
-	bool hasOrderByHllType = false;
-	List *selectNodeList = NIL;
-	List *projectNodeList = NIL;
-	List *collectNodeList = NIL;
-	List *extendedOpNodeList = NIL;
-	List *tableNodeList = NIL;
 	ListCell *collectNodeCell = NULL;
 	ListCell *tableNodeCell = NULL;
-	MultiProject *projectNode = NULL;
-	MultiExtendedOp *extendedOpNode = NULL;
-	MultiExtendedOp *masterExtendedOpNode = NULL;
-	MultiExtendedOp *workerExtendedOpNode = NULL;
-	ExtendedOpNodeProperties extendedOpNodeProperties;
 	MultiNode *logicalPlanNode = (MultiNode *) multiLogicalPlan;
 
-	/* check that we can optimize aggregates in the plan */
-	ErrorIfContainsUnsupportedAggregate(logicalPlanNode);
+	List *extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
+	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
+	ExtendedOpNodeProperties extendedOpNodeProperties = BuildExtendedOpNodeProperties(
+		extendedOpNode);
+
+	if (!extendedOpNodeProperties.groupedByDisjointPartitionColumn)
+	{
+		/* check that we can optimize aggregates in the plan */
+		ErrorIfContainsUnsupportedAggregate(logicalPlanNode);
+	}
 
 	/*
 	 * If a select node exists, we use the idempower property to split the node
@@ -330,7 +333,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	 * exist, we modify the tree in place to swap the original select node with
 	 * And and Or nodes. We then push down the And select node if it exists.
 	 */
-	selectNodeList = FindNodesOfType(logicalPlanNode, T_MultiSelect);
+	List *selectNodeList = FindNodesOfType(logicalPlanNode, T_MultiSelect);
 	if (selectNodeList != NIL)
 	{
 		MultiSelect *selectNode = (MultiSelect *) linitial(selectNodeList);
@@ -359,12 +362,12 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	}
 
 	/* push down the multi project node */
-	projectNodeList = FindNodesOfType(logicalPlanNode, T_MultiProject);
-	projectNode = (MultiProject *) linitial(projectNodeList);
+	List *projectNodeList = FindNodesOfType(logicalPlanNode, T_MultiProject);
+	MultiProject *projectNode = (MultiProject *) linitial(projectNodeList);
 	PushDownNodeLoop((MultiUnaryNode *) projectNode);
 
 	/* pull up collect nodes and merge duplicate collects */
-	collectNodeList = FindNodesOfType(logicalPlanNode, T_MultiCollect);
+	List *collectNodeList = FindNodesOfType(logicalPlanNode, T_MultiCollect);
 	foreach(collectNodeCell, collectNodeList)
 	{
 		MultiCollect *collectNode = (MultiCollect *) lfirst(collectNodeCell);
@@ -379,19 +382,15 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	 * clause list to the worker operator node. We then push the worker operator
 	 * node below the collect node.
 	 */
-	extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
-	extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
-	extendedOpNodeProperties = BuildExtendedOpNodeProperties(extendedOpNode);
-
-	masterExtendedOpNode =
+	MultiExtendedOp *masterExtendedOpNode =
 		MasterExtendedOpNode(extendedOpNode, &extendedOpNodeProperties);
-	workerExtendedOpNode =
+	MultiExtendedOp *workerExtendedOpNode =
 		WorkerExtendedOpNode(extendedOpNode, &extendedOpNodeProperties);
 
 	ApplyExtendedOpNodes(extendedOpNode, masterExtendedOpNode, workerExtendedOpNode);
 
-	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	List *tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
 	foreach(tableNodeCell, tableNodeList)
 	{
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
@@ -408,8 +407,8 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	 * clause's sortop oid, so we can't push an order by on the hll data type to
 	 * the worker node. We check that here and error out if necessary.
 	 */
-	hasOrderByHllType = HasOrderByHllType(workerExtendedOpNode->sortClauseList,
-										  workerExtendedOpNode->targetList);
+	bool hasOrderByHllType = HasOrderByHllType(workerExtendedOpNode->sortClauseList,
+											   workerExtendedOpNode->targetList);
 	if (hasOrderByHllType)
 	{
 		ereport(ERROR, (errmsg("cannot approximate count(distinct) and order by it"),
@@ -591,7 +590,6 @@ PushDownNodeLoop(MultiUnaryNode *currentNode)
 static void
 PullUpCollectLoop(MultiCollect *collectNode)
 {
-	MultiNode *childNode = NULL;
 	MultiUnaryNode *currentNode = (MultiUnaryNode *) collectNode;
 
 	PullUpStatus pullUpStatus = CanPullUp(currentNode);
@@ -605,7 +603,7 @@ PullUpCollectLoop(MultiCollect *collectNode)
 	 * After pulling up the collect node, if we find that our child node is also
 	 * a collect, we merge the two collect nodes together by removing this node.
 	 */
-	childNode = currentNode->childNode;
+	MultiNode *childNode = currentNode->childNode;
 	if (CitusIsA(childNode, MultiCollect))
 	{
 		RemoveUnaryNode(currentNode);
@@ -747,8 +745,8 @@ CanPullUp(MultiUnaryNode *childNode)
 		 * Evaluate if parent can be pushed down below the child node, since it
 		 * is equivalent to pulling up the child above its parent.
 		 */
-		PushDownStatus parentPushDownStatus = PUSH_DOWN_INVALID_FIRST;
-		parentPushDownStatus = Commutative((MultiUnaryNode *) parentNode, childNode);
+		PushDownStatus parentPushDownStatus = Commutative((MultiUnaryNode *) parentNode,
+														  childNode);
 
 		if (parentPushDownStatus == PUSH_DOWN_VALID)
 		{
@@ -926,8 +924,6 @@ SelectClauseTableIdList(List *selectClauseList)
 	{
 		Node *selectClause = (Node *) lfirst(selectClauseCell);
 		List *selectColumnList = pull_var_clause_default(selectClause);
-		Var *selectColumn = NULL;
-		int selectColumnTableId = 0;
 
 		if (list_length(selectColumnList) == 0)
 		{
@@ -935,8 +931,8 @@ SelectClauseTableIdList(List *selectClauseList)
 			continue;
 		}
 
-		selectColumn = (Var *) linitial(selectColumnList);
-		selectColumnTableId = (int) selectColumn->varno;
+		Var *selectColumn = (Var *) linitial(selectColumnList);
+		int selectColumnTableId = (int) selectColumn->varno;
 
 		tableIdList = lappend_int(tableIdList, selectColumnTableId);
 	}
@@ -1008,9 +1004,9 @@ GenerateNode(MultiUnaryNode *currentNode, MultiNode *childNode)
 	{
 		MultiSelect *selectNode = (MultiSelect *) currentNode;
 		List *selectClauseList = copyObject(selectNode->selectClauseList);
-		List *newSelectClauseList = NIL;
 
-		newSelectClauseList = TableIdListSelectClauses(tableIdList, selectClauseList);
+		List *newSelectClauseList = TableIdListSelectClauses(tableIdList,
+															 selectClauseList);
 		if (newSelectClauseList != NIL)
 		{
 			MultiSelect *newSelectNode = CitusMakeNode(MultiSelect);
@@ -1364,9 +1360,9 @@ static MultiExtendedOp *
 MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 					 ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
-	MultiExtendedOp *masterExtendedOpNode = NULL;
 	List *targetEntryList = originalOpNode->targetList;
 	List *newTargetEntryList = NIL;
+	List *newGroupClauseList = NIL;
 	ListCell *targetEntryCell = NULL;
 	Node *originalHavingQual = originalOpNode->havingQual;
 	Node *newHavingQual = NULL;
@@ -1380,7 +1376,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	foreach(targetEntryCell, targetEntryList)
 	{
 		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		TargetEntry *newTargetEntry = copyObject(originalTargetEntry);
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
@@ -1391,7 +1387,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		 * if the aggregate belongs to a window function, it is not mutated, but pushed
 		 * down to worker as it is. Master query should treat that as a Var.
 		 */
-		if (hasAggregates && !hasWindowFunction)
+		if (hasAggregates && !hasWindowFunction &&
+			!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
 		{
 			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
 												   walkerContext);
@@ -1400,8 +1397,9 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		else
 		{
 			/*
-			 * The expression does not have any aggregates. We simply make it
-			 * reference the output generated by worker nodes.
+			 * The expression does not have any aggregates or the group by
+			 * is on the partition column. We simply make it reference the
+			 * output generated by worker nodes.
 			 */
 			const uint32 masterTableId = 1; /* only one table on master node */
 
@@ -1410,6 +1408,11 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			column->varoattno = walkerContext->columnId;
 			walkerContext->columnId++;
 
+			if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
+			{
+				column->vartypmod = BlessRecordExpression(originalTargetEntry->expr);
+			}
+
 			newExpression = (Expr *) column;
 		}
 
@@ -1417,14 +1420,23 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
 	}
 
-	if (originalHavingQual != NULL)
+	if (!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
 	{
-		newHavingQual = MasterAggregateMutator(originalHavingQual, walkerContext);
+		/*
+		 * Not pushing down GROUP BY, need to regroup on coordinator
+		 * and apply having on the coordinator.
+		 */
+		newGroupClauseList = originalOpNode->groupClauseList;
+
+		if (originalHavingQual != NULL)
+		{
+			newHavingQual = MasterAggregateMutator(originalHavingQual, walkerContext);
+		}
 	}
 
-	masterExtendedOpNode = CitusMakeNode(MultiExtendedOp);
+	MultiExtendedOp *masterExtendedOpNode = CitusMakeNode(MultiExtendedOp);
 	masterExtendedOpNode->targetList = newTargetEntryList;
-	masterExtendedOpNode->groupClauseList = originalOpNode->groupClauseList;
+	masterExtendedOpNode->groupClauseList = newGroupClauseList;
 	masterExtendedOpNode->sortClauseList = originalOpNode->sortClauseList;
 	masterExtendedOpNode->distinctClause = originalOpNode->distinctClause;
 	masterExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
@@ -1497,9 +1509,8 @@ static Expr *
 MasterAggregateExpression(Aggref *originalAggregate,
 						  MasterAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	Expr *newMasterExpression = NULL;
-	Expr *typeConvertedExpression = NULL;
 	const uint32 masterTableId = 1;  /* one table on the master node */
 	const Index columnLevelsUp = 0;  /* normal column */
 	const AttrNumber argumentId = 1; /* our aggregates have single arguments */
@@ -1542,6 +1553,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 				columnIndex++;
 			}
 
+			columnToUpdate->varno = masterTableId;
+			columnToUpdate->varnoold = masterTableId;
 			columnToUpdate->varattno = startColumnCount + columnIndex;
 			columnToUpdate->varoattno = startColumnCount + columnIndex;
 		}
@@ -1556,16 +1569,13 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	{
 		/*
 		 * If enabled, we check for count(distinct) approximations before count
-		 * distincts. For this, we first compute hll_add_agg(hll_hash(column) on
+		 * distincts. For this, we first compute hll_add_agg(hll_hash(column)) on
 		 * worker nodes, and get hll values. We then gather hlls on the master
 		 * node, and compute hll_cardinality(hll_union_agg(hll)).
 		 */
 		const int argCount = 1;
 		const int defaultTypeMod = -1;
 
-		TargetEntry *hllTargetEntry = NULL;
-		Aggref *unionAggregate = NULL;
-		FuncExpr *cardinalityExpression = NULL;
 
 		/* extract schema name of hll */
 		Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
@@ -1585,9 +1595,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								 hllTypeCollationId, columnLevelsUp);
 		walkerContext->columnId++;
 
-		hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId, NULL, false);
+		TargetEntry *hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId,
+													  NULL, false);
 
-		unionAggregate = makeNode(Aggref);
+		Aggref *unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = hllType;
 		unionAggregate->args = list_make1(hllTargetEntry);
@@ -1597,7 +1608,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
-		cardinalityExpression = makeNode(FuncExpr);
+		FuncExpr *cardinalityExpression = makeNode(FuncExpr);
 		cardinalityExpression->funcid = cardinalityFunctionId;
 		cardinalityExpression->funcresulttype = cardinalityReturnType;
 		cardinalityExpression->args = list_make1(unionAggregate);
@@ -1634,12 +1645,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * Count aggregates are handled in two steps. First, worker nodes report
 		 * their count results. Then, the master node sums up these results.
 		 */
-		Var *column = NULL;
-		TargetEntry *columnTargetEntry = NULL;
-		CoerceViaIO *coerceExpr = NULL;
-		Const *zeroConst = NULL;
-		List *coalesceArgs = NULL;
-		CoalesceExpr *coalesceExpr = NULL;
 
 		/* worker aggregate and original aggregate have the same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1660,16 +1665,17 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggargtypes = list_make1_oid(newMasterAggregate->aggtype);
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
-		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
-						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+		Var *column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+							  workerReturnTypeMod, workerCollationId, columnLevelsUp);
 		walkerContext->columnId++;
 
 		/* aggref expects its arguments to be wrapped in target entries */
-		columnTargetEntry = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+		TargetEntry *columnTargetEntry = makeTargetEntry((Expr *) column, argumentId,
+														 NULL, false);
 		newMasterAggregate->args = list_make1(columnTargetEntry);
 
 		/* cast numeric sum result to bigint (count's return type) */
-		coerceExpr = makeNode(CoerceViaIO);
+		CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
 		coerceExpr->arg = (Expr *) newMasterAggregate;
 		coerceExpr->resulttype = INT8OID;
 		coerceExpr->resultcollid = InvalidOid;
@@ -1677,10 +1683,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		coerceExpr->location = -1;
 
 		/* convert NULL to 0 in case of no rows */
-		zeroConst = MakeIntegerConstInt64(0);
-		coalesceArgs = list_make2(coerceExpr, zeroConst);
+		Const *zeroConst = MakeIntegerConstInt64(0);
+		List *coalesceArgs = list_make2(coerceExpr, zeroConst);
 
-		coalesceExpr = makeNode(CoalesceExpr);
+		CoalesceExpr *coalesceExpr = makeNode(CoalesceExpr);
 		coalesceExpr->coalescetype = INT8OID;
 		coalesceExpr->coalescecollid = InvalidOid;
 		coalesceExpr->args = coalesceArgs;
@@ -1700,10 +1706,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * the arrays or jsons on the master and compute the array_cat_agg()
 		 * or jsonb_cat_agg() aggregate on them to get the final array or json.
 		 */
-		Var *column = NULL;
-		TargetEntry *catAggArgument = NULL;
-		Aggref *newMasterAggregate = NULL;
-		Oid aggregateFunctionId = InvalidOid;
 		const char *catAggregateName = NULL;
 		Oid catInputType = InvalidOid;
 
@@ -1740,17 +1742,18 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Assert(catAggregateName != NULL);
 		Assert(catInputType != InvalidOid);
 
-		aggregateFunctionId = AggregateFunctionOid(catAggregateName,
-												   catInputType);
+		Oid aggregateFunctionId = AggregateFunctionOid(catAggregateName,
+													   catInputType);
 
 		/* create argument for the array_cat_agg() or jsonb_cat_agg() aggregate */
-		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
-						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
-		catAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+		Var *column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+							  workerReturnTypeMod, workerCollationId, columnLevelsUp);
+		TargetEntry *catAggArgument = makeTargetEntry((Expr *) column, argumentId, NULL,
+													  false);
 		walkerContext->columnId++;
 
 		/* construct the master array_cat_agg() or jsonb_cat_agg() expression */
-		newMasterAggregate = copyObject(originalAggregate);
+		Aggref *newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->args = list_make1(catAggArgument);
 		newMasterAggregate->aggfilter = NULL;
@@ -1768,8 +1771,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * to apply in the master after running the original aggregate in
 		 * workers.
 		 */
-		TargetEntry *hllTargetEntry = NULL;
-		Aggref *unionAggregate = NULL;
 
 		Oid hllType = exprType((Node *) originalAggregate);
 		Oid unionFunctionId = AggregateFunctionOid(HLL_UNION_AGGREGATE_NAME, hllType);
@@ -1780,9 +1781,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								 hllReturnTypeMod, hllTypeCollationId, columnLevelsUp);
 		walkerContext->columnId++;
 
-		hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId, NULL, false);
+		TargetEntry *hllTargetEntry = makeTargetEntry((Expr *) hllColumn, argumentId,
+													  NULL, false);
 
-		unionAggregate = makeNode(Aggref);
+		Aggref *unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = hllType;
 		unionAggregate->args = list_make1(hllTargetEntry);
@@ -1803,8 +1805,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 * Then, we gather the Top-Ns on the master and take the union of all
 		 * to get the final topn.
 		 */
-		TargetEntry *topNTargetEntry = NULL;
-		Aggref *unionAggregate = NULL;
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid topnType = exprType((Node *) originalAggregate);
@@ -1818,10 +1818,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								  topnReturnTypeMod, topnTypeCollationId, columnLevelsUp);
 		walkerContext->columnId++;
 
-		topNTargetEntry = makeTargetEntry((Expr *) topnColumn, argumentId, NULL, false);
+		TargetEntry *topNTargetEntry = makeTargetEntry((Expr *) topnColumn, argumentId,
+													   NULL, false);
 
 		/* construct the master topn_union_agg() expression */
-		unionAggregate = makeNode(Aggref);
+		Aggref *unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = topnType;
 		unionAggregate->args = list_make1(topNTargetEntry);
@@ -1833,14 +1834,73 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		HeapTuple aggTuple =
+			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
+		Form_pg_aggregate aggform;
+		Oid combine;
+
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(ERROR, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			return NULL;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			Oid coordCombineId = CoordCombineAggOid();
+			Oid workerReturnType = CSTRINGOID;
+			int32 workerReturnTypeMod = -1;
+			Oid workerCollationId = InvalidOid;
+			Oid resultType = exprType((Node *) originalAggregate);
+
+			Const *aggOidParam = makeConst(OIDOID, -1, InvalidOid, sizeof(Oid),
+										   ObjectIdGetDatum(originalAggregate->aggfnoid),
+										   false, true);
+			Var *column = makeVar(masterTableId, walkerContext->columnId,
+								  workerReturnType,
+								  workerReturnTypeMod, workerCollationId, columnLevelsUp);
+			walkerContext->columnId++;
+			Const *nullTag = makeNullConst(resultType, -1, InvalidOid);
+
+			List *aggArguments =
+				list_make3(makeTargetEntry((Expr *) aggOidParam, 1, NULL, false),
+						   makeTargetEntry((Expr *) column, 2, NULL, false),
+						   makeTargetEntry((Expr *) nullTag, 3, NULL, false));
+
+			/* coord_combine_agg(agg, workercol) */
+			Aggref *newMasterAggregate = makeNode(Aggref);
+			newMasterAggregate->aggfnoid = coordCombineId;
+			newMasterAggregate->aggtype = originalAggregate->aggtype;
+			newMasterAggregate->args = aggArguments;
+			newMasterAggregate->aggkind = AGGKIND_NORMAL;
+			newMasterAggregate->aggfilter = NULL;
+			newMasterAggregate->aggtranstype = INTERNALOID;
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
+															 resultType);
+			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			newMasterExpression = (Expr *) newMasterAggregate;
+		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
+	}
 	else
 	{
 		/*
 		 * All other aggregates are handled as they are. These include sum, min,
 		 * and max.
 		 */
-		Var *column = NULL;
-		TargetEntry *columnTargetEntry = NULL;
 
 		/* worker aggregate and original aggregate have the same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1851,22 +1911,33 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Oid aggregateFunctionId = AggregateFunctionOid(aggregateName, workerReturnType);
 		Oid masterReturnType = get_func_rettype(aggregateFunctionId);
 
+		/*
+		 * If return type aggregate is anyelement, it's actual return type is
+		 * determined on the type of its argument. So we replace it with the
+		 * argument type in that case.
+		 */
+		if (masterReturnType == ANYELEMENTOID)
+		{
+			masterReturnType = workerReturnType;
+		}
 		Aggref *newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
 		newMasterAggregate->aggfilter = NULL;
 
-		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
-						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
+		Var *column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
+							  workerReturnTypeMod, workerCollationId, columnLevelsUp);
 		walkerContext->columnId++;
 
 		/* aggref expects its arguments to be wrapped in target entries */
-		columnTargetEntry = makeTargetEntry((Expr *) column, argumentId, NULL, false);
+		TargetEntry *columnTargetEntry = makeTargetEntry((Expr *) column, argumentId,
+														 NULL, false);
 		newMasterAggregate->args = list_make1(columnTargetEntry);
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
+
 
 	/*
 	 * Aggregate functions could have changed the return type. If so, we wrap
@@ -1874,8 +1945,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	 * type as the original aggregate. We need this since functions like sorting
 	 * and grouping have already been chosen based on the original type.
 	 */
-	typeConvertedExpression = AddTypeConversion((Node *) originalAggregate,
-												(Node *) newMasterExpression);
+	Expr *typeConvertedExpression = AddTypeConversion((Node *) originalAggregate,
+													  (Node *) newMasterExpression);
 	if (typeConvertedExpression != NULL)
 	{
 		newMasterExpression = typeConvertedExpression;
@@ -1909,22 +1980,15 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 
 	Oid sumTypeCollationId = get_typcollation(sumAggregateType);
 	Oid countTypeCollationId = get_typcollation(countAggregateType);
-	Var *firstColumn = NULL;
-	Var *secondColumn = NULL;
-	TargetEntry *firstTargetEntry = NULL;
-	TargetEntry *secondTargetEntry = NULL;
-	Aggref *firstSum = NULL;
-	Aggref *secondSum = NULL;
-	List *operatorNameList = NIL;
-	Expr *opExpr = NULL;
 
 	/* create the first argument for sum(column1) */
-	firstColumn = makeVar(masterTableId, (*columnId), sumAggregateType,
-						  defaultTypeMod, sumTypeCollationId, defaultLevelsUp);
-	firstTargetEntry = makeTargetEntry((Expr *) firstColumn, argumentId, NULL, false);
+	Var *firstColumn = makeVar(masterTableId, (*columnId), sumAggregateType,
+							   defaultTypeMod, sumTypeCollationId, defaultLevelsUp);
+	TargetEntry *firstTargetEntry = makeTargetEntry((Expr *) firstColumn, argumentId,
+													NULL, false);
 	(*columnId)++;
 
-	firstSum = makeNode(Aggref);
+	Aggref *firstSum = makeNode(Aggref);
 	firstSum->aggfnoid = AggregateFunctionOid(sumAggregateName, sumAggregateType);
 	firstSum->aggtype = get_func_rettype(firstSum->aggfnoid);
 	firstSum->args = list_make1(firstTargetEntry);
@@ -1934,12 +1998,13 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	firstSum->aggsplit = AGGSPLIT_SIMPLE;
 
 	/* create the second argument for sum(column2) */
-	secondColumn = makeVar(masterTableId, (*columnId), countAggregateType,
-						   defaultTypeMod, countTypeCollationId, defaultLevelsUp);
-	secondTargetEntry = makeTargetEntry((Expr *) secondColumn, argumentId, NULL, false);
+	Var *secondColumn = makeVar(masterTableId, (*columnId), countAggregateType,
+								defaultTypeMod, countTypeCollationId, defaultLevelsUp);
+	TargetEntry *secondTargetEntry = makeTargetEntry((Expr *) secondColumn, argumentId,
+													 NULL, false);
 	(*columnId)++;
 
-	secondSum = makeNode(Aggref);
+	Aggref *secondSum = makeNode(Aggref);
 	secondSum->aggfnoid = AggregateFunctionOid(sumAggregateName, countAggregateType);
 	secondSum->aggtype = get_func_rettype(secondSum->aggfnoid);
 	secondSum->args = list_make1(secondTargetEntry);
@@ -1952,9 +2017,10 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	 * Build the division operator between these two aggregates. This function
 	 * will convert the types of the aggregates if necessary.
 	 */
-	operatorNameList = list_make1(makeString(DIVISION_OPER_NAME));
-	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, NULL,
-					 -1);
+	List *operatorNameList = list_make1(makeString(DIVISION_OPER_NAME));
+	Expr *opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum,
+						   NULL,
+						   -1);
 
 	return opExpr;
 }
@@ -1971,7 +2037,6 @@ AddTypeConversion(Node *originalAggregate, Node *newExpression)
 	Oid newTypeId = exprType(newExpression);
 	Oid originalTypeId = exprType(originalAggregate);
 	int32 originalTypeMod = exprTypmod(originalAggregate);
-	Node *typeConvertedExpression = NULL;
 
 	/* nothing to do if the two types are the same */
 	if (originalTypeId == newTypeId)
@@ -1980,10 +2045,10 @@ AddTypeConversion(Node *originalAggregate, Node *newExpression)
 	}
 
 	/* otherwise, add a type conversion function */
-	typeConvertedExpression = coerce_to_target_type(NULL, newExpression, newTypeId,
-													originalTypeId, originalTypeMod,
-													COERCION_EXPLICIT,
-													COERCE_EXPLICIT_CAST, -1);
+	Node *typeConvertedExpression = coerce_to_target_type(NULL, newExpression, newTypeId,
+														  originalTypeId, originalTypeMod,
+														  COERCION_EXPLICIT,
+														  COERCE_EXPLICIT_CAST, -1);
 	Assert(typeConvertedExpression != NULL);
 	return (Expr *) typeConvertedExpression;
 }
@@ -2000,10 +2065,7 @@ static MultiExtendedOp *
 WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 					 ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
-	MultiExtendedOp *workerExtendedOpNode = NULL;
-	Index nextSortGroupRefIndex = 0;
 	bool distinctPreventsLimitPushdown = false;
-	bool groupByExtended = false;
 	bool groupedByDisjointPartitionColumn =
 		extendedOpNodeProperties->groupedByDisjointPartitionColumn;
 
@@ -2028,14 +2090,14 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool queryHasAggregates = TargetListHasAggragates(originalTargetEntryList);
 
 	/* initialize to default values */
-	memset(&queryTargetList, 0, sizeof(queryGroupClause));
+	memset(&queryTargetList, 0, sizeof(queryTargetList));
 	memset(&queryGroupClause, 0, sizeof(queryGroupClause));
-	memset(&queryDistinctClause, 0, sizeof(queryGroupClause));
-	memset(&queryWindowClause, 0, sizeof(queryGroupClause));
-	memset(&queryOrderByLimit, 0, sizeof(queryGroupClause));
+	memset(&queryDistinctClause, 0, sizeof(queryDistinctClause));
+	memset(&queryWindowClause, 0, sizeof(queryWindowClause));
+	memset(&queryOrderByLimit, 0, sizeof(queryOrderByLimit));
 
 	/* calculate the next sort group index based on the original target list */
-	nextSortGroupRefIndex = GetNextSortGroupRef(originalTargetEntryList);
+	Index nextSortGroupRefIndex = GetNextSortGroupRef(originalTargetEntryList);
 
 	/* targetProjectionNumber starts from 1 */
 	queryTargetList.targetProjectionNumber = 1;
@@ -2077,7 +2139,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 *      (1) Creating a new group by clause during aggregate mutation, or
 	 *      (2) Distinct clause is not pushed down
 	 */
-	groupByExtended =
+	bool groupByExtended =
 		list_length(queryGroupClause.groupClauseList) > originalGroupClauseLength;
 	if (!groupByExtended && !distinctPreventsLimitPushdown)
 	{
@@ -2098,7 +2160,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	}
 
 	/* finally, fill the extended op node with the data we gathered */
-	workerExtendedOpNode = CitusMakeNode(MultiExtendedOp);
+	MultiExtendedOp *workerExtendedOpNode = CitusMakeNode(MultiExtendedOp);
 
 	workerExtendedOpNode->targetList = queryTargetList.targetEntryList;
 	workerExtendedOpNode->groupClauseList = queryGroupClause.groupClauseList;
@@ -2166,11 +2228,15 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		workerAggContext->createGroupByClause = false;
 
 		/*
-		 * If the expression uses aggregates inside window function contain agg
-		 * clause still returns true. We want to make sure it is not a part of
-		 * window function before we proceed.
+		 * If the query has a window function, we currently assume it's safe to push
+		 * down the target list.
+		 *
+		 * If there are aggregates without a GROUP BY on the distribution column
+		 * then the results of those aggregates need to be combined on the coordinator.
+		 * In that case we rewrite the expressions using WorkerAggregateWalker.
 		 */
-		if (hasAggregates && !hasWindowFunction)
+		if (!hasWindowFunction && hasAggregates &&
+			!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
 		{
 			WorkerAggregateWalker((Node *) originalExpression, workerAggContext);
 
@@ -2198,11 +2264,6 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
  * having clause is safe to pushdown to the workers, workerHavingQual is set to
  * be the original having clause.
  *
- * TODO: Citus currently always pulls the expressions in the having clause to the
- * coordinator and apply it on the coordinator. Do we really need to pull those
- * expressions to the coordinator and apply the having on the coordinator if we're
- * already pushing down the HAVING clause?
- *
  *     inputs: originalHavingQual, extendedOpNodeProperties
  *     outputs: workerHavingQual, queryTargetList, queryGroupClause
  */
@@ -2213,9 +2274,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 								  QueryTargetList *queryTargetList,
 								  QueryGroupClause *queryGroupClause)
 {
-	List *newExpressionList = NIL;
 	TargetEntry *targetEntry = NULL;
-	WorkerAggregateWalkerContext *workerAggContext = NULL;
 
 	if (originalHavingQual == NULL)
 	{
@@ -2224,17 +2283,26 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 
 	*workerHavingQual = NULL;
 
-	workerAggContext = palloc0(sizeof(WorkerAggregateWalkerContext));
-	workerAggContext->expressionList = NIL;
-	workerAggContext->pullDistinctColumns = extendedOpNodeProperties->pullDistinctColumns;
-	workerAggContext->createGroupByClause = false;
+	if (!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
+	{
+		/*
+		 * If the GROUP BY or PARTITION BY is not on the distribution column
+		 * then we need to combine the aggregates in the HAVING across shards.
+		 */
+		WorkerAggregateWalkerContext *workerAggContext = palloc0(
+			sizeof(WorkerAggregateWalkerContext));
+		workerAggContext->expressionList = NIL;
+		workerAggContext->pullDistinctColumns =
+			extendedOpNodeProperties->pullDistinctColumns;
+		workerAggContext->createGroupByClause = false;
 
-	WorkerAggregateWalker(originalHavingQual, workerAggContext);
-	newExpressionList = workerAggContext->expressionList;
+		WorkerAggregateWalker(originalHavingQual, workerAggContext);
+		List *newExpressionList = workerAggContext->expressionList;
 
-	ExpandWorkerTargetEntry(newExpressionList, targetEntry,
-							workerAggContext->createGroupByClause,
-							queryTargetList, queryGroupClause);
+		ExpandWorkerTargetEntry(newExpressionList, targetEntry,
+								workerAggContext->createGroupByClause,
+								queryTargetList, queryGroupClause);
+	}
 
 	/*
 	 * If grouped by a partition column whose values are shards have disjoint sets
@@ -2273,7 +2341,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 /*
  * PrcoessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
  * such that worker query's DISTINCT and DISTINCT ON clauses are set accordingly.
- * Note the the function may or may not decide to pushdown the DISTINCT and DISTINCT
+ * Note the function may or may not decide to pushdown the DISTINCT and DISTINCT
  * on clauses based on the inputs.
  *
  * See the detailed comments in the function for the rules of pushing down DISTINCT
@@ -2295,7 +2363,6 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
 									bool *distinctPreventsLimitPushdown)
 {
 	bool distinctClauseSupersetofGroupClause = false;
-	bool shouldPushdownDistinct = false;
 
 	if (distinctClause == NIL)
 	{
@@ -2329,8 +2396,8 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
 	 * distinct pushdown if distinct clause is missing some entries that
 	 * group by clause has.
 	 */
-	shouldPushdownDistinct = !queryHasAggregates &&
-							 distinctClauseSupersetofGroupClause;
+	bool shouldPushdownDistinct = !queryHasAggregates &&
+								  distinctClauseSupersetofGroupClause;
 	if (shouldPushdownDistinct)
 	{
 		queryDistinctClause->workerDistinctClause = distinctClause;
@@ -2434,8 +2501,6 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 								  QueryOrderByLimit *queryOrderByLimit,
 								  QueryTargetList *queryTargetList)
 {
-	List *newTargetEntryListForSortClauses = NIL;
-
 	queryOrderByLimit->workerLimitCount =
 		WorkerLimitCount(originalLimitCount, limitOffset, orderByLimitReference);
 
@@ -2449,7 +2514,7 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 	 * TODO: Do we really need to add the target entries if we're not pushing
 	 * down ORDER BY?
 	 */
-	newTargetEntryListForSortClauses =
+	List *newTargetEntryListForSortClauses =
 		GenerateNewTargetEntriesForSortClauses(originalTargetList,
 											   queryOrderByLimit->workerSortClauseList,
 											   &(queryTargetList->targetProjectionNumber),
@@ -2544,10 +2609,9 @@ ExpandWorkerTargetEntry(List *expressionList, TargetEntry *originalTargetEntry,
 	foreach(newExpressionCell, expressionList)
 	{
 		Expr *newExpression = (Expr *) lfirst(newExpressionCell);
-		TargetEntry *newTargetEntry = NULL;
 
 		/* generate and add the new target entry to the target list */
-		newTargetEntry =
+		TargetEntry *newTargetEntry =
 			GenerateWorkerTargetEntry(originalTargetEntry, newExpression,
 									  queryTargetList->targetProjectionNumber);
 		(queryTargetList->targetProjectionNumber)++;
@@ -2659,14 +2723,12 @@ AppendTargetEntryToGroupClause(TargetEntry *targetEntry,
 							   QueryGroupClause *queryGroupClause)
 {
 	Expr *targetExpr PG_USED_FOR_ASSERTS_ONLY = targetEntry->expr;
-	Var *targetColumn = NULL;
-	SortGroupClause *groupByClause = NULL;
 
 	/* we currently only support appending Var target entries */
 	AssertArg(IsA(targetExpr, Var));
 
-	targetColumn = (Var *) targetEntry->expr;
-	groupByClause = CreateSortGroupClause(targetColumn);
+	Var *targetColumn = (Var *) targetEntry->expr;
+	SortGroupClause *groupByClause = CreateSortGroupClause(targetColumn);
 
 	/* the target entry should have an index */
 	targetEntry->ressortgroupref = *queryGroupClause->nextSortGroupRefIndex;
@@ -2733,7 +2795,7 @@ static List *
 WorkerAggregateExpressionList(Aggref *originalAggregate,
 							  WorkerAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	List *workerAggregateList = NIL;
 	AggClauseCosts aggregateCosts;
 
@@ -2764,10 +2826,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		const int hashArgumentCount = 2;
 		const int addArgumentCount = 2;
 
-		TargetEntry *hashedColumnArgument = NULL;
-		TargetEntry *storageSizeArgument = NULL;
-		List *addAggregateArgumentList = NIL;
-		Aggref *addAggregateFunction = NULL;
 
 		/* init hll_hash() related variables */
 		Oid argumentType = AggregateArgumentType(originalAggregate);
@@ -2779,7 +2837,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Oid hllSchemaOid = get_extension_schema(hllId);
 		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
 
-		char *hashFunctionName = CountDistinctHashFunctionName(argumentType);
+		const char *hashFunctionName = CountDistinctHashFunctionName(argumentType);
 		Oid hashFunctionId = FunctionOid(hllSchemaName, hashFunctionName,
 										 hashArgumentCount);
 		Oid hashFunctionReturnType = get_func_rettype(hashFunctionId);
@@ -2798,13 +2856,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		hashFunction->args = list_make1(argumentExpression);
 
 		/* construct hll_add_agg() expression */
-		hashedColumnArgument = makeTargetEntry((Expr *) hashFunction,
-											   firstArgumentId, NULL, false);
-		storageSizeArgument = makeTargetEntry((Expr *) logOfStorageSizeConst,
-											  secondArgumentId, NULL, false);
-		addAggregateArgumentList = list_make2(hashedColumnArgument, storageSizeArgument);
+		TargetEntry *hashedColumnArgument = makeTargetEntry((Expr *) hashFunction,
+															firstArgumentId, NULL, false);
+		TargetEntry *storageSizeArgument = makeTargetEntry((Expr *) logOfStorageSizeConst,
+														   secondArgumentId, NULL, false);
+		List *addAggregateArgumentList = list_make2(hashedColumnArgument,
+													storageSizeArgument);
 
-		addAggregateFunction = makeNode(Aggref);
+		Aggref *addAggregateFunction = makeNode(Aggref);
 		addAggregateFunction->aggfnoid = addFunctionId;
 		addAggregateFunction->aggtype = hllType;
 		addAggregateFunction->args = addAggregateArgumentList;
@@ -2851,6 +2910,62 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
+	else if (aggregateType == AGGREGATE_CUSTOM)
+	{
+		HeapTuple aggTuple =
+			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
+		Form_pg_aggregate aggform;
+		Oid combine;
+
+		if (!HeapTupleIsValid(aggTuple))
+		{
+			elog(ERROR, "citus cache lookup failed for aggregate %u",
+				 originalAggregate->aggfnoid);
+			return NULL;
+		}
+		else
+		{
+			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+			combine = aggform->aggcombinefn;
+			ReleaseSysCache(aggTuple);
+		}
+
+		if (combine != InvalidOid)
+		{
+			ListCell *originalAggArgCell;
+			Oid workerPartialId = WorkerPartialAggOid();
+
+			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
+										   ObjectIdGetDatum(originalAggregate->aggfnoid),
+										   false, true);
+			List *aggArguments = list_make1(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
+															false));
+			foreach(originalAggArgCell, originalAggregate->args)
+			{
+				TargetEntry *arg = lfirst(originalAggArgCell);
+				TargetEntry *newArg = copyObject(arg);
+				newArg->resno++;
+				aggArguments = lappend(aggArguments, newArg);
+			}
+
+			/* worker_partial_agg(agg, ...args) */
+			Aggref *newWorkerAggregate = copyObject(originalAggregate);
+			newWorkerAggregate->aggfnoid = workerPartialId;
+			newWorkerAggregate->aggtype = CSTRINGOID;
+			newWorkerAggregate->args = aggArguments;
+			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+			newWorkerAggregate->aggtranstype = INTERNALOID;
+			newWorkerAggregate->aggargtypes = lcons_oid(OIDOID,
+														newWorkerAggregate->aggargtypes);
+			newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+			workerAggregateList = list_make1(newWorkerAggregate);
+		}
+		else
+		{
+			elog(ERROR, "Aggregate lacks COMBINEFUNC");
+		}
+	}
 	else
 	{
 		/*
@@ -2877,37 +2992,37 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
  * previously stored strings, and returns the appropriate aggregate type.
  */
 static AggregateType
-GetAggregateType(Oid aggFunctionId)
+GetAggregateType(Aggref *aggregateExpression)
 {
-	char *aggregateProcName = NULL;
-	uint32 aggregateCount = 0;
-	uint32 aggregateIndex = 0;
-	bool found = false;
+	Oid aggFunctionId = aggregateExpression->aggfnoid;
 
 	/* look up the function name */
-	aggregateProcName = get_func_name(aggFunctionId);
+	char *aggregateProcName = get_func_name(aggFunctionId);
 	if (aggregateProcName == NULL)
 	{
-		ereport(ERROR, (errmsg("cache lookup failed for function %u", aggFunctionId)));
+		ereport(ERROR, (errmsg("citus cache lookup failed for function %u",
+							   aggFunctionId)));
 	}
 
-	aggregateCount = lengthof(AggregateNames);
-	for (aggregateIndex = 0; aggregateIndex < aggregateCount; aggregateIndex++)
+	uint32 aggregateCount = lengthof(AggregateNames);
+
+	Assert(AGGREGATE_INVALID_FIRST == 0);
+
+	for (uint32 aggregateIndex = 1; aggregateIndex < aggregateCount; aggregateIndex++)
 	{
 		const char *aggregateName = AggregateNames[aggregateIndex];
 		if (strncmp(aggregateName, aggregateProcName, NAMEDATALEN) == 0)
 		{
-			found = true;
-			break;
+			return aggregateIndex;
 		}
 	}
 
-	if (!found)
+	if (AggregateEnabledCustom(aggregateExpression))
 	{
-		ereport(ERROR, (errmsg("unsupported aggregate function %s", aggregateProcName)));
+		return AGGREGATE_CUSTOM;
 	}
 
-	return aggregateIndex;
+	ereport(ERROR, (errmsg("unsupported aggregate function %s", aggregateProcName)));
 }
 
 
@@ -2927,6 +3042,49 @@ AggregateArgumentType(Aggref *aggregate)
 
 
 /*
+ * AggregateEnabledCustom returns whether given aggregate can be
+ * distributed across workers using worker_partial_agg & coord_combine_agg.
+ */
+static bool
+AggregateEnabledCustom(Aggref *aggregateExpression)
+{
+	if (aggregateExpression->aggorder != NIL ||
+		list_length(aggregateExpression->args) != 1)
+	{
+		return false;
+	}
+
+	Oid aggregateOid = aggregateExpression->aggfnoid;
+	HeapTuple aggTuple = SearchSysCache1(AGGFNOID, aggregateOid);
+	if (!HeapTupleIsValid(aggTuple))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+	Form_pg_aggregate aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+
+	if (aggform->aggcombinefn == InvalidOid)
+	{
+		ReleaseSysCache(aggTuple);
+		return false;
+	}
+
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, aggform->aggtranstype);
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed.");
+	}
+	Form_pg_type typeform = (Form_pg_type) GETSTRUCT(typeTuple);
+
+	bool supportsSafeCombine = typeform->typtype != TYPTYPE_PSEUDO;
+
+	ReleaseSysCache(aggTuple);
+	ReleaseSysCache(typeTuple);
+
+	return supportsSafeCombine;
+}
+
+
+/*
  * AggregateFunctionOid performs a reverse lookup on aggregate function name,
  * and returns the corresponding aggregate function oid for the given function
  * name and input type.
@@ -2935,23 +3093,20 @@ static Oid
 AggregateFunctionOid(const char *functionName, Oid inputType)
 {
 	Oid functionOid = InvalidOid;
-	Relation procRelation = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
 
-	procRelation = heap_open(ProcedureRelationId, AccessShareLock);
+	Relation procRelation = heap_open(ProcedureRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_proc_proname,
 				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
 
-	scanDescriptor = systable_beginscan(procRelation,
-										ProcedureNameArgsNspIndexId, true,
-										NULL, scanKeyCount, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(procRelation,
+													ProcedureNameArgsNspIndexId, true,
+													NULL, scanKeyCount, scanKey);
 
 	/* loop until we find the right function */
-	heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_proc procForm = (Form_pg_proc) GETSTRUCT(heapTuple);
@@ -2960,9 +3115,14 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 		if (argumentCount == 1)
 		{
 			/* check if input type and found value type match */
-			if (procForm->proargtypes.values[0] == inputType)
+			if (procForm->proargtypes.values[0] == inputType ||
+				procForm->proargtypes.values[0] == ANYELEMENTOID)
 			{
+#if PG_VERSION_NUM < 120000
 				functionOid = HeapTupleGetOid(heapTuple);
+#else
+				functionOid = procForm->oid;
+#endif
 				break;
 			}
 		}
@@ -2984,16 +3144,71 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 
 /*
+ * CitusFunctionOidWithSignature looks up a function with given input types.
+ * Looks in pg_catalog schema, as this function's sole purpose is
+ * support aggregate lookup.
+ */
+static Oid
+CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
+{
+	List *aggregateName = list_make2(makeString("pg_catalog"), makeString(functionName));
+	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL, false,
+													false, true);
+
+	for (; clist; clist = clist->next)
+	{
+		if (memcmp(clist->args, argtypes, numargs * sizeof(Oid)) == 0)
+		{
+			return clist->oid;
+		}
+	}
+
+	ereport(ERROR, (errmsg("no matching oid for function: %s", functionName)));
+	return InvalidOid;
+}
+
+
+/*
+ * WorkerPartialAggOid looks up oid of pg_catalog.worker_partial_agg
+ */
+static Oid
+WorkerPartialAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(WORKER_PARTIAL_AGGREGATE_NAME, 2, argtypes);
+}
+
+
+/*
+ * CoordCombineAggOid looks up oid of pg_catalog.coord_combine_agg
+ */
+static Oid
+CoordCombineAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		CSTRINGOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(COORD_COMBINE_AGGREGATE_NAME, 3, argtypes);
+}
+
+
+/*
  * TypeOid looks for a type that has the given name and schema, and returns the
  * corresponding type's oid.
  */
 static Oid
 TypeOid(Oid schemaId, const char *typeName)
 {
-	Oid typeOid;
-
-	typeOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum(typeName),
-							  ObjectIdGetDatum(schemaId));
+	Oid typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid,
+										PointerGetDatum(typeName),
+										ObjectIdGetDatum(schemaId));
 
 	return typeOid;
 }
@@ -3028,42 +3243,34 @@ CreateSortGroupClause(Var *column)
  * CountDistinctHashFunctionName resolves the hll_hash function name to use for
  * the given input type, and returns this function name.
  */
-static char *
+static const char *
 CountDistinctHashFunctionName(Oid argumentType)
 {
-	char *hashFunctionName = NULL;
-
 	/* resolve hash function name based on input argument type */
 	switch (argumentType)
 	{
 		case INT4OID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_INTEGER_FUNC_NAME);
-			break;
+			return HLL_HASH_INTEGER_FUNC_NAME;
 		}
 
 		case INT8OID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_BIGINT_FUNC_NAME);
-			break;
+			return HLL_HASH_BIGINT_FUNC_NAME;
 		}
 
 		case TEXTOID:
 		case BPCHAROID:
 		case VARCHAROID:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_TEXT_FUNC_NAME);
-			break;
+			return HLL_HASH_TEXT_FUNC_NAME;
 		}
 
 		default:
 		{
-			hashFunctionName = pstrdup(HLL_HASH_ANY_FUNC_NAME);
-			break;
+			return HLL_HASH_ANY_FUNC_NAME;
 		}
 	}
-
-	return hashFunctionName;
 }
 
 
@@ -3154,8 +3361,6 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 	foreach(expressionCell, expressionList)
 	{
 		Node *expression = (Node *) lfirst(expressionCell);
-		Aggref *aggregateExpression = NULL;
-		AggregateType aggregateType = AGGREGATE_INVALID_FIRST;
 
 		/* only consider aggregate expressions */
 		if (!IsA(expression, Aggref))
@@ -3164,8 +3369,8 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 		}
 
 		/* GetAggregateType errors out on unsupported aggregate types */
-		aggregateExpression = (Aggref *) expression;
-		aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+		Aggref *aggregateExpression = (Aggref *) expression;
+		AggregateType aggregateType = GetAggregateType(aggregateExpression);
 		Assert(aggregateType != AGGREGATE_INVALID_FIRST);
 
 		/*
@@ -3185,7 +3390,7 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 		else if (aggregateType == AGGREGATE_JSONB_OBJECT_AGG ||
 				 aggregateType == AGGREGATE_JSON_OBJECT_AGG)
 		{
-			ErrorIfUnsupportedJsonObjectAggregate(aggregateType, aggregateExpression);
+			ErrorIfUnsupportedJsonAggregate(aggregateType, aggregateExpression);
 		}
 		else if (aggregateExpression->aggdistinct)
 		{
@@ -3247,33 +3452,6 @@ ErrorIfUnsupportedJsonAggregate(AggregateType type,
 
 
 /*
- * ErrorIfUnsupportedJsonObjectAggregate checks if we can transform the
- * json object aggregate expression and push it down to the worker node.
- * If we cannot transform the aggregate, this function errors.
- */
-static void
-ErrorIfUnsupportedJsonObjectAggregate(AggregateType type,
-									  Aggref *aggregateExpression)
-{
-	/* if json object aggregate has order by, we error out */
-	if (aggregateExpression->aggorder)
-	{
-		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s with order by is unsupported", name)));
-	}
-
-	/* if json object aggregate has distinct, we error out */
-	if (aggregateExpression->aggdistinct)
-	{
-		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s (distinct) is unsupported", name)));
-	}
-}
-
-
-/*
  * ErrorIfUnsupportedAggregateDistinct checks if we can transform the aggregate
  * (distinct expression) and push it down to the worker node. It handles count
  * (distinct) separately to check if we can use distinct approximations. If we
@@ -3285,13 +3463,8 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 {
 	char *errorDetail = NULL;
 	bool distinctSupported = true;
-	List *repartitionNodeList = NIL;
-	Var *distinctColumn = NULL;
-	List *tableNodeList = NIL;
-	List *extendedOpNodeList = NIL;
-	MultiExtendedOp *extendedOpNode = NULL;
 
-	AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+	AggregateType aggregateType = GetAggregateType(aggregateExpression);
 
 	/*
 	 * We partially support count(distinct) in subqueries, other distinct aggregates in
@@ -3359,18 +3532,18 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		}
 	}
 
-	repartitionNodeList = FindNodesOfType(logicalPlanNode, T_MultiPartition);
+	List *repartitionNodeList = FindNodesOfType(logicalPlanNode, T_MultiPartition);
 	if (repartitionNodeList != NIL)
 	{
 		distinctSupported = false;
 		errorDetail = "aggregate (distinct) with table repartitioning is unsupported";
 	}
 
-	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
-	extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
-	extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
+	List *tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	List *extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
+	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
-	distinctColumn = AggregateDistinctColumn(aggregateExpression);
+	Var *distinctColumn = AggregateDistinctColumn(aggregateExpression);
 	if (distinctSupported)
 	{
 		if (distinctColumn == NULL)
@@ -3435,29 +3608,26 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 static Var *
 AggregateDistinctColumn(Aggref *aggregateExpression)
 {
-	Var *aggregateColumn = NULL;
-	int aggregateArgumentCount = 0;
-	TargetEntry *aggregateTargetEntry = NULL;
-
 	/* only consider aggregates with distincts */
 	if (!aggregateExpression->aggdistinct)
 	{
 		return NULL;
 	}
 
-	aggregateArgumentCount = list_length(aggregateExpression->args);
+	int aggregateArgumentCount = list_length(aggregateExpression->args);
 	if (aggregateArgumentCount != 1)
 	{
 		return NULL;
 	}
 
-	aggregateTargetEntry = (TargetEntry *) linitial(aggregateExpression->args);
+	TargetEntry *aggregateTargetEntry = (TargetEntry *) linitial(
+		aggregateExpression->args);
 	if (!IsA(aggregateTargetEntry->expr, Var))
 	{
 		return NULL;
 	}
 
-	aggregateColumn = (Var *) aggregateTargetEntry->expr;
+	Var *aggregateColumn = (Var *) aggregateTargetEntry->expr;
 	return aggregateColumn;
 }
 
@@ -3481,8 +3651,6 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		Oid relationId = tableNode->relationId;
 		bool tableDistinctSupported = false;
-		char partitionMethod = 0;
-		List *shardList = NIL;
 
 		if (relationId == SUBQUERY_RELATION_ID ||
 			relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
@@ -3491,7 +3659,7 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		}
 
 		/* if table has one shard, task results don't overlap */
-		shardList = LoadShardList(relationId);
+		List *shardList = LoadShardList(relationId);
 		if (list_length(shardList) == 1)
 		{
 			continue;
@@ -3501,13 +3669,12 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		 * We need to check that task results don't overlap. We can only do this
 		 * if table is range partitioned.
 		 */
-		partitionMethod = PartitionMethod(relationId);
+		char partitionMethod = PartitionMethod(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_RANGE ||
 			partitionMethod == DISTRIBUTE_BY_HASH)
 		{
 			Var *tablePartitionColumn = tableNode->partitionColumn;
-			bool groupedByPartitionColumn = false;
 
 			if (aggregateType == AGGREGATE_COUNT)
 			{
@@ -3523,9 +3690,9 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 			}
 
 			/* if results are grouped by partition column, we can push down */
-			groupedByPartitionColumn = GroupedByColumn(opNode->groupClauseList,
-													   opNode->targetList,
-													   tablePartitionColumn);
+			bool groupedByPartitionColumn = GroupedByColumn(opNode->groupClauseList,
+															opNode->targetList,
+															tablePartitionColumn);
 			if (groupedByPartitionColumn)
 			{
 				tableDistinctSupported = true;
@@ -3672,8 +3839,6 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 {
 	Var *candidateColumn = NULL;
 	List *rangetableList = query->rtable;
-	Index rangeTableEntryIndex = 0;
-	RangeTblEntry *rangeTableEntry = NULL;
 	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
 		(Node *) columnExpression);
 
@@ -3711,8 +3876,8 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
-	rangeTableEntryIndex = candidateColumn->varno - 1;
-	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
+	Index rangeTableEntryIndex = candidateColumn->varno - 1;
+	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
@@ -4033,7 +4198,7 @@ GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
 		else
 		{
 			Aggref *aggNode = (Aggref *) targetExpr;
-			AggregateType aggregateType = GetAggregateType(aggNode->aggfnoid);
+			AggregateType aggregateType = GetAggregateType(aggNode);
 			if (aggregateType == AGGREGATE_AVERAGE)
 			{
 				createNewTargetEntry = true;
@@ -4145,7 +4310,7 @@ HasOrderByAverage(List *sortClauseList, List *targetList)
 		{
 			Aggref *aggregate = (Aggref *) sortExpression;
 
-			AggregateType aggregateType = GetAggregateType(aggregate->aggfnoid);
+			AggregateType aggregateType = GetAggregateType(aggregate);
 			if (aggregateType == AGGREGATE_AVERAGE)
 			{
 				hasOrderByAverage = true;
@@ -4173,7 +4338,6 @@ HasOrderByComplexExpression(List *sortClauseList, List *targetList)
 	{
 		SortGroupClause *sortClause = (SortGroupClause *) lfirst(sortClauseCell);
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
-		bool nestedAggregate = false;
 
 		/* simple aggregate functions are ok */
 		if (IsA(sortExpression, Aggref))
@@ -4181,7 +4345,7 @@ HasOrderByComplexExpression(List *sortClauseList, List *targetList)
 			continue;
 		}
 
-		nestedAggregate = contain_agg_clause(sortExpression);
+		bool nestedAggregate = contain_agg_clause(sortExpression);
 		if (nestedAggregate)
 		{
 			hasOrderByComplexExpression = true;
@@ -4201,20 +4365,17 @@ static bool
 HasOrderByHllType(List *sortClauseList, List *targetList)
 {
 	bool hasOrderByHllType = false;
-	Oid hllId = InvalidOid;
-	Oid hllSchemaOid = InvalidOid;
-	Oid hllTypeId = InvalidOid;
 	ListCell *sortClauseCell = NULL;
 
 	/* check whether HLL is loaded */
-	hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
+	Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
 	if (!OidIsValid(hllId))
 	{
 		return hasOrderByHllType;
 	}
 
-	hllSchemaOid = get_extension_schema(hllId);
-	hllTypeId = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
+	Oid hllSchemaOid = get_extension_schema(hllId);
+	Oid hllTypeId = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
 
 	foreach(sortClauseCell, sortClauseList)
 	{

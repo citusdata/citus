@@ -2,11 +2,10 @@
 -- MULTI_SIZE_QUERIES
 --
 -- Test checks whether size of distributed tables can be obtained with citus_table_size.
--- To find the relation size and total relation size citus_relation_size and 
+-- To find the relation size and total relation size citus_relation_size and
 -- citus_total_relation_size are also tested.
 
 SET citus.next_shard_id TO 1460000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1460000;
 
 SET citus.shard_replication_factor to 1;
 
@@ -39,7 +38,7 @@ INSERT INTO test_table_4_rf2 values(1,2),(2,3),(3,4);
 -- Hash tables with RF = 1 is supported for router planner queries
 SELECT * FROM
 	test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-	WHERE tt1.id = 1 
+	WHERE tt1.id = 1
 	ORDER BY 1
 	FOR UPDATE;
 
@@ -103,7 +102,7 @@ SELECT * FROM
 	NOWAIT;
 
 -- queries with CTEs are supported
-WITH first_value AS ( 
+WITH first_value AS (
 	SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
 SELECT * FROM first_value;
 

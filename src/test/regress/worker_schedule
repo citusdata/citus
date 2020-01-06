@@ -19,6 +19,7 @@ test: worker_hash_partition worker_hash_partition_complex
 test: worker_merge_range_files worker_merge_hash_files
 test: worker_binary_data_partition worker_null_data_partition
 test: worker_check_invalid_arguments
+test: worker_remove_files
 
 # ----------
 # All task tracker tests use the following tables
@@ -26,3 +27,8 @@ test: worker_check_invalid_arguments
 test: task_tracker_create_table
 test: task_tracker_assign_task task_tracker_partition_task
 test: task_tracker_cleanup_job
+
+# ---------
+# test that no tests leaked intermediate results. This should always be last
+# ---------
+test: ensure_no_intermediate_data_leak

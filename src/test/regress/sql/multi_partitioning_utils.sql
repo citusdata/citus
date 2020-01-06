@@ -1,7 +1,3 @@
--- This test has different output per major version
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int as server_major_version;
-
 -- ===================================================================
 -- create test functions
 -- ===================================================================
@@ -120,8 +116,8 @@ CREATE TABLE date_partitioned_table_100 (id int, time date) PARTITION BY RANGE (
 CREATE TABLE date_partition_2007_100 (id int, time date );
 
 -- now create the partitioning hierarcy
-SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_schema_name:='public', 
-											referenced_shard:=100, referenced_schema_name:='public', 
+SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_schema_name:='public',
+											referenced_shard:=100, referenced_schema_name:='public',
 											command:='ALTER TABLE date_partitioned_table ATTACH PARTITION date_partition_2007 FOR VALUES FROM (''2007-01-01'') TO (''2008-01-02'')' );
 
 -- the hierarcy is successfully created
@@ -131,14 +127,14 @@ SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_
 SELECT master_get_table_ddl_events('date_partition_2007_100');
 
 -- now break the partitioning hierarcy
-SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_schema_name:='public', 
-                      referenced_shard:=100, referenced_schema_name:='public', 
+SELECT worker_apply_inter_shard_ddl_command(referencing_shard:=100, referencing_schema_name:='public',
+                      referenced_shard:=100, referenced_schema_name:='public',
                       command:='ALTER TABLE date_partitioned_table DETACH PARTITION date_partition_2007' );
 
 -- the hierarcy is successfully broken
 \d+ date_partitioned_table_100
 
--- now lets have some more complex partitioning hierarcies with 
+-- now lets have some more complex partitioning hierarcies with
 -- tables on different schemas and constraints on the tables
 
 CREATE SCHEMA partition_parent_schema;
@@ -256,14 +252,14 @@ CREATE TABLE capitals (
 -- returns true since capitals inherits from cities
 SELECT table_inherits('capitals');
 
--- although date_partition_2006 inherits from its parent 
+-- although date_partition_2006 inherits from its parent
 -- returns false since the hierarcy is formed via partitioning
 SELECT table_inherits('date_partition_2006');
 
 -- returns true since cities inherited by capitals
 SELECT table_inherited('cities');
 
--- although date_partitioned_table inherited by its partitions 
+-- although date_partitioned_table inherited by its partitions
 -- returns false since the hierarcy is formed via partitioning
 SELECT table_inherited('date_partitioned_table');
 

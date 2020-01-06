@@ -6,7 +6,7 @@
  *   subsystems, this files, and especially CoordinatedTransactionCallback,
  *   coordinates the work between them.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -21,9 +21,11 @@
 #include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
-#include "distributed/multi_shard_transaction.h"
+#include "distributed/local_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
@@ -38,7 +40,26 @@ CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NON
 
 /* GUC, the commit protocol to use for commands affecting more than one connection */
 int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
+int SingleShardCommitProtocol = COMMIT_PROTOCOL_2PC;
 int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
+/*
+ * GUC that determines whether a SELECT in a transaction block should also run in
+ * a transaction block on the worker even if no writes have occurred yet.
+ */
+bool SelectOpensTransactionBlock = true;
+
+/* controls use of locks to enforce safe commutativity */
+bool AllModificationsCommutative = false;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
+bool EnableDeadlockPrevention = true;
+
+/* number of nested stored procedure call levels we are currently in */
+int StoredProcedureLevel = 0;
+
+/* number of nested DO block levels we are currently in */
+int DoBlockLevel = 0;
 
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
@@ -74,36 +95,42 @@ bool CoordinatedTransactionUses2PC = false;
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
-/* stack depth of UDF calls */
-int FunctionCallLevel = 0;
-
 
 /* transaction management functions */
-static void BeginCoordinatedTransaction(void);
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 											  SubTransactionId parentSubid, void *arg);
 
 /* remaining functions */
+static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
 static void SwallowErrors(void (*func)());
+static bool MaybeExecutingUDF(void);
 
 
 /*
- * BeginOrContinueCoordinatedTransaction starts a coordinated transaction,
- * unless one already is in progress.
+ * UseCoordinatedTransaction sets up the necessary variables to use
+ * a coordinated transaction, unless one is already in progress.
  */
 void
-BeginOrContinueCoordinatedTransaction(void)
+UseCoordinatedTransaction(void)
 {
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_STARTED)
 	{
 		return;
 	}
 
-	BeginCoordinatedTransaction();
+	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
+		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
+	{
+		ereport(ERROR, (errmsg("starting transaction in wrong state")));
+	}
+
+	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+
+	AssignDistributedTransactionId();
 }
 
 
@@ -147,25 +174,6 @@ InitializeTransactionManagement(void)
 												  8 * 1024,
 												  8 * 1024,
 												  8 * 1024);
-}
-
-
-/*
- * BeginCoordinatedTransaction begins a coordinated transaction. No
- * pre-existing coordinated transaction may be in progress./
- */
-static void
-BeginCoordinatedTransaction(void)
-{
-	if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
-		CurrentCoordinatedTransactionState != COORD_TRANS_IDLE)
-	{
-		ereport(ERROR, (errmsg("starting transaction in wrong state")));
-	}
-
-	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
-
-	AssignDistributedTransactionId();
 }
 
 
@@ -224,6 +232,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
+			LocalExecutionHappened = false;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
@@ -277,10 +286,26 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
+			LocalExecutionHappened = false;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;
-			FunctionCallLevel = 0;
+
+			/*
+			 * Getting here without ExecutorLevel 0 is a bug, however it is such a big
+			 * problem that will persist between reuse of the backend we still assign 0 in
+			 * production deploys, but during development and tests we want to crash.
+			 */
+			Assert(ExecutorLevel == 0);
+			ExecutorLevel = 0;
+
+			/*
+			 * Getting here without PlannerLevel 0 is a bug, however it is such a big
+			 * problem that will persist between reuse of the backend we still assign 0 in
+			 * production deploys, but during development and tests we want to crash.
+			 */
+			Assert(PlannerLevel == 0);
+			PlannerLevel = 0;
 
 			/*
 			 * We should reset SubPlanLevel in case a transaction is aborted,
@@ -389,7 +414,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		case XACT_EVENT_PRE_PREPARE:
 		{
-			if (CurrentCoordinatedTransactionState > COORD_TRANS_NONE)
+			if (InCoordinatedTransaction())
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("cannot use 2PC in transactions involving "
@@ -397,6 +422,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 			break;
 		}
+	}
+}
+
+
+/*
+ * ResetShardPlacementTransactionState performs cleanup after the end of a
+ * transaction.
+ */
+static void
+ResetShardPlacementTransactionState(void)
+{
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
+		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 	}
 }
 
@@ -633,12 +673,17 @@ IsMultiStatementTransaction(void)
 		/* in a BEGIN...END block */
 		return true;
 	}
+	else if (DoBlockLevel > 0)
+	{
+		/* in (a transaction within) a do block */
+		return true;
+	}
 	else if (StoredProcedureLevel > 0)
 	{
 		/* in (a transaction within) a stored procedure */
 		return true;
 	}
-	else if (FunctionCallLevel > 0 && FunctionOpensTransactionBlock)
+	else if (MaybeExecutingUDF() && FunctionOpensTransactionBlock)
 	{
 		/* in a language-handler function call, open a transaction if configured to do so */
 		return true;
@@ -647,4 +692,19 @@ IsMultiStatementTransaction(void)
 	{
 		return false;
 	}
+}
+
+
+/*
+ * MaybeExecutingUDF returns true if we are possibly executing a function call.
+ * We use nested level of executor to check this, so this can return true for
+ * CTEs, etc. which also start nested executors.
+ *
+ * If the planner is being called from the executor, then we may also be in
+ * a UDF.
+ */
+static bool
+MaybeExecutingUDF(void)
+{
+	return ExecutorLevel > 1 || (ExecutorLevel == 1 && PlannerLevel > 0);
 }

@@ -8,7 +8,7 @@
  * concerning the creation, deletion, merging, and split of remote partitions
  * reference this table.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -58,6 +58,7 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
 #define SHARD_STORAGE_FOREIGN 'f'
 #define SHARD_STORAGE_TABLE 't'
 #define SHARD_STORAGE_COLUMNAR 'c'
+#define SHARD_STORAGE_VIRTUAL 'v'
 
 
 #endif   /* PG_DIST_SHARD_H */

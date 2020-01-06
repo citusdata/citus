@@ -3,13 +3,15 @@
  * metadata_cache.h
  *	  Executor support for Citus.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
 
 #ifndef METADATA_CACHE_H
 #define METADATA_CACHE_H
+
+#include "postgres.h"
 
 #include "fmgr.h"
 #include "distributed/master_metadata_utility.h"
@@ -26,6 +28,14 @@ typedef enum
 	USE_SECONDARY_NODES_ALWAYS = 1
 } ReadFromSecondariesType;
 extern int ReadFromSecondaries;
+
+
+/*
+ * While upgrading pg_dist_local_group can be empty temporarily, in that
+ * case we use GROUP_ID_UPGRADING as the local group id to communicate
+ * this to other functions.
+ */
+#define GROUP_ID_UPGRADING -2
 
 /*
  * Representation of a table's metadata that is frequently used for
@@ -87,6 +97,25 @@ typedef struct
 	int *arrayOfPlacementArrayLengths;
 } DistTableCacheEntry;
 
+typedef struct DistObjectCacheEntryKey
+{
+	Oid classid;
+	Oid objid;
+	int32 objsubid;
+} DistObjectCacheEntryKey;
+
+typedef struct DistObjectCacheEntry
+{
+	/* lookup key - must be first. */
+	DistObjectCacheEntryKey key;
+
+	bool isValid;
+	bool isDistributed;
+
+	int distributionArgIndex;
+	int colocationId;
+} DistObjectCacheEntry;
+
 
 extern bool IsDistributedTable(Oid relationId);
 extern List * DistributedTableList(void);
@@ -97,6 +126,8 @@ extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
+														 objsubid);
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
@@ -109,17 +140,29 @@ extern void InvalidateMetadataSystemCache(void);
 extern Datum DistNodeMetadata(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
+extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
+										  int shardCount);
+extern bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+										int shardIntervalArrayLength,
+										Oid shardIntervalCollation,
+										FmgrInfo *shardIntervalSortCompareFunction);
 
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
-bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
-
+extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
+extern void ErrorIfInconsistentShardIntervals(DistTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
+extern char LookupDistributionMethod(Oid distributionMethodOid);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
+extern int GetWorkerNodeCount(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
+extern WorkerNode * LookupNodeForGroup(int32 groupId);
+
+/* namespace oids */
+extern Oid CitusCatalogNamespaceId(void);
 
 /* relation oids */
 extern Oid DistColocationRelationId(void);
@@ -129,7 +172,10 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
+extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
+extern Oid DistObjectRelationId(void);
+extern Oid DistEnabledCustomAggregatesId(void);
 
 /* index oids */
 extern Oid DistNodeNodeIdIndexId(void);
@@ -143,14 +189,17 @@ extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistTransactionRecordIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
+extern Oid DistObjectPrimaryKeyIndexId(void);
 
 /* type oids */
 extern Oid CitusCopyFormatTypeId(void);
 
 /* function oids */
 extern Oid CitusReadIntermediateResultFuncId(void);
+Oid CitusReadIntermediateResultArrayFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
+extern Oid CitusAnyValueFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);

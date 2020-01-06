@@ -3,7 +3,7 @@
  * truncate.c
  *    Commands for truncating distributed tables.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -25,11 +25,12 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists('%s', '%s');"
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
 
 
 /* Local functions forward declarations for unsupported command checks */
@@ -67,7 +68,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	foreach(relationCell, relationList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, true);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		char relationKind = get_rel_relkind(relationId);
 		if (IsDistributedTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)
@@ -93,19 +94,15 @@ EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 
 	foreach(relationCell, truncateStatement->relations)
 	{
-		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
-		Relation relation = heap_openrv(relationRV, NoLock);
-		Oid relationId = RelationGetRelid(relation);
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		if (!IsDistributedTable(relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
 		EnsurePartitionTableNotReplicated(relationId);
-
-		heap_close(relation, NoLock);
 	}
 }
 
@@ -181,39 +178,31 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 	foreach(relationCell, truncateStatement->relations)
 	{
-		RangeVar *relationRV = (RangeVar *) lfirst(relationCell);
-		Relation relation = heap_openrv(relationRV, NoLock);
-		Oid relationId = RelationGetRelid(relation);
-		DistTableCacheEntry *cacheEntry = NULL;
-		List *referencingTableList = NIL;
-		ListCell *referencingTableCell = NULL;
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+		Oid referencingRelationId = InvalidOid;
 
 		if (!IsDistributedTable(relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
 		if (list_member_oid(distributedRelationList, relationId))
 		{
-			heap_close(relation, NoLock);
 			continue;
 		}
 
 		distributedRelationList = lappend_oid(distributedRelationList, relationId);
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 		Assert(cacheEntry != NULL);
 
-		referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
-		foreach(referencingTableCell, referencingTableList)
+		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+		foreach_oid(referencingRelationId, referencingTableList)
 		{
-			Oid referencingRelationId = lfirst_oid(referencingTableCell);
 			distributedRelationList = list_append_unique_oid(distributedRelationList,
 															 referencingRelationId);
 		}
-
-		heap_close(relation, NoLock);
 	}
 
 	if (distributedRelationList != NIL)
@@ -237,8 +226,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 static void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
-	ListCell *relationIdCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	Oid relationId = InvalidOid;
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	/*
@@ -248,12 +237,10 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	relationIdList = SortList(relationIdList, CompareOids);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	BeginOrContinueCoordinatedTransaction();
+	UseCoordinatedTransaction();
 
-	foreach(relationIdCell, relationIdList)
+	foreach_oid(relationId, relationIdList)
 	{
-		Oid relationId = lfirst_oid(relationIdCell);
-
 		/*
 		 * We only acquire distributed lock on relation if
 		 * the relation is sync'ed between mx nodes.
@@ -265,7 +252,8 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 			ListCell *workerNodeCell = NULL;
 
 			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
-							 qualifiedRelationName, lockModeText);
+							 quote_literal_cstr(qualifiedRelationName),
+							 lockModeText);
 
 			foreach(workerNodeCell, workerNodeList)
 			{

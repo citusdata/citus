@@ -9,7 +9,7 @@
  * one-phase or two-phase fashion, depending on the citus.multi_shard_commit_protocol
  * setting.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -32,11 +32,9 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_router_executor.h"
-#include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_partition.h"
@@ -47,9 +45,13 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
 #include "optimizer/predtest.h"
-#include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
+#endif
+#include "optimizer/restrictinfo.h"
 #include "nodes/makefuncs.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"

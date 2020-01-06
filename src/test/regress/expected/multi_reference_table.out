@@ -34,19 +34,19 @@ WHERE
  1250000 | t                   | t
 (1 row)
 
+SELECT count(*) active_primaries FROM pg_dist_node WHERE isactive AND noderole='primary' \gset
 SELECT
-	shardid, shardstate, nodename, nodeport
+	shardid, bool_and(shardstate = 1) all_placements_healthy, COUNT(distinct nodeport) = :active_primaries replicated_to_all
 FROM
 	pg_dist_shard_placement
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass)
-ORDER BY
-	placementid;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
- 1250000 |          1 | localhost |    57637
- 1250000 |          1 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | all_placements_healthy | replicated_to_all 
+---------+------------------------+-------------------
+ 1250000 | t                      | t
+(1 row)
 
 -- check whether data was copied into distributed table
 SELECT * FROM reference_table_test;
@@ -783,18 +783,16 @@ SELECT create_reference_table('reference_table_test_fourth');
  
 (1 row)
 
+\set VERBOSITY terse
 -- insert a row
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
 -- now get the unique key violation
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01');
 ERROR:  duplicate key value violates unique constraint "reference_table_test_fourth_pkey_1250003"
-DETAIL:  Key (value_2)=(1) already exists.
-CONTEXT:  while executing command on localhost:57637
 -- now get null constraint violation due to primary key
 INSERT INTO reference_table_test_fourth (value_1, value_3, value_4) VALUES (1, '1.0', '2016-12-01');
 ERROR:  null value in column "value_2" violates not-null constraint
-DETAIL:  Failing row contains (1, null, 1.0, 2016-12-01 00:00:00).
-CONTEXT:  while executing command on localhost:57637
+\set VERBOSITY default
 -- lets run some upserts
 INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '1', '2016-12-01') ON CONFLICT DO NOTHING RETURNING *;
  value_1 | value_2 | value_3 | value_4 
@@ -820,18 +818,17 @@ INSERT INTO reference_table_test_fourth VALUES (1, 1.0, '10', '2016-12-01') ON C
 
 -- finally see that shard healths are OK
 SELECT
-	shardid, shardstate, nodename, nodeport
+	shardid, bool_and(shardstate = 1) all_placements_healthy, COUNT(distinct nodeport) = :active_primaries replicated_to_all
 FROM
 	pg_dist_shard_placement
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass)
-ORDER BY
-	placementid;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
- 1250003 |          1 | localhost |    57637
- 1250003 |          1 | localhost |    57638
-(2 rows)
+GROUP BY shardid
+ORDER BY shardid;
+ shardid | all_placements_healthy | replicated_to_all 
+---------+------------------------+-------------------
+ 1250003 | t                      | t
+(1 row)
 
 -- let's not run some update/delete queries on arbitrary columns
 DELETE FROM
@@ -1007,11 +1004,11 @@ INSERT INTO colocated_table_test_2 VALUES (1, 1.0, '1', '2016-12-01');
 INSERT INTO colocated_table_test_2 VALUES (2, 2.0, '2', '2016-12-02');
 SET client_min_messages TO DEBUG1;
 SET citus.log_multi_join_order TO TRUE;
-SELECT 
+SELECT
 	reference_table_test.value_1
-FROM 
+FROM
 	reference_table_test, colocated_table_test
-WHERE 
+WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_1 
@@ -1020,11 +1017,11 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SELECT 
+SELECT
 	colocated_table_test.value_2
-FROM 
-	reference_table_test, colocated_table_test 
-WHERE 
+FROM
+	reference_table_test, colocated_table_test
+WHERE
 	colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
@@ -1033,11 +1030,11 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SELECT 
+SELECT
 	colocated_table_test.value_2
-FROM 
+FROM
 	colocated_table_test, reference_table_test
-WHERE 
+WHERE
 	reference_table_test.value_1 = colocated_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ]
  value_2 
@@ -1046,20 +1043,29 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SELECT 
-	colocated_table_test.value_2 
-FROM 
+SET citus.enable_repartition_joins = on;
+SELECT
+	colocated_table_test.value_2
+FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
-WHERE 
-	colocated_table_test.value_2 = reference_table_test.value_2;
-LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ cartesian product "colocated_table_test_2" ]
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Cartesian products are currently unsupported
-SELECT 
-	colocated_table_test.value_2 
-FROM 
+WHERE
+	colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY colocated_table_test.value_2;
+LOG:  join order: [ "colocated_table_test_2" ][ cartesian product reference join "reference_table_test" ][ dual partition join "colocated_table_test" ]
+ value_2 
+---------
+       1
+       1
+       2
+       2
+(4 rows)
+
+RESET citus.enable_repartition_joins;
+SELECT
+	colocated_table_test.value_2
+FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
-WHERE 
+WHERE
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
  value_2 
@@ -1069,11 +1075,11 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
 (2 rows)
 
 SET citus.task_executor_type to "task-tracker";
-SELECT 
-	colocated_table_test.value_2 
-FROM 
+SELECT
+	colocated_table_test.value_2
+FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
-WHERE 
+WHERE
 	colocated_table_test.value_2 = colocated_table_test_2.value_2 AND colocated_table_test.value_2 = reference_table_test.value_2;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
@@ -1082,11 +1088,11 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SELECT 
-	reference_table_test.value_2 
-FROM 
+SELECT
+	reference_table_test.value_2
+FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
-WHERE 
+WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1 AND colocated_table_test_2.value_1 = reference_table_test.value_1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ dual partition join "colocated_table_test_2" ]
  value_2 
@@ -1097,9 +1103,9 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
 
 SET citus.log_multi_join_order TO FALSE;
 SET citus.shard_count TO DEFAULT;
-SET citus.task_executor_type to "real-time";
+SET citus.task_executor_type to "adaptive";
 -- some INSERT .. SELECT queries that involve both hash distributed and reference tables
--- should go via coordinator since we're inserting into reference table where 
+-- should go via coordinator since we're inserting into reference table where
 -- not all the participants are reference tables
 INSERT INTO
 	reference_table_test (value_1)
@@ -1125,7 +1131,7 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- safe to push down even lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
-SELECT 
+SELECT
 	colocated_table_test_2.value_1, reference_table_test.value_2
 FROM
 	colocated_table_test_2, reference_table_test
@@ -1138,10 +1144,10 @@ RETURNING value_1, value_2;
        2 |       2
 (2 rows)
 
--- similar query with the above, this time partition key but without equality 
+-- similar query with the above, this time partition key but without equality
 INSERT INTO
 	colocated_table_test (value_1, value_2)
-SELECT 
+SELECT
 	colocated_table_test_2.value_1, reference_table_test.value_2
 FROM
 	colocated_table_test_2, reference_table_test
@@ -1254,7 +1260,7 @@ WHERE
        2 |       2
 (2 rows)
 
--- let's now test TRUNCATE and DROP TABLE 
+-- let's now test TRUNCATE and DROP TABLE
 -- delete all rows and ingest some data
 DELETE FROM reference_table_test;
 INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
@@ -1382,10 +1388,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 (0 rows)
 
 \c - - - :master_port
--- as we expect, setting WITH OIDS does not work for reference tables
-ALTER TABLE reference_schema.reference_table_ddl SET WITH OIDS;
-ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- now test the renaming of the table, and back to the expected name
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
 ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_ddl;
@@ -1443,13 +1445,13 @@ SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_p
 (1 row)
 
 -- some queries that are captured in functions
-CREATE FUNCTION select_count_all() RETURNS bigint AS '
+CREATE OR REPLACE FUNCTION select_count_all() RETURNS bigint AS '
         SELECT
                 count(*)
         FROM
                 reference_table_test;
 ' LANGUAGE SQL;
-CREATE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp) 
+CREATE OR REPLACE FUNCTION insert_into_ref_table(value_1 int, value_2 float, value_3 text, value_4 timestamp)
 RETURNS void AS '
        INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
 ' LANGUAGE SQL;
@@ -1504,7 +1506,7 @@ SELECT select_count_all();
 
 TRUNCATE reference_table_test;
 -- some prepared queries and pl/pgsql functions
-PREPARE insert_into_ref_table_pr (int, float, text, timestamp) 
+PREPARE insert_into_ref_table_pr (int, float, text, timestamp)
 	AS INSERT INTO reference_table_test VALUES ($1, $2, $3, $4);
 -- reference tables do not have up-to-five execution limit as other tables
 EXECUTE insert_into_ref_table_pr(1, 1.0, '1', '2016-12-01');
@@ -1526,11 +1528,6 @@ TRUNCATE reference_table_test;
 -- function etc.
 -- first create the type on all nodes
 CREATE TYPE reference_comp_key as (key text, value text);
-\c - - - :worker_1_port
-CREATE TYPE reference_comp_key as (key text, value text);
-\c - - - :worker_2_port
-CREATE TYPE reference_comp_key as (key text, value text);
-\c - - - :master_port
 CREATE TABLE reference_table_composite (id int PRIMARY KEY, data reference_comp_key);
 SELECT create_reference_table('reference_table_composite');
  create_reference_table 
@@ -1596,10 +1593,12 @@ BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
--- clean up tables
-DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
-		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite;
+-- clean up tables, ...
+SET client_min_messages TO ERROR;
+DROP SEQUENCE example_ref_value_seq;
+DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third,
+		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite,
+		   colocated_table_test, colocated_table_test_2, append_reference_tmp_table;
+DROP TYPE reference_comp_key;
 DROP SCHEMA reference_schema CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table reference_schema.reference_table_test_sixth
-drop cascades to table reference_schema.reference_table_test_seventh
+RESET client_min_messages;

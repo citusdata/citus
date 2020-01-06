@@ -7,7 +7,7 @@
  * nodes; and when partitioning data, we follow Hadoop's naming conventions as
  * much as possible.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -65,11 +65,12 @@ static uint32 FileBufferSize(int partitionBufferSizeInKB, uint32 fileCount);
 static FileOutputStream * OpenPartitionFiles(StringInfo directoryName, uint32 fileCount);
 static void ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectoryName);
-static void FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite);
-static void FileOutputStreamFlush(FileOutputStream file);
+static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite);
+static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
 									const char *columnName, Oid columnType,
-									uint32 (*PartitionIdFunction)(Datum, const void *),
+									uint32 (*PartitionIdFunction)(Datum, Oid, const
+																  void *),
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
@@ -78,8 +79,10 @@ static CopyOutState InitRowOutputState(void);
 static void ClearRowOutputState(CopyOutState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
-static uint32 RangePartitionId(Datum partitionValue, const void *context);
-static uint32 HashPartitionId(Datum partitionValue, const void *context);
+static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation, const
+							   void *context);
+static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation, const
+							  void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(char *filename, struct stat filestat);
 
@@ -112,14 +115,6 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	const char *filterQuery = text_to_cstring(filterQueryText);
 	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
-	RangePartitionContext *partitionContext = NULL;
-	FmgrInfo *comparisonFunction = NULL;
-	Datum *splitPointArray = NULL;
-	int32 splitPointCount = 0;
-	uint32 fileCount = 0;
-	StringInfo taskDirectory = NULL;
-	StringInfo taskAttemptDirectory = NULL;
-	FileOutputStream *partitionFileArray = NULL;
 
 	/* first check that array element's and partition column's types match */
 	Oid splitPointType = ARR_ELEMTYPE(splitPointObject);
@@ -133,25 +128,26 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	}
 
 	/* use column's type information to get the comparison function */
-	comparisonFunction = GetFunctionInfo(partitionColumnType,
-										 BTREE_AM_OID, BTORDER_PROC);
+	FmgrInfo *comparisonFunction = GetFunctionInfo(partitionColumnType,
+												   BTREE_AM_OID, BTORDER_PROC);
 
 	/* deserialize split points into their array representation */
-	splitPointArray = DeconstructArrayObject(splitPointObject);
-	splitPointCount = ArrayObjectCount(splitPointObject);
-	fileCount = splitPointCount + 1; /* range partitioning needs an extra bucket */
+	Datum *splitPointArray = DeconstructArrayObject(splitPointObject);
+	int32 splitPointCount = ArrayObjectCount(splitPointObject);
+	uint32 fileCount = splitPointCount + 1; /* range partitioning needs an extra bucket */
 
 	/* create range partition context object */
-	partitionContext = palloc0(sizeof(RangePartitionContext));
+	RangePartitionContext *partitionContext = palloc0(sizeof(RangePartitionContext));
 	partitionContext->comparisonFunction = comparisonFunction;
 	partitionContext->splitPointArray = splitPointArray;
 	partitionContext->splitPointCount = splitPointCount;
 
 	/* init directories and files to write the partitioned data to */
-	taskDirectory = InitTaskDirectory(jobId, taskId);
-	taskAttemptDirectory = InitTaskAttemptDirectory(jobId, taskId);
+	StringInfo taskDirectory = InitTaskDirectory(jobId, taskId);
+	StringInfo taskAttemptDirectory = InitTaskAttemptDirectory(jobId, taskId);
 
-	partitionFileArray = OpenPartitionFiles(taskAttemptDirectory, fileCount);
+	FileOutputStream *partitionFileArray = OpenPartitionFiles(taskAttemptDirectory,
+															  fileCount);
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
@@ -191,33 +187,24 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	const char *filterQuery = text_to_cstring(filterQueryText);
 	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
-	HashPartitionContext *partitionContext = NULL;
-	FmgrInfo *hashFunction = NULL;
 	Datum *hashRangeArray = DeconstructArrayObject(hashRangeObject);
 	int32 partitionCount = ArrayObjectCount(hashRangeObject);
-	StringInfo taskDirectory = NULL;
-	StringInfo taskAttemptDirectory = NULL;
-	FileOutputStream *partitionFileArray = NULL;
-	uint32 fileCount = 0;
-
-	uint32 (*hashPartitionIdFunction)(Datum, const void *);
 
 	CheckCitusVersion(ERROR);
 
-	partitionContext = palloc0(sizeof(HashPartitionContext));
+	HashPartitionContext *partitionContext = palloc0(sizeof(HashPartitionContext));
 	partitionContext->syntheticShardIntervalArray =
 		SyntheticShardIntervalArrayForShardMinValues(hashRangeArray, partitionCount);
 	partitionContext->hasUniformHashDistribution =
 		HasUniformHashDistribution(partitionContext->syntheticShardIntervalArray,
 								   partitionCount);
 
-	hashPartitionIdFunction = &HashPartitionId;
-
 	/* use column's type information to get the hashing function */
-	hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID, HASHSTANDARD_PROC);
+	FmgrInfo *hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID,
+											 HASHSTANDARD_PROC);
 
 	/* we create as many files as the number of split points */
-	fileCount = partitionCount;
+	uint32 fileCount = partitionCount;
 
 	partitionContext->hashFunction = hashFunction;
 	partitionContext->partitionCount = partitionCount;
@@ -230,15 +217,16 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	}
 
 	/* init directories and files to write the partitioned data to */
-	taskDirectory = InitTaskDirectory(jobId, taskId);
-	taskAttemptDirectory = InitTaskAttemptDirectory(jobId, taskId);
+	StringInfo taskDirectory = InitTaskDirectory(jobId, taskId);
+	StringInfo taskAttemptDirectory = InitTaskAttemptDirectory(jobId, taskId);
 
-	partitionFileArray = OpenPartitionFiles(taskAttemptDirectory, fileCount);
+	FileOutputStream *partitionFileArray = OpenPartitionFiles(taskAttemptDirectory,
+															  fileCount);
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
 	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
-							hashPartitionIdFunction, (const void *) partitionContext,
+							&HashPartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
 	/* close partition files and atomically rename (commit) them */
@@ -261,12 +249,11 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 static ShardInterval **
 SyntheticShardIntervalArrayForShardMinValues(Datum *shardMinValues, int shardCount)
 {
-	int shardIndex = 0;
 	Datum nextShardMaxValue = Int32GetDatum(INT32_MAX);
 	ShardInterval **syntheticShardIntervalArray =
 		palloc(sizeof(ShardInterval *) * shardCount);
 
-	for (shardIndex = shardCount - 1; shardIndex >= 0; --shardIndex)
+	for (int shardIndex = shardCount - 1; shardIndex >= 0; --shardIndex)
 	{
 		Datum currentShardMinValue = shardMinValues[shardIndex];
 		ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
@@ -326,7 +313,6 @@ DeconstructArrayObject(ArrayType *arrayObject)
 	bool *datumArrayNulls = NULL;
 	int datumArrayLength = 0;
 
-	Oid typeId = InvalidOid;
 	bool typeByVal = false;
 	char typeAlign = 0;
 	int16 typeLength = 0;
@@ -338,7 +324,7 @@ DeconstructArrayObject(ArrayType *arrayObject)
 						errmsg("worker array object cannot contain null values")));
 	}
 
-	typeId = ARR_ELEMTYPE(arrayObject);
+	Oid typeId = ARR_ELEMTYPE(arrayObject);
 	get_typlenbyvalalign(typeId, &typeLength, &typeByVal, &typeAlign);
 
 	deconstruct_array(arrayObject, typeId, typeLength, typeByVal, typeAlign,
@@ -357,12 +343,16 @@ ArrayObjectCount(ArrayType *arrayObject)
 {
 	int32 dimensionCount = ARR_NDIM(arrayObject);
 	int32 *dimensionLengthArray = ARR_DIMS(arrayObject);
-	int32 arrayLength = 0;
+
+	if (dimensionCount == 0)
+	{
+		return 0;
+	}
 
 	/* we currently allow split point arrays to have only one subarray */
 	Assert(dimensionCount == 1);
 
-	arrayLength = ArrayGetNItems(dimensionCount, dimensionLengthArray);
+	int32 arrayLength = ArrayGetNItems(dimensionCount, dimensionLengthArray);
 	if (arrayLength <= 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
@@ -381,9 +371,6 @@ ArrayObjectCount(ArrayType *arrayObject)
 StringInfo
 InitTaskDirectory(uint64 jobId, uint32 taskId)
 {
-	bool jobDirectoryExists = false;
-	bool taskDirectoryExists = false;
-
 	/*
 	 * If the task tracker assigned this task (regular case), the tracker should
 	 * have already created the job directory.
@@ -393,13 +380,13 @@ InitTaskDirectory(uint64 jobId, uint32 taskId)
 
 	LockJobResource(jobId, AccessExclusiveLock);
 
-	jobDirectoryExists = DirectoryExists(jobDirectoryName);
+	bool jobDirectoryExists = DirectoryExists(jobDirectoryName);
 	if (!jobDirectoryExists)
 	{
 		CitusCreateDirectory(jobDirectoryName);
 	}
 
-	taskDirectoryExists = DirectoryExists(taskDirectoryName);
+	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
 	if (!taskDirectoryExists)
 	{
 		CitusCreateDirectory(taskDirectoryName);
@@ -461,15 +448,13 @@ FileBufferSize(int partitionBufferSizeInKB, uint32 fileCount)
 static FileOutputStream *
 OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 {
-	FileOutputStream *partitionFileArray = NULL;
 	File fileDescriptor = 0;
-	uint32 fileIndex = 0;
-	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | PG_BINARY);
+	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 	const int fileMode = (S_IRUSR | S_IWUSR);
 
-	partitionFileArray = palloc0(fileCount * sizeof(FileOutputStream));
+	FileOutputStream *partitionFileArray = palloc0(fileCount * sizeof(FileOutputStream));
 
-	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
+	for (uint32 fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		StringInfo filePath = UserPartitionFilename(directoryName, fileIndex);
 
@@ -480,7 +465,8 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 							errmsg("could not open file \"%s\": %m", filePath->data)));
 		}
 
-		partitionFileArray[fileIndex].fileDescriptor = fileDescriptor;
+		partitionFileArray[fileIndex].fileCompat = FileCompatFromFileStart(
+			fileDescriptor);
 		partitionFileArray[fileIndex].fileBuffer = makeStringInfo();
 		partitionFileArray[fileIndex].filePath = filePath;
 	}
@@ -497,16 +483,15 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 static void
 ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount)
 {
-	uint32 fileIndex = 0;
-	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
+	for (uint32 fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
-		FileOutputStream partitionFile = partitionFileArray[fileIndex];
+		FileOutputStream *partitionFile = &partitionFileArray[fileIndex];
 
 		FileOutputStreamFlush(partitionFile);
 
-		FileClose(partitionFile.fileDescriptor);
-		FreeStringInfo(partitionFile.fileBuffer);
-		FreeStringInfo(partitionFile.filePath);
+		FileClose(partitionFile->fileCompat.fd);
+		FreeStringInfo(partitionFile->fileBuffer);
+		FreeStringInfo(partitionFile->filePath);
 	}
 
 	pfree(partitionFileArray);
@@ -612,12 +597,11 @@ bool
 JobDirectoryElement(const char *filename)
 {
 	bool directoryElement = false;
-	char *directoryPathFound = NULL;
 
 	StringInfo directoryPath = makeStringInfo();
 	appendStringInfo(directoryPath, "base/%s/%s", PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX);
 
-	directoryPathFound = strstr(filename, directoryPath->data);
+	char *directoryPathFound = strstr(filename, directoryPath->data);
 	if (directoryPathFound != NULL)
 	{
 		directoryElement = true;
@@ -637,12 +621,11 @@ bool
 CacheDirectoryElement(const char *filename)
 {
 	bool directoryElement = false;
-	char *directoryPathFound = NULL;
 
 	StringInfo directoryPath = makeStringInfo();
 	appendStringInfo(directoryPath, "base/%s/", PG_JOB_CACHE_DIR);
 
-	directoryPathFound = strstr(filename, directoryPath->data);
+	char *directoryPathFound = strstr(filename, directoryPath->data);
 
 	/*
 	 * If directoryPath occurs at the beginning of the filename, then the
@@ -757,7 +740,6 @@ CitusRemoveDirectory(StringInfo filename)
 	if (S_ISDIR(fileStat.st_mode) && !FileIsLink(filename->data, fileStat))
 	{
 		const char *directoryName = filename->data;
-		struct dirent *directoryEntry = NULL;
 
 		DIR *directory = AllocateDir(directoryName);
 		if (directory == NULL)
@@ -767,11 +749,10 @@ CitusRemoveDirectory(StringInfo filename)
 								   directoryName)));
 		}
 
-		directoryEntry = ReadDir(directory, directoryName);
+		struct dirent *directoryEntry = ReadDir(directory, directoryName);
 		for (; directoryEntry != NULL; directoryEntry = ReadDir(directory, directoryName))
 		{
 			const char *baseFilename = directoryEntry->d_name;
-			StringInfo fullFilename = NULL;
 
 			/* if system file, skip it */
 			if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
@@ -780,7 +761,7 @@ CitusRemoveDirectory(StringInfo filename)
 				continue;
 			}
 
-			fullFilename = makeStringInfo();
+			StringInfo fullFilename = makeStringInfo();
 			appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
 
 			CitusRemoveDirectory(fullFilename);
@@ -829,9 +810,9 @@ RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectoryName)
  * if so, the function flushes the buffer to the underlying file.
  */
 static void
-FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite)
+FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite)
 {
-	StringInfo fileBuffer = file.fileBuffer;
+	StringInfo fileBuffer = file->fileBuffer;
 	uint32 newBufferSize = fileBuffer->len + dataToWrite->len;
 
 	appendBinaryStringInfo(fileBuffer, dataToWrite->data, dataToWrite->len);
@@ -847,19 +828,18 @@ FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite)
 
 /* Flushes data buffered in the file stream object to the underlying file. */
 static void
-FileOutputStreamFlush(FileOutputStream file)
+FileOutputStreamFlush(FileOutputStream *file)
 {
-	StringInfo fileBuffer = file.fileBuffer;
-	int written = 0;
+	StringInfo fileBuffer = file->fileBuffer;
 
 	errno = 0;
-	written = FileWrite(file.fileDescriptor, fileBuffer->data, fileBuffer->len,
-						PG_WAIT_IO);
+	int written = FileWriteCompat(&file->fileCompat, fileBuffer->data, fileBuffer->len,
+								  PG_WAIT_IO);
 	if (written != fileBuffer->len)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not write %d bytes to partition file \"%s\"",
-							   fileBuffer->len, file.filePath->data)));
+							   fileBuffer->len, file->filePath->data)));
 	}
 }
 
@@ -874,21 +854,15 @@ FileOutputStreamFlush(FileOutputStream file)
 static void
 FilterAndPartitionTable(const char *filterQuery,
 						const char *partitionColumnName, Oid partitionColumnType,
-						uint32 (*PartitionIdFunction)(Datum, const void *),
+						uint32 (*PartitionIdFunction)(Datum, Oid, const void *),
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
-	CopyOutState rowOutputState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
 	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
-	Portal queryPortal = NULL;
-	int connected = 0;
-	int finished = 0;
-	uint32 columnCount = 0;
-	Datum *valueArray = NULL;
-	bool *isNullArray = NULL;
+	Oid partitionColumnCollation = InvalidOid;
 
 	const char *noPortalName = NULL;
 	const bool readOnly = true;
@@ -896,30 +870,38 @@ FilterAndPartitionTable(const char *filterQuery,
 	const int noCursorOptions = 0;
 	const int prefetchCount = ROW_PREFETCH_COUNT;
 
-	connected = SPI_connect();
+	int connected = SPI_connect();
 	if (connected != SPI_OK_CONNECT)
 	{
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	queryPortal = SPI_cursor_open_with_args(noPortalName, filterQuery,
-											0, NULL, NULL, NULL, /* no arguments */
-											readOnly, noCursorOptions);
+	Portal queryPortal = SPI_cursor_open_with_args(noPortalName, filterQuery,
+												   0, NULL, NULL, NULL, /* no arguments */
+												   readOnly, noCursorOptions);
 	if (queryPortal == NULL)
 	{
 		ereport(ERROR, (errmsg("could not open implicit cursor for query \"%s\"",
 							   ApplyLogRedaction(filterQuery))));
 	}
 
-	rowOutputState = InitRowOutputState();
+	CopyOutState rowOutputState = InitRowOutputState();
 
 	SPI_cursor_fetch(queryPortal, fetchForward, prefetchCount);
 	if (SPI_processed > 0)
 	{
 		TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
-		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
 
+		if (fileCount == 0)
+		{
+			ereport(ERROR, (errmsg("no partition to read into")));
+		}
+
+		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
 		partitionColumnTypeId = SPI_gettypeid(rowDescriptor, partitionColumnIndex);
+		partitionColumnCollation = TupleDescAttr(rowDescriptor, partitionColumnIndex -
+												 1)->attcollation;
+
 		if (partitionColumnType != partitionColumnTypeId)
 		{
 			ereport(ERROR, (errmsg("partition column types %u and %u do not match",
@@ -935,25 +917,21 @@ FilterAndPartitionTable(const char *filterQuery,
 		OutputBinaryHeaders(partitionFileArray, fileCount);
 	}
 
-	columnCount = (uint32) SPI_tuptable->tupdesc->natts;
-	valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
-	isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
+	uint32 columnCount = (uint32) SPI_tuptable->tupdesc->natts;
+	Datum *valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
 
 	while (SPI_processed > 0)
 	{
-		int rowIndex = 0;
-		for (rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
+		for (int rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
 		{
 			HeapTuple row = SPI_tuptable->vals[rowIndex];
 			TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
-			FileOutputStream partitionFile = { 0, 0, 0 };
-			StringInfo rowText = NULL;
-			Datum partitionKey = 0;
 			bool partitionKeyNull = false;
 			uint32 partitionId = 0;
 
-			partitionKey = SPI_getbinval(row, rowDescriptor,
-										 partitionColumnIndex, &partitionKeyNull);
+			Datum partitionKey = SPI_getbinval(row, rowDescriptor,
+											   partitionColumnIndex, &partitionKeyNull);
 
 			/*
 			 * If we have a partition key, we compute its bucket. Else if we have
@@ -963,7 +941,13 @@ FilterAndPartitionTable(const char *filterQuery,
 			 */
 			if (!partitionKeyNull)
 			{
-				partitionId = (*PartitionIdFunction)(partitionKey, partitionIdContext);
+				partitionId = (*PartitionIdFunction)(partitionKey,
+													 partitionColumnCollation,
+													 partitionIdContext);
+				if (partitionId == INVALID_SHARD_INDEX)
+				{
+					ereport(ERROR, (errmsg("invalid distribution column value")));
+				}
 			}
 			else
 			{
@@ -976,9 +960,9 @@ FilterAndPartitionTable(const char *filterQuery,
 			AppendCopyRowData(valueArray, isNullArray, rowDescriptor,
 							  rowOutputState, columnOutputFunctions, NULL);
 
-			rowText = rowOutputState->fe_msgbuf;
+			StringInfo rowText = rowOutputState->fe_msgbuf;
 
-			partitionFile = partitionFileArray[partitionId];
+			FileOutputStream *partitionFile = &partitionFileArray[partitionId];
 			FileOutputStreamWrite(partitionFile, rowText);
 
 			resetStringInfo(rowText);
@@ -1003,7 +987,7 @@ FilterAndPartitionTable(const char *filterQuery,
 	/* delete row output memory context */
 	ClearRowOutputState(rowOutputState);
 
-	finished = SPI_finish();
+	int finished = SPI_finish();
 	if (finished != SPI_OK_FINISH)
 	{
 		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
@@ -1122,11 +1106,10 @@ ClearRowOutputState(CopyOutState rowOutputState)
 static void
 OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 {
-	uint32 fileIndex = 0;
-	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
+	for (uint32 fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate header for a binary copy */
-		FileOutputStream partitionFile = { 0, 0, 0 };
+		FileOutputStream partitionFile = { };
 		CopyOutStateData headerOutputStateData;
 		CopyOutState headerOutputState = (CopyOutState) & headerOutputStateData;
 
@@ -1136,7 +1119,7 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 		AppendCopyBinaryHeaders(headerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
-		FileOutputStreamWrite(partitionFile, headerOutputState->fe_msgbuf);
+		FileOutputStreamWrite(&partitionFile, headerOutputState->fe_msgbuf);
 	}
 }
 
@@ -1148,11 +1131,10 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 static void
 OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 {
-	uint32 fileIndex = 0;
-	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
+	for (uint32 fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate footer for a binary copy */
-		FileOutputStream partitionFile = { 0, 0, 0 };
+		FileOutputStream partitionFile = { };
 		CopyOutStateData footerOutputStateData;
 		CopyOutState footerOutputState = (CopyOutState) & footerOutputStateData;
 
@@ -1162,18 +1144,8 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 		AppendCopyBinaryFooters(footerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
-		FileOutputStreamWrite(partitionFile, footerOutputState->fe_msgbuf);
+		FileOutputStreamWrite(&partitionFile, footerOutputState->fe_msgbuf);
 	}
-}
-
-
-/* Helper function that invokes a function with the default collation oid. */
-Datum
-CompareCall2(FmgrInfo *functionInfo, Datum leftArgument, Datum rightArgument)
-{
-	Datum result = FunctionCall2Coll(functionInfo, DEFAULT_COLLATION_OID,
-									 leftArgument, rightArgument);
-	return result;
 }
 
 
@@ -1189,7 +1161,7 @@ CompareCall2(FmgrInfo *functionInfo, Datum leftArgument, Datum rightArgument)
  * full compatibility with the semantics of Hadoop's TotalOrderPartitioner.
  */
 static uint32
-RangePartitionId(Datum partitionValue, const void *context)
+RangePartitionId(Datum partitionValue, Oid partitionCollation, const void *context)
 {
 	RangePartitionContext *rangePartitionContext = (RangePartitionContext *) context;
 	FmgrInfo *comparisonFunction = rangePartitionContext->comparisonFunction;
@@ -1207,19 +1179,16 @@ RangePartitionId(Datum partitionValue, const void *context)
 	 */
 	while (currentLength > 0)
 	{
-		uint32 middleIndex = 0;
-		Datum middlePoint = 0;
-		Datum comparisonDatum = 0;
-		int comparisonResult = 0;
-
 		halfLength = currentLength >> 1;
-		middleIndex = firstIndex;
+		uint32 middleIndex = firstIndex;
 		middleIndex += halfLength;
 
-		middlePoint = pointArray[middleIndex];
+		Datum middlePoint = pointArray[middleIndex];
 
-		comparisonDatum = CompareCall2(comparisonFunction, partitionValue, middlePoint);
-		comparisonResult = DatumGetInt32(comparisonDatum);
+		Datum comparisonDatum =
+			FunctionCall2Coll(comparisonFunction, partitionCollation,
+							  partitionValue, middlePoint);
+		int comparisonResult = DatumGetInt32(comparisonDatum);
 
 		/* if partition value is less than middle point */
 		if (comparisonResult < 0)
@@ -1243,9 +1212,12 @@ RangePartitionId(Datum partitionValue, const void *context)
  * using hash partitioning. More specifically, the function returns zero if the
  * given data value is null. If not, the function follows the exact same approach
  * as Citus distributed planner uses.
+ *
+ * partitionCollation is unused, as we do not support non deterministic collations
+ * for hash distributed tables.
  */
 static uint32
-HashPartitionId(Datum partitionValue, const void *context)
+HashPartitionId(Datum partitionValue, Oid partitionCollation, const void *context)
 {
 	HashPartitionContext *hashPartitionContext = (HashPartitionContext *) context;
 	FmgrInfo *hashFunction = hashPartitionContext->hashFunction;
@@ -1253,7 +1225,8 @@ HashPartitionId(Datum partitionValue, const void *context)
 	ShardInterval **syntheticShardIntervalArray =
 		hashPartitionContext->syntheticShardIntervalArray;
 	FmgrInfo *comparisonFunction = hashPartitionContext->comparisonFunction;
-	Datum hashDatum = FunctionCall1(hashFunction, partitionValue);
+	Datum hashDatum = FunctionCall1Coll(hashFunction, DEFAULT_COLLATION_OID,
+										partitionValue);
 	int32 hashResult = 0;
 	uint32 hashPartitionId = 0;
 
@@ -1273,7 +1246,8 @@ HashPartitionId(Datum partitionValue, const void *context)
 	{
 		hashPartitionId =
 			SearchCachedShardInterval(hashDatum, syntheticShardIntervalArray,
-									  partitionCount, comparisonFunction);
+									  partitionCount, InvalidOid,
+									  comparisonFunction);
 	}
 
 

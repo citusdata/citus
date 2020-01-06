@@ -2,6 +2,7 @@
 
 citus_subdir = .
 citus_top_builddir = .
+extension_dir = $(shell $(PG_CONFIG) --sharedir)/extension
 
 # Hint that configure should be run first
 ifeq (,$(wildcard Makefile.global))
@@ -32,7 +33,7 @@ clean: clean-extension
 
 # apply or check style
 reindent:
-	cd ${citus_abs_top_srcdir} && citus_indent --quiet
+	${citus_abs_top_srcdir}/ci/fix_style.sh
 check-style:
 	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
 .PHONY: reindent check-style

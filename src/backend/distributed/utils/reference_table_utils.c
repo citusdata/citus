@@ -4,7 +4,7 @@
  *
  * Declarations for public utility functions related to reference tables.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -36,8 +36,8 @@
 
 
 /* local function forward declarations */
-static void ReplicateSingleShardTableToAllWorkers(Oid relationId);
-static void ReplicateShardToAllWorkers(ShardInterval *shardInterval);
+static void ReplicateSingleShardTableToAllNodes(Oid relationId);
+static void ReplicateShardToAllNodes(ShardInterval *shardInterval);
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 								 int nodePort);
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
@@ -55,10 +55,6 @@ Datum
 upgrade_to_reference_table(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	List *shardIntervalList = NIL;
-	ShardInterval *shardInterval = NULL;
-	uint64 shardId = INVALID_SHARD_ID;
-	DistTableCacheEntry *tableEntry = NULL;
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -74,7 +70,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	tableEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(relationId);
 
 	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
@@ -95,7 +91,9 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								  relationName)));
 	}
 
-	shardIntervalList = LoadShardIntervalList(relationId);
+	LockRelationOid(relationId, AccessExclusiveLock);
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
 	if (list_length(shardIntervalList) != 1)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -106,13 +104,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								  "reference tables.", relationName)));
 	}
 
-	shardInterval = (ShardInterval *) linitial(shardIntervalList);
-	shardId = shardInterval->shardId;
-
-	LockShardDistributionMetadata(shardId, ExclusiveLock);
-	LockShardResource(shardId, ExclusiveLock);
-
-	ReplicateSingleShardTableToAllWorkers(relationId);
+	ReplicateSingleShardTableToAllNodes(relationId);
 
 	PG_RETURN_VOID();
 }
@@ -129,70 +121,68 @@ void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
-	List *referenceShardIntervalList = NIL;
 	ListCell *referenceTableCell = NULL;
-	ListCell *referenceShardIntervalCell = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
-	uint32 workerCount = 0;
-	Oid firstReferenceTableId = InvalidOid;
-	uint32 referenceTableColocationId = INVALID_COLOCATION_ID;
 
-	/* if there is no reference table, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	/* if there is no reference table, we do not need to replicate anything */
+	if (list_length(referenceTableList) > 0)
 	{
-		return;
+		List *referenceShardIntervalList = NIL;
+		ListCell *referenceShardIntervalCell = NULL;
+
+		/*
+		 * We sort the reference table list to prevent deadlocks in concurrent
+		 * ReplicateAllReferenceTablesToAllNodes calls.
+		 */
+		referenceTableList = SortList(referenceTableList, CompareOids);
+		foreach(referenceTableCell, referenceTableList)
+		{
+			Oid referenceTableId = lfirst_oid(referenceTableCell);
+			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+
+			referenceShardIntervalList = lappend(referenceShardIntervalList,
+												 shardInterval);
+		}
+
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			BlockWritesToShardList(referenceShardIntervalList);
+		}
+
+		foreach(referenceShardIntervalCell, referenceShardIntervalList)
+		{
+			ShardInterval *shardInterval = (ShardInterval *) lfirst(
+				referenceShardIntervalCell);
+			uint64 shardId = shardInterval->shardId;
+
+			LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+			ReplicateShardToNode(shardInterval, nodeName, nodePort);
+		}
+
+		/* create foreign constraints between reference tables */
+		foreach(referenceShardIntervalCell, referenceShardIntervalList)
+		{
+			ShardInterval *shardInterval =
+				(ShardInterval *) lfirst(referenceShardIntervalCell);
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
+
+			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
+													   commandList);
+		}
 	}
-
-	/*
-	 * We sort the reference table list to prevent deadlocks in concurrent
-	 * ReplicateAllReferenceTablesToAllNodes calls.
-	 */
-	referenceTableList = SortList(referenceTableList, CompareOids);
-	foreach(referenceTableCell, referenceTableList)
-	{
-		Oid referenceTableId = lfirst_oid(referenceTableCell);
-		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-
-		referenceShardIntervalList = lappend(referenceShardIntervalList,
-											 shardInterval);
-	}
-
-	if (ClusterHasKnownMetadataWorkers())
-	{
-		BlockWritesToShardList(referenceShardIntervalList);
-	}
-
-	foreach(referenceShardIntervalCell, referenceShardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(
-			referenceShardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
-
-		LockShardDistributionMetadata(shardId, ExclusiveLock);
-
-		ReplicateShardToNode(shardInterval, nodeName, nodePort);
-	}
-
-	/*
-	 * After replicating reference tables, we will update replication factor column for
-	 * colocation group of reference tables so that worker count will be equal to
-	 * replication factor again.
-	 */
-	workerCount = list_length(workerNodeList);
-	firstReferenceTableId = linitial_oid(referenceTableList);
-	referenceTableColocationId = TableColocationId(firstReferenceTableId);
-	UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
 }
 
 
 /*
- * ReplicateSingleShardTableToAllWorkers accepts a broadcast table and replicates it to
- * all worker nodes. It assumes that caller of this function ensures that given broadcast
- * table has only one shard.
+ * ReplicateSingleShardTableToAllNodes accepts a broadcast table and replicates
+ * it to all worker nodes, and the coordinator if it has been added by the user
+ * to pg_dist_node. It assumes that caller of this function ensures that given
+ * broadcast table has only one shard.
  */
 static void
-ReplicateSingleShardTableToAllWorkers(Oid relationId)
+ReplicateSingleShardTableToAllNodes(Oid relationId)
 {
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
@@ -212,12 +202,12 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 	}
 
 	/*
-	 * ReplicateShardToAllWorkers function opens separate transactions (i.e., not part
+	 * ReplicateShardToAllNodes function opens separate transactions (i.e., not part
 	 * of any coordinated transactions) to each worker and replicates given shard to all
 	 * workers. If a worker already has a healthy replica of given shard, it skips that
 	 * worker to prevent copying unnecessary data.
 	 */
-	ReplicateShardToAllWorkers(shardInterval);
+	ReplicateShardToAllNodes(shardInterval);
 
 	/*
 	 * We need to update metadata tables to mark this table as reference table. We modify
@@ -236,26 +226,23 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 
 
 /*
- * ReplicateShardToAllWorkers function replicates given shard to the all worker nodes
+ * ReplicateShardToAllNodes function replicates given shard to all nodes
  * in separate transactions. While replicating, it only replicates the shard to the
- * workers which does not have a healthy replica of the shard. However, this function
+ * nodes which does not have a healthy replica of the shard. However, this function
  * does not obtain any lock on shard resource and shard metadata. It is caller's
  * responsibility to take those locks.
  */
 static void
-ReplicateShardToAllWorkers(ShardInterval *shardInterval)
+ReplicateShardToAllNodes(ShardInterval *shardInterval)
 {
-	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
 
 	/* prevent concurrent pg_dist_node changes */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
-	workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
 
 	/*
-	 * We will iterate over all worker nodes and if healthy placement is not exist at
-	 * given node we will copy the shard to that node. Then we will also modify
+	 * We will iterate over all worker nodes and if a healthy placement does not exist
+	 * at given node we will copy the shard to that node. Then we will also modify
 	 * the metadata to reflect newly copied shard.
 	 */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -296,16 +283,6 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 																 missingWorkerOk);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
-
-	/*
-	 * Ensure schema exists on the worker node. We can not run this
-	 * function transactionally, since we may create shards over separate
-	 * sessions and shard creation depends on the schema being present and
-	 * visible from all sessions.
-	 */
-	EnsureSchemaExistsOnNode(shardInterval->relationId, nodeName, nodePort);
-
-
 	/*
 	 * Although this function is used for reference tables and reference table shard
 	 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
@@ -322,6 +299,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 								get_rel_name(shardInterval->relationId), nodeName,
 								nodePort)));
 
+		EnsureNoModificationsHaveBeenDone();
 		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 												   ddlCommandList);
 		if (targetPlacement == NULL)
@@ -339,7 +317,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 		}
 
 		/*
-		 * Although ReplicateShardToAllWorkers is used only for reference tables,
+		 * Although ReplicateShardToAllNodes is used only for reference tables,
 		 * during the upgrade phase, the placements are created before the table is
 		 * marked as a reference table. All metadata (including the placement
 		 * metadata) will be copied to workers after all reference table changed
@@ -351,7 +329,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 															FILE_FINALIZED, 0,
 															groupId);
 
-			SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
+			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
 }
@@ -395,18 +373,26 @@ ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
 uint32
 CreateReferenceTableColocationId()
 {
-	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = ActivePrimaryNodeList();
 	int shardCount = 1;
-	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;
+	Oid distributionColumnCollation = InvalidOid;
+
+	/*
+	 * We don't maintain replication factor of reference tables anymore and
+	 * just use -1 instead. We don't use this value in any places.
+	 */
+	int replicationFactor = -1;
 
 	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	uint32 colocationId =
+		ColocationId(shardCount, replicationFactor, distributionColumnType,
+					 distributionColumnCollation);
+
 	if (colocationId == INVALID_COLOCATION_ID)
 	{
 		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
+											 distributionColumnType,
+											 distributionColumnCollation);
 	}
 
 	return colocationId;
@@ -416,8 +402,7 @@ CreateReferenceTableColocationId()
 /*
  * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
  * tables and deletes all reference table placements from pg_dist_placement table
- * for given group. However, it does not modify replication factor of the colocation
- * group of reference tables. It is caller's responsibility to do that if it is necessary.
+ * for given group.
  */
 void
 DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
@@ -446,7 +431,6 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 
 	foreach(referenceTableCell, referenceTableList)
 	{
-		GroupShardPlacement *placement = NULL;
 		StringInfo deletePlacementCommand = makeStringInfo();
 
 		Oid referenceTableId = lfirst_oid(referenceTableCell);
@@ -458,7 +442,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 			continue;
 		}
 
-		placement = (GroupShardPlacement *) linitial(placements);
+		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
 
 		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
@@ -468,7 +452,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 						 "DELETE FROM pg_dist_placement WHERE placementid = "
 						 UINT64_FORMAT,
 						 placement->placementId);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
+		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
 	}
 }
 
@@ -490,10 +474,9 @@ ReferenceTableOidList()
 
 	foreach(distTableOidCell, distTableOidList)
 	{
-		DistTableCacheEntry *cacheEntry = NULL;
 		Oid relationId = lfirst_oid(distTableOidCell);
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
@@ -524,4 +507,17 @@ CompareOids(const void *leftElement, const void *rightElement)
 	{
 		return 0;
 	}
+}
+
+
+/*
+ * ReferenceTableReplicationFactor returns the replication factor for
+ * reference tables.
+ */
+int
+ReferenceTableReplicationFactor(void)
+{
+	List *nodeList = ReferenceTablePlacementNodeList(NoLock);
+	int replicationFactor = list_length(nodeList);
+	return replicationFactor;
 }

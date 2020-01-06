@@ -19,6 +19,8 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32744;
 
 -- now singe-row INSERT to the other worker
 \c - - - :worker_2_port
+\set VERBOSITY terse
+
 INSERT INTO limit_orders_mx VALUES (32745, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32745;

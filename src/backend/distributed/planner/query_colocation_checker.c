@@ -15,7 +15,7 @@
  * necessary since some of the attribute equivalance checks are based on
  * queries rather than range table entries.
  *
- * Copyright (c) 2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -49,14 +49,10 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 {
 	ColocatedJoinChecker colocatedJoinChecker;
 
-	RangeTblEntry *anchorRangeTblEntry = NULL;
 	Query *anchorSubquery = NULL;
-	PlannerRestrictionContext *anchorPlannerRestrictionContext = NULL;
-	RelationRestrictionContext *anchorRelationRestrictionContext = NULL;
-	List *anchorRestrictionEquivalences = NIL;
 
 	/* we couldn't pick an anchor subquery, no need to continue */
-	anchorRangeTblEntry = AnchorRte(subquery);
+	RangeTblEntry *anchorRangeTblEntry = AnchorRte(subquery);
 	if (anchorRangeTblEntry == NULL)
 	{
 		colocatedJoinChecker.anchorRelationRestrictionList = NIL;
@@ -84,11 +80,11 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		pg_unreachable();
 	}
 
-	anchorPlannerRestrictionContext =
+	PlannerRestrictionContext *anchorPlannerRestrictionContext =
 		FilterPlannerRestrictionForQuery(restrictionContext, anchorSubquery);
-	anchorRelationRestrictionContext =
+	RelationRestrictionContext *anchorRelationRestrictionContext =
 		anchorPlannerRestrictionContext->relationRestrictionContext;
-	anchorRestrictionEquivalences =
+	List *anchorRestrictionEquivalences =
 		GenerateAllAttributeEquivalences(anchorPlannerRestrictionContext);
 
 	/* fill the non colocated planning context */
@@ -191,9 +187,6 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	List *filteredRestrictionList =
 		filteredPlannerContext->relationRestrictionContext->relationRestrictionList;
 
-	List *unionedRelationRestrictionList = NULL;
-	RelationRestrictionContext *unionedRelationRestrictionContext = NULL;
-	PlannerRestrictionContext *unionedPlannerRestrictionContext = NULL;
 
 	/*
 	 * There are no relations in the input subquery, such as a subquery
@@ -213,7 +206,7 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	 * forming this temporary context is to check whether the context contains
 	 * distribution key equality or not.
 	 */
-	unionedRelationRestrictionList =
+	List *unionedRelationRestrictionList =
 		UnionRelationRestrictionLists(anchorRelationRestrictionList,
 									  filteredRestrictionList);
 
@@ -224,11 +217,13 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	 * join restrictions, we're already relying on the attributeEquivalances
 	 * provided by the context.
 	 */
-	unionedRelationRestrictionContext = palloc0(sizeof(RelationRestrictionContext));
+	RelationRestrictionContext *unionedRelationRestrictionContext = palloc0(
+		sizeof(RelationRestrictionContext));
 	unionedRelationRestrictionContext->relationRestrictionList =
 		unionedRelationRestrictionList;
 
-	unionedPlannerRestrictionContext = palloc0(sizeof(PlannerRestrictionContext));
+	PlannerRestrictionContext *unionedPlannerRestrictionContext = palloc0(
+		sizeof(PlannerRestrictionContext));
 	unionedPlannerRestrictionContext->relationRestrictionContext =
 		unionedRelationRestrictionContext;
 
@@ -256,14 +251,11 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
-	RangeTblEntry *newRangeTableEntry = NULL;
-	Var *targetColumn = NULL;
-	TargetEntry *targetEntry = NULL;
 
 	subquery->commandType = CMD_SELECT;
 
 	/* we copy the input rteRelation to preserve the rteIdentity */
-	newRangeTableEntry = copyObject(rteRelation);
+	RangeTblEntry *newRangeTableEntry = copyObject(rteRelation);
 	subquery->rtable = list_make1(newRangeTableEntry);
 
 	/* set the FROM expression to the subquery */
@@ -272,11 +264,12 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
 	/* Need the whole row as a junk var */
-	targetColumn = makeWholeRowVar(newRangeTableEntry, newRangeTableRef->rtindex, 0,
-								   false);
+	Var *targetColumn = makeWholeRowVar(newRangeTableEntry, newRangeTableRef->rtindex, 0,
+										false);
 
 	/* create a dummy target entry */
-	targetEntry = makeTargetEntry((Expr *) targetColumn, 1, "wholerow", true);
+	TargetEntry *targetEntry = makeTargetEntry((Expr *) targetColumn, 1, "wholerow",
+											   true);
 
 	subquery->targetList = lappend(subquery->targetList, targetEntry);
 
@@ -292,15 +285,13 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 static List *
 UnionRelationRestrictionLists(List *firstRelationList, List *secondRelationList)
 {
-	RelationRestrictionContext *unionedRestrictionContext = NULL;
 	List *unionedRelationRestrictionList = NULL;
 	ListCell *relationRestrictionCell = NULL;
 	Relids rteIdentities = NULL;
-	List *allRestrictionList = NIL;
 
 	/* list_concat destructively modifies the first list, thus copy it */
 	firstRelationList = list_copy(firstRelationList);
-	allRestrictionList = list_concat(firstRelationList, secondRelationList);
+	List *allRestrictionList = list_concat(firstRelationList, secondRelationList);
 
 	foreach(relationRestrictionCell, allRestrictionList)
 	{
@@ -320,7 +311,8 @@ UnionRelationRestrictionLists(List *firstRelationList, List *secondRelationList)
 		rteIdentities = bms_add_member(rteIdentities, rteIdentity);
 	}
 
-	unionedRestrictionContext = palloc0(sizeof(RelationRestrictionContext));
+	RelationRestrictionContext *unionedRestrictionContext = palloc0(
+		sizeof(RelationRestrictionContext));
 	unionedRestrictionContext->relationRestrictionList = unionedRelationRestrictionList;
 
 	return unionedRelationRestrictionList;

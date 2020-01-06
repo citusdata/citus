@@ -6,7 +6,7 @@
  * routines allow for the master node to assign tasks to the task tracker, check
  * these tasks' statuses, and remove these tasks when they are no longer needed.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -42,7 +42,6 @@
 
 /* Local functions forward declarations */
 static bool TaskTrackerRunning(void);
-static void CreateJobSchema(StringInfo schemaName);
 static void CreateTask(uint64 jobId, uint32 taskId, char *taskCallString);
 static void UpdateTask(WorkerTask *workerTask, char *taskCallString);
 static void CleanupTask(WorkerTask *workerTask);
@@ -68,18 +67,15 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	text *taskCallStringText = PG_GETARG_TEXT_P(2);
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-	bool schemaExists = false;
 
-	WorkerTask *workerTask = NULL;
 	char *taskCallString = text_to_cstring(taskCallStringText);
 	uint32 taskCallStringLength = strlen(taskCallString);
 
-	bool taskTrackerRunning = false;
 
 	CheckCitusVersion(ERROR);
 
 	/* check that we have a running task tracker on this host */
-	taskTrackerRunning = TaskTrackerRunning();
+	bool taskTrackerRunning = TaskTrackerRunning();
 	if (!taskTrackerRunning)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CANNOT_CONNECT_NOW),
@@ -102,7 +98,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	 * schema is already visible, and we immediately release the resource lock.
 	 */
 	LockJobResource(jobId, AccessExclusiveLock);
-	schemaExists = JobSchemaExists(jobSchemaName);
+	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
 		/* lock gets automatically released upon return from this function */
@@ -120,7 +116,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	/* check if we already have the task in our shared hash */
-	workerTask = WorkerTasksHashFind(jobId, taskId);
+	WorkerTask *workerTask = WorkerTasksHashFind(jobId, taskId);
 	if (workerTask == NULL)
 	{
 		CreateTask(jobId, taskId, taskCallString);
@@ -146,11 +142,10 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 	WorkerTask *workerTask = NULL;
 	uint32 taskStatus = 0;
 	char *userName = CurrentUserName();
-	bool taskTrackerRunning = false;
 
 	CheckCitusVersion(ERROR);
 
-	taskTrackerRunning = TaskTrackerRunning();
+	bool taskTrackerRunning = TaskTrackerRunning();
 
 	if (taskTrackerRunning)
 	{
@@ -188,15 +183,11 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 
-	bool schemaExists = false;
 	HASH_SEQ_STATUS status;
-	WorkerTask *currentTask = NULL;
-	StringInfo jobDirectoryName = NULL;
-	StringInfo jobSchemaName = NULL;
 
 	CheckCitusVersion(ERROR);
 
-	jobSchemaName = JobSchemaName(jobId);
+	StringInfo jobSchemaName = JobSchemaName(jobId);
 
 	/*
 	 * We'll keep this lock for a while, but that's ok because nothing
@@ -204,7 +195,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 */
 	LockJobResource(jobId, AccessExclusiveLock);
 
-	schemaExists = JobSchemaExists(jobSchemaName);
+	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (schemaExists)
 	{
 		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
@@ -220,7 +211,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 
 	hash_seq_init(&status, TaskTrackerTaskHash);
 
-	currentTask = (WorkerTask *) hash_seq_search(&status);
+	WorkerTask *currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
 		if (currentTask->jobId == jobId)
@@ -239,7 +230,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * schema drop call can block if another process is creating the schema or
 	 * writing to a table within the schema.
 	 */
-	jobDirectoryName = JobDirectoryName(jobId);
+	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	CitusRemoveDirectory(jobDirectoryName);
 
 	RemoveJobSchema(jobSchemaName);
@@ -281,12 +272,10 @@ task_tracker_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 static bool
 TaskTrackerRunning(void)
 {
-	WorkerTask *workerTask = NULL;
-	bool postmasterAlive = true;
 	bool taskTrackerRunning = true;
 
 	/* if postmaster shut down, infer task tracker shut down from it */
-	postmasterAlive = PostmasterIsAlive();
+	bool postmasterAlive = PostmasterIsAlive();
 	if (!postmasterAlive)
 	{
 		return false;
@@ -299,7 +288,8 @@ TaskTrackerRunning(void)
 	 */
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 
-	workerTask = WorkerTasksHashFind(RESERVED_JOB_ID, SHUTDOWN_MARKER_TASK_ID);
+	WorkerTask *workerTask = WorkerTasksHashFind(RESERVED_JOB_ID,
+												 SHUTDOWN_MARKER_TASK_ID);
 	if (workerTask != NULL)
 	{
 		taskTrackerRunning = false;
@@ -317,19 +307,17 @@ TaskTrackerRunning(void)
  * Further note that the created schema does not become visible to other
  * processes until the transaction commits.
  */
-static void
+void
 CreateJobSchema(StringInfo schemaName)
 {
 	const char *queryString = NULL;
-	bool oldAllowSystemTableMods = false;
 
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	CreateSchemaStmt *createSchemaStmt = NULL;
 	RoleSpec currentUserRole = { 0 };
 
 	/* allow schema names that start with pg_ */
-	oldAllowSystemTableMods = allowSystemTableMods;
+	bool oldAllowSystemTableMods = allowSystemTableMods;
 	allowSystemTableMods = true;
 
 	/* ensure we're allowed to create this schema */
@@ -342,7 +330,7 @@ CreateJobSchema(StringInfo schemaName)
 	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
 	currentUserRole.location = -1;
 
-	createSchemaStmt = makeNode(CreateSchemaStmt);
+	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
 	createSchemaStmt->schemaname = schemaName->data;
 	createSchemaStmt->schemaElts = NIL;
 
@@ -366,20 +354,18 @@ CreateJobSchema(StringInfo schemaName)
 static void
 CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 {
-	WorkerTask *workerTask = NULL;
-	uint32 assignmentTime = 0;
 	char *databaseName = CurrentDatabaseName();
 	char *userName = CurrentUserName();
 
 	/* increase task priority for cleanup tasks */
-	assignmentTime = (uint32) time(NULL);
+	uint32 assignmentTime = (uint32) time(NULL);
 	if (taskId == JOB_CLEANUP_TASK_ID)
 	{
 		assignmentTime = HIGH_PRIORITY_TASK_TIME;
 	}
 
 	/* enter the worker task into shared hash and initialize the task */
-	workerTask = WorkerTasksHashEnter(jobId, taskId);
+	WorkerTask *workerTask = WorkerTasksHashEnter(jobId, taskId);
 	workerTask->assignedAt = assignmentTime;
 	strlcpy(workerTask->taskCallString, taskCallString, MaxTaskStringSize);
 
@@ -399,9 +385,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 static void
 UpdateTask(WorkerTask *workerTask, char *taskCallString)
 {
-	TaskStatus taskStatus = TASK_STATUS_INVALID_FIRST;
-
-	taskStatus = workerTask->taskStatus;
+	TaskStatus taskStatus = workerTask->taskStatus;
 	Assert(taskStatus != TASK_STATUS_INVALID_FIRST);
 
 	/*
@@ -434,7 +418,6 @@ UpdateTask(WorkerTask *workerTask, char *taskCallString)
 static void
 CleanupTask(WorkerTask *workerTask)
 {
-	WorkerTask *taskRemoved = NULL;
 	void *hashKey = (void *) workerTask;
 
 	/*
@@ -461,7 +444,8 @@ CleanupTask(WorkerTask *workerTask)
 	}
 
 	/* remove the task from the shared hash */
-	taskRemoved = hash_search(TaskTrackerTaskHash, hashKey, HASH_REMOVE, NULL);
+	WorkerTask *taskRemoved = hash_search(TaskTrackerTaskHash, hashKey, HASH_REMOVE,
+										  NULL);
 	if (taskRemoved == NULL)
 	{
 		ereport(FATAL, (errmsg("worker task hash corrupted")));

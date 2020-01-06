@@ -4,7 +4,7 @@
  *	  Type and function declarations used in creating the distributed execution
  *	  plan.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -20,6 +20,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -51,13 +52,12 @@ typedef enum CitusRTEKind
 	CITUS_RTE_SUBQUERY = RTE_SUBQUERY,  /* subquery in FROM */
 	CITUS_RTE_JOIN = RTE_JOIN,          /* join */
 	CITUS_RTE_FUNCTION = RTE_FUNCTION,  /* function in FROM */
-#if (PG_VERSION_NUM >= 100000)
 	CITUS_RTE_TABLEFUNC = RTE_TABLEFUNC, /* TableFunc(.., column list) */
-#endif
 	CITUS_RTE_VALUES = RTE_VALUES,      /* VALUES (<exprlist>), (<exprlist>), ... */
 	CITUS_RTE_CTE = RTE_CTE,            /* common table expr (WITH list element) */
-#if (PG_VERSION_NUM >= 100000)
 	CITUS_RTE_NAMEDTUPLESTORE = RTE_NAMEDTUPLESTORE, /* tuplestore, e.g. for triggers */
+#if (PG_VERSION_NUM >= 120000)
+	CITUS_RTE_RESULT = RTE_RESULT,      /* RTE represents an empty FROM clause */
 #endif
 	CITUS_RTE_SHARD,
 	CITUS_RTE_REMOTE_QUERY
@@ -77,16 +77,15 @@ typedef enum
 /* Enumeration that defines different task types */
 typedef enum
 {
-	TASK_TYPE_INVALID_FIRST = 0,
-	SQL_TASK = 1,
-	MAP_TASK = 2,
-	MERGE_TASK = 3,
-	MAP_OUTPUT_FETCH_TASK = 4,
-	MERGE_FETCH_TASK = 5,
-	MODIFY_TASK = 6,
-	ROUTER_TASK = 7,
-	DDL_TASK = 8,
-	VACUUM_ANALYZE_TASK = 9
+	TASK_TYPE_INVALID_FIRST,
+	SELECT_TASK,
+	MAP_TASK,
+	MERGE_TASK,
+	MAP_OUTPUT_FETCH_TASK,
+	MERGE_FETCH_TASK,
+	MODIFY_TASK,
+	DDL_TASK,
+	VACUUM_ANALYZE_TASK
 } TaskType;
 
 
@@ -110,6 +109,15 @@ typedef enum
 } BoundaryNodeJobType;
 
 
+/* Enumeration that specifies extent of DML modifications */
+typedef enum RowModifyLevel
+{
+	ROW_MODIFY_NONE = 0,
+	ROW_MODIFY_READONLY = 1,
+	ROW_MODIFY_COMMUTATIVE = 2,
+	ROW_MODIFY_NONCOMMUTATIVE = 3
+} RowModifyLevel;
+
 /*
  * Job represents a logical unit of work that contains one set of data transfers
  * in our physical plan. The physical planner maps each SQL query into one or
@@ -123,7 +131,7 @@ typedef struct Job
 	uint64 jobId;
 	Query *jobQuery;
 	List *taskList;
-	List *dependedJobList;
+	List *dependentJobList;
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
@@ -176,21 +184,44 @@ typedef struct Task
 	char *queryString;
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
-	List *dependedTaskList;     /* only applies to compute tasks */
+	List *dependentTaskList;     /* only applies to compute tasks */
 
 	uint32 partitionId;
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
-	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
 
+	/*
+	 * List of struct RelationRowLock. This contains an entry for each
+	 * query identified as a FOR [KEY] UPDATE/SHARE target. Citus
+	 * converts PostgreSQL's RowMarkClause to RelationRowLock in
+	 * RowLocksOnRelations().
+	 */
 	List *relationRowLockList;
+
 	bool modifyWithSubquery;
+
+	/*
+	 * List of struct RelationShard. This represents the mapping of relations
+	 * in the RTE list to shard IDs for a task for the purposes of:
+	 *  - Locking: See AcquireExecutorShardLocks()
+	 *  - Deparsing: See UpdateRelationToShardNames()
+	 *  - Relation Access Tracking
+	 */
 	List *relationShardList;
 
 	List *rowValuesLists;          /* rows to use when building multi-row INSERT */
+
+	/*
+	 * Used only when local execution happens. Indicates that this task is part of
+	 * both local and remote executions. We use "or" in the field name because this
+	 * is set to true for both the remote and local tasks generated for such
+	 * executions. The most common example is modifications to reference tables where
+	 * the task splitted into local and remote tasks.
+	 */
+	bool partiallyLocalOrRemote;
 } Task;
 
 
@@ -229,11 +260,14 @@ typedef struct DistributedPlan
 	/* unique identifier of the plan within the session */
 	uint64 planId;
 
-	/* type of command to execute (SELECT/INSERT/...) */
-	CmdType operation;
+	/* specifies nature of modifications in query */
+	RowModifyLevel modLevel;
 
 	/* specifies whether a DML command has a RETURNING */
 	bool hasReturning;
+
+	/* a router executable query is executed entirely on a worker */
+	bool routerExecutable;
 
 	/* job tree containing the tasks to be executed on workers */
 	Job *workerJob;
@@ -241,23 +275,17 @@ typedef struct DistributedPlan
 	/* local query that merges results from the workers */
 	Query *masterQuery;
 
-	/* a router executable query is executed entirely on a worker */
-	bool routerExecutable;
-
 	/* query identifier (copied from the top-level PlannedStmt) */
 	uint64 queryId;
 
 	/* which relations are accessed by this distributed plan */
 	List *relationIdList;
 
-	/* SELECT query in an INSERT ... SELECT via the coordinator */
-	Query *insertSelectSubquery;
-
-	/* target list of an INSERT ... SELECT via the coordinator */
-	List *insertTargetList;
-
 	/* target relation of a modification */
 	Oid targetRelationId;
+
+	/* INSERT .. SELECT via the coordinator */
+	Query *insertSelectQuery;
 
 	/*
 	 * If intermediateResultIdPrefix is non-null, an INSERT ... SELECT
@@ -271,6 +299,16 @@ typedef struct DistributedPlan
 
 	/* list of subplans to execute before the distributed query */
 	List *subPlanList;
+
+	/*
+	 * List of subPlans that are used in the DistributedPlan
+	 * Note that this is different that "subPlanList" field which
+	 * contains the subplans generated part of the DistributedPlan.
+	 *
+	 * On the other hand, usedSubPlanNodeList keeps track of which subPlans
+	 * are used within this distributed plan.
+	 */
+	List *usedSubPlanNodeList;
 
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
@@ -340,6 +378,7 @@ extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
+extern RowModifyLevel RowModifyLevelForQuery(Query *query);
 
 
 /* function declarations for Task and Task list operations */

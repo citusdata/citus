@@ -2,6 +2,33 @@
 root = true
 
 # rules for all files
+# we use tabs with indent size 4
 [*]
-indent_style = tab # we use tabs
-indent_size = 4    # of size four
+indent_style = tab
+indent_size = 4
+tab_width = 4
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+trim_trailing_whitespace = true
+
+# Don't change test output files, pngs or test data files
+[*.{out,png,data}]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+# Don't change test/regress/output directory, this needs to be a separate rule
+# for some reason
+[/src/test/regress/output/**]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[*.{sql,sh}]
+indent_style = space
+indent_size = 4
+tab_width = 4
+
+[*.yml]
+indent_style = space
+indent_size = 2
+tab_width = 2

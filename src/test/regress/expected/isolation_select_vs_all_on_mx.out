@@ -1,0 +1,426 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-insert-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-insert-select: 
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO select_table SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM select_table;
+
+count          
+
+10             
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-delete s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-delete: 
+	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM select_table WHERE id = 1');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM select_table;
+
+count          
+
+4              
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-copy: 
+	SELECT run_commands_on_session_level_connection_to_node('COPY select_table FROM PROGRAM ''echo 9, 90 && echo 10, 100''WITH CSV');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s3-select-count: 
+	SELECT COUNT(*) FROM select_table;
+
+count          
+
+7              
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-begin s2-index s1-commit-worker s2-commit s1-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-begin: 
+	BEGIN;
+
+step s2-index: 
+	CREATE INDEX select_index ON select_table(id);
+
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit: 
+	COMMIT;
+
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+               
+step s2-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-select-for-update: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table WHERE id = 6 FOR UPDATE');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-commit-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+step s2-stop-connection: 
+        SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+step s1-start-session-level-connection: 
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+               
+step s1-begin-on-worker: 
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-select: 
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s2-coordinator-create-index-concurrently: 
+	CREATE INDEX CONCURRENTLY select_table_index ON select_table(id);
+
+step s1-commit-worker: 
+	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+               
+step s1-stop-connection: 
+	SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+               
+restore_isolation_tester_func
+
+               

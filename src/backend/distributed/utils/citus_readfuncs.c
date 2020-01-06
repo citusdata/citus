@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
- * Portions Copyright (c) 2012-2015, Citus Data, Inc.
+ * Portions Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -15,6 +15,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
+#include "distributed/log_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
@@ -45,9 +46,15 @@ CitusSetTag(Node *node, int tag)
 	nodeTypeName *local_node = (nodeTypeName *) CitusSetTag((Node *) node, T_##nodeTypeName)
 
 /* And a few guys need only the pg_strtok support fields */
+#if PG_VERSION_NUM >= 120000
 #define READ_TEMP_LOCALS()	\
-	char	   *token;		\
+	const char	*token;		\
 	int			length
+#else
+#define READ_TEMP_LOCALS()	\
+	char		*token;		\
+	int			length
+#endif
 
 /* ... but most need both */
 #define READ_LOCALS(nodeTypeName)			\
@@ -177,7 +184,7 @@ readJobInfo(Job *local_node)
 	READ_UINT64_FIELD(jobId);
 	READ_NODE_FIELD(jobQuery);
 	READ_NODE_FIELD(taskList);
-	READ_NODE_FIELD(dependedJobList);
+	READ_NODE_FIELD(dependentJobList);
 	READ_BOOL_FIELD(subqueryPushdown);
 	READ_BOOL_FIELD(requiresMasterEvaluation);
 	READ_BOOL_FIELD(deferredPruning);
@@ -202,21 +209,20 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_LOCALS(DistributedPlan);
 
 	READ_UINT64_FIELD(planId);
-	READ_INT_FIELD(operation);
+	READ_ENUM_FIELD(modLevel, RowModifyLevel);
 	READ_BOOL_FIELD(hasReturning);
+	READ_BOOL_FIELD(routerExecutable);
 
 	READ_NODE_FIELD(workerJob);
 	READ_NODE_FIELD(masterQuery);
-	READ_BOOL_FIELD(routerExecutable);
 	READ_UINT64_FIELD(queryId);
 	READ_NODE_FIELD(relationIdList);
-
-	READ_NODE_FIELD(insertSelectSubquery);
-	READ_NODE_FIELD(insertTargetList);
 	READ_OID_FIELD(targetRelationId);
+	READ_NODE_FIELD(insertSelectQuery);
 	READ_STRING_FIELD(intermediateResultIdPrefix);
 
 	READ_NODE_FIELD(subPlanList);
+	READ_NODE_FIELD(usedSubPlanNodeList);
 
 	READ_NODE_FIELD(planningError);
 
@@ -271,8 +277,6 @@ ReadShardInterval(READFUNC_ARGS)
 READFUNC_RET
 ReadMapMergeJob(READFUNC_ARGS)
 {
-	int arrayLength;
-	int i;
 
 	READ_LOCALS(MapMergeJob);
 
@@ -284,13 +288,13 @@ ReadMapMergeJob(READFUNC_ARGS)
 	READ_UINT_FIELD(partitionCount);
 	READ_INT_FIELD(sortedShardIntervalArrayLength);
 
-	arrayLength = local_node->sortedShardIntervalArrayLength;
+	int arrayLength = local_node->sortedShardIntervalArrayLength;
 
 	/* now build & read sortedShardIntervalArray */
 	local_node->sortedShardIntervalArray =
 			(ShardInterval**) palloc(arrayLength * sizeof(ShardInterval *));
 
-	for (i = 0; i < arrayLength; ++i)
+	for (int i = 0; i < arrayLength; ++i)
 	{
 		/* can't use READ_NODE_FIELD, no field names */
 		local_node->sortedShardIntervalArray[i] = nodeRead(NULL, 0);
@@ -375,18 +379,18 @@ ReadTask(READFUNC_ARGS)
 	READ_STRING_FIELD(queryString);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);
-	READ_NODE_FIELD(dependedTaskList);
+	READ_NODE_FIELD(dependentTaskList);
 	READ_UINT_FIELD(partitionId);
 	READ_UINT_FIELD(upstreamTaskId);
 	READ_NODE_FIELD(shardInterval);
 	READ_BOOL_FIELD(assignmentConstrained);
 	READ_NODE_FIELD(taskExecution);
-	READ_BOOL_FIELD(upsertQuery);
 	READ_CHAR_FIELD(replicationModel);
 	READ_BOOL_FIELD(modifyWithSubquery);
 	READ_NODE_FIELD(relationShardList);
 	READ_NODE_FIELD(relationRowLockList);
 	READ_NODE_FIELD(rowValuesLists);
+	READ_BOOL_FIELD(partiallyLocalOrRemote);
 
 	READ_DONE();
 }

@@ -3,7 +3,7 @@
  * pg_dist_node.h
  *	  definition of the relation that holds the nodes on the cluster (pg_dist_node).
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -20,7 +20,7 @@
  *  in particular their OUT parameters) must be changed whenever the definition of
  *  pg_dist_node changes.
  */
-#define Natts_pg_dist_node 9
+#define Natts_pg_dist_node 11
 #define Anum_pg_dist_node_nodeid 1
 #define Anum_pg_dist_node_groupid 2
 #define Anum_pg_dist_node_nodename 3
@@ -30,6 +30,8 @@
 #define Anum_pg_dist_node_isactive 7
 #define Anum_pg_dist_node_noderole 8
 #define Anum_pg_dist_node_nodecluster 9
+#define Anum_pg_dist_node_metadatasynced 10
+#define Anum_pg_dist_node_shouldhaveshards 11
 
 #define GROUPID_SEQUENCE_NAME "pg_dist_groupid_seq"
 #define NODEID_SEQUENCE_NAME "pg_dist_node_nodeid_seq"

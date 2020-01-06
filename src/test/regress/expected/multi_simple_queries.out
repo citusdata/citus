@@ -279,7 +279,7 @@ ORDER BY articles.id;
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
-ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- joins are not supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
@@ -411,7 +411,7 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
 SET client_min_messages TO 'DEBUG2';
-SET citus.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'adaptive';
 -- start with the simple lookup query
 SELECT *
 	FROM articles
@@ -544,7 +544,6 @@ COPY articles_single_shard TO stdout;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 50	10	anjanette	19519
--- error out for queries with aggregates
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
@@ -556,6 +555,16 @@ DETAIL:  distribution column value: 2
  12356.400000000000
 (1 row)
 
+-- error out on unsupported aggregate
+SET client_min_messages to 'NOTICE';
+CREATE AGGREGATE public.invalid(int) (
+    sfunc = int4pl,
+    stype = int
+);
+SELECT invalid(word_count) FROM articles;
+ERROR:  unsupported aggregate function invalid
+DROP AGGREGATE invalid(int);
+SET client_min_messages to 'DEBUG2';
 -- max, min, sum, count is somehow implemented
 -- differently in distributed planning 
 SELECT max(word_count) as max, min(word_count) as min,

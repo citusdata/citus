@@ -3,7 +3,7 @@
  * intermediate_results.h
  *   Functions for writing and reading intermediate results.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -18,15 +18,19 @@
 #include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "tcop/dest.h"
+#include "utils/builtins.h"
 #include "utils/palloc.h"
 
 
 extern DestReceiver * CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 												   List *initialNodeList, bool
 												   writeLocalFile);
+extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectory(void);
 extern int64 IntermediateResultSize(char *resultId);
+extern char * QueryResultFileName(const char *resultId);
+extern char * CreateIntermediateResultsDirectory(void);
 
 
 #endif /* INTERMEDIATE_RESULTS_H */

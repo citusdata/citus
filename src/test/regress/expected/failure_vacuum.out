@@ -1,14 +1,7 @@
 -- We have different output files for the executor. This is because
 -- we don't mark transactions with ANALYZE as critical anymore, and
 -- get WARNINGs instead of ERRORs.
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
- t
-(1 row)
-
+SET citus.next_shard_id TO 12000000;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy 
 -----------
@@ -38,10 +31,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
 (1 row)
 
 VACUUM vacuum_test;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
  mitmproxy 
 -----------
@@ -49,10 +42,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
 (1 row)
 
 ANALYZE vacuum_test;
-ERROR:  server closed the connection unexpectedly
+WARNING:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy 
 -----------
@@ -60,18 +53,13 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 (1 row)
 
 ANALYZE vacuum_test;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
-WARNING:  failed to commit transaction on localhost:9060
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:9060
 -- ANALYZE transactions being critical is an open question, see #2430
 -- show that we marked as INVALID on COMMIT FAILURE
 SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND 
 shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
- shardid | shardstate 
----------+------------
-  102093 |          3
+ shardid  | shardstate 
+----------+------------
+ 12000000 |          3
 (1 row)
 
 UPDATE pg_dist_shard_placement SET shardstate = 1
@@ -123,10 +111,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
 (1 row)
 
 VACUUM vacuum_test, other_vacuum_test;
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection error: localhost:9060
+DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:9060
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy 
 -----------

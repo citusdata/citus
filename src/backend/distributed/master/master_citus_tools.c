@@ -5,7 +5,7 @@
  *
  * This file contains functions to run commands on other worker/shards.
  *
- * Copyright (c) 2016-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -72,18 +72,10 @@ Datum
 master_run_on_worker(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	MemoryContext per_query_ctx = NULL;
-	MemoryContext oldcontext = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
 	bool parallelExecution = false;
 	StringInfo *nodeNameArray = NULL;
 	int *nodePortArray = NULL;
 	StringInfo *commandStringArray = NULL;
-	bool *statusArray = NULL;
-	StringInfo *resultArray = NULL;
-	int commandIndex = 0;
-	int commandCount = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -96,14 +88,14 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 						"allowed in this context")));
 	}
 
-	commandCount = ParseCommandParameters(fcinfo, &nodeNameArray, &nodePortArray,
-										  &commandStringArray, &parallelExecution);
+	int commandCount = ParseCommandParameters(fcinfo, &nodeNameArray, &nodePortArray,
+											  &commandStringArray, &parallelExecution);
 
-	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
-	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+	MemoryContext per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	MemoryContext oldcontext = MemoryContextSwitchTo(per_query_ctx);
 
 	/* get the requested return tuple description */
-	tupleDescriptor = CreateTupleDescCopy(rsinfo->expectedDesc);
+	TupleDesc tupleDescriptor = CreateTupleDescCopy(rsinfo->expectedDesc);
 
 	/*
 	 * Check to make sure we have correct tuple descriptor
@@ -121,9 +113,9 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 	}
 
 	/* prepare storage for status and result values */
-	statusArray = palloc0(commandCount * sizeof(bool));
-	resultArray = palloc0(commandCount * sizeof(StringInfo));
-	for (commandIndex = 0; commandIndex < commandCount; commandIndex++)
+	bool *statusArray = palloc0(commandCount * sizeof(bool));
+	StringInfo *resultArray = palloc0(commandCount * sizeof(StringInfo));
+	for (int commandIndex = 0; commandIndex < commandCount; commandIndex++)
 	{
 		resultArray[commandIndex] = makeStringInfo();
 	}
@@ -142,9 +134,10 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 
 	/* let the caller know we're sending back a tuplestore */
 	rsinfo->returnMode = SFRM_Materialize;
-	tupleStore = CreateTupleStore(tupleDescriptor,
-								  nodeNameArray, nodePortArray, statusArray,
-								  resultArray, commandCount);
+	Tuplestorestate *tupleStore = CreateTupleStore(tupleDescriptor,
+												   nodeNameArray, nodePortArray,
+												   statusArray,
+												   resultArray, commandCount);
 	rsinfo->setResult = tupleStore;
 	rsinfo->setDesc = tupleDescriptor;
 
@@ -170,10 +163,6 @@ ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 	Datum *nodeNameDatumArray = DeconstructArrayObject(nodeNameArrayObject);
 	Datum *nodePortDatumArray = DeconstructArrayObject(nodePortArrayObject);
 	Datum *commandStringDatumArray = DeconstructArrayObject(commandStringArrayObject);
-	int index = 0;
-	StringInfo *nodeNames = NULL;
-	int *nodePorts = NULL;
-	StringInfo *commandStrings = NULL;
 
 	if (nodeNameCount != nodePortCount || nodeNameCount != commandStringCount)
 	{
@@ -182,11 +171,11 @@ ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 				 errmsg("expected same number of node name, port, and query string")));
 	}
 
-	nodeNames = palloc0(nodeNameCount * sizeof(StringInfo));
-	nodePorts = palloc0(nodeNameCount * sizeof(int));
-	commandStrings = palloc0(nodeNameCount * sizeof(StringInfo));
+	StringInfo *nodeNames = palloc0(nodeNameCount * sizeof(StringInfo));
+	int *nodePorts = palloc0(nodeNameCount * sizeof(int));
+	StringInfo *commandStrings = palloc0(nodeNameCount * sizeof(StringInfo));
 
-	for (index = 0; index < nodeNameCount; index++)
+	for (int index = 0; index < nodeNameCount; index++)
 	{
 		text *nodeNameText = DatumGetTextP(nodeNameDatumArray[index]);
 		char *nodeName = text_to_cstring(nodeNameText);
@@ -224,13 +213,12 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 										 bool *statusArray, StringInfo *resultStringArray,
 										 int commmandCount)
 {
-	int commandIndex = 0;
 	MultiConnection **connectionArray =
 		palloc0(commmandCount * sizeof(MultiConnection *));
 	int finishedCount = 0;
 
 	/* start connections asynchronously */
-	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+	for (int commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 	{
 		char *nodeName = nodeNameArray[commandIndex]->data;
 		int nodePort = nodePortArray[commandIndex];
@@ -240,7 +228,7 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 	}
 
 	/* establish connections */
-	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+	for (int commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 	{
 		MultiConnection *connection = connectionArray[commandIndex];
 		StringInfo queryResultString = resultStringArray[commandIndex];
@@ -264,9 +252,8 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 	}
 
 	/* send queries at once */
-	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+	for (int commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 	{
-		int querySent = 0;
 		MultiConnection *connection = connectionArray[commandIndex];
 		char *queryString = commandStringArray[commandIndex]->data;
 		StringInfo queryResultString = resultStringArray[commandIndex];
@@ -280,7 +267,7 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 			continue;
 		}
 
-		querySent = SendRemoteCommand(connection, queryString);
+		int querySent = SendRemoteCommand(connection, queryString);
 		if (querySent == 0)
 		{
 			StoreErrorMessage(connection, queryResultString);
@@ -294,20 +281,19 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 	/* check for query results */
 	while (finishedCount < commmandCount)
 	{
-		for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+		for (int commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 		{
 			MultiConnection *connection = connectionArray[commandIndex];
 			StringInfo queryResultString = resultStringArray[commandIndex];
 			bool success = false;
-			bool queryFinished = false;
 
 			if (connection == NULL)
 			{
 				continue;
 			}
 
-			queryFinished = GetConnectionStatusAndResult(connection, &success,
-														 queryResultString);
+			bool queryFinished = GetConnectionStatusAndResult(connection, &success,
+															  queryResultString);
 
 			if (queryFinished)
 			{
@@ -343,9 +329,6 @@ GetConnectionStatusAndResult(MultiConnection *connection, bool *resultStatus,
 {
 	bool finished = true;
 	ConnStatusType connectionStatus = PQstatus(connection->pgConn);
-	int consumeInput = 0;
-	PGresult *queryResult = NULL;
-	bool success = false;
 
 	*resultStatus = false;
 	resetStringInfo(queryResultString);
@@ -356,7 +339,7 @@ GetConnectionStatusAndResult(MultiConnection *connection, bool *resultStatus,
 		return finished;
 	}
 
-	consumeInput = PQconsumeInput(connection->pgConn);
+	int consumeInput = PQconsumeInput(connection->pgConn);
 	if (consumeInput == 0)
 	{
 		appendStringInfo(queryResultString, "query result unavailable");
@@ -371,8 +354,8 @@ GetConnectionStatusAndResult(MultiConnection *connection, bool *resultStatus,
 	}
 
 	/* query result is available at this point */
-	queryResult = PQgetResult(connection->pgConn);
-	success = EvaluateQueryResult(connection, queryResult, queryResultString);
+	PGresult *queryResult = PQgetResult(connection->pgConn);
+	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
 	PQclear(queryResult);
 
 	*resultStatus = success;
@@ -449,12 +432,10 @@ StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString)
 	char *errorMessage = PQerrorMessage(connection->pgConn);
 	if (errorMessage != NULL)
 	{
-		char *firstNewlineIndex = NULL;
-
 		/* copy the error message to a writable memory */
 		errorMessage = pnstrdup(errorMessage, strlen(errorMessage));
 
-		firstNewlineIndex = strchr(errorMessage, '\n');
+		char *firstNewlineIndex = strchr(errorMessage, '\n');
 
 		/* trim the error message at the line break */
 		if (firstNewlineIndex != NULL)
@@ -484,17 +465,15 @@ ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray, int *nodePortArray,
 							   StringInfo *commandStringArray, bool *statusArray,
 							   StringInfo *resultStringArray, int commmandCount)
 {
-	int commandIndex = 0;
-	for (commandIndex = 0; commandIndex < commmandCount; commandIndex++)
+	for (int commandIndex = 0; commandIndex < commmandCount; commandIndex++)
 	{
 		char *nodeName = nodeNameArray[commandIndex]->data;
 		int32 nodePort = nodePortArray[commandIndex];
-		bool success = false;
 		char *queryString = commandStringArray[commandIndex]->data;
 		StringInfo queryResultString = resultStringArray[commandIndex];
 
-		success = ExecuteRemoteQueryOrCommand(nodeName, nodePort, queryString,
-											  queryResultString);
+		bool success = ExecuteRemoteQueryOrCommand(nodeName, nodePort, queryString,
+												   queryResultString);
 
 		statusArray[commandIndex] = success;
 
@@ -516,8 +495,6 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *connection =
 		GetNodeConnection(connectionFlags, nodeName, nodePort);
-	bool success = false;
-	PGresult *queryResult = NULL;
 	bool raiseInterrupts = true;
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
@@ -528,8 +505,8 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 	}
 
 	SendRemoteCommand(connection, queryString);
-	queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
-	success = EvaluateQueryResult(connection, queryResult, queryResultString);
+	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
+	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
 
 	PQclear(queryResult);
 
@@ -547,13 +524,11 @@ CreateTupleStore(TupleDesc tupleDescriptor,
 				 StringInfo *resultArray, int commandCount)
 {
 	Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	int commandIndex = 0;
 	bool nulls[4] = { false, false, false, false };
 
-	for (commandIndex = 0; commandIndex < commandCount; commandIndex++)
+	for (int commandIndex = 0; commandIndex < commandCount; commandIndex++)
 	{
 		Datum values[4];
-		HeapTuple tuple = NULL;
 		StringInfo nodeNameString = nodeNameArray[commandIndex];
 		StringInfo resultString = resultArray[commandIndex];
 		text *nodeNameText = cstring_to_text_with_len(nodeNameString->data,
@@ -566,7 +541,7 @@ CreateTupleStore(TupleDesc tupleDescriptor,
 		values[2] = BoolGetDatum(statusArray[commandIndex]);
 		values[3] = PointerGetDatum(resultText);
 
-		tuple = heap_form_tuple(tupleDescriptor, values, nulls);
+		HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 		tuplestore_puttuple(tupleStore, tuple);
 
 		heap_freetuple(tuple);

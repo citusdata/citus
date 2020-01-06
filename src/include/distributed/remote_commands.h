@@ -3,7 +3,7 @@
  * remote_commands.h
  *	  Helpers to execute commands on remote nodes, over libpq.
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -14,17 +14,16 @@
 #include "distributed/connection_management.h"
 
 /* errors which ExecuteRemoteCommand might return */
+#define RESPONSE_OKAY 0
 #define QUERY_SEND_FAILED 1
 #define RESPONSE_NOT_OKAY 2
-
-struct pg_result; /* target of the PGresult typedef */
 
 /* GUC, determining whether statements sent to remote nodes are logged */
 extern bool LogRemoteCommands;
 
 
 /* simple helpers */
-extern bool IsResponseOK(struct pg_result *result);
+extern bool IsResponseOK(PGresult *result);
 extern void ForgetResults(MultiConnection *connection);
 extern bool ClearResults(MultiConnection *connection, bool raiseErrors);
 extern bool ClearResultsDiscardWarnings(MultiConnection *connection, bool raiseErrors);
@@ -33,7 +32,7 @@ extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
 /* report errors & warnings */
 extern void ReportConnectionError(MultiConnection *connection, int elevel);
-extern void ReportResultError(MultiConnection *connection, struct pg_result *result,
+extern void ReportResultError(MultiConnection *connection, PGresult *result,
 							  int elevel);
 extern char * pchomp(const char *in);
 extern void LogRemoteCommand(MultiConnection *connection, const char *command);
@@ -45,14 +44,14 @@ extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
-										struct pg_result **result);
+										PGresult **result);
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,
 								   const char *const *parameterValues);
-extern List * ReadFirstColumnAsText(struct pg_result *queryResult);
-extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
-												 bool raiseInterrupts);
+extern List * ReadFirstColumnAsText(PGresult *queryResult);
+extern PGresult * GetRemoteCommandResult(MultiConnection *connection,
+										 bool raiseInterrupts);
 extern bool PutRemoteCopyData(MultiConnection *connection, const char *buffer,
 							  int nbytes);
 extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);

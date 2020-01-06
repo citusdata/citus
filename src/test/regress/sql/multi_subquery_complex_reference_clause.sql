@@ -6,7 +6,6 @@
 
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 
 CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('user_buy_test_table', 'user_id');
@@ -220,7 +219,7 @@ SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
- 
+
 -- union involving reference table and distributed table subqueries
 -- is supported with pulling data to coordinator
 SELECT * FROM
@@ -1117,7 +1116,7 @@ ORDER BY 1 LIMIT 3;
 
 -- should be able to pushdown since one of the subqueries has distinct on reference tables
 -- and there is only reference table in that subquery
-SELECT 
+SELECT
   distinct_users, event_type, time
 FROM
 (SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
@@ -1127,11 +1126,11 @@ LIMIT 5
 OFFSET 0;
 
 -- the same query wuth multiple reference tables in the subquery
-SELECT 
+SELECT
   distinct_users, event_type, time
 FROM
 (SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
-(SELECT DISTINCT users_reference_table.user_id as distinct_users FROM users_reference_table, events_reference_table 
+(SELECT DISTINCT users_reference_table.user_id as distinct_users FROM users_reference_table, events_reference_table
  WHERE events_reference_table.user_id =  users_reference_table.user_id AND events_reference_table.event_type IN (1,2,3,4)) users_ref
 ON (events_dist.user_id = users_ref.distinct_users)
 ORDER BY time DESC
@@ -1139,7 +1138,7 @@ LIMIT 5
 OFFSET 0;
 
 -- similar query as the above, but with group bys
-SELECT 
+SELECT
   distinct_users, event_type, time
 FROM
 (SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
@@ -1162,7 +1161,7 @@ SELECT * FROM
   GROUP BY 1
 ) as foo;
 
--- similiar to the above examples, this time there is a subquery 
+-- similiar to the above examples, this time there is a subquery
 -- whose output is not in the DISTINCT clause
 SELECT * FROM
 (
@@ -1174,8 +1173,8 @@ ORDER BY 1;
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id, us_events.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table WHERE event_type IN (2,3)) as us_events WHERE users_reference_table.user_id = us_events.user_id
-) as foo 
-ORDER BY 1 DESC 
+) as foo
+ORDER BY 1 DESC
 LIMIT 4;
 
 -- should not pushdown since there is a non partition column on the DISTINCT clause
@@ -1183,34 +1182,34 @@ LIMIT 4;
 -- is disabled
 SELECT * FROM
 (
-  SELECT 
-    DISTINCT users_reference_table.user_id, us_events.value_4 
-  FROM 
-    users_reference_table, 
-    (SELECT user_id, value_4, random() FROM events_table WHERE event_type IN (2,3)) as us_events 
-  WHERE 
+  SELECT
+    DISTINCT users_reference_table.user_id, us_events.value_4
+  FROM
+    users_reference_table,
+    (SELECT user_id, value_4, random() FROM events_table WHERE event_type IN (2,3)) as us_events
+  WHERE
     users_reference_table.user_id = us_events.user_id
-) as foo 
-ORDER BY 1 DESC 
+) as foo
+ORDER BY 1 DESC
 LIMIT 4;
 
 
 
 -- test the read_intermediate_result() for GROUP BYs
 BEGIN;
- 
+
 SELECT broadcast_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,200) s');
 
 -- single appereance of read_intermediate_result
-SELECT 
-  DISTINCT user_id 
-FROM 
-  users_table 
-JOIN 
-(SELECT 
-  max(res.val) as mx 
-FROM 
-  read_intermediate_result('squares', 'binary') AS res (val int, val_square int) 
+SELECT
+  DISTINCT user_id
+FROM
+  users_table
+JOIN
+(SELECT
+  max(res.val) as mx
+FROM
+  read_intermediate_result('squares', 'binary') AS res (val int, val_square int)
 GROUP BY res.val_square) squares
  ON (mx = user_id)
 ORDER BY 1
@@ -1226,15 +1225,15 @@ ORDER BY 1
 LIMIT 5;
 
 -- single appereance of read_intermediate_result but inside a subquery
-SELECT 
-  DISTINCT user_id 
-FROM 
-  users_table 
+SELECT
+  DISTINCT user_id
+FROM
+  users_table
 JOIN (
-  SELECT *,random() FROM (SELECT 
-    max(res.val) as mx 
-  FROM 
-      (SELECT val, val_square FROM read_intermediate_result('squares', 'binary') AS res (val int, val_square int)) res 
+  SELECT *,random() FROM (SELECT
+    max(res.val) as mx
+  FROM
+      (SELECT val, val_square FROM read_intermediate_result('squares', 'binary') AS res (val int, val_square int)) res
   GROUP BY res.val_square) foo)
 squares
  ON (mx = user_id)
@@ -1242,16 +1241,16 @@ ORDER BY 1
 LIMIT 5;
 
 -- multiple read_intermediate_results in the same subquery is OK
-SELECT 
-  DISTINCT user_id 
-FROM 
-  users_table 
-JOIN 
-(SELECT 
-  max(res.val) as mx 
-FROM 
+SELECT
+  DISTINCT user_id
+FROM
+  users_table
+JOIN
+(SELECT
+  max(res.val) as mx
+FROM
   read_intermediate_result('squares', 'binary') AS res (val int, val_square int),
-  read_intermediate_result('squares', 'binary') AS res2 (val int, val_square int) 
+  read_intermediate_result('squares', 'binary') AS res2 (val int, val_square int)
 WHERE res.val = res2.val_square
 GROUP BY res2.val_square) squares
  ON (mx = user_id)
@@ -1259,19 +1258,19 @@ ORDER BY 1
 LIMIT 5;
 
 -- mixed recurring tuples should be supported
-SELECT 
-  DISTINCT user_id 
-FROM 
-  users_table 
-JOIN 
-(SELECT 
-  max(res.val) as mx 
-FROM 
-  read_intermediate_result('squares', 'binary') AS res (val int, val_square int), 
+SELECT
+  DISTINCT user_id
+FROM
+  users_table
+JOIN
+(SELECT
+  max(res.val) as mx
+FROM
+  read_intermediate_result('squares', 'binary') AS res (val int, val_square int),
   generate_series(0, 10) i
   WHERE
   res.val = i
-  GROUP BY 
+  GROUP BY
     i) squares
  ON (mx = user_id)
 ORDER BY 1
@@ -1279,16 +1278,16 @@ LIMIT 5;
 
 -- should recursively plan since
 -- there are no columns on the GROUP BY from the distributed table
-SELECT 
-  DISTINCT user_id 
-FROM 
+SELECT
+  DISTINCT user_id
+FROM
   users_reference_table
-JOIN 
-  (SELECT 
-    max(val_square) as mx 
-  FROM 
-    read_intermediate_result('squares', 'binary') AS res (val int, val_square int), events_table 
-  WHERE 
+JOIN
+  (SELECT
+    max(val_square) as mx
+  FROM
+    read_intermediate_result('squares', 'binary') AS res (val int, val_square int), events_table
+  WHERE
     events_table.user_id = res.val GROUP BY res.val) squares
  ON (mx = user_id)
 ORDER BY 1
@@ -1297,34 +1296,34 @@ LIMIT 5;
 ROLLBACK;
 
 -- should work since we're using an immutable function as recurring tuple
-SELECT 
-  DISTINCT user_id 
-FROM 
-  users_table 
-JOIN 
-(SELECT 
-  max(i+5)as mx 
-FROM 
+SELECT
+  DISTINCT user_id
+FROM
+  users_table
+JOIN
+(SELECT
+  max(i+5)as mx
+FROM
   generate_series(0, 10) as i GROUP BY i) squares
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
 
 
--- should recursively plan since we're 
+-- should recursively plan since we're
 -- using an immutable function as recurring tuple
--- along with a distributed table, where GROUP BY is 
+-- along with a distributed table, where GROUP BY is
 -- on the recurring tuple
-SELECT 
-  DISTINCT user_id 
-FROM 
+SELECT
+  DISTINCT user_id
+FROM
   users_reference_table
-JOIN 
-  (SELECT 
-    max(i+5)as mx 
-  FROM 
-     generate_series(0, 10) as i, events_table 
-  WHERE 
+JOIN
+  (SELECT
+    max(i+5)as mx
+  FROM
+     generate_series(0, 10) as i, events_table
+  WHERE
     events_table.user_id = i GROUP BY i) squares
  ON (mx = user_id)
 ORDER BY 1

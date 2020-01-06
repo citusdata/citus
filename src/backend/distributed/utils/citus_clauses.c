@@ -3,7 +3,7 @@
  *
  * Routines roughly equivalent to postgres' util/clauses.
  *
- * Copyright (c) 2016-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  */
 
 #include "postgres.h"
@@ -154,7 +154,6 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	EState     *estate;
 	ExprState  *exprstate;
 	ExprContext *econtext;
-	MemoryContext oldcontext;
 	Datum		const_val;
 	bool		const_is_null;
 	int16		resultTypLen;
@@ -166,7 +165,7 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	estate = CreateExecutorState();
 
 	/* We can use the estate's working context to avoid memory leaks. */
-	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
+	MemoryContext oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
 
 	/* Make sure any opfuncids are filled in. */
 	fix_opfuncids((Node *) expr);

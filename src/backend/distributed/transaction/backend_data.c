@@ -5,7 +5,7 @@
  *  Infrastructure for managing per backend data that can efficiently
  *  accessed by all sessions.
  *
- * Copyright (c) 2017, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -25,8 +25,12 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_identifier.h"
+#include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
+#if PG_VERSION_NUM >= 120000
+#include "replication/walsender.h"
+#endif
 #include "storage/ipc.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
@@ -62,7 +66,6 @@ typedef struct BackendManagementShmemData
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
-static void CheckReturnSetInfo(ReturnSetInfo *returnSetInfo);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static BackendManagementShmemData *backendManagementShmemData = NULL;
@@ -152,12 +155,10 @@ Datum
 get_current_transaction_id(PG_FUNCTION_ARGS)
 {
 	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
 
 	Datum values[5];
 	bool isNulls[5];
 
-	DistributedTransactionId *distributedTransctionId = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -173,7 +174,8 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
 	}
 
-	distributedTransctionId = GetCurrentDistributedTransactionId();
+	DistributedTransactionId *distributedTransctionId =
+		GetCurrentDistributedTransactionId();
 
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
@@ -195,7 +197,7 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 		isNulls[4] = true;
 	}
 
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(heapTuple));
 }
@@ -206,43 +208,22 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
  * the active backends from each node of the cluster. If you call that function from
  * the coordinator, it will returns back active transaction from the coordinator as
  * well. Yet, if you call it from the worker, result won't include the transactions
- * on the coordinator node, since worker nodes do not aware of the coordinator.
+ * on the coordinator node, since worker nodes are not aware of the coordinator.
  */
 Datum
 get_global_active_transactions(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	MemoryContext perQueryContext = NULL;
-	MemoryContext oldContext = NULL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	ListCell *workerNodeCell = NULL;
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 	StringInfo queryToSend = makeStringInfo();
 
 	CheckCitusVersion(ERROR);
-	CheckReturnSetInfo(returnSetInfo);
-
-	/* build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	appendStringInfo(queryToSend, GET_ACTIVE_TRANSACTION_QUERY);
-
-	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
-
-	oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	returnSetInfo->returnMode = SFRM_Materialize;
-	returnSetInfo->setResult = tupleStore;
-	returnSetInfo->setDesc = tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
 
 	/* add active transactions for local node */
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
@@ -253,7 +234,6 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		MultiConnection *connection = NULL;
 		int connectionFlags = 0;
 
 		if (workerNode->groupId == GetLocalGroupId())
@@ -262,7 +242,8 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-		connection = StartNodeConnection(connectionFlags, nodeName, nodePort);
+		MultiConnection *connection = StartNodeConnection(connectionFlags, nodeName,
+														  nodePort);
 
 		connectionList = lappend(connectionList, connection);
 	}
@@ -273,9 +254,8 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		int querySent = false;
 
-		querySent = SendRemoteCommand(connection, queryToSend->data);
+		int querySent = SendRemoteCommand(connection, queryToSend->data);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, WARNING);
@@ -286,28 +266,24 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-		PGresult *result = NULL;
 		bool raiseInterrupts = true;
 		Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
 		bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
-		int64 rowIndex = 0;
-		int64 rowCount = 0;
-		int64 colCount = 0;
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			continue;
 		}
 
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (!IsResponseOK(result))
 		{
 			ReportResultError(connection, result, WARNING);
 			continue;
 		}
 
-		rowCount = PQntuples(result);
-		colCount = PQnfields(result);
+		int64 rowCount = PQntuples(result);
+		int64 colCount = PQnfields(result);
 
 		/* Although it is not expected */
 		if (colCount != ACTIVE_TRANSACTION_COLUMN_COUNT)
@@ -317,7 +293,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
 			memset(values, 0, sizeof(values));
 			memset(isNulls, false, sizeof(isNulls));
@@ -350,31 +326,11 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 Datum
 get_all_active_transactions(PG_FUNCTION_ARGS)
 {
-	ReturnSetInfo *returnSetInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	MemoryContext perQueryContext = NULL;
-	MemoryContext oldContext = NULL;
 
 	CheckCitusVersion(ERROR);
-	CheckReturnSetInfo(returnSetInfo);
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	/* build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
-	{
-		elog(ERROR, "return type must be a row type");
-	}
-
-	perQueryContext = returnSetInfo->econtext->ecxt_per_query_memory;
-
-	oldContext = MemoryContextSwitchTo(perQueryContext);
-
-	tupleStore = tuplestore_begin_heap(true, false, work_mem);
-	returnSetInfo->returnMode = SFRM_Materialize;
-	returnSetInfo->setResult = tupleStore;
-	returnSetInfo->setDesc = tupleDescriptor;
-
-	MemoryContextSwitchTo(oldContext);
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
 
 	/* clean up and return the tuplestore */
@@ -391,7 +347,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 static void
 StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 {
-	int backendIndex = 0;
 	Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
 	bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
 	bool showAllTransactions = superuser();
@@ -413,18 +368,14 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	/* we're reading all distributed transactions, prevent new backends */
 	LockBackendSharedMemory(LW_SHARED);
 
-	for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		BackendData *currentBackend =
 			&backendManagementShmemData->backends[backendIndex];
-		bool coordinatorOriginatedQuery = false;
 
 		/* to work on data after releasing g spinlock to protect against errors */
-		Oid databaseId = InvalidOid;
-		int backendPid = -1;
 		int initiatorNodeIdentifier = -1;
 		uint64 transactionNumber = 0;
-		TimestampTz transactionIdTimestamp = 0;
 
 		SpinLockAcquire(&currentBackend->mutex);
 
@@ -445,8 +396,8 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 			continue;
 		}
 
-		databaseId = currentBackend->databaseId;
-		backendPid = ProcGlobal->allProcs[backendIndex].pid;
+		Oid databaseId = currentBackend->databaseId;
+		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
 		initiatorNodeIdentifier = currentBackend->citusBackend.initiatorNodeIdentifier;
 
 		/*
@@ -457,10 +408,11 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		 * field with the same name. The reason is that it also covers backends that are not
 		 * inside a distributed transaction.
 		 */
-		coordinatorOriginatedQuery = currentBackend->citusBackend.transactionOriginator;
+		bool coordinatorOriginatedQuery =
+			currentBackend->citusBackend.transactionOriginator;
 
 		transactionNumber = currentBackend->transactionId.transactionNumber;
-		transactionIdTimestamp = currentBackend->transactionId.timestamp;
+		TimestampTz transactionIdTimestamp = currentBackend->transactionId.timestamp;
 
 		SpinLockRelease(&currentBackend->mutex);
 
@@ -483,32 +435,6 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	}
 
 	UnlockBackendSharedMemory();
-}
-
-
-/*
- * CheckReturnSetInfo checks whether the defined given returnSetInfo is
- * proper for returning tuplestore.
- */
-static void
-CheckReturnSetInfo(ReturnSetInfo *returnSetInfo)
-{
-	/* check to see if caller supports us returning a tuplestore */
-	if (returnSetInfo == NULL || !IsA(returnSetInfo, ReturnSetInfo))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context " \
-						"that cannot accept a set")));
-	}
-
-	if (!(returnSetInfo->allowedModes & SFRM_Materialize))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
-	}
 }
 
 
@@ -551,8 +477,6 @@ BackendManagementShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		int backendIndex = 0;
-		int totalProcs = 0;
 		char *trancheName = "Backend Management Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
@@ -580,12 +504,13 @@ BackendManagementShmemInit(void)
 		 * We also initiate initiatorNodeIdentifier to -1, which can never be
 		 * used as a node id.
 		 */
-		totalProcs = TotalProcCount();
-		for (backendIndex = 0; backendIndex < totalProcs; ++backendIndex)
+		int totalProcs = TotalProcCount();
+		for (int backendIndex = 0; backendIndex < totalProcs; ++backendIndex)
 		{
-			backendManagementShmemData->backends[backendIndex].citusBackend.
-			initiatorNodeIdentifier = -1;
-			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
+			BackendData *backendData =
+				&backendManagementShmemData->backends[backendIndex];
+			backendData->citusBackend.initiatorNodeIdentifier = -1;
+			SpinLockInit(&backendData->mutex);
 		}
 	}
 
@@ -652,11 +577,15 @@ TotalProcCount(void)
 	 * We prefer to maintain space for auxiliary procs or preperad transactions in
 	 * the backend space because they could be blocking processes and our current
 	 * implementation of distributed deadlock detection could process them
-	 * as a regular backend. In the future, we could consider chaning deadlock
-	 * detection algorithm to ignore auxiliary procs or preperad transactions and
-	 * save same space.
+	 * as a regular backend. In the future, we could consider changing deadlock
+	 * detection algorithm to ignore auxiliary procs or prepared transactions and
+	 * save some space.
 	 */
 	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
+
+#if PG_VERSION_NUM >= 120000
+	totalProcs += max_wal_senders;
+#endif
 
 	return totalProcs;
 }
@@ -791,7 +720,7 @@ GetCurrentDistributedTransactionId(void)
  * sets it for the current backend. It also sets the databaseId and
  * processId fields.
  *
- * This function should only be called on BeginCoordinatedTransaction(). Any other
+ * This function should only be called on UseCoordinatedTransaction(). Any other
  * callers is very likely to break the distributed transaction management.
  */
 void
@@ -866,7 +795,6 @@ CurrentDistributedTransactionNumber(void)
 void
 GetBackendDataForProc(PGPROC *proc, BackendData *result)
 {
-	BackendData *backendData = NULL;
 	int pgprocno = proc->pgprocno;
 
 	if (proc->lockGroupLeader != NULL)
@@ -874,7 +802,7 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 		pgprocno = proc->lockGroupLeader->pgprocno;
 	}
 
-	backendData = &backendManagementShmemData->backends[pgprocno];
+	BackendData *backendData = &backendManagementShmemData->backends[pgprocno];
 
 	SpinLockAcquire(&backendData->mutex);
 
@@ -960,14 +888,12 @@ List *
 ActiveDistributedTransactionNumbers(void)
 {
 	List *activeTransactionNumberList = NIL;
-	int curBackend = 0;
 
 	/* build list of starting procs */
-	for (curBackend = 0; curBackend < MaxBackends; curBackend++)
+	for (int curBackend = 0; curBackend < MaxBackends; curBackend++)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
 		BackendData currentBackendData;
-		uint64 *transactionNumber = NULL;
 
 		if (currentProc->pid == 0)
 		{
@@ -989,7 +915,7 @@ ActiveDistributedTransactionNumbers(void)
 			continue;
 		}
 
-		transactionNumber = (uint64 *) palloc0(sizeof(uint64));
+		uint64 *transactionNumber = (uint64 *) palloc0(sizeof(uint64));
 		*transactionNumber = currentBackendData.transactionId.transactionNumber;
 
 		activeTransactionNumberList = lappend(activeTransactionNumberList,

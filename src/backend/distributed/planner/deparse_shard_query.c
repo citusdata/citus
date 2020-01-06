@@ -4,7 +4,7 @@
  *
  * This file contains functions for deparsing shard queries.
  *
- * Copyright (c) 2014-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -61,21 +61,17 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		else if (query->commandType == CMD_INSERT && task->modifyWithSubquery)
 		{
 			/* for INSERT..SELECT, adjust shard names in SELECT part */
-			RangeTblEntry *copiedInsertRte = NULL;
-			RangeTblEntry *copiedSubqueryRte = NULL;
-			Query *copiedSubquery = NULL;
 			List *relationShardList = task->relationShardList;
 			ShardInterval *shardInterval = LoadShardInterval(task->anchorShardId);
-			char partitionMethod = 0;
 
 			query = copyObject(originalQuery);
 
-			copiedInsertRte = ExtractInsertRangeTableEntry(query);
-			copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
-			copiedSubquery = copiedSubqueryRte->subquery;
+			RangeTblEntry *copiedInsertRte = ExtractResultRelationRTE(query);
+			RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
+			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
 			/* there are no restrictions to add for reference tables */
-			partitionMethod = PartitionMethod(shardInterval->relationId);
+			char partitionMethod = PartitionMethod(shardInterval->relationId);
 			if (partitionMethod != DISTRIBUTE_BY_NONE)
 			{
 				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
@@ -92,16 +88,15 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 
 			UpdateRelationToShardNames((Node *) copiedSubquery, relationShardList);
 		}
-		else if (task->upsertQuery || valuesRTE != NULL)
+		else if (query->commandType == CMD_INSERT && (query->onConflict != NULL ||
+													  valuesRTE != NULL))
 		{
-			RangeTblEntry *rangeTableEntry = NULL;
-
 			/*
 			 * Always an alias in UPSERTs and multi-row INSERTs to avoid
 			 * deparsing issues (e.g. RETURNING might reference the original
 			 * table name, which has been replaced by a shard name).
 			 */
-			rangeTableEntry = linitial(query->rtable);
+			RangeTblEntry *rangeTableEntry = linitial(query->rtable);
 			if (rangeTableEntry->alias == NULL)
 			{
 				Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
@@ -110,6 +105,7 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		}
 
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
+								task->queryString == NULL ? "(null)" :
 								ApplyLogRedaction(task->queryString))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
@@ -182,13 +178,8 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 bool
 UpdateRelationToShardNames(Node *node, List *relationShardList)
 {
-	RangeTblEntry *newRte = NULL;
 	uint64 shardId = INVALID_SHARD_ID;
 	Oid relationId = InvalidOid;
-	Oid schemaId = InvalidOid;
-	char *relationName = NULL;
-	char *schemaName = NULL;
-	bool replaceRteWithNullValues = false;
 	ListCell *relationShardCell = NULL;
 	RelationShard *relationShard = NULL;
 
@@ -201,7 +192,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	if (IsA(node, Query))
 	{
 		return query_tree_walker((Query *) node, UpdateRelationToShardNames,
-								 relationShardList, QTW_EXAMINE_RTES);
+								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}
 
 	if (!IsA(node, RangeTblEntry))
@@ -210,7 +201,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 									  relationShardList);
 	}
 
-	newRte = (RangeTblEntry *) node;
+	RangeTblEntry *newRte = (RangeTblEntry *) node;
 
 	if (newRte->rtekind != RTE_RELATION)
 	{
@@ -236,8 +227,8 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 		relationShard = NULL;
 	}
 
-	replaceRteWithNullValues = relationShard == NULL ||
-							   relationShard->shardId == INVALID_SHARD_ID;
+	bool replaceRteWithNullValues = relationShard == NULL ||
+									relationShard->shardId == INVALID_SHARD_ID;
 	if (replaceRteWithNullValues)
 	{
 		ConvertRteToSubqueryWithEmptyResult(newRte);
@@ -247,11 +238,11 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	shardId = relationShard->shardId;
 	relationId = relationShard->relationId;
 
-	relationName = get_rel_name(relationId);
+	char *relationName = get_rel_name(relationId);
 	AppendShardIdToName(&relationName, shardId);
 
-	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
 
 	ModifyRangeTblExtraData(newRte, CITUS_RTE_SHARD, schemaName, relationName, NIL);
 
@@ -269,31 +260,26 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	Relation relation = heap_open(rte->relid, NoLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	int columnCount = tupleDescriptor->natts;
-	int columnIndex = 0;
-	Query *subquery = NULL;
 	List *targetList = NIL;
-	FromExpr *joinTree = NULL;
 
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
 															 columnIndex);
-		TargetEntry *targetEntry = NULL;
-		StringInfo resname = NULL;
-		Const *constValue = NULL;
 
 		if (attributeForm->attisdropped)
 		{
 			continue;
 		}
 
-		resname = makeStringInfo();
-		constValue = makeNullConst(attributeForm->atttypid, attributeForm->atttypmod,
-								   attributeForm->attcollation);
+		StringInfo resname = makeStringInfo();
+		Const *constValue = makeNullConst(attributeForm->atttypid,
+										  attributeForm->atttypmod,
+										  attributeForm->attcollation);
 
 		appendStringInfo(resname, "%s", attributeForm->attname.data);
 
-		targetEntry = makeNode(TargetEntry);
+		TargetEntry *targetEntry = makeNode(TargetEntry);
 		targetEntry->expr = (Expr *) constValue;
 		targetEntry->resno = columnIndex;
 		targetEntry->resname = resname->data;
@@ -303,10 +289,10 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 
 	heap_close(relation, NoLock);
 
-	joinTree = makeNode(FromExpr);
+	FromExpr *joinTree = makeNode(FromExpr);
 	joinTree->quals = makeBoolConst(false, false);
 
-	subquery = makeNode(Query);
+	Query *subquery = makeNode(Query);
 	subquery->commandType = CMD_SELECT;
 	subquery->querySource = QSRC_ORIGINAL;
 	subquery->canSetTag = true;

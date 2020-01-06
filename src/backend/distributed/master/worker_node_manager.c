@@ -4,7 +4,7 @@
  *	  Routines for reading worker nodes from membership file, and allocating
  *	  candidate nodes for shard placement.
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  * $Id$
  *
@@ -15,17 +15,17 @@
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
-#include "distributed/worker_manager.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/worker_manager.h"
 #include "libpq/hba.h"
-#if (PG_VERSION_NUM >= 100000)
 #include "common/ip.h"
-#endif
 #include "libpq/libpq-be.h"
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
+#include "storage/lmgr.h"
 #include "storage/shmem.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
@@ -44,6 +44,8 @@ static List * PrimaryNodesNotInList(List *currentList);
 static WorkerNode * FindRandomNodeFromList(List *candidateWorkerNodeList);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
+static bool NodeIsPrimaryWorker(WorkerNode *node);
+static bool NodeIsReadableWorker(WorkerNode *node);
 
 
 /* ------------------------------------------------------------
@@ -64,7 +66,6 @@ WorkerGetRandomCandidateNode(List *currentNodeList)
 	WorkerNode *workerNode = NULL;
 	bool wantSameRack = false;
 	uint32 tryCount = WORKER_RACK_TRIES;
-	uint32 tryIndex = 0;
 
 	uint32 currentNodeCount = list_length(currentNodeList);
 	List *candidateWorkerNodeList = PrimaryNodesNotInList(currentNodeList);
@@ -101,17 +102,15 @@ WorkerGetRandomCandidateNode(List *currentNodeList)
 	 * If after a predefined number of tries, we still cannot find such a node,
 	 * we simply give up and return the last worker node we found.
 	 */
-	for (tryIndex = 0; tryIndex < tryCount; tryIndex++)
+	for (uint32 tryIndex = 0; tryIndex < tryCount; tryIndex++)
 	{
 		WorkerNode *firstNode = (WorkerNode *) linitial(currentNodeList);
 		char *firstRack = firstNode->workerRack;
-		char *workerRack = NULL;
-		bool sameRack = false;
 
 		workerNode = FindRandomNodeFromList(candidateWorkerNodeList);
-		workerRack = workerNode->workerRack;
+		char *workerRack = workerNode->workerRack;
 
-		sameRack = (strncmp(workerRack, firstRack, WORKER_LENGTH) == 0);
+		bool sameRack = (strncmp(workerRack, firstRack, WORKER_LENGTH) == 0);
 		if ((sameRack && wantSameRack) || (!sameRack && !wantSameRack))
 		{
 			break;
@@ -168,7 +167,6 @@ WorkerGetLocalFirstCandidateNode(List *currentNodeList)
 	if (currentNodeCount == 0)
 	{
 		StringInfo clientHostStringInfo = makeStringInfo();
-		char *clientHost = NULL;
 		char *errorMessage = ClientHostAddress(clientHostStringInfo);
 
 		if (errorMessage != NULL)
@@ -181,7 +179,7 @@ WorkerGetLocalFirstCandidateNode(List *currentNodeList)
 		}
 
 		/* if hostname is localhost.localdomain, change it to localhost */
-		clientHost = clientHostStringInfo->data;
+		char *clientHost = clientHostStringInfo->data;
 		if (strncmp(clientHost, "localhost.localdomain", WORKER_LENGTH) == 0)
 		{
 			clientHost = pstrdup("localhost");
@@ -294,12 +292,12 @@ WorkerGetNodeWithName(const char *hostname)
 
 
 /*
- * ActivePrimaryNodeCount returns the number of groups with a primary in the cluster.
+ * ActivePrimaryWorkerNodeCount returns the number of groups with a primary in the cluster.
  */
 uint32
-ActivePrimaryNodeCount(void)
+ActivePrimaryWorkerNodeCount(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
@@ -307,12 +305,12 @@ ActivePrimaryNodeCount(void)
 
 
 /*
- * ActiveReadableNodeCount returns the number of groups with a node we can read from.
+ * ActiveReadableWorkerNodeCount returns the number of groups with a node we can read from.
  */
 uint32
-ActiveReadableNodeCount(void)
+ActiveReadableWorkerNodeCount(void)
 {
-	List *workerNodeList = ActiveReadableNodeList();
+	List *workerNodeList = ActiveReadableWorkerNodeList();
 	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
@@ -320,23 +318,41 @@ ActiveReadableNodeCount(void)
 
 
 /*
- * ActivePrimaryNodeList returns a list of all the active primary nodes in workerNodeHash
+ * NodeIsCoordinator returns true if the given node represents the coordinator.
  */
-List *
-ActivePrimaryNodeList(void)
+bool
+NodeIsCoordinator(WorkerNode *node)
+{
+	return node->groupId == COORDINATOR_GROUP_ID;
+}
+
+
+/*
+ * ActiveNodeListFilterFunc returns a list of all active nodes that checkFunction
+ * returns true for.
+ * lockMode specifies which lock to use on pg_dist_node, this is necessary when
+ * the caller wouldn't want nodes to be added concurrent to their use of this list
+ */
+static List *
+FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
 	HASH_SEQ_STATUS status;
 
-	EnsureModificationsCanRun();
+	Assert(checkFunction != NULL);
 
+	if (lockMode != NoLock)
+	{
+		LockRelationOid(DistNodeRelationId(), lockMode);
+	}
+
+	HTAB *workerNodeHash = GetWorkerNodeHash();
 	hash_seq_init(&status, workerNodeHash);
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->isActive && WorkerNodeIsPrimary(workerNode))
+		if (workerNode->isActive && checkFunction(workerNode))
 		{
 			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
 			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
@@ -349,38 +365,111 @@ ActivePrimaryNodeList(void)
 
 
 /*
- * ActiveReadableNodeList returns a list of all nodes in workerNodeHash we can read from.
+ * ActivePrimaryWorkerNodeList returns a list of all active primary worker nodes
+ * in workerNodeHash. lockMode specifies which lock to use on pg_dist_node,
+ * this is necessary when the caller wouldn't want nodes to be added concurrent
+ * to their use of this list.
+ */
+List *
+ActivePrimaryWorkerNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsPrimaryWorker);
+}
+
+
+/*
+ * ActivePrimaryNodeList returns a list of all active primary nodes in
+ * workerNodeHash.
+ */
+List *
+ActivePrimaryNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * NodeIsPrimaryWorker returns true if the node is a primary worker node.
+ */
+static bool
+NodeIsPrimaryWorker(WorkerNode *node)
+{
+	return !NodeIsCoordinator(node) && NodeIsPrimary(node);
+}
+
+
+/*
+ * ReferenceTablePlacementNodeList returns the set of nodes that should have
+ * reference table placements. This includes all primaries, including the
+ * coordinator if known.
+ */
+List *
+ReferenceTablePlacementNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * DistributedTablePlacementNodeList returns a list of all active, primary
+ * worker nodes that can store new data, i.e shouldstoreshards is 'true'
+ */
+List *
+DistributedTablePlacementNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeCanHaveDistTablePlacements);
+}
+
+
+/*
+ * NodeCanHaveDistTablePlacements returns true if the given node can have
+ * shards of a distributed table.
+ */
+bool
+NodeCanHaveDistTablePlacements(WorkerNode *node)
+{
+	if (!NodeIsPrimary(node))
+	{
+		return false;
+	}
+
+	return node->shouldHaveShards;
+}
+
+
+/*
+ * ActiveReadableWorkerNodeList returns a list of all nodes in workerNodeHash
+ * that are readable workers.
+ */
+List *
+ActiveReadableWorkerNodeList(void)
+{
+	return FilterActiveNodeListFunc(NoLock, NodeIsReadableWorker);
+}
+
+
+/*
+ * ActiveReadableNodeList returns a list of all nodes in workerNodeHash
+ * that are readable workers.
  */
 List *
 ActiveReadableNodeList(void)
 {
-	List *workerNodeList = NIL;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	return FilterActiveNodeListFunc(NoLock, NodeIsReadable);
+}
 
-	hash_seq_init(&status, workerNodeHash);
 
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		WorkerNode *workerNodeCopy;
-
-		if (!workerNode->isActive)
-		{
-			continue;
-		}
-
-		if (!WorkerNodeIsReadable(workerNode))
-		{
-			continue;
-		}
-
-		workerNodeCopy = palloc0(sizeof(WorkerNode));
-		memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
-		workerNodeList = lappend(workerNodeList, workerNodeCopy);
-	}
-
-	return workerNodeList;
+/*
+ * NodeIsReadableWorker returns true if the given node is a readable worker node.
+ */
+static bool
+NodeIsReadableWorker(WorkerNode *node)
+{
+	return !NodeIsCoordinator(node) && NodeIsReadable(node);
 }
 
 
@@ -406,7 +495,7 @@ PrimaryNodesNotInList(List *currentList)
 			continue;
 		}
 
-		if (WorkerNodeIsPrimary(workerNode))
+		if (NodeIsPrimary(workerNode))
 		{
 			workerNodeList = lappend(workerNodeList, workerNode);
 		}
@@ -473,10 +562,9 @@ CompareWorkerNodes(const void *leftElement, const void *rightElement)
 {
 	const void *leftWorker = *((const void **) leftElement);
 	const void *rightWorker = *((const void **) rightElement);
-	int compare = 0;
 	Size ignoredKeySize = 0;
 
-	compare = WorkerNodeCompare(leftWorker, rightWorker, ignoredKeySize);
+	int compare = WorkerNodeCompare(leftWorker, rightWorker, ignoredKeySize);
 
 	return compare;
 }
@@ -493,15 +581,42 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 	const WorkerNode *workerLhs = (const WorkerNode *) lhsKey;
 	const WorkerNode *workerRhs = (const WorkerNode *) rhsKey;
 
-	int nameCompare = 0;
-	int portCompare = 0;
 
-	nameCompare = strncmp(workerLhs->workerName, workerRhs->workerName, WORKER_LENGTH);
+	int nameCompare = strncmp(workerLhs->workerName, workerRhs->workerName,
+							  WORKER_LENGTH);
 	if (nameCompare != 0)
 	{
 		return nameCompare;
 	}
 
-	portCompare = workerLhs->workerPort - workerRhs->workerPort;
+	int portCompare = workerLhs->workerPort - workerRhs->workerPort;
 	return portCompare;
+}
+
+
+/*
+ * GetFirstPrimaryWorkerNode returns the primary worker node with the
+ * lowest rank based on CompareWorkerNodes.
+ *
+ * The ranking is arbitrary, but needs to be kept consistent with IsFirstWorkerNode.
+ */
+WorkerNode *
+GetFirstPrimaryWorkerNode(void)
+{
+	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	ListCell *workerNodeCell = NULL;
+	WorkerNode *firstWorkerNode = NULL;
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
+		if (firstWorkerNode == NULL ||
+			CompareWorkerNodes(&workerNode, &firstWorkerNode) < 0)
+		{
+			firstWorkerNode = workerNode;
+		}
+	}
+
+	return firstWorkerNode;
 }

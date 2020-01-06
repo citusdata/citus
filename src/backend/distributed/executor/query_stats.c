@@ -3,7 +3,7 @@
  * query_stats.c
  *    Statement-level statistics for distributed queries.
  *
- * Copyright (c) 2012-2018, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
@@ -94,19 +94,9 @@ CitusExecutorName(MultiExecutorType executorType)
 			return "adaptive";
 		}
 
-		case MULTI_EXECUTOR_REAL_TIME:
-		{
-			return "real-time";
-		}
-
 		case MULTI_EXECUTOR_TASK_TRACKER:
 		{
 			return "task-tracker";
-		}
-
-		case MULTI_EXECUTOR_ROUTER:
-		{
-			return "router";
 		}
 
 		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:

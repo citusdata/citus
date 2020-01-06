@@ -3,15 +3,6 @@
 --
 -- This test checks that we can handle null min/max values in shard statistics
 -- and that we don't partition or join prune shards that have null values.
-SET citus.next_shard_id TO 760000;
--- print major version number for version-specific tests
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int AS server_version;
- server_version 
-----------------
-             11
-(1 row)
-
 SET client_min_messages TO DEBUG2;
 SET citus.explain_all_tasks TO on;
 -- to avoid differing explain output - executor doesn't matter,
@@ -34,34 +25,19 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
 
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
+$Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
    Task Count: 2
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Bitmap Heap Scan on lineitem_290001 lineitem
-               Recheck Cond: ((l_orderkey = 9030) OR (l_orderkey = 1))
-               ->  BitmapOr
-                     ->  Bitmap Index Scan on lineitem_pkey_290001
-                           Index Cond: (l_orderkey = 9030)
-                     ->  Bitmap Index Scan on lineitem_pkey_290001
-                           Index Cond: (l_orderkey = 1)
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Bitmap Heap Scan on lineitem_290000 lineitem
-               Recheck Cond: ((l_orderkey = 9030) OR (l_orderkey = 1))
-               ->  BitmapOr
-                     ->  Bitmap Index Scan on lineitem_pkey_290000
-                           Index Cond: (l_orderkey = 9030)
-                     ->  Bitmap Index Scan on lineitem_pkey_290000
-                           Index Cond: (l_orderkey = 1)
-(21 rows)
+(2 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -73,7 +49,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Real-Time)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: All
          ->  Task
@@ -98,24 +74,19 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 -- partition or join pruning for the shard with null min value. Since it is not
 -- supported with single-repartition join, dual-repartition has been used.
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 290000;
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
    Task Count: 2
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
-               Index Cond: (l_orderkey = 9030)
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
-               Index Cond: (l_orderkey = 9030)
-(11 rows)
+(2 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -150,12 +121,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  cannot use real time executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -170,24 +139,19 @@ HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-
 -- don't apply partition or join pruning for this other shard either. Since it
 -- is not supported with single-repartition join, dual-repartition has been used.
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 290001;
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
    Task Count: 2
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
-               Index Cond: (l_orderkey = 9030)
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
-               Index Cond: (l_orderkey = 9030)
-(11 rows)
+(2 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -222,12 +186,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  cannot use real time executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -242,21 +204,21 @@ HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-
 -- should apply partition and join pruning for this shard now. Since it is not
 -- supported with single-repartition join, dual-repartition has been used.
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 290000;
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+$Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 DEBUG:  Plan is router executable
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Custom Scan (Citus Router)
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+       coordinator_plan       
+------------------------------
+ Custom Scan (Citus Adaptive)
    Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Index Scan using lineitem_pkey_290001 on lineitem_290001 lineitem
-               Index Cond: (l_orderkey = 9030)
-(7 rows)
+(2 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
@@ -291,12 +253,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-DEBUG:  cannot use real time executor with repartition jobs
-HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
                             QUERY PLAN                             
 -------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob

@@ -3,7 +3,7 @@
  * variableset.c
  *    Support for propagation of SET (commands to set variables)
  *
- * Copyright (c) 2019, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -15,7 +15,6 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
@@ -97,9 +96,8 @@ IsSettingSafeToPropagate(char *name)
 		"exit_on_error",
 		"max_stack_depth"
 	};
-	Index settingIndex = 0;
 
-	for (settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
+	for (Index settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
 	{
 		if (pg_strcasecmp(skipSettings[settingIndex], name) == 0)
 		{
@@ -139,9 +137,8 @@ ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		RemoteTransaction *transaction = NULL;
 
-		transaction = &connection->remoteTransaction;
+		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
 			continue;
@@ -163,10 +160,9 @@ ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		RemoteTransaction *transaction = NULL;
 		const bool raiseErrors = true;
 
-		transaction = &connection->remoteTransaction;
+		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
 			continue;

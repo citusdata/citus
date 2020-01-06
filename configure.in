@@ -5,8 +5,8 @@
 # everyone needing autoconf installed, the resulting files are checked
 # into the SCM.
 
-AC_INIT([Citus], [8.2devel])
-AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
+AC_INIT([Citus], [9.2devel])
+AC_COPYRIGHT([Copyright (c) Citus Data, Inc.])
 
 # we'll need sed and awk for some of the version commands
 AC_PROG_SED
@@ -74,7 +74,7 @@ if test -z "$version_num"; then
   AC_MSG_ERROR([Could not detect PostgreSQL version from pg_config.])
 fi
 
-if test "$version_num" != '10' -a "$version_num" != '11'; then
+if test "$version_num" != '11' -a "$version_num" != '12'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])
@@ -136,7 +136,11 @@ AC_DEFUN([CITUSAC_PROG_CC_CFLAGS_OPT],
 [define([Ac_cachevar], [AS_TR_SH([citusac_cv_prog_cc_cflags_$1])])dnl
 AC_CACHE_CHECK([whether $CC supports $1], [Ac_cachevar],
 [citusac_save_CFLAGS=$CFLAGS
-CFLAGS="$citusac_save_CFLAGS $1"
+flag=$1
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
 ac_save_c_werror_flag=$ac_c_werror_flag
 ac_c_werror_flag=yes
 _AC_COMPILE_IFELSE([AC_LANG_PROGRAM()],
@@ -150,6 +154,7 @@ fi
 undefine([Ac_cachevar])dnl
 ])# CITUSAC_PROG_CC_CFLAGS_OPT
 
+CITUSAC_PROG_CC_CFLAGS_OPT([-std=gnu99])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wall])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wextra])
 # disarm options included in the above, which are too noisy for now
@@ -157,14 +162,18 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-unused-parameter])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-sign-compare])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-missing-field-initializers])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-clobbered])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-gnu-variable-sized-type-not-at-end])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Wno-declaration-after-statement])
 # And add a few extra warnings
-CITUSAC_PROG_CC_CFLAGS_OPT([-Wdeclaration-after-statement])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wendif-labels])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-declarations])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-prototypes])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wshadow])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=vla])  # visual studio does not support these
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-int])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-function-declaration])
+CITUSAC_PROG_CC_CFLAGS_OPT([-Werror=return-type])
 
 #
 # --enable-coverage enables generation of code coverage metrics with gcov
@@ -203,11 +212,16 @@ PGAC_ARG_REQ(with, reports-hostname, [HOSTNAME],
 AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
                    [Base URL for statistics collection and update checks])
 
+# Check if git is installed, when installed the gitref of the checkout will be baked in the application
+AC_PATH_PROG(GIT_BIN, git)
+AC_CHECK_FILE(.git,[HAS_DOTGIT=yes], [HAS_DOTGIT=])
+
 AC_SUBST(CITUS_CFLAGS, "$CITUS_CFLAGS")
 AC_SUBST(CITUS_CPPFLAGS, "$CITUS_CPPFLAGS")
 AC_SUBST(CITUS_LDFLAGS, "$LIBS $CITUS_LDFLAGS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
+AC_SUBST(HAS_DOTGIT, "$HAS_DOTGIT")
 
 AC_CONFIG_FILES([Makefile.global])
 AC_CONFIG_HEADERS([src/include/citus_config.h] [src/include/citus_version.h])

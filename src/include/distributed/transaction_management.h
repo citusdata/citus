@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  * transaction_management.h
  *
- * Copyright (c) 2016, Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -75,6 +75,7 @@ extern bool FunctionOpensTransactionBlock;
 
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
+extern int SingleShardCommitProtocol;
 
 /* state needed to restore multi-shard commit protocol during VACUUM/ANALYZE */
 extern int SavedMultiShardCommitProtocol;
@@ -87,11 +88,17 @@ extern CoordinatedTransactionState CurrentCoordinatedTransactionState;
 /* list of connections that are part of the current coordinated transaction */
 extern dlist_head InProgressTransactions;
 
+/* controls use of locks to enforce safe commutativity */
+extern bool AllModificationsCommutative;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
+extern bool EnableDeadlockPrevention;
+
 /* number of nested stored procedure call levels we are currently in */
 extern int StoredProcedureLevel;
 
-/* number of nested function call levels we are currently in */
-extern int FunctionCallLevel;
+/* number of nested DO block levels we are currently in */
+extern int DoBlockLevel;
 
 /* SET LOCAL statements active in the current (sub-)transaction. */
 extern StringInfo activeSetStmts;
@@ -99,7 +106,7 @@ extern StringInfo activeSetStmts;
 /*
  * Coordinated transaction management.
  */
-extern void BeginOrContinueCoordinatedTransaction(void);
+extern void UseCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
