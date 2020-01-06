@@ -45,6 +45,7 @@ static WorkerNode * FindRandomNodeFromList(List *candidateWorkerNodeList);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
 static bool NodeIsPrimaryWorker(WorkerNode *node);
+static bool CanHaveReferenceTableReplicas(void);
 static bool NodeIsReadableWorker(WorkerNode *node);
 
 
@@ -397,6 +398,59 @@ static bool
 NodeIsPrimaryWorker(WorkerNode *node)
 {
 	return !NodeIsCoordinator(node) && NodeIsPrimary(node);
+}
+
+/*
+ * CanUseCoordinatorLocalTablesWithReferenceTables returns true if we 
+ * are allowed to use coordinator local tables with reference tables 
+ * for joining or defining foreign keys between them.
+ */
+bool
+CanUseCoordinatorLocalTablesWithReferenceTables()
+{
+	/*
+	 * Using local tables of coordinator with reference tables is only allowed 
+	 * if we are in the coordinator.
+	 * 
+	 * Also, to check if coordinator can have reference table replicas in below
+	 * check, we should be in the coordinator. 
+	 */
+	if (!IsCoordinator())
+	{
+		return false;
+	}
+
+	/*
+	 * If reference table doesn't have replicas on the coordinator, we don't
+	 * use local tables in coordinator with reference tables.
+	 */
+	if (!CanHaveReferenceTableReplicas())
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * CanHaveReferenceTableReplicas returns true if current node can have
+ * reference table replicas. This is only possible if we called below
+ * command formerly
+ * "SELECT master_add_node(coordinator_hostname, coordinator_port, groupId => 0)"
+ */
+static bool
+CanHaveReferenceTableReplicas()
+{
+	bool hasReferenceTableReplica = false;
+
+	/*
+	 * All groups that have pg_dist_node entries, also have reference
+	 * table replicas.
+	 */
+	PrimaryNodeForGroup(GetLocalGroupId(), &hasReferenceTableReplica);
+
+	return hasReferenceTableReplica;
 }
 
 
