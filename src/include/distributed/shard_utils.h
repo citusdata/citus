@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
-extern Oid GetShardLocalTableOid(Oid distRelId, uint64 shardId);
+extern Oid GetTableLocalShardOid(Oid citusTableOid, uint64 shardId);
+extern Oid GetReferenceTableLocalShardOid(Oid referenceTableOid);
 
 #endif /* SHARD_UTILS_H */

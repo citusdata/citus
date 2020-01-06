@@ -159,7 +159,7 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	 */
 	LocalCopyBuffer = buffer;
 
-	Oid shardOid = GetShardLocalTableOid(relationId, shardId);
+	Oid shardOid = GetTableLocalShardOid(relationId, shardId);
 	Relation shard = heap_open(shardOid, RowExclusiveLock);
 	ParseState *pState = make_parsestate(NULL);
 

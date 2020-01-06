@@ -39,6 +39,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
@@ -2503,14 +2504,7 @@ UpdateReferenceTablesWithShard(Node *node, void *context)
 		return false;
 	}
 
-	ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 shardId = shardInterval->shardId;
-
-	char *relationName = get_rel_name(relationId);
-	AppendShardIdToName(&relationName, shardId);
-
-	Oid schemaId = get_rel_namespace(relationId);
-	newRte->relid = get_relname_relid(relationName, schemaId);
+	newRte->relid = GetReferenceTableLocalShardOid(relationId);
 
 	/*
 	 * Parser locks relations in addRangeTableEntry(). So we should lock the
