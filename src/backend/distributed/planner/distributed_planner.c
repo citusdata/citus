@@ -2221,14 +2221,7 @@ UpdateReferenceTablesWithShard(Node *node, void *context)
 		return false;
 	}
 
-	ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 shardId = shardInterval->shardId;
-
-	char *relationName = get_rel_name(relationId);
-	AppendShardIdToName(&relationName, shardId);
-
-	Oid schemaId = get_rel_namespace(relationId);
-	newRte->relid = get_relname_relid(relationName, schemaId);
+	newRte->relid = GetOnlyShardOidOfReferenceTable(relationId);
 
 	/*
 	 * Parser locks relations in addRangeTableEntry(). So we should lock the
