@@ -299,3 +299,39 @@ SET search_path TO not_existing_schema;
 ALTER TABLE "CiTuS.TeAeN"."TeeNTabLE.1!?!" DROP COLUMN new_col;
 
 DROP SCHEMA mx_ddl_schema_1, mx_ddl_schema_2, "CiTuS.TeAeN" CASCADE;
+
+-- test if ALTER TABLE SET SCHEMA sets the original table in the worker
+SET search_path TO public;
+
+CREATE SCHEMA mx_old_schema;
+CREATE TABLE mx_old_schema.table_set_schema (id int);
+SELECT create_distributed_table('mx_old_schema.table_set_schema', 'id');
+CREATE SCHEMA mx_new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%'
+    GROUP BY table_schema;
+\c - - - :master_port
+
+ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%'
+    GROUP BY table_schema;
+\c - - - :master_port
+SELECT * FROM mx_new_schema.table_set_schema;
+
+DROP SCHEMA mx_old_schema CASCADE;
+DROP SCHEMA mx_new_schema CASCADE;

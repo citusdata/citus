@@ -721,9 +721,152 @@ SET citus.task_executor_type TO "adaptive";
 
 
 -- test ALTER TABLE SET SCHEMA
--- we expect that it will warn out
 SET search_path TO public;
-ALTER TABLE test_schema_support.nation_hash SET SCHEMA public;
+
+CREATE SCHEMA old_schema;
+CREATE TABLE old_schema.table_set_schema(id int);
+SELECT create_distributed_table('old_schema.table_set_schema', 'id');
+CREATE SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('old_schema', 'new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+
+ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('old_schema', 'new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+SELECT * FROM new_schema.table_set_schema;
+
+DROP SCHEMA old_schema CASCADE;
+DROP SCHEMA new_schema CASCADE;
+
+
+-- test ALTER TABLE SET SCHEMA from public
+CREATE TABLE table_set_schema(id int);
+SELECT create_distributed_table('table_set_schema', 'id');
+CREATE SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid='new_schema'::regnamespace::oid;
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+
+ALTER TABLE table_set_schema SET SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid='new_schema'::regnamespace::oid;
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+SELECT * FROM new_schema.table_set_schema;
+
+DROP SCHEMA new_schema CASCADE;
+
+
+-- test ALTER TABLE SET SCHEMA when a search path is set
+CREATE SCHEMA old_schema;
+CREATE TABLE old_schema.table_set_schema(id int);
+SELECT create_distributed_table('old_schema.table_set_schema', 'id');
+CREATE TABLE table_set_schema(id int);
+SELECT create_distributed_table('table_set_schema', 'id');
+CREATE SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('old_schema', 'new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+
+SET search_path TO old_schema;
+ALTER TABLE table_set_schema SET SCHEMA new_schema;
+
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%' AND
+          table_schema IN ('old_schema', 'new_schema', 'public')
+    GROUP BY table_schema;
+\c - - - :master_port
+SELECT * FROM new_schema.table_set_schema;
+
+SET search_path to public;
+DROP SCHEMA old_schema CASCADE;
+DROP SCHEMA new_schema CASCADE;
+DROP TABLE table_set_schema;
+
+
+-- test ALTER TABLE SET SCHEMA with nonexisting schemas and table
+-- expect all to give error
+CREATE SCHEMA existing_schema;
+CREATE SCHEMA another_existing_schema;
+CREATE TABLE existing_schema.table_set_schema(id int);
+SELECT create_distributed_table('existing_schema.table_set_schema', 'id');
+ALTER TABLE non_existent_schema.table_set_schema SET SCHEMA another_existing_schema;
+ALTER TABLE non_existent_schema.non_existent_table SET SCHEMA another_existing_schema;
+ALTER TABLE non_existent_schema.table_set_schema SET SCHEMA another_non_existent_schema;
+ALTER TABLE non_existent_schema.non_existent_table SET SCHEMA another_non_existent_schema;
+ALTER TABLE existing_schema.non_existent_table SET SCHEMA another_existing_schema;
+ALTER TABLE existing_schema.non_existent_table SET SCHEMA non_existent_schema;
+ALTER TABLE existing_schema.table_set_schema SET SCHEMA non_existent_schema;
+DROP SCHEMA existing_schema, another_existing_schema CASCADE;
+
+
+-- test ALTER TABLE SET SCHEMA with interesting names
+CREATE SCHEMA "cItuS.T E E N'sSchema";
+CREATE SCHEMA "citus-teen's scnd schm.";
+
+CREATE TABLE "cItuS.T E E N'sSchema"."be$t''t*ble" (id int);
+
+SELECT create_distributed_table('"cItuS.T E E N''sSchema"."be$t''''t*ble"', 'id');
+
+ALTER TABLE "cItuS.T E E N'sSchema"."be$t''t*ble" SET SCHEMA "citus-teen's scnd schm.";
+
+\c - - - :worker_1_port
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'be$t''''t*ble%'
+    GROUP BY table_schema;
+\c - - - :master_port
+
+SELECT * FROM "citus-teen's scnd schm."."be$t''t*ble";
+
+DROP SCHEMA "cItuS.T E E N'sSchema", "citus-teen's scnd schm." CASCADE;
+
 
 -- test schema propagation with user other than current user
 SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');

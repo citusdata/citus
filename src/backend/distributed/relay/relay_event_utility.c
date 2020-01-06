@@ -76,6 +76,21 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 	switch (nodeType)
 	{
+		case T_AlterObjectSchemaStmt:
+		{
+			AlterObjectSchemaStmt *alterObjectSchemaStmt =
+				(AlterObjectSchemaStmt *) parseTree;
+			char **relationName = &(alterObjectSchemaStmt->relation->relname);
+			char **relationSchemaName = &(alterObjectSchemaStmt->relation->schemaname);
+
+			/* prefix with schema name if it is not added already */
+			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+
+			/* append shardId to base relation name */
+			AppendShardIdToName(relationName, shardId);
+			break;
+		}
+
 		case T_AlterTableStmt:
 		{
 			/*

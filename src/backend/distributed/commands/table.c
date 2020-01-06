@@ -22,6 +22,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -252,6 +253,30 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 
 
 /*
+ * PostprocessAlterTableSchemaStmt is executed after the change has been applied locally, we
+ * can now use the new dependencies of the table to ensure all its dependencies exist on
+ * the workers before we apply the commands remotely.
+ */
+List *
+PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TABLE);
+
+	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+
+	if (!ShouldPropagate() || !IsDistributedTable(tableAddress.objectId))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
+
+	return NIL;
+}
+
+
+/*
  * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
@@ -473,6 +498,41 @@ PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
 							  "move all tables.")));
 
 	return NIL;
+}
+
+
+/*
+ * PreprocessAlterTableSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that will alter the schemas of the shards.
+ */
+List *
+PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TABLE);
+
+	if (stmt->relation == NULL)
+	{
+		return NIL;
+	}
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+	Oid relationId = address.objectId;
+
+	/* first check whether a distributed relation is affected */
+	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	{
+		return NIL;
+	}
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+	QualifyTreeNode((Node *) stmt);
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->commandString = DeparseTreeNode((Node *) stmt);
+	ddlJob->taskList = DDLTaskList(relationId, ddlJob->commandString);
+	return list_make1(ddlJob);
 }
 
 
@@ -1389,4 +1449,54 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
 	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
 								 colocationId);
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * AlterTableSchemaStmtObjectAddress returns the ObjectAddress of the table that is the
+ * object of the AlterObjectSchemaStmt.
+ *
+ * This could be called both before or after it has been applied locally. It will look in
+ * the old schema first, if the table cannot be found in that schema it will look in the
+ * new schema. Errors if missing_ok is false and the table cannot be found in either of the
+ * schemas.
+ */
+ObjectAddress
+AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TABLE);
+
+	const char *tableName = stmt->relation->relname;
+	Oid tableOid = InvalidOid;
+	if (stmt->relation->schemaname)
+	{
+		const char *schemaName = stmt->relation->schemaname;
+		Oid schemaOid = get_namespace_oid(schemaName, false);
+		tableOid = get_relname_relid(tableName, schemaOid);
+	}
+	else
+	{
+		tableOid = RelnameGetRelid(stmt->relation->relname);
+	}
+
+	if (tableOid == InvalidOid)
+	{
+		const char *newSchemaName = stmt->newschema;
+		Oid newSchemaOid = get_namespace_oid(newSchemaName, true);
+		tableOid = get_relname_relid(tableName, newSchemaOid);
+
+		if (!missing_ok && tableOid == InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE),
+							errmsg("relation \"%s\" does not exist",
+								   quote_qualified_identifier(stmt->relation->schemaname,
+															  tableName))));
+		}
+	}
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, RelationRelationId, tableOid);
+
+	return address;
 }
