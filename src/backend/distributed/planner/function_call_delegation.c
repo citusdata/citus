@@ -130,19 +130,19 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (planContext->parse == NULL)
+	if (planContext->query == NULL)
 	{
 		/* no query (mostly here to be defensive) */
 		return NULL;
 	}
 
-	if (planContext->parse->commandType != CMD_SELECT)
+	if (planContext->query->commandType != CMD_SELECT)
 	{
 		/* not a SELECT */
 		return NULL;
 	}
 
-	FromExpr *joinTree = planContext->parse->jointree;
+	FromExpr *joinTree = planContext->query->jointree;
 	if (joinTree == NULL)
 	{
 		/* no join tree (mostly here to be defensive) */
@@ -172,7 +172,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 			if (IsA(reference, RangeTblRef))
 			{
 				RangeTblEntry *rtentry = rt_fetch(reference->rtindex,
-												  planContext->parse->rtable);
+												  planContext->query->rtable);
 				if (rtentry->rtekind != RTE_RESULT)
 				{
 					/* e.g. SELECT f() FROM rel */
@@ -201,8 +201,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 #endif
 	}
 
-	targetList = planContext->parse->targetList;
-	if (list_length(planContext->parse->targetList) != 1)
+	targetList = planContext->query->targetList;
+	if (list_length(planContext->query->targetList) != 1)
 	{
 		/* multiple target list items */
 		return NULL;
@@ -365,7 +365,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
 	queryString = makeStringInfo();
-	pg_get_query_def(planContext->parse, queryString);
+	pg_get_query_def(planContext->query, queryString);
 
 	task = CitusMakeNode(Task);
 	task->taskType = SELECT_TASK;
@@ -376,7 +376,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();
-	job->jobQuery = planContext->parse;
+	job->jobQuery = planContext->query;
 	job->taskList = list_make1(task);
 
 	distributedPlan = CitusMakeNode(DistributedPlan);

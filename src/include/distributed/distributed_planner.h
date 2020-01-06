@@ -133,7 +133,7 @@ typedef struct DistributedPlanningContext
 {
 	/* The parsed query that is given to the planner. It is a slightly modified
 	 * to work with the standard_planner */
-	Query *parse;
+	Query *query;
 
 	/* A copy of the original parsed query that is given to the planner. This
 	 * doesn't contain most of the changes that are made to parse. There's one

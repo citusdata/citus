@@ -128,7 +128,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool fastPathRouterQuery = false;
 	Const *distributionKeyValue = NULL;
 	DistributedPlanningContext planContext = {
-		.parse = parse,
+		.query = parse,
 		.cursorOptions = cursorOptions,
 		.boundParams = boundParams,
 	};
@@ -234,7 +234,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			 * restriction information per table and parse tree transformations made by
 			 * postgres' planner.
 			 */
-			planContext.plan = standard_planner(planContext.parse,
+			planContext.plan = standard_planner(planContext.query,
 												planContext.cursorOptions,
 												planContext.boundParams);
 			if (needsDistributedPlanning)
@@ -548,7 +548,7 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 	planContext->plannerRestrictionContext->fastPathRestrictionContext->
 	distributionKeyValue = distributionKeyValue;
 
-	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->parse,
+	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
 										planContext->boundParams);
 
 	return CreateDistributedPlannedStmt(planContext);
@@ -565,7 +565,7 @@ PlanDistributedStmt(DistributedPlanningContext *planContext,
 					int rteIdCounter)
 {
 	/* may've inlined new relation rtes */
-	rangeTableList = ExtractRangeTableEntryList(planContext->parse);
+	rangeTableList = ExtractRangeTableEntryList(planContext->query);
 	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 
 
@@ -615,11 +615,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	planContext->plannerRestrictionContext->joinRestrictionContext =
 		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
-	DistributedPlan *distributedPlan =
-		CreateDistributedPlan(planId, planContext->originalQuery, planContext->parse,
-							  planContext->boundParams,
-							  hasUnresolvedParams,
-							  planContext->plannerRestrictionContext);
+	DistributedPlan *distributedPlan = CreateDistributedPlan(planId, planContext,
+															 hasUnresolvedParams);
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
