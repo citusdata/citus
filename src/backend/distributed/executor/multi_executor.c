@@ -589,9 +589,9 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 	bool hasLocalTable = false;
 	ListCell *rangeTableCell = NULL;
 
-	/* 
+	/*
 	 * Check if we are in the coordinator and coordinator can have reference
-	 * table replicas 
+	 * table replicas
 	 */
 	if (!CanUseCoordinatorLocalTablesWithReferenceTables())
 	{

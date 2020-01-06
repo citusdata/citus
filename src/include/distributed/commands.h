@@ -97,6 +97,9 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  char distributionMethod,
 													  Var *distributionColumn,
 													  uint32 colocationId);
+extern void ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid,
+																  Oid
+																  referencedTableOid);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);

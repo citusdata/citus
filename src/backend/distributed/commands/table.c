@@ -37,6 +37,9 @@
 #include "utils/syscache.h"
 
 /* Local functions forward declarations for unsupported command checks */
+static void UpdateRefTableIfFKeyBetweenLocalAndReferenceTables(
+	AlterTableStmt *alterTableStatement, Oid leftRelationId, Oid rightRelationId,
+	Constraint *constraint);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
@@ -290,33 +293,41 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		leftRelationId = IndexGetRelation(leftRelationId, false);
 	}
 
-	bool isDistributedRelation = IsDistributedTable(leftRelationId);
-	if (!isDistributedRelation)
-	{
-		return NIL;
-	}
+	bool referencingIsLocalTable = !IsDistributedTable(leftRelationId);
+	bool referencingIsReferenceTable = !referencingIsLocalTable && (PartitionMethod(
+																		leftRelationId) ==
+																	DISTRIBUTE_BY_NONE);
 
 	/*
-	 * The PostgreSQL parser dispatches several commands into the node type
-	 * AlterTableStmt, from ALTER INDEX to ALTER SEQUENCE or ALTER VIEW. Here
-	 * we have a special implementation for ALTER INDEX, and a specific error
-	 * message in case of unsupported sub-command.
+	 * If the referencing relation is a local table, try to handle the case while traversing
+	 * the subcommand list if citus supports the query.
 	 */
-	if (leftRelationKind == RELKIND_INDEX)
+	if (!referencingIsLocalTable)
 	{
-		ErrorIfUnsupportedAlterIndexStmt(alterTableStatement);
-	}
-	else
-	{
-		/* this function also accepts more than just RELKIND_RELATION... */
-		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+		/*
+		 * The PostgreSQL parser dispatches several commands into the node type
+		 * AlterTableStmt, from ALTER INDEX to ALTER SEQUENCE or ALTER VIEW. Here
+		 * we have a special implementation for ALTER INDEX, and a specific error
+		 * message in case of unsupported sub-command.
+		 */
+		if (leftRelationKind == RELKIND_INDEX)
+		{
+			ErrorIfUnsupportedAlterIndexStmt(alterTableStatement);
+		}
+		else
+		{
+			/* this function also accepts more than just RELKIND_RELATION... */
+			ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+		}
 	}
 
 	/*
 	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands list.
 	 * If there is we assign referenced relation id to rightRelationId and we also
 	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
-	 * foreign constraint in master. Validity will be checked in workers anyway.
+	 * foreign constraint in master. Validity will be checked in workers if it is not
+	 * the case that we define fkey between a reference table and a local table.
+	 * We also rewrite reference table's relname to its only shard name in that case.
 	 */
 	List *commandList = alterTableStatement->cmds;
 
@@ -337,89 +348,126 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 				 */
 				Assert(list_length(commandList) <= 1);
 
-				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
-												   alterTableStatement->missing_ok);
-
-				/*
-				 * Foreign constraint validations will be done in workers. If we do not
-				 * set this flag, PostgreSQL tries to do additional checking when we drop
-				 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
-				 * connections to workers to verify foreign constraints while original
-				 * transaction is in process, which causes deadlock.
-				 */
-				constraint->skip_validation = true;
-			}
-		}
-		else if (alterTableType == AT_AddColumn)
-		{
-			/*
-			 * TODO: This code path is nothing beneficial since we do not
-			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
-			 * However, the code is kept in case we fix the constraint
-			 * creation without a name and allow foreign key creation with the mentioned
-			 * command.
-			 */
-			ColumnDef *columnDefinition = (ColumnDef *) command->def;
-			List *columnConstraints = columnDefinition->constraints;
-
-			ListCell *columnConstraint = NULL;
-			foreach(columnConstraint, columnConstraints)
-			{
-				Constraint *constraint = (Constraint *) lfirst(columnConstraint);
-				if (constraint->contype == CONSTR_FOREIGN)
+				if (!referencingIsLocalTable)
 				{
-					rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
-													   alterTableStatement->missing_ok);
-
 					/*
 					 * Foreign constraint validations will be done in workers. If we do not
 					 * set this flag, PostgreSQL tries to do additional checking when we drop
 					 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
 					 * connections to workers to verify foreign constraints while original
 					 * transaction is in process, which causes deadlock.
+					 *
+					 * Note that if referencing table is a local table, we should perform needed
+					 * checks in coordinator as the command will be executed only in the coordinator.
 					 */
 					constraint->skip_validation = true;
-					break;
+				}
+
+				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
+												   alterTableStatement->missing_ok);
+
+				UpdateRefTableIfFKeyBetweenLocalAndReferenceTables(alterTableStatement,
+																   leftRelationId,
+																   rightRelationId,
+																   constraint);
+			}
+		}
+		else if (!referencingIsLocalTable)
+		{
+			if (alterTableType == AT_AddColumn)
+			{
+				/*
+				 * TODO: This code path is nothing beneficial since we do not
+				 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
+				 * However, the code is kept in case we fix the constraint
+				 * creation without a name and allow foreign key creation with the mentioned
+				 * command.
+				 */
+				ColumnDef *columnDefinition = (ColumnDef *) command->def;
+				List *columnConstraints = columnDefinition->constraints;
+
+				ListCell *columnConstraint = NULL;
+				foreach(columnConstraint, columnConstraints)
+				{
+					Constraint *constraint = (Constraint *) lfirst(columnConstraint);
+					if (constraint->contype == CONSTR_FOREIGN)
+					{
+						rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
+														   alterTableStatement->missing_ok);
+
+						/*
+						 * Foreign constraint validations will be done in workers. If we do not
+						 * set this flag, PostgreSQL tries to do additional checking when we drop
+						 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+						 * connections to workers to verify foreign constraints while original
+						 * transaction is in process, which causes deadlock.
+						 */
+						constraint->skip_validation = true;
+						break;
+					}
 				}
 			}
-		}
-		else if (alterTableType == AT_AttachPartition)
-		{
-			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
-
-			/*
-			 * We only support ALTER TABLE ATTACH PARTITION, if it is only subcommand of
-			 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
-			 */
-			Assert(list_length(commandList) <= 1);
-
-			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
-
-			/*
-			 * Do not generate tasks if relation is distributed and the partition
-			 * is not distributed. Because, we'll manually convert the partition into
-			 * distributed table and co-locate with its parent.
-			 */
-			if (!IsDistributedTable(rightRelationId))
+			else if (alterTableType == AT_AttachPartition)
 			{
-				return NIL;
+				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+				/*
+				 * We only support ALTER TABLE ATTACH PARTITION, if it is only subcommand of
+				 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
+				 */
+				Assert(list_length(commandList) <= 1);
+
+				rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+
+				/*
+				 * Do not generate tasks if relation is distributed and the partition
+				 * is not distributed. Because, we'll manually convert the partition into
+				 * distributed table and co-locate with its parent.
+				 */
+				if (!IsDistributedTable(rightRelationId))
+				{
+					return NIL;
+				}
+			}
+			else if (alterTableType == AT_DetachPartition)
+			{
+				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+				/*
+				 * We only support ALTER TABLE DETACH PARTITION, if it is only subcommand of
+				 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
+				 */
+				Assert(list_length(commandList) <= 1);
+
+				rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 			}
 		}
-		else if (alterTableType == AT_DetachPartition)
+		else
 		{
-			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
-
-			/*
-			 * We only support ALTER TABLE DETACH PARTITION, if it is only subcommand of
-			 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
-			 */
-			Assert(list_length(commandList) <= 1);
-
-			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			/* we do not need to loop more */
+			break;
 		}
 
+		/*
+		 * We check and set the execution mode only if we fall into either of first two
+		 * conditional blocks, otherwise we already break the loop
+		 */
 		executeSequentially |= SetupExecutionModeForAlterTable(leftRelationId,
 															   command);
+	}
+
+	/*
+	 * Here we return NIL if referencing table is a local table. This is because
+	 * if referenced table ->
+	 *  - is a local table, then we are all good, the rest is Postgres's.
+	 *  - is a distributed table, then we already error'ed out in CreateDistributedPlan
+	 *  - is a reference table, then Postgres will just handle the rest as we already
+	 * replaced reference table with its only shard while traversing the constraints in
+	 * above loop
+	 */
+	if (referencingIsLocalTable)
+	{
+		return NIL;
 	}
 
 	if (executeSequentially)
@@ -427,16 +475,37 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		SetLocalMultiShardModifyModeToSequential();
 	}
 
+	/* fill them here as it is possible to use them in some condtional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
 
-	if (rightRelationId)
+	if (OidIsValid(rightRelationId))
 	{
-		if (!IsDistributedTable(rightRelationId))
+		bool referencedIsLocalTable = !IsDistributedTable(rightRelationId);
+
+		/* TODO: I think, we should also error for distributed table -> local table case here */
+
+		/*
+		 * Similarly, here we return NIL if referenced table is a local table, except
+		 * referencing table is a distributed table but not a reference table. This is
+		 * because if referencing table ->
+		 *  - is a local table, then we are all good, the rest is Postgres's.
+		 *  - is a reference table, then Postgres will just handle the rest as we already
+		 * replaced reference table with its only shard while traversing the constraints in
+		 * above loop
+		 */
+		if (referencedIsLocalTable)
 		{
-			ddlJob->taskList = NIL;
+			if (!referencingIsLocalTable && !referencingIsReferenceTable)
+			{
+				ddlJob->taskList = NIL;
+			}
+			else
+			{
+				return NIL;
+			}
 		}
 		else
 		{
@@ -454,6 +523,57 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	List *ddlJobs = list_make1(ddlJob);
 
 	return ddlJobs;
+}
+
+
+/*
+ * UpdateRefTableIfFKeyBetweenLocalAndReferenceTables function replaces
+ * reference table name if we are to define foreign key constraint between
+ * a local table and a refence table. It can be the the referencing relation
+ * or the referenced relation indicated in "constraint" parameter.
+ * If conditions are not met, this function errors out.
+ * If we are are not defining such a foreign key, then we simply do nothing.
+ */
+static void
+UpdateRefTableIfFKeyBetweenLocalAndReferenceTables(AlterTableStmt *alterTableStatement,
+												   Oid leftRelationId, Oid
+												   rightRelationId,
+												   Constraint *constraint)
+{
+	if (OidIsValid(rightRelationId))
+	{
+		/*
+		 * Below, we will try to handle the queries adding a foreign constraint between
+		 * a local table and a reference table
+		 */
+		ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(leftRelationId,
+															  rightRelationId);
+
+		bool referencedIsLocalTable = !IsDistributedTable(rightRelationId);
+		bool referencedIsReferenceTable = !referencedIsLocalTable &&
+										  (PartitionMethod(rightRelationId) ==
+										   DISTRIBUTE_BY_NONE);
+
+		bool referencingIsLocalTable = !IsDistributedTable(leftRelationId);
+		bool referencingIsReferenceTable = !referencingIsLocalTable &&
+										   (PartitionMethod(leftRelationId) ==
+											DISTRIBUTE_BY_NONE);
+
+		/* reference table references to a local table */
+		if (referencingIsReferenceTable && referencedIsLocalTable)
+		{
+			/* rewrite referencing table name */
+			Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(leftRelationId);
+			alterTableStatement->relation->relname = get_rel_name(referenceTableShardOid);
+		}
+		/* local table references to a reference table */
+		else if (referencingIsLocalTable && referencedIsReferenceTable)
+		{
+			/* rewrite referenced table name */
+			Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(rightRelationId);
+			constraint->pktable->relname = get_rel_name(referenceTableShardOid);
+		}
+	}
 }
 
 
@@ -1124,6 +1244,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
  * executed in the same transaction, the function errors out. See the comment
  * in the function for the rationale.
  */
+
+/* TODO: I do not know should we add/change something in this function for local table fkey constraints */
 static bool
 SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 {

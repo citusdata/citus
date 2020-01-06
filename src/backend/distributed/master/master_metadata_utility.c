@@ -514,9 +514,11 @@ LoadShardIntervalList(Oid relationId)
 Oid
 GetOnlyShardOidOfReferenceTable(Oid referenceTableOid)
 {
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(referenceTableOid);
+
 	/* TODO: should we use LoadShardIntervalList here ? */
 	ShardInterval *referenceTableShardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 referenceTableShardId = shardInterval->shardId;
+	uint64 referenceTableShardId = referenceTableShardInterval->shardId;
 
 	/* construct reference table's one & only shard's name */
 	char *referenceTableShardName = get_rel_name(referenceTableOid);
@@ -524,7 +526,8 @@ GetOnlyShardOidOfReferenceTable(Oid referenceTableOid)
 
 	Oid referenceTableSchemaOid = get_rel_namespace(referenceTableOid);
 
-	Oid referenceTableShardOid = get_relname_relid(referenceTableShardName, referenceTableSchemaOid);
+	Oid referenceTableShardOid = get_relname_relid(referenceTableShardName,
+												   referenceTableSchemaOid);
 
 	return referenceTableShardOid;
 }

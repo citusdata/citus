@@ -31,7 +31,7 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-
+/* Local functions forward declarations */
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
 													   relationId, int pgConstraintKey,
 													   char *columnName);
@@ -100,7 +100,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  * errors out if it is not possible to create one of the foreign constraint in distributed
  * environment.
  *
- * To support foreign constraints, we require that;
+ * To support foreign constraints in this function, we require that;
  * - If referencing and referenced tables are hash-distributed
  *		- Referencing and referenced tables are co-located.
  *      - Foreign constraint is defined over distribution column.
@@ -112,6 +112,12 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  *        are not used on the distribution key of the referencing column.
  * - If referencing table is a reference table, error out if the referenced table is not a
  *   a reference table.
+ *
+ * Note that checks performed in this functions are only done via PostProcessAlterTableStmt
+ * function. Another allowed case is creating foreign key constraint between a reference
+ * table and a local table in coordinator. We do not check that case here as we do not have
+ * post process steps for it. See ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable and its
+ * usage
  */
 void
 ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
@@ -121,10 +127,10 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Oid referencingTableId = relation->rd_id;	
+	Oid referencingTableId = relation->rd_id;
 	bool referencingNotReplicated = true;
 	bool referencingIsDistributed = IsDistributedTable(referencingTableId);
-		
+
 	if (referencingIsDistributed)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
@@ -164,10 +170,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		}
 
 		Oid referencedTableId = constraintForm->confrelid;
+		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
 
 		bool selfReferencingTable = (referencingTableId == referencedTableId);
 
-		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
+		/* TODO: will remove this block after implementing create table ref_table references local_table */
 		if (!referencedIsDistributed && !selfReferencingTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -176,6 +183,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 									  " or a reference table.")));
 		}
 
+		/* set referenced table related variables here in an optimized way */
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
@@ -203,19 +211,19 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
-
 		/*
 		 * Foreign keys from reference tables to distributed tables are not
 		 * supported.
 		 */
-		if (referencingIsReferenceTable && !referencedIsReferenceTable)
+		else if (referencingIsReferenceTable && !referencedIsReferenceTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
 								   "since foreign keys from reference tables "
 								   "to distributed tables are not supported"),
 							errdetail("A reference table can only have reference "
-									  "keys to other reference tables")));
+									  "keys to other reference tables or a local table "
+									  "in coordinator")));
 		}
 
 		/*
@@ -386,6 +394,59 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 			referencingDistColumn->varattno == referencingAttrNo)
 		{
 			*referencingAttrIndex = attrIdx;
+		}
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable runs check related to foreign
+ * constraints between local tables and reference tables
+ */
+void
+ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, Oid
+													  referencedTableOid)
+{
+	bool referencingIsDistributed = IsDistributedTable(referencingTableOid);
+	char referencingDistMethod = 0;
+	bool referencingIsReferenceTable = false;
+
+	bool referencedIsDistributed = IsDistributedTable(referencedTableOid);
+	char referencedDistMethod = 0;
+	bool referencedIsReferenceTable = false;
+
+	if (referencingIsDistributed)
+	{
+		referencingDistMethod = PartitionMethod(referencingTableOid);
+		referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
+	}
+
+	if (referencedIsDistributed)
+	{
+		referencedDistMethod = PartitionMethod(referencedTableOid);
+		referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
+	}
+
+	/* reference table <> local table */
+	if ((referencingIsReferenceTable && !referencedIsDistributed) ||
+		(!referencingIsDistributed && referencedIsReferenceTable))
+	{
+		/*
+		 * Check if we are in the coordinator and coordinator can have reference
+		 * table replicas
+		 */
+		if (!CanUseCoordinatorLocalTablesWithReferenceTables())
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+							errmsg(
+								"cannot create foreign key constraint"),
+							errdetail(
+								"Referenced table must be a distributed table"
+								" or a reference table or a local table in coordinator."),
+							errhint(
+								"To define foreign constraint between reference tables "
+								"and local tables, consider adding coordinator "
+								"to pg_dist_node as well.")));
 		}
 	}
 }
@@ -564,7 +625,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 
 		if (!IsDistributedTable(referencedTableId))
 		{
-			/* TODO: This line should be already there ??*/ // why we hit here ??
+			/* TODO: This line should be already here ?? */
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
