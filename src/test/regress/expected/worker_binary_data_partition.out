@@ -21,8 +21,8 @@ SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
 CREATE TABLE :Table_Name(textcolumn text, binarycolumn bytea);
 COPY :Table_Name FROM stdin;
 SELECT length(binarycolumn) FROM :Table_Name;
- length 
---------
+ length
+---------------------------------------------------------------------
       2
       4
       3
@@ -43,9 +43,9 @@ SELECT length(binarycolumn) FROM :Table_Name;
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Text, :Partition_Column_Type,
 				    ARRAY['aaa', 'some']::_text);
- worker_range_partition_table 
-------------------------------
- 
+ worker_range_partition_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Copy range partitioned files into tables
@@ -60,8 +60,8 @@ SELECT COUNT(*) AS total_row_count FROM (
        SELECT * FROM :Table_Part_00 UNION ALL
        SELECT * FROM :Table_Part_01 UNION ALL
        SELECT * FROM :Table_Part_02 ) AS all_rows;
- total_row_count 
------------------
+ total_row_count
+---------------------------------------------------------------------
               14
 (1 row)
 
@@ -71,8 +71,8 @@ SELECT COUNT(*) AS diff_lhs_00 FROM (
        :Select_All FROM :Table_Part_00 EXCEPT ALL
        :Select_All FROM :Table_Name WHERE :Partition_Column IS NULL OR
        		   		    	  :Partition_Column < 'aaa' ) diff;
- diff_lhs_00 
--------------
+ diff_lhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -80,16 +80,16 @@ SELECT COUNT(*) AS diff_lhs_01 FROM (
        :Select_All FROM :Table_Part_01 EXCEPT ALL
        :Select_All FROM :Table_Name WHERE :Partition_Column >= 'aaa' AND
        		   		       	  :Partition_Column < 'some' ) diff;
- diff_lhs_01 
--------------
+ diff_lhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_lhs_02 FROM (
        :Select_All FROM :Table_Part_02 EXCEPT ALL
        :Select_All FROM :Table_Name WHERE :Partition_Column >= 'some' ) diff;
- diff_lhs_02 
--------------
+ diff_lhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -97,8 +97,8 @@ SELECT COUNT(*) AS diff_rhs_00 FROM (
        :Select_All FROM :Table_Name WHERE :Partition_Column IS NULL OR
        		   		    	  :Partition_Column < 'aaa' EXCEPT ALL
        :Select_All FROM :Table_Part_00 ) diff;
- diff_rhs_00 
--------------
+ diff_rhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -106,16 +106,16 @@ SELECT COUNT(*) AS diff_rhs_01 FROM (
        :Select_All FROM :Table_Name WHERE :Partition_Column >= 'aaa' AND
        		   		       	  :Partition_Column < 'some' EXCEPT ALL
        :Select_All FROM :Table_Part_01 ) diff;
- diff_rhs_01 
--------------
+ diff_rhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs_02 FROM (
        :Select_All FROM :Table_Name WHERE :Partition_Column >= 'some' EXCEPT ALL
        :Select_All FROM :Table_Part_02 ) diff;
- diff_rhs_02 
--------------
+ diff_rhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 

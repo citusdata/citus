@@ -9,6 +9,7 @@
 #
 # Note that src/test/regress/Makefile adds this directory to $PATH so
 # pg_regress uses this diff tool instead of the system diff tool.
+set -eu -o pipefail
 
 file1="${@:(-2):1}"
 file2="${@:(-1):1}"
@@ -29,13 +30,17 @@ then
     DIFF=/usr/bin/diff
 fi
 
-if test -z "$VANILLATEST"
+if test -z "${VANILLATEST:-}"
 then
-	sed -Ef $BASEDIR/normalize.sed < $file1 > $file1.modified
-	sed -Ef $BASEDIR/normalize.sed < $file2 > $file2.modified
-	$DIFF -w $args $file1.modified $file2.modified
+	touch "$file1"  # when adding a new test the expected file does not exist
+	sed -Ef $BASEDIR/normalize.sed < $file1 > "$file1.modified"
+	mv "$file1" "$file1.unmodified"
+	mv "$file1.modified" "$file1"
+	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
+	mv "$file2" "$file2.unmodified"
+	mv "$file2.modified" "$file2"
+	$DIFF -w $args $file1 $file2
 	exitcode=$?
-	rm -f $file1.modified $file2.modified
 	exit $exitcode
 else
 	exec $DIFF -w $args $file1 $file2

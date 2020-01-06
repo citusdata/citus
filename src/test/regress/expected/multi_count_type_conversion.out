@@ -10,8 +10,8 @@
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity DESC;
- count_quantity | l_quantity 
-----------------+------------
+ count_quantity | l_quantity
+---------------------------------------------------------------------
             219 |      13.00
             222 |      29.00
             227 |       3.00
@@ -48,8 +48,8 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity DESC, l_quantity ASC;
- count_quantity | l_quantity 
-----------------+------------
+ count_quantity | l_quantity
+---------------------------------------------------------------------
             273 |      28.00
             264 |      30.00
             261 |      23.00

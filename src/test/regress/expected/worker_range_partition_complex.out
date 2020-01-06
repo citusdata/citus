@@ -27,9 +27,9 @@ SELECT worker_range_partition_table(:JobId, :TaskId,
 				    ' AND l_discount between 0.02 AND 0.08',
 				    :Partition_Column_Text, :Partition_Column_Type,
 				    ARRAY[101, 12000, 18000]::_int4);
- worker_range_partition_table 
-------------------------------
- 
+ worker_range_partition_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Copy partitioned data files into tables for testing purposes
@@ -38,14 +38,14 @@ COPY :Table_Part_01 FROM :'Table_File_01';
 COPY :Table_Part_02 FROM :'Table_File_02';
 COPY :Table_Part_03 FROM :'Table_File_03';
 SELECT COUNT(*) FROM :Table_Part_00;
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
 SELECT COUNT(*) FROM :Table_Part_03;
- count 
--------
+ count
+---------------------------------------------------------------------
   7022
 (1 row)
 
@@ -55,8 +55,8 @@ SELECT COUNT(*) AS diff_lhs_00 FROM (
        :Select_Columns FROM :Table_Part_00 EXCEPT ALL
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        		       	    	     	   :Partition_Column < 101 ) diff;
- diff_lhs_00 
--------------
+ diff_lhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -65,8 +65,8 @@ SELECT COUNT(*) AS diff_lhs_01 FROM (
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        			    	     	   :Partition_Column >= 101 AND
 					   :Partition_Column < 12000 ) diff;
- diff_lhs_01 
--------------
+ diff_lhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -75,8 +75,8 @@ SELECT COUNT(*) AS diff_lhs_02 FROM (
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        			    	 	   :Partition_Column >= 12000 AND
 					   :Partition_Column < 18000 ) diff;
- diff_lhs_02 
--------------
+ diff_lhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -84,8 +84,8 @@ SELECT COUNT(*) AS diff_lhs_03 FROM (
        :Select_Columns FROM :Table_Part_03 EXCEPT ALL
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        			    	 	   :Partition_Column >= 18000 ) diff;
- diff_lhs_03 
--------------
+ diff_lhs_03
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -93,8 +93,8 @@ SELECT COUNT(*) AS diff_rhs_00 FROM (
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        			    	 	   :Partition_Column < 101 EXCEPT ALL
        :Select_Columns FROM :Table_Part_00 ) diff;
- diff_rhs_00 
--------------
+ diff_rhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -103,8 +103,8 @@ SELECT COUNT(*) AS diff_rhs_01 FROM (
        			    	 	   :Partition_Column >= 101 AND
 					   :Partition_Column < 12000 EXCEPT ALL
        :Select_Columns FROM :Table_Part_01 ) diff;
- diff_rhs_01 
--------------
+ diff_rhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -113,8 +113,8 @@ SELECT COUNT(*) AS diff_rhs_02 FROM (
        			    	 	   :Partition_Column >= 12000 AND
 					   :Partition_Column < 18000 EXCEPT ALL
        :Select_Columns FROM :Table_Part_02 ) diff;
- diff_rhs_02 
--------------
+ diff_rhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -122,8 +122,8 @@ SELECT COUNT(*) AS diff_rhs_03 FROM (
        :Select_Columns FROM lineitem WHERE :Select_Filters AND
        			    	 	   :Partition_Column >= 18000 EXCEPT ALL
        :Select_Columns FROM :Table_Part_03 ) diff;
- diff_rhs_03 
--------------
+ diff_rhs_03
+---------------------------------------------------------------------
            0
 (1 row)
 

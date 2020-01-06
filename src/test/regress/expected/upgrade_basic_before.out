@@ -3,17 +3,17 @@ SET search_path TO upgrade_basic, public;
 CREATE TABLE t(a int);
 CREATE INDEX ON t USING HASH (a);
 SELECT create_distributed_table('t', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO t SELECT * FROM generate_series(1, 5);
 CREATE TABLE tp(a int PRIMARY KEY);
 SELECT create_distributed_table('tp', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO tp SELECT * FROM generate_series(1, 5);
@@ -22,9 +22,9 @@ INSERT INTO tp SELECT * FROM generate_series(1, 5);
 -- distribution column. The index information is in partkey column of pg_dist_partition table.
 CREATE TABLE t_ab(a int, b int);
 SELECT create_distributed_table('t_ab', 'b');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO t_ab VALUES (1, 11);
@@ -38,25 +38,25 @@ ALTER TABLE t_ab DROP a;
 -- Check that basic reference tables work
 CREATE TABLE r(a int PRIMARY KEY);
 SELECT create_reference_table('r');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO r SELECT * FROM generate_series(1, 5);
 CREATE TABLE tr(pk int, a int REFERENCES r(a) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_distributed_table('tr', 'pk');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO tr SELECT c, c FROM generate_series(1, 5) as c;
 CREATE TABLE t_append(id int, value_1 int);
 SELECT master_create_distributed_table('t_append', 'id', 'append');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy t_append FROM STDIN DELIMITER ','

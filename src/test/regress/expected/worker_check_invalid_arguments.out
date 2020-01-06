@@ -20,8 +20,8 @@ SET citus.next_shard_id TO 1100000;
 CREATE TABLE :Table_Name(textcolumn text, binarycolumn bytea);
 COPY :Table_Name FROM stdin;
 SELECT COUNT(*) FROM :Table_Name;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -30,8 +30,6 @@ SELECT worker_range_partition_table(:JobId, :TaskId, :Bad_Select_Query_Text,
        				    :Partition_Column_Name, :Partition_Column_Type,
 				    ARRAY['aaa', 'some']::_text);
 ERROR:  relation "bad_table_name" does not exist
-LINE 1: SELECT * FROM bad_table_name
-                      ^
 QUERY:  SELECT * FROM bad_table_name
 -- Check that we fail with bad partition column name
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
@@ -52,9 +50,9 @@ ERROR:  partition column types 25 and 20 do not match
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Name, :Partition_Column_Type,
 				    ARRAY['aaa', 'some']::_text);
- worker_range_partition_table 
-------------------------------
- 
+ worker_range_partition_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Check that we fail to merge when the number of column names and column types
@@ -92,9 +90,9 @@ ERROR:  could not open directory "base/pgsql_job_cache/job_201010/task_429496729
 SELECT worker_merge_files_into_table(:JobId, :TaskId,
        				     ARRAY['textcolumn', 'binarycolumn'],
 				     ARRAY['text', 'bytea']);
- worker_merge_files_into_table 
--------------------------------
- 
+ worker_merge_files_into_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- worker_execute_sql_task should only accept queries

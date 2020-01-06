@@ -34,8 +34,8 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-   revenue   
--------------
+   revenue
+---------------------------------------------------------------------
  144747.0857
 (1 row)
 
@@ -72,8 +72,8 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-   revenue   
--------------
+   revenue
+---------------------------------------------------------------------
  144747.0857
 (1 row)
 
@@ -110,8 +110,8 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-   revenue   
--------------
+   revenue
+---------------------------------------------------------------------
  144747.0857
 (1 row)
 

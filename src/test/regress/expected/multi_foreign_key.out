@@ -7,9 +7,9 @@ SET citus.shard_count TO 32;
 -- create tables
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test foreign constraint creation with not supported parameters
@@ -47,9 +47,9 @@ HINT:  Please change "citus.shard_replication_factor to 1". To learn more about 
 DROP TABLE self_referencing_table;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
 SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE self_referencing_table ADD CONSTRAINT fkey FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id);
@@ -86,14 +86,14 @@ HINT:  Please change "citus.shard_replication_factor to 1". To learn more about 
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- test foreign constraint creation on append and range distributed tables
--- foreign keys are supported either in between distributed tables including the 
+-- foreign keys are supported either in between distributed tables including the
 -- distribution column or from distributed tables to reference tables.
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
@@ -104,9 +104,9 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'range');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int,FOREIGN KEY (id) REFERENCES referenced_table(id));
@@ -119,32 +119,32 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test inserts
 -- test insert to referencing table while there is NO corresponding value in referenced table
 INSERT INTO referencing_table VALUES(1, 1);
-ERROR:  insert or update on table "referencing_table_1350129" violates foreign key constraint "referencing_table_ref_id_fkey_1350129"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350097".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350129"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 -- test deletes
 -- test delete from referenced table while there is corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350097" violates foreign key constraint "referencing_table_ref_id_fkey_1350129" on table "referencing_table_1350129"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350129".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350129" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referencing_table WHERE ref_id = 1;
 DELETE FROM referenced_table WHERE id = 1;
@@ -154,8 +154,8 @@ INSERT INTO referencing_table VALUES(2, 2);
 TRUNCATE referenced_table CASCADE;
 NOTICE:  truncate cascades to table "referencing_table"
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- drop table for next tests
@@ -166,15 +166,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE CASCADE);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- single shard cascading delete
@@ -182,13 +182,13 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
 (0 rows)
 
 -- multi shard cascading delete
@@ -196,8 +196,8 @@ INSERT INTO referenced_table VALUES(2, 2);
 INSERT INTO referencing_table VALUES(2, 2);
 DELETE FROM referenced_table;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- multi shard cascading delete with alter table
@@ -213,35 +213,35 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350225" violates foreign key constraint "referencing_table_ref_id_fkey_1350257" on table "referencing_table_1350257"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350257".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350257" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
 DELETE FROM referencing_table WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -250,36 +250,36 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE RESTRICT);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350289" violates foreign key constraint "referencing_table_ref_id_fkey_1350321" on table "referencing_table_1350321"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350321".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350321" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |           1
 (1 row)
 
@@ -289,36 +289,36 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE NO ACTION DEFERRABLE INITIALLY DEFERRED);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350353" violates foreign key constraint "referencing_table_ref_id_fkey_1350385" on table "referencing_table_1350385"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350385".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350385" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
 UPDATE referencing_table SET id = 10 WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |          10
 (1 row)
 
@@ -328,36 +328,36 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE RESTRICT);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 UPDATE referenced_table SET test_column = 20 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350417" violates foreign key constraint "referencing_table_ref_id_fkey_1350449" on table "referencing_table_1350449"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350449".
-CONTEXT:  while executing command on localhost:57638
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350449" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |           1
 (1 row)
 
@@ -367,21 +367,21 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
     |      2
 (1 row)
 
@@ -392,24 +392,24 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH FULL);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
-ERROR:  insert or update on table "referencing_table_1350600" violates foreign key constraint "referencing_table_ref_id_fkey_1350600"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350600"
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE referencing_table;
@@ -419,16 +419,16 @@ DROP TABLE referenced_table;
 SET citus.shard_count TO 4;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify that we skip foreign key validation when propagation is turned off
@@ -472,16 +472,16 @@ DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash', colocate_with => 'none');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
@@ -493,15 +493,15 @@ DROP TABLE referenced_table;
 CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, test_column));
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- columns for the referenced table is empty
@@ -521,27 +521,27 @@ ERROR:  number of referencing and referenced columns for foreign key disagree
 -- test foreign constraint creation while existing tables does not satisfy the constraint
 INSERT INTO referencing_table VALUES(1, 1);
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
-ERROR:  insert or update on table "referencing_table_1350628" violates foreign key constraint "test_constraint_1350628"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350624".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 -- test foreign constraint with correct conditions
 DELETE FROM referencing_table WHERE ref_id = 1;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id);
 -- test inserts
 -- test insert to referencing table while there is NO corresponding value in referenced table
 INSERT INTO referencing_table VALUES(1, 1);
-ERROR:  insert or update on table "referencing_table_1350628" violates foreign key constraint "test_constraint_1350628"
-DETAIL:  Key (ref_id)=(1) is not present in table "referenced_table_1350624".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628"
+DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 -- test deletes
 -- test delete from referenced table while there is corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referencing_table WHERE ref_id = 1;
 DELETE FROM referenced_table WHERE id = 1;
@@ -554,13 +554,13 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
 (0 rows)
 
 ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
@@ -569,21 +569,21 @@ ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id)
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
 DELETE FROM referencing_table WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
 (0 rows)
 
 ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
@@ -593,21 +593,21 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 DELETE FROM referenced_table WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id)=(1) is still referenced from table "referencing_table_1350628".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM referencing_table WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
   1 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |           1
 (1 row)
 
@@ -615,22 +615,22 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 -- test ON UPDATE NO ACTION + DEFERABLE + INITIALLY DEFERRED
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_1350628".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
 UPDATE referencing_table SET id = 10 WHERE ref_id = 1;
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |          10
 (1 row)
 
@@ -639,21 +639,21 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) ON UPDATE RESTRICT;
 BEGIN;
 UPDATE referenced_table SET test_column = 20 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_1350624" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_1350628"
-DETAIL:  Key (id, test_column)=(1, 10) is still referenced from table "referencing_table_1350628".
-CONTEXT:  while executing command on localhost:57637
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "test_constraint_1350628" on table "referencing_table_xxxxxxx"
+DETAIL:  Key (id, test_column)=(1, 10) is still referenced from table "referencing_table_xxxxxxx".
+CONTEXT:  while executing command on localhost:xxxxx
 UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
  10 |      1
 (1 row)
 
 SELECT * FROM referenced_table;
- id | test_column 
-----+-------------
+ id | test_column
+---------------------------------------------------------------------
   1 |          10
 (1 row)
 
@@ -662,8 +662,8 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH SIMPLE;
 INSERT INTO referencing_table VALUES(null, 2);
 SELECT * FROM referencing_table ORDER BY 1,2;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
  10 |      1
     |      2
 (2 rows)
@@ -673,12 +673,12 @@ ALTER TABLE referencing_table DROP CONSTRAINT test_constraint;
 -- test MATCH FULL
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id, id) REFERENCES referenced_table(id, test_column) MATCH FULL;
 INSERT INTO referencing_table VALUES(null, 2);
-ERROR:  insert or update on table "referencing_table_1350631" violates foreign key constraint "test_constraint_1350631"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "test_constraint_1350631"
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
  10 |      1
 (1 row)
 
@@ -690,15 +690,15 @@ DROP TABLE referenced_table;
 CREATE TABLE cyclic_reference_table1(id int, table2_id int, PRIMARY KEY(id, table2_id));
 CREATE TABLE cyclic_reference_table2(id int, table1_id int, PRIMARY KEY(id, table1_id));
 SELECT create_distributed_table('cyclic_reference_table1', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('cyclic_reference_table2', 'table1_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE cyclic_reference_table1 ADD CONSTRAINT cyclic_constraint1 FOREIGN KEY(id, table2_id) REFERENCES cyclic_reference_table2(table1_id, id) DEFERRABLE INITIALLY DEFERRED;
@@ -707,7 +707,7 @@ ALTER TABLE cyclic_reference_table2 ADD CONSTRAINT cyclic_constraint2 FOREIGN KE
 INSERT INTO cyclic_reference_table1 VALUES(1, 1);
 ERROR:  insert or update on table "cyclic_reference_table1_1350632" violates foreign key constraint "cyclic_constraint1_1350632"
 DETAIL:  Key (id, table2_id)=(1, 1) is not present in table "cyclic_reference_table2_1350636".
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- proper insertion to table with cyclic dependency
 BEGIN;
 INSERT INTO cyclic_reference_table1 VALUES(1, 1);
@@ -715,14 +715,14 @@ INSERT INTO cyclic_reference_table2 VALUES(1, 1);
 COMMIT;
 -- verify that rows are actually inserted
 SELECT * FROM cyclic_reference_table1;
- id | table2_id 
-----+-----------
+ id | table2_id
+---------------------------------------------------------------------
   1 |         1
 (1 row)
 
 SELECT * FROM cyclic_reference_table2;
- id | table1_id 
-----+-----------
+ id | table1_id
+---------------------------------------------------------------------
   1 |         1
 (1 row)
 
@@ -749,20 +749,20 @@ COMMIT;
 -- test insertion to referencing table, we expect that to fail
 INSERT INTO transaction_referencing_table VALUES(1, 1);
 ERROR:  insert or update on table "transaction_referencing_table" violates foreign key constraint "transaction_fk_constraint"
-DETAIL:  Key (ref_id)=(1) is not present in table "transaction_referenced_table".
+DETAIL:  Key (ref_id)=(X) is not present in table "transaction_referenced_table".
 -- proper insertion to both referenced and referencing tables
 INSERT INTO transaction_referenced_table VALUES(1);
 INSERT INTO transaction_referencing_table VALUES(1, 1);
 -- verify that rows are actually inserted
 SELECT * FROM transaction_referenced_table;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
 (1 row)
 
 SELECT * FROM transaction_referencing_table;
- id | ref_id 
-----+--------
+ id | ref_id
+---------------------------------------------------------------------
   1 |      1
 (1 row)
 
@@ -778,9 +778,9 @@ CREATE TABLE self_referencing_table1(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_table1(id, other_column)
 );
 SELECT create_distributed_table('self_referencing_table1', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test insertion to self referencing table
@@ -789,11 +789,11 @@ INSERT INTO self_referencing_table1 VALUES(1, 1, 1);
 INSERT INTO self_referencing_table1 VALUES(1, 2, 3);
 ERROR:  insert or update on table "self_referencing_table1_1350640" violates foreign key constraint "self_referencing_table1_id_fkey_1350640"
 DETAIL:  Key (id, other_column_ref)=(1, 3) is not present in table "self_referencing_table1_1350640".
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- verify that rows are actually inserted
 SELECT * FROM self_referencing_table1;
- id | other_column | other_column_ref 
-----+--------------+------------------
+ id | other_column | other_column_ref
+---------------------------------------------------------------------
   1 |            1 |                1
 (1 row)
 
@@ -802,9 +802,9 @@ DROP TABLE self_referencing_table1;
 -- test self referencing foreign key with ALTER TABLE
 CREATE TABLE self_referencing_table2(id int, other_column int, other_column_ref int, PRIMARY KEY(id, other_column));
 SELECT create_distributed_table('self_referencing_table2', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE self_referencing_table2 ADD CONSTRAINT self_referencing_fk_constraint FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_table2(id, other_column);
@@ -814,11 +814,11 @@ INSERT INTO self_referencing_table2 VALUES(1, 1, 1);
 INSERT INTO self_referencing_table2 VALUES(1, 2, 3);
 ERROR:  insert or update on table "self_referencing_table2_1350644" violates foreign key constraint "self_referencing_fk_constraint_1350644"
 DETAIL:  Key (id, other_column_ref)=(1, 3) is not present in table "self_referencing_table2_1350644".
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- verify that rows are actually inserted
 SELECT * FROM self_referencing_table2;
- id | other_column | other_column_ref 
-----+--------------+------------------
+ id | other_column | other_column_ref
+---------------------------------------------------------------------
   1 |            1 |                1
 (1 row)
 
@@ -828,9 +828,9 @@ DROP TABLE self_referencing_table2;
 -- test foreign key creation on CREATE TABLE from reference table
 CREATE TABLE referenced_by_reference_table(id int PRIMARY KEY, other_column int);
 SELECT create_distributed_table('referenced_by_reference_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
@@ -841,16 +841,16 @@ DETAIL:  A reference table can only have reference keys to other reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
 SELECT create_reference_table('reference_table_second');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test foreign key creation on CREATE TABLE from reference table to local table
@@ -870,18 +870,18 @@ CREATE TABLE self_referencing_reference_table(
     FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test foreign key creation on ALTER TABLE from reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
@@ -890,9 +890,9 @@ DETAIL:  A reference table can only have reference keys to other reference table
 -- test foreign key creation on ALTER TABLE to reference table
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -900,9 +900,9 @@ ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referenc
 DROP TABLE reference_table_second;
 CREATE TABLE reference_table_second(id int, referencing_column int);
 SELECT create_reference_table('reference_table_second');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
@@ -913,9 +913,9 @@ DETAIL:  drop cascades to constraint fk on table references_to_reference_table
 drop cascades to constraint fk on table reference_table_second
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
@@ -930,9 +930,9 @@ CREATE TABLE self_referencing_reference_table(
     PRIMARY KEY(id, other_column)
 );
 SELECT create_reference_table('self_referencing_reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);

@@ -15,36 +15,36 @@ SELECT worker_merge_files_into_table(:JobId, :TaskId,
        ARRAY['bigint', 'integer', 'integer', 'integer', 'decimal(15, 2)', 'decimal(15, 2)',
              'decimal(15, 2)', 'decimal(15, 2)', 'char(1)', 'char(1)', 'date', 'date',
 	     'date', 'char(25)', 'char(10)', 'varchar(44)']::_text);
- worker_merge_files_into_table 
--------------------------------
- 
+ worker_merge_files_into_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- We first count elements from the merged table and the original table we range
 -- partitioned. We then compute the difference of these two tables.
 SELECT COUNT(*) FROM :Task_Table_Name;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT COUNT(*) FROM lineitem;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT COUNT(*) AS diff_lhs FROM ( :Select_All FROM :Task_Table_Name EXCEPT ALL
        		   	    	   :Select_All FROM lineitem ) diff;
- diff_lhs 
-----------
+ diff_lhs
+---------------------------------------------------------------------
         0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs FROM ( :Select_All FROM lineitem EXCEPT ALL
        		   	    	   :Select_All FROM :Task_Table_Name ) diff;
- diff_rhs 
-----------
+ diff_rhs
+---------------------------------------------------------------------
         0
 (1 row)
 

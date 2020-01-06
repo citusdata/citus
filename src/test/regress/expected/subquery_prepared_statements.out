@@ -3,8 +3,8 @@
 -- ===================================================================
 CREATE SCHEMA subquery_prepared_statements;
 SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements;');
-       run_command_on_workers        
--------------------------------------
+       run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
@@ -12,45 +12,45 @@ SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements;');
 SET search_path TO subquery_prepared_statements, public;
 CREATE TYPE subquery_prepared_statements.xy AS (x int, y int);
 SET client_min_messages TO DEBUG1;
-PREPARE subquery_prepare_without_param AS 
+PREPARE subquery_prepare_without_param AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
-      users_table.user_id = events_table.user_id AND 
+     FROM
+      users_table, events_table
+     WHERE
+      users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
-PREPARE subquery_prepare_param_on_partkey(int) AS 
+PREPARE subquery_prepare_param_on_partkey(int) AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
+     FROM
+      users_table, events_table
+     WHERE
       users_table.user_id = events_table.user_id AND
       (users_table.user_id = $1 OR users_table.user_id = 2) AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
-PREPARE subquery_prepare_param_non_partkey(int) AS 
+PREPARE subquery_prepare_param_non_partkey(int) AS
 SELECT
    DISTINCT values_of_subquery
 FROM
-    (SELECT 
+    (SELECT
       DISTINCT (users_table.user_id, events_table.event_type)::xy  as values_of_subquery
-     FROM 
-      users_table, events_table 
-     WHERE 
-      users_table.user_id = events_table.user_id AND 
+     FROM
+      users_table, events_table
+     WHERE
+      users_table.user_id = events_table.user_id AND
      event_type = $1
      ORDER BY 1 DESC LIMIT 5
      ) as foo
@@ -58,10 +58,10 @@ FROM
 -- execute each test with 6 times
 EXECUTE subquery_prepare_without_param;
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 1_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('1_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -70,8 +70,8 @@ DEBUG:  Plan 1 query after replacing subqueries and CTEs: SELECT DISTINCT values
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -80,8 +80,8 @@ EXECUTE subquery_prepare_without_param;
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -90,8 +90,8 @@ EXECUTE subquery_prepare_without_param;
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -100,8 +100,8 @@ EXECUTE subquery_prepare_without_param;
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -110,8 +110,8 @@ EXECUTE subquery_prepare_without_param;
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -120,8 +120,8 @@ EXECUTE subquery_prepare_without_param;
 (5 rows)
 
 EXECUTE subquery_prepare_without_param;
- values_of_subquery 
---------------------
+ values_of_subquery
+---------------------------------------------------------------------
  (6,4)
  (6,3)
  (6,2)
@@ -131,10 +131,10 @@ EXECUTE subquery_prepare_without_param;
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('3_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -144,10 +144,10 @@ DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT DISTINCT values
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('5_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -157,10 +157,10 @@ DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT DISTINCT values
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 7_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('7_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -170,10 +170,10 @@ DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT DISTINCT values
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 9_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('9_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -183,10 +183,10 @@ DEBUG:  Plan 9 query after replacing subqueries and CTEs: SELECT DISTINCT values
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 11_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('11_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -196,10 +196,10 @@ DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_on_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 14_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('14_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND ((users_table.user_id OPERATOR(pg_catalog.=) 1) OR (users_table.user_id OPERATOR(pg_catalog.=) 2)) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (2,4)
  (2,3)
  (2,2)
@@ -209,10 +209,10 @@ DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 16_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('16_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)
@@ -222,10 +222,10 @@ DEBUG:  Plan 16 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 18_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('18_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)
@@ -235,10 +235,10 @@ DEBUG:  Plan 18 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 20_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('20_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)
@@ -248,10 +248,10 @@ DEBUG:  Plan 20 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 22_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('22_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)
@@ -261,10 +261,10 @@ DEBUG:  Plan 22 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 24_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('24_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)
@@ -274,10 +274,10 @@ DEBUG:  Plan 24 query after replacing subqueries and CTEs: SELECT DISTINCT value
 
 EXECUTE subquery_prepare_param_non_partkey(1);
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 27_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
-DEBUG:  Plan 27 query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('27_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
- values_of_subquery 
---------------------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy AS values_of_subquery FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) 1)) ORDER BY ROW(users_table.user_id, events_table.event_type)::subquery_prepared_statements.xy DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT values_of_subquery FROM (SELECT intermediate_result.values_of_subquery FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(values_of_subquery subquery_prepared_statements.xy)) foo ORDER BY values_of_subquery DESC
+ values_of_subquery
+---------------------------------------------------------------------
  (6,1)
  (5,1)
  (4,1)

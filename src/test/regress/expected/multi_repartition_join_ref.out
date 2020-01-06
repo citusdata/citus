@@ -15,8 +15,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
        195 |       196 |   804
        245 |       246 |   754
        278 |       279 |   721
@@ -43,8 +43,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
        195 |       196 |     1
        245 |       246 |     1
        278 |       279 |     1
@@ -71,8 +71,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
        195 |       196 |     1
        245 |       246 |     1
        278 |       279 |     1
@@ -98,8 +98,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ][ cartesian product reference join "supplier" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
         18 |      7519 |  1000
         79 |      7580 |  1000
         91 |      2592 |  1000
@@ -126,8 +126,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
        195 |       196 |     1
        245 |       246 |     1
        278 |       279 |     1
@@ -154,8 +154,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
        195 |       196 |     1
        245 |       246 |     1
        278 |       279 |     1
@@ -182,8 +182,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ reference join "supplier" ][ single range partition join "part_append" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
         18 |      7519 |     1
         79 |      7580 |     1
         91 |      2592 |     1
@@ -210,8 +210,8 @@ ORDER BY
 LIMIT 10;
 LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ][ reference join "supplier" ]
 DEBUG:  push down of limit count: 10
- l_partkey | l_suppkey | count 
------------+-----------+-------
+ l_partkey | l_suppkey | count
+---------------------------------------------------------------------
         18 |      7519 |     1
         79 |      7580 |     1
         91 |      2592 |     1

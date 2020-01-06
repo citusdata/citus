@@ -39,47 +39,47 @@ create aggregate sum2_strict (int) (
     combinefunc = sum2_sfunc_strict
 );
 select create_distributed_function('sum2(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_function('sum2_strict(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
 select key, sum2(val), sum2_strict(val), stddev(valf) from aggdata group by key order by key;
- key | sum2 | sum2_strict |      stddev      
------+------+-------------+------------------
+ key | sum2 | sum2_strict |      stddev
+---------------------------------------------------------------------
    1 |      |           4 | 6.43467170879758
    2 |   20 |          20 | 1.01500410508201
-   3 |    8 |           8 |                 
-   5 |      |             |                 
-   6 |      |             |                 
-   7 |   16 |          16 |                 
-   9 |    0 |           0 |                 
+   3 |    8 |           8 |
+   5 |      |             |
+   6 |      |             |
+   7 |   16 |          16 |
+   9 |    0 |           0 |
 (7 rows)
 
 -- FILTER supported
 select key, sum2(val) filter (where valf < 5), sum2_strict(val) filter (where valf < 5) from aggdata group by key order by key;
- key | sum2 | sum2_strict 
------+------+-------------
-   1 |      |            
+ key | sum2 | sum2_strict
+---------------------------------------------------------------------
+   1 |      |
    2 |   10 |          10
-   3 |    0 |            
-   5 |    0 |            
-   6 |    0 |            
-   7 |    0 |            
+   3 |    0 |
+   5 |    0 |
+   6 |    0 |
+   7 |    0 |
    9 |    0 |           0
 (7 rows)
 
@@ -88,17 +88,17 @@ select key, sum2(distinct val), sum2_strict(distinct val) from aggdata group by 
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 select id, sum2(distinct val), sum2_strict(distinct val) from aggdata group by id order by id;
- id | sum2 | sum2_strict 
-----+------+-------------
+ id | sum2 | sum2_strict
+---------------------------------------------------------------------
   1 |    4 |           4
-  2 |      |            
+  2 |      |
   3 |    4 |           4
   4 |    6 |           6
   5 |   10 |          10
   6 |    8 |           8
-  7 |      |            
-  8 |      |            
-  9 |      |            
+  7 |      |
+  8 |      |
+  9 |      |
  10 |   16 |          16
  11 |    0 |           0
 (11 rows)
@@ -108,9 +108,9 @@ select key, sum2(val order by valf), sum2_strict(val order by valf) from aggdata
 ERROR:  unsupported aggregate function sum2
 -- Test handling a lack of intermediate results
 select sum2(val), sum2_strict(val) from aggdata where valf = 0;
- sum2 | sum2_strict 
-------+-------------
-    0 |            
+ sum2 | sum2_strict
+---------------------------------------------------------------------
+    0 |
 (1 row)
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
@@ -136,15 +136,15 @@ CREATE AGGREGATE last (
 	combinefunc = last_agg
 );
 SELECT create_distributed_function('first(anyelement)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_function('last(anyelement)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT key, first(val ORDER BY id), last(val ORDER BY id)
@@ -153,17 +153,17 @@ ERROR:  unsupported aggregate function first
 -- However, GROUP BY on distribution column gets pushed down
 SELECT id, first(val ORDER BY key), last(val ORDER BY key)
 FROM aggdata GROUP BY id ORDER BY id;
- id | first | last 
-----+-------+------
+ id | first | last
+---------------------------------------------------------------------
   1 |     2 |    2
-  2 |       |     
+  2 |       |
   3 |     2 |    2
   4 |     3 |    3
   5 |     5 |    5
   6 |     4 |    4
-  7 |       |     
-  8 |       |     
-  9 |       |     
+  7 |       |
+  8 |       |
+  9 |       |
  10 |     8 |    8
  11 |     0 |    0
 (11 rows)
@@ -187,16 +187,16 @@ create aggregate sumstring(text) (
 );
 select sumstring(valf::text) from aggdata where valf is not null;
 ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 select create_distributed_function('sumstring(text)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 select sumstring(valf::text) from aggdata where valf is not null;
- sumstring 
------------
+ sumstring
+---------------------------------------------------------------------
  1339.59
 (1 row)
 
@@ -213,14 +213,14 @@ create aggregate array_collect_sort(el int) (
 	initcond = '{}'
 );
 select create_distributed_function('array_collect_sort(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 select array_collect_sort(val) from aggdata;
-         array_collect_sort          
--------------------------------------
+         array_collect_sort
+---------------------------------------------------------------------
  {0,2,2,3,4,5,8,NULL,NULL,NULL,NULL}
 (1 row)
 
@@ -229,8 +229,8 @@ create user notsuper;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 select run_command_on_workers($$create user notsuper$$);
-      run_command_on_workers       
------------------------------------
+      run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
@@ -241,16 +241,16 @@ select run_command_on_workers($$
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
 $$);
-  run_command_on_workers   
----------------------------
+  run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
  (localhost,57638,t,GRANT)
 (2 rows)
 
 set role notsuper;
 select array_collect_sort(val) from aggdata;
-         array_collect_sort          
--------------------------------------
+         array_collect_sort
+---------------------------------------------------------------------
  {0,2,2,3,4,5,8,NULL,NULL,NULL,NULL}
 (1 row)
 

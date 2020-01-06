@@ -5,9 +5,9 @@
 SET citus.next_shard_id TO 550000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- this emits a NOTICE message for every table we are dropping with our CASCADE. It would
@@ -20,34 +20,34 @@ RESET client_min_messages;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
 -- verify that a table can be created after the extension has been dropped and recreated
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT 1 FROM master_create_empty_shard('testtableddl');
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT * FROM testtableddl;
- somecol | distributecol 
----------+---------------
+ somecol | distributecol
+---------------------------------------------------------------------
 (0 rows)
 
 DROP TABLE testtableddl;

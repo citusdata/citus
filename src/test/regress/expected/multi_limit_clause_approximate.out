@@ -9,8 +9,8 @@ SET client_min_messages TO DEBUG1;
 SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 	GROUP BY l_partkey
 	ORDER BY aggregate DESC LIMIT 10;
- l_partkey | aggregate  
------------+------------
+ l_partkey | aggregate
+---------------------------------------------------------------------
     194541 | 3727794642
     160895 | 3671463005
     183486 | 3128069328
@@ -29,8 +29,8 @@ SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 	GROUP BY l_partkey
 	ORDER BY aggregate DESC LIMIT 10;
 DEBUG:  push down of limit count: 600
- l_partkey | aggregate  
------------+------------
+ l_partkey | aggregate
+---------------------------------------------------------------------
     194541 | 3727794642
     160895 | 3671463005
     183486 | 3128069328
@@ -51,8 +51,8 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
 	GROUP BY c_custkey, c_name
 	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
- c_custkey |       c_name       | lineitem_count 
------------+--------------------+----------------
+ c_custkey |       c_name       | lineitem_count
+---------------------------------------------------------------------
         43 | Customer#000000043 |             42
        370 | Customer#000000370 |             40
         79 | Customer#000000079 |             38
@@ -73,8 +73,8 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 	GROUP BY c_custkey, c_name
 	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
 DEBUG:  push down of limit count: 150
- c_custkey |       c_name       | lineitem_count 
------------+--------------------+----------------
+ c_custkey |       c_name       | lineitem_count
+---------------------------------------------------------------------
         43 | Customer#000000043 |             42
        370 | Customer#000000370 |             40
         79 | Customer#000000079 |             38
@@ -93,8 +93,8 @@ DEBUG:  push down of limit count: 150
 SELECT l_partkey, avg(l_suppkey) AS average FROM lineitem
 	GROUP BY l_partkey
 	ORDER BY average DESC, l_partkey LIMIT 10;
- l_partkey |        average        
------------+-----------------------
+ l_partkey |        average
+---------------------------------------------------------------------
       9998 | 9999.0000000000000000
     102466 | 9997.0000000000000000
     184959 | 9996.0000000000000000
@@ -112,8 +112,8 @@ SELECT l_partkey, avg(l_suppkey) AS average FROM lineitem
 SELECT l_partkey, round(sum(l_suppkey)) AS complex_expression FROM lineitem
 	GROUP BY l_partkey
 	ORDER BY complex_expression DESC LIMIT 10;
- l_partkey | complex_expression 
------------+--------------------
+ l_partkey | complex_expression
+---------------------------------------------------------------------
     160895 |              22816
     194541 |              19160
      37018 |              19044
@@ -130,8 +130,8 @@ SELECT l_partkey, round(sum(l_suppkey)) AS complex_expression FROM lineitem
 SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 10.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC;
- count_quantity | l_quantity 
-----------------+------------
+ count_quantity | l_quantity
+---------------------------------------------------------------------
             227 |       3.00
             232 |       7.00
             237 |       2.00

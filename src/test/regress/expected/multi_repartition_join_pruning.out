@@ -28,8 +28,8 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 9
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Task-Tracker)
          Task Count: 3
@@ -58,8 +58,8 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 9
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -74,8 +74,8 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Task-Tracker)
          Task Count: 0
@@ -93,8 +93,8 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -109,8 +109,8 @@ WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Task-Tracker)
          Task Count: 0
@@ -128,8 +128,8 @@ WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -172,8 +172,8 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Task-Tracker)
          Task Count: 4
@@ -221,8 +221,8 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 16
- count 
--------
+ count
+---------------------------------------------------------------------
    125
 (1 row)
 
@@ -237,8 +237,8 @@ WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Task-Tracker)
          Task Count: 0
@@ -259,8 +259,8 @@ WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -273,8 +273,8 @@ FROM
 WHERE
 	false;
 DEBUG:  Router planner does not support append-partitioned tables.
-                         QUERY PLAN                          
--------------------------------------------------------------
+                         QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
    Task Count: 0
    Tasks Shown: None, not supported for re-partition queries
@@ -291,8 +291,8 @@ FROM
 WHERE
 	false;
 DEBUG:  Router planner does not support append-partitioned tables.
- o_orderkey 
-------------
+ o_orderkey
+---------------------------------------------------------------------
 (0 rows)
 
 EXPLAIN (COSTS OFF)
@@ -303,8 +303,8 @@ FROM
 WHERE
 	1=0 AND c_custkey < 0;
 DEBUG:  Router planner does not support append-partitioned tables.
-                         QUERY PLAN                          
--------------------------------------------------------------
+                         QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
    Task Count: 0
    Tasks Shown: None, not supported for re-partition queries
@@ -319,8 +319,8 @@ SELECT
 FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
 DEBUG:  Router planner does not support append-partitioned tables.
-            QUERY PLAN            
-----------------------------------
+            QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
    Task Count: 0
    Tasks Shown: All
@@ -334,8 +334,8 @@ FROM
 WHERE
 	o_custkey = c_custkey AND false;
 DEBUG:  Router planner does not support append-partitioned tables.
-            QUERY PLAN            
-----------------------------------
+            QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Task-Tracker)
    Task Count: 0
    Tasks Shown: All

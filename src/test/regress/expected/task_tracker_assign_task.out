@@ -14,76 +14,76 @@
 SELECT task_tracker_assign_task(:JobId, :SimpleTaskId,
 				'COPY (SELECT * FROM lineitem) TO '
 				'''base/pgsql_job_cache/job_401010/task_101101''');
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_assign_task(:JobId, :RecoverableTaskId, :BadQueryString);
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 -- After assigning the two tasks, we wait for them to make progress. Note that
 -- these tasks get scheduled and run asynchronously, so if the sleep interval is
 -- not enough, the regression tests may fail on an overloaded box.
 SELECT pg_sleep(3.0);
- pg_sleep 
-----------
- 
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :SimpleTaskId);
- task_tracker_task_status 
---------------------------
+ task_tracker_task_status
+---------------------------------------------------------------------
                         6
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :RecoverableTaskId);
- task_tracker_task_status 
---------------------------
+ task_tracker_task_status
+---------------------------------------------------------------------
                         5
 (1 row)
 
 COPY :SimpleTaskTable FROM 'base/pgsql_job_cache/job_401010/task_101101';
 SELECT COUNT(*) FROM :SimpleTaskTable;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
 SELECT COUNT(*) AS diff_lhs FROM ( :SelectAll FROM :SimpleTaskTable EXCEPT ALL
        		   	    	   :SelectAll FROM lineitem ) diff;
- diff_lhs 
-----------
+ diff_lhs
+---------------------------------------------------------------------
         0
 (1 row)
 
 SELECT COUNT(*) As diff_rhs FROM ( :SelectAll FROM lineitem EXCEPT ALL
        		   	    	   :SelectAll FROM :SimpleTaskTable ) diff;
- diff_rhs 
-----------
+ diff_rhs
+---------------------------------------------------------------------
         0
 (1 row)
 
 -- We now reassign the recoverable task with a good query string. This updates
 -- the task's query string, and reschedules the updated task for execution.
 SELECT task_tracker_assign_task(:JobId, :RecoverableTaskId, :GoodQueryString);
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT pg_sleep(2.0);
- pg_sleep 
-----------
- 
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :RecoverableTaskId);
- task_tracker_task_status 
---------------------------
+ task_tracker_task_status
+---------------------------------------------------------------------
                         6
 (1 row)
 

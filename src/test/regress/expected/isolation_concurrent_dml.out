@@ -3,17 +3,17 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-insert s2-update s1-commit
 master_create_worker_shards
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_concurrent_dml VALUES(1);
 
-step s2-update: 
+step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update: <... completed>
@@ -21,28 +21,28 @@ step s2-update: <... completed>
 starting permutation: s1-insert s2-update
 master_create_worker_shards
 
-               
-step s1-insert: 
+
+step s1-insert:
     INSERT INTO test_concurrent_dml VALUES(1);
 
-step s2-update: 
+step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
 
 
 starting permutation: s1-begin s1-multi-insert s2-update s1-commit
 master_create_worker_shards
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-multi-insert: 
+step s1-multi-insert:
     INSERT INTO test_concurrent_dml VALUES (1), (2);
 
-step s2-update: 
+step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-update: <... completed>
@@ -50,39 +50,39 @@ step s2-update: <... completed>
 starting permutation: s1-begin s1-multi-insert s2-multi-insert-overlap s1-commit
 master_create_worker_shards
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-multi-insert: 
+step s1-multi-insert:
     INSERT INTO test_concurrent_dml VALUES (1), (2);
 
-step s2-multi-insert-overlap: 
+step s2-multi-insert-overlap:
     INSERT INTO test_concurrent_dml VALUES (1), (4);
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-multi-insert s2-multi-insert s1-commit s2-commit
 master_create_worker_shards
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s1-multi-insert: 
+step s1-multi-insert:
     INSERT INTO test_concurrent_dml VALUES (1), (2);
 
-step s2-multi-insert: 
+step s2-multi-insert:
     INSERT INTO test_concurrent_dml VALUES (3), (4);
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-commit: 
+step s2-commit:
     COMMIT;
 

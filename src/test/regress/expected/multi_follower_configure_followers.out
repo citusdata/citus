@@ -3,8 +3,8 @@
 ALTER SYSTEM SET citus.use_secondary_nodes TO 'always';
 ALTER SYSTEM SET citus.cluster_name TO 'second-cluster';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
+ pg_reload_conf
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -13,8 +13,8 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET citus.use_secondary_nodes TO 'always';
 ALTER SYSTEM SET citus.cluster_name TO 'second-cluster';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
+ pg_reload_conf
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -22,8 +22,8 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET citus.use_secondary_nodes TO 'always';
 ALTER SYSTEM SET citus.cluster_name TO 'second-cluster';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
+ pg_reload_conf
+---------------------------------------------------------------------
  t
 (1 row)
 

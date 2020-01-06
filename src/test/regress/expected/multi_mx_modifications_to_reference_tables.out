@@ -8,36 +8,36 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node 
------------------------------
- 
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node 
------------------------------
- 
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABlE ref_table(id int, value_1 int);
 SELECT create_reference_table('ref_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABlE ref_table_2(id int, value_1 int);
 SELECT create_reference_table('ref_table_2');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE test_table_1(id int, value_1 int);
 SELECT create_distributed_table('test_table_1', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test_table_1 VALUES(5,5),(6,6);
@@ -46,37 +46,37 @@ SET search_path TO 'mx_modify_reference_table';
 -- Simple DML operations from the first worker node
 INSERT INTO ref_table VALUES(1,1),(2,2);
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
    3
 (1 row)
 
 UPDATE ref_table SET value_1 = 1 WHERE id = 2;
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
    2
 (1 row)
 
 DELETE FROM ref_table;
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
-    
+ sum
+---------------------------------------------------------------------
+
 (1 row)
 
 COPY ref_table FROM STDIN DELIMITER ',';
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
    3
 (1 row)
 
 -- Select For Update also follows the same logic with modification.
 -- It has been started to be supported on MX nodes with DML operations.
 SELECT * FROM ref_table FOR UPDATE;
- id | value_1 
-----+---------
+ id | value_1
+---------------------------------------------------------------------
   1 |       1
   2 |       2
 (2 rows)
@@ -85,15 +85,15 @@ SELECT * FROM ref_table FOR UPDATE;
 -- queries are also supported on MX nodes.
 INSERT INTO ref_table SELECT * FROM test_table_1;
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   14
 (1 row)
 
 INSERT INTO ref_table_2 SELECT * FROM ref_table;
 SELECT SUM(value_1) FROM ref_table_2;
- sum 
------
+ sum
+---------------------------------------------------------------------
   14
 (1 row)
 
@@ -101,52 +101,52 @@ SELECT SUM(value_1) FROM ref_table_2;
 \c - - - :worker_2_port
 SET search_path TO 'mx_modify_reference_table';
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   14
 (1 row)
 
 SELECT SUM(value_1) FROM ref_table_2;
- sum 
------
+ sum
+---------------------------------------------------------------------
   14
 (1 row)
 
--- Run basic queries from second worker node. These tests have been added 
+-- Run basic queries from second worker node. These tests have been added
 -- since locking logic is slightly different between running these commands
 -- from first worker node and the second one
 INSERT INTO ref_table VALUES(1,1),(2,2);
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   17
 (1 row)
 
 UPDATE ref_table SET value_1 = 1 WHERE id = 2;
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   15
 (1 row)
 
 COPY ref_table FROM STDIN DELIMITER ',';
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   18
 (1 row)
 
 INSERT INTO ref_table SELECT * FROM test_table_1;
 SELECT SUM(value_1) FROM ref_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   29
 (1 row)
 
 INSERT INTO ref_table_2 SELECT * FROM ref_table;
 SELECT SUM(value_1) FROM ref_table_2;
- sum 
------
+ sum
+---------------------------------------------------------------------
   43
 (1 row)
 

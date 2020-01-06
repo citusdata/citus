@@ -6,37 +6,37 @@
 -- ssl can only be enabled by default on installations that are OpenSSL-enabled.
 SHOW ssl_ciphers \gset
 SELECT :'ssl_ciphers' != 'none' AS hasssl;
- hasssl 
---------
+ hasssl
+---------------------------------------------------------------------
  t
 (1 row)
 
 SHOW ssl;
- ssl 
------
+ ssl
+---------------------------------------------------------------------
  on
 (1 row)
 
 SELECT run_command_on_workers($$
     SHOW ssl;
 $$);
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,on)
  (localhost,57638,t,on)
 (2 rows)
 
 SHOW citus.node_conninfo;
- citus.node_conninfo 
----------------------
+ citus.node_conninfo
+---------------------------------------------------------------------
  sslmode=require
 (1 row)
 
 SELECT run_command_on_workers($$
     SHOW citus.node_conninfo;
 $$);
-       run_command_on_workers        
--------------------------------------
+       run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,sslmode=require)
  (localhost,57638,t,sslmode=require)
 (2 rows)
@@ -44,23 +44,23 @@ $$);
 SELECT run_command_on_workers($$
     SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid();
 $$);
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,t)
  (localhost,57638,t,t)
 (2 rows)
 
 SHOW ssl_ciphers;
-        ssl_ciphers         
-----------------------------
+        ssl_ciphers
+---------------------------------------------------------------------
  TLSv1.2+HIGH:!aNULL:!eNULL
 (1 row)
 
 SELECT run_command_on_workers($$
     SHOW ssl_ciphers;
 $$);
-             run_command_on_workers             
-------------------------------------------------
+             run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,TLSv1.2+HIGH:!aNULL:!eNULL)
  (localhost,57638,t,TLSv1.2+HIGH:!aNULL:!eNULL)
 (2 rows)

@@ -6,23 +6,23 @@ SET citus.replication_model TO 'streaming';
 SET citus.next_shard_id TO 1470000;
 CREATE TABLE reference_table (key int PRIMARY KEY);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE distributed_table (key int PRIMARY KEY , value text, age bigint CHECK (age > 10), FOREIGN KEY (key) REFERENCES reference_table(key) ON DELETE CASCADE);
 SELECT create_distributed_table('distributed_table','key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE second_distributed_table (key int PRIMARY KEY , value text, FOREIGN KEY (key) REFERENCES distributed_table(key) ON DELETE CASCADE);
 SELECT create_distributed_table('second_distributed_table','key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ingest some data to enable some tests with data
@@ -39,9 +39,9 @@ CREATE TABLE collections_list (
 	PRIMARY KEY(key, collection_id)
 ) PARTITION BY LIST (collection_id );
 SELECT create_distributed_table('collections_list', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE collections_list_0
@@ -79,39 +79,39 @@ $$ LANGUAGE plpgsql;
 -- distribution key values of 1,6, 500 and 701 are LOCAL to shards,
 -- we'll use these values in the tests
 SELECT shard_of_distribution_column_is_local(1);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT shard_of_distribution_column_is_local(6);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT shard_of_distribution_column_is_local(500);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT shard_of_distribution_column_is_local(701);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- distribution key values of 11 and 12 are REMOTE to shards
 SELECT shard_of_distribution_column_is_local(11);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT shard_of_distribution_column_is_local(12);
- shard_of_distribution_column_is_local 
----------------------------------------
+ shard_of_distribution_column_is_local
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -122,8 +122,8 @@ SET citus.log_local_commands TO ON;
 -- with simple queries that are not in transcation blocks
 SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -131,21 +131,21 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_e
 -- because local execution means executing the tasks locally, so the executor
 -- favors parallel execution even if everyting is local to node
 SELECT count(*) FROM distributed_table WHERE key IN (1,6);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- queries that hit any remote shards should NOT use local execution
 SELECT count(*) FROM distributed_table WHERE key IN (1,11);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM distributed_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -179,8 +179,8 @@ WHERE
 ON CONFLICT(key) DO UPDATE SET value = '22'
 RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution.distributed_table_1470001 distributed_table, local_shard_execution.second_distributed_table_1470005 second_distributed_table WHERE (((distributed_table.key OPERATOR(pg_catalog.=) 1) AND (distributed_table.key OPERATOR(pg_catalog.=) second_distributed_table.key)) AND ((worker_hash(distributed_table.key) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(distributed_table.key) OPERATOR(pg_catalog.<=) '-1073741825'::integer))) ON CONFLICT(key) DO UPDATE SET value = '22'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 22    |  20
 (1 row)
 
@@ -194,8 +194,8 @@ WHERE
 	distributed_table.key != 1 and distributed_table.key=second_distributed_table.key
 ON CONFLICT(key) DO UPDATE SET value = '22'
 RETURNING *;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 -- INSERT..SELECT via coordinator consists of two steps, select + COPY
@@ -208,39 +208,39 @@ INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOT
 -- EXPLAIN for local execution just works fine
 -- though going through distributed execution
 EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table
                Index Cond: (key = 1)
                Filter: (age = 20)
 (8 rows)
 
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
-                                                             QUERY PLAN                                                             
-------------------------------------------------------------------------------------------------------------------------------------
+                                                             QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                Index Cond: (key = 1)
                Filter: (age = 20)
 (8 rows)
 
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                    QUERY PLAN                                                    
-------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Delete on distributed_table_1470001 distributed_table
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table
                      Index Cond: (key = 1)
@@ -248,13 +248,13 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
 (9 rows)
 
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
-                                                                QUERY PLAN                                                                
-------------------------------------------------------------------------------------------------------------------------------------------
+                                                                QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57637 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                      Index Cond: (key = 1)
@@ -264,14 +264,14 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_ta
 -- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE ((key OPERATOR(pg_catalog.=) 1) AND (age OPERATOR(pg_catalog.=) 20)) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM second_distributed_table WHERE key = 1 ORDER BY 1,2;
 LOG:  executing the command locally: SELECT key, value FROM local_shard_execution.second_distributed_table_1470005 second_distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 -- Put rows back for other tests
@@ -294,15 +294,15 @@ COPY second_distributed_table FROM STDIN WITH CSV;
 BEGIN;
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 29    |  20
 (1 row)
 
 	SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 29    |  20
 (1 row)
 
@@ -310,8 +310,8 @@ ROLLBACK;
 -- make sure that the value is rollbacked
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 22    |  20
 (1 row)
 
@@ -319,8 +319,8 @@ LOG:  executing the command locally: SELECT key, value, age FROM local_shard_exe
 BEGIN;
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 29    |  20
 (1 row)
 
@@ -331,8 +331,8 @@ LOG:  executing the command locally: DELETE FROM local_shard_execution.distribut
 	SELECT count(*) FROM second_distributed_table;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.second_distributed_table_1470005 second_distributed_table WHERE true
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.second_distributed_table_1470007 second_distributed_table WHERE true
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -340,20 +340,20 @@ ROLLBACK;
 -- make sure that everything is rollbacked
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 22    |  20
 (1 row)
 
 SELECT count(*) FROM second_distributed_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT * FROM second_distributed_table;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 | 1
    6 | '6'
 (2 rows)
@@ -364,8 +364,8 @@ BEGIN;
 	-- INSERT is executed locally
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '23' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '23'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 23    |  20
 (1 row)
 
@@ -373,8 +373,8 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.distribut
 	-- executed locally and see the changes
 	SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 23    |  20
 (1 row)
 
@@ -383,8 +383,8 @@ LOG:  executing the command locally: SELECT key, value, age FROM local_shard_exe
 	SELECT * FROM distributed_table WHERE value = '23' ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (value OPERATOR(pg_catalog.=) '23'::text)
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (value OPERATOR(pg_catalog.=) '23'::text)
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 23    |  20
 (1 row)
 
@@ -397,16 +397,16 @@ LOG:  executing the command locally: DELETE FROM local_shard_execution.distribut
 	SELECT * FROM distributed_table WHERE value = '23' ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (value OPERATOR(pg_catalog.=) '23'::text)
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (value OPERATOR(pg_catalog.=) '23'::text)
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 COMMIT;
 -- make sure that we've committed everything
 SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
 LOG:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) ORDER BY key, value, age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 -- if we start with a distributed execution, we should keep
@@ -416,8 +416,8 @@ BEGIN;
 	-- although this command could have been executed
 	-- locally, it is not going to be executed locally
 	SELECT * FROM distributed_table WHERE key = 1 ORDER BY 1,2,3;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 	-- but we can still execute parallel queries, even if
@@ -426,8 +426,8 @@ BEGIN;
 NOTICE:  truncate cascades to table "second_distributed_table"
 	-- TRUNCATE cascaded into second_distributed_table
 	SELECT count(*) FROM second_distributed_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -441,8 +441,8 @@ BEGIN;
 	-- this could go through local execution, but doesn't because we've already
 	-- done distributed execution
 	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
  500 | 500   |  25
 (1 row)
 
@@ -451,8 +451,8 @@ BEGIN;
 NOTICE:  truncate cascades to table "second_distributed_table"
 	-- ensure that TRUNCATE made it
 	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
 (0 rows)
 
 ROLLBACK;
@@ -468,15 +468,15 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.second_di
 LOG:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) 701)
 	SELECT count(*) FROM distributed_table WHERE key = 701;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 701)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM second_distributed_table WHERE key = 701;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.second_distributed_table_1470005 second_distributed_table WHERE (key OPERATOR(pg_catalog.=) 701)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -484,8 +484,8 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_e
 	SELECT count(*) FROM distributed_table WHERE key > 700;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.>) 700)
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.>) 700)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -498,22 +498,22 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 	SELECT count(*) FROM distributed_table WHERE key = 6;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 6)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM distributed_table WHERE key = 500;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -522,8 +522,8 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -537,8 +537,8 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -552,8 +552,8 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -566,8 +566,8 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -578,8 +578,8 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_executi
 ROLLBACK;
 INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 11    |  21
 (1 row)
 
@@ -593,8 +593,8 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_executi
 ROLLBACK;
 BEGIN;
 	INSERT INTO distributed_table VALUES (11, '111',29) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
   11 | 29    | 121
 (1 row)
 
@@ -606,8 +606,8 @@ HINT:  Connect to the coordinator and run it again.
 ROLLBACK;
 BEGIN;
 	INSERT INTO distributed_table VALUES (11, '111',29) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
   11 | 29    | 121
 (1 row)
 
@@ -686,9 +686,9 @@ WITH local_insert AS (INSERT INTO distributed_table VALUES (1, '11',21) ON CONFL
 distributed_local_mixed AS (SELECT * FROM reference_table WHERE key IN (SELECT key FROM local_insert))
 SELECT * FROM local_insert, distributed_local_mixed;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
-LOG:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('81_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
- key | value | age | key 
------+-------+-----+-----
+LOG:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
+ key | value | age | key
+---------------------------------------------------------------------
    1 | 11    |  21 |   1
 (1 row)
 
@@ -697,8 +697,8 @@ LOG:  executing the command locally: SELECT key FROM local_shard_execution.refer
 WITH distributed_local_mixed AS (SELECT * FROM distributed_table),
 local_insert AS (INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *)
 SELECT * FROM local_insert, distributed_local_mixed ORDER BY 1,2,3,4,5;
- key | value | age | key | value | age 
------+-------+-----+-----+-------+-----
+ key | value | age | key | value | age
+---------------------------------------------------------------------
    1 | 29    |  21 |   1 | 11    |  21
 (1 row)
 
@@ -711,8 +711,8 @@ FROM
 WHERE
 	distributed_table.key = all_data.key AND distributed_table.key = 1;
 LOG:  executing the command locally: WITH all_data AS (SELECT distributed_table_1.key, distributed_table_1.value, distributed_table_1.age FROM local_shard_execution.distributed_table_1470001 distributed_table_1 WHERE (distributed_table_1.key OPERATOR(pg_catalog.=) 1)) SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table, all_data WHERE ((distributed_table.key OPERATOR(pg_catalog.=) all_data.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 1))
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -730,8 +730,8 @@ WHERE
 	distributed_table.value = all_data.value AND distributed_table.key = 1
 ORDER BY
 	1 DESC;
- key 
------
+ key
+---------------------------------------------------------------------
    1
 (1 row)
 
@@ -748,8 +748,8 @@ FROM
 WHERE
 	distributed_table.key = all_data.key AND distributed_table.key = 1
 	AND EXISTS (SELECT * FROM all_data);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -763,8 +763,8 @@ FROM
 	distributed_table, all_data
 WHERE
 	distributed_table.key = all_data.age AND distributed_table.key = 1;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -773,8 +773,8 @@ TRUNCATE reference_table, distributed_table, second_distributed_table;
 -- local execution of returning of reference tables
 INSERT INTO reference_table VALUES (1),(2),(3),(4),(5),(6) RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 AS citus_table_alias (key) VALUES (1), (2), (3), (4), (5), (6) RETURNING citus_table_alias.key
- key 
------
+ key
+---------------------------------------------------------------------
    1
    2
    3
@@ -786,8 +786,8 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.reference
 -- local execution of multi-row INSERTs
 INSERT INTO distributed_table VALUES (1, '11',21), (5,'55',22) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1,'11'::text,'21'::bigint), (5,'55'::text,'22'::bigint) ON CONFLICT(key) DO UPDATE SET value = (((excluded.value)::integer OPERATOR(pg_catalog.+) 1))::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 11    |  21
    5 | 55    |  22
 (2 rows)
@@ -796,8 +796,8 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.distribut
 -- could have been done via local execution but the executor choose the other way around
 -- because the command is a multi-shard query
 INSERT INTO distributed_table VALUES (1, '11',21), (2,'22',22), (3,'33',33), (4,'44',44),(5,'55',55) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 12    |  21
    2 | 22    |  22
    3 | 33    |  33
@@ -812,86 +812,86 @@ BEGIN;
 	-- 6 local execution without params
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_no_param;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	-- 6 local executions with params
 	EXECUTE local_prepare_param(1);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_param(5);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 5)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_param(6);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 6)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 	EXECUTE local_prepare_param(1);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_param(5);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 5)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	EXECUTE local_prepare_param(6);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 6)
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -899,8 +899,8 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_e
 	EXECUTE remote_prepare_param(1);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.<>) 1)
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.<>) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -911,86 +911,86 @@ BEGIN;
 	-- 6 local execution without params
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_no_param;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	-- 6 local executions with params
 	EXECUTE local_insert_prepare_param(1);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_param(5);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (5, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    5 | 2928  |  22 |        6 | 292830   |      330
 (1 row)
 
 	EXECUTE local_insert_prepare_param(6);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470003 AS citus_table_alias (key, value, age) VALUES (6, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    6 | 11    |  21 |        7 | 1130     |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_param(1);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    1 | 2928  |  21 |        2 | 292830   |      315
 (1 row)
 
 	EXECUTE local_insert_prepare_param(5);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (5, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    5 | 2928  |  22 |        6 | 292830   |      330
 (1 row)
 
 	EXECUTE local_insert_prepare_param(6);
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470003 AS citus_table_alias (key, value, age) VALUES (6, '11'::text, '21'::bigint) ON CONFLICT(key) DO UPDATE SET value = '2928'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age, (citus_table_alias.key OPERATOR(pg_catalog.+) 1), (citus_table_alias.value OPERATOR(pg_catalog.||) '30'::text), (citus_table_alias.age OPERATOR(pg_catalog.*) 15)
- key | value | age | ?column? | ?column? | ?column? 
------+-------+-----+----------+----------+----------
+ key | value | age | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
    6 | 2928  |  21 |        7 | 292830   |      315
 (1 row)
 
@@ -998,8 +998,8 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.distribut
 	EXECUTE remote_prepare_param(2);
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.<>) 2)
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.<>) 2)
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -1068,8 +1068,8 @@ ROLLBACK;
 BEGIN;
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '100' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '100'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 100   |  21
 (1 row)
 
@@ -1082,23 +1082,23 @@ ERROR:  division by zero
 ROLLBACK;
 -- we've rollbacked everything
 SELECT count(*) FROM distributed_table WHERE value = '200';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- RETURNING should just work fine for reference tables
 INSERT INTO reference_table VALUES (500) RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (500) RETURNING key
- key 
------
+ key
+---------------------------------------------------------------------
  500
 (1 row)
 
 DELETE FROM reference_table WHERE key = 500 RETURNING *;
 LOG:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) 500) RETURNING key
- key 
------
+ key
+---------------------------------------------------------------------
  500
 (1 row)
 
@@ -1107,8 +1107,8 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO sequential ;
 	DELETE FROM distributed_table;
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '100' RETURNING *;
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 11    |  21
 (1 row)
 
@@ -1118,8 +1118,8 @@ BEGIN;
 	SET citus.multi_shard_modify_mode TO sequential ;
 	INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '100' RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '100'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
    1 | 100   |  21
 (1 row)
 
@@ -1145,8 +1145,8 @@ ROLLBACK;
 BEGIN;
 	DELETE FROM reference_table WHERE key = 500 RETURNING *;
 LOG:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) 500) RETURNING key
- key 
------
+ key
+---------------------------------------------------------------------
  500
 (1 row)
 
@@ -1169,8 +1169,8 @@ BEGIN;
 	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SET LOCAL client_min_messages TO INFO;
 	SELECT count(*) FROM distributed_table;
- count 
--------
+ count
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -1183,8 +1183,8 @@ CREATE VIEW v_local_query_execution AS
 SELECT * FROM distributed_table WHERE key = 500;
 SELECT * FROM v_local_query_execution;
 LOG:  executing the command locally: SELECT key, value, age FROM (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) 500)) v_local_query_execution
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
  500 | 500   |  25
 (1 row)
 
@@ -1194,8 +1194,8 @@ CREATE VIEW v_local_query_execution_2 AS
 SELECT * FROM distributed_table;
 SELECT * FROM v_local_query_execution_2 WHERE key = 500;
 LOG:  executing the command locally: SELECT key, value, age FROM (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution.distributed_table_1470003 distributed_table) v_local_query_execution_2 WHERE (key OPERATOR(pg_catalog.=) 500)
- key | value | age 
------+-------+-----
+ key | value | age
+---------------------------------------------------------------------
  500 | 500   |  25
 (1 row)
 
@@ -1204,8 +1204,8 @@ LOG:  executing the command locally: SELECT key, value, age FROM (SELECT distrib
 BEGIN;
 	SAVEPOINT my_savepoint;
 	SELECT count(*) FROM distributed_table;
- count 
--------
+ count
+---------------------------------------------------------------------
    101
 (1 row)
 
@@ -1222,8 +1222,8 @@ LOG:  executing the command locally: DELETE FROM local_shard_execution.distribut
 	SELECT count(*) FROM distributed_table;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE true
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE true
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
@@ -1234,9 +1234,9 @@ COMMIT;
 -- sanity check: local execution on partitions
 INSERT INTO collections_list (collection_id) VALUES (0) RETURNING *;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470011 (key, ser, collection_id) VALUES ('3940649673949185'::bigint, '3940649673949185'::bigint, 0) RETURNING key, ser, ts, collection_id, value
-       key        |       ser        | ts | collection_id | value 
-------------------+------------------+----+---------------+-------
- 3940649673949185 | 3940649673949185 |    |             0 |      
+       key        |       ser        | ts | collection_id | value
+---------------------------------------------------------------------
+ 3940649673949185 | 3940649673949185 |    |             0 |
 (1 row)
 
 BEGIN;
@@ -1244,26 +1244,26 @@ BEGIN;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470009 (key, ser, collection_id) VALUES ('1'::bigint, '3940649673949186'::bigint, 0)
 	SELECT count(*) FROM collections_list_0 WHERE key = 1;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.collections_list_0_1470013 collections_list_0 WHERE (key OPERATOR(pg_catalog.=) 1)
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 	SELECT count(*) FROM collections_list;
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.collections_list_1470009 collections_list WHERE true
 LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.collections_list_1470011 collections_list WHERE true
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 	SELECT * FROM collections_list ORDER BY 1,2,3,4;
 LOG:  executing the command locally: SELECT key, ser, ts, collection_id, value FROM local_shard_execution.collections_list_1470009 collections_list WHERE true
 LOG:  executing the command locally: SELECT key, ser, ts, collection_id, value FROM local_shard_execution.collections_list_1470011 collections_list WHERE true
-       key        |       ser        | ts | collection_id | value 
-------------------+------------------+----+---------------+-------
-                1 | 3940649673949186 |    |             0 |      
- 3940649673949185 | 3940649673949185 |    |             0 |      
+       key        |       ser        | ts | collection_id | value
+---------------------------------------------------------------------
+                1 | 3940649673949186 |    |             0 |
+ 3940649673949185 | 3940649673949185 |    |             0 |
 (2 rows)
 
 COMMIT;
@@ -1273,93 +1273,93 @@ TRUNCATE collections_list;
 ALTER SEQUENCE collections_list_key_seq NO MINVALUE NO MAXVALUE;
 PREPARE serial_prepared_local AS INSERT INTO collections_list (collection_id) VALUES (0) RETURNING key, ser;
 SELECT setval('collections_list_key_seq', 4);
- setval 
---------
+ setval
+---------------------------------------------------------------------
       4
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470009 (key, ser, collection_id) VALUES ('5'::bigint, '3940649673949187'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
    5 | 3940649673949187
 (1 row)
 
 SELECT setval('collections_list_key_seq', 5);
- setval 
---------
+ setval
+---------------------------------------------------------------------
       5
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470011 (key, ser, collection_id) VALUES ('6'::bigint, '3940649673949188'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
    6 | 3940649673949188
 (1 row)
 
 SELECT setval('collections_list_key_seq', 499);
- setval 
---------
+ setval
+---------------------------------------------------------------------
     499
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470011 (key, ser, collection_id) VALUES ('500'::bigint, '3940649673949189'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
  500 | 3940649673949189
 (1 row)
 
 SELECT setval('collections_list_key_seq', 700);
- setval 
---------
+ setval
+---------------------------------------------------------------------
     700
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470009 (key, ser, collection_id) VALUES ('701'::bigint, '3940649673949190'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
  701 | 3940649673949190
 (1 row)
 
 SELECT setval('collections_list_key_seq', 708);
- setval 
---------
+ setval
+---------------------------------------------------------------------
     708
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470011 (key, ser, collection_id) VALUES ('709'::bigint, '3940649673949191'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
  709 | 3940649673949191
 (1 row)
 
 SELECT setval('collections_list_key_seq', 709);
- setval 
---------
+ setval
+---------------------------------------------------------------------
     709
 (1 row)
 
 EXECUTE serial_prepared_local;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.collections_list_1470009 (key, ser, collection_id) VALUES ('710'::bigint, '3940649673949192'::bigint, 0) RETURNING key, ser
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
  710 | 3940649673949192
 (1 row)
 
 -- and, one remote test
 SELECT setval('collections_list_key_seq', 10);
- setval 
---------
+ setval
+---------------------------------------------------------------------
      10
 (1 row)
 
 EXECUTE serial_prepared_local;
- key |       ser        
------+------------------
+ key |       ser
+---------------------------------------------------------------------
   11 | 3940649673949193
 (1 row)
 
@@ -1368,8 +1368,8 @@ EXECUTE serial_prepared_local;
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (1000) RETURNING key
- key  
-------
+ key
+---------------------------------------------------------------------
  1000
 (1 row)
 
@@ -1388,8 +1388,8 @@ LOG:  executing the command locally: INSERT INTO local_shard_execution.distribut
     DELETE FROM distributed_table RETURNING key;
 LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table RETURNING key
 LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table RETURNING key
- key 
------
+ key
+---------------------------------------------------------------------
    1
    2
 (2 rows)
@@ -1408,8 +1408,8 @@ BEGIN;
 LOG:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (1)
     DELETE FROM reference_table RETURNING key;
 LOG:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table RETURNING key
- key 
------
+ key
+---------------------------------------------------------------------
    1
    2
 (2 rows)
@@ -1427,9 +1427,9 @@ CREATE TABLE event_responses (
   primary key (event_id, user_id)
 );
 SELECT create_distributed_table('event_responses', 'event_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE OR REPLACE PROCEDURE register_for_event(p_event_id int, p_user_id int, p_choice invite_resp)
@@ -1441,9 +1441,9 @@ BEGIN
 END;
 $fn$;
 SELECT create_distributed_function('register_for_event(int,int,invite_resp)', 'p_event_id', 'event_responses');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 -- call 6 times to make sure it works after the 5th time(postgres binds values after the 5th time)

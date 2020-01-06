@@ -1,19 +1,19 @@
 SELECT citus.mitmproxy('conn.allow()');
- mitmproxy 
------------
- 
+ mitmproxy
+---------------------------------------------------------------------
+
 (1 row)
 
 -- add the workers
 SELECT master_add_node('localhost', :worker_1_port);
- master_add_node 
------------------
+ master_add_node
+---------------------------------------------------------------------
                1
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_proxy_port);  -- an mitmproxy which forwards to the second worker
- master_add_node 
------------------
+ master_add_node
+---------------------------------------------------------------------
                2
 (1 row)
 

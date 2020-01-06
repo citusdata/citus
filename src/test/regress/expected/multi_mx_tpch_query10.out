@@ -1,7 +1,7 @@
 --
 -- MULTI_MX_TPCH_QUERY10
 --
--- Query #10 from the TPC-H decision support benchmark. 
+-- Query #10 from the TPC-H decision support benchmark.
 -- connect to master
 \c - - - :master_port
 SELECT
@@ -36,18 +36,18 @@ GROUP BY
 ORDER BY
 	revenue DESC
 LIMIT 20;
- c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+ c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
-       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
-       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 
+       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto
+       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole
        223 | Customer#000000223 | 218652.8040 |   7476.20 | SAUDI ARABIA              | ftau6Pk,brboMyEl,,kFm                 | 30-193-643-1517 | al, regular requests run furiously blithely silent packages. blithely ironic accounts across the furious
        613 | Customer#000000613 | 186092.2017 |   6679.75 | EGYPT                     | AJT,26RbanTdEHOBgTWg                  | 14-275-416-1669 | ironic, pending deposits: quickl
        355 | Customer#000000355 | 168184.4825 |   8727.90 | KENYA                     | 205r3Xg9ZWjPZNX1z                     | 24-656-787-6091 | ly bold requests detect furiously. unusual instructions sleep aft
        872 | Customer#000000872 | 166831.7294 |   -858.61 | PERU                      | vLP7iNZBK4B,HANFTKabVI3AO Y9O8H       | 27-357-139-7164 |  detect. packages wake slyly express foxes. even deposits ru
        805 | Customer#000000805 | 165239.8440 |    511.69 | IRAN                      | wCKx5zcHvwpSffyc9qfi9dvqcm9LT,cLAG    | 20-732-989-5653 | busy sentiments. pending packages haggle among the express requests-- slyly regular excuses above the slyl
        427 | Customer#000000427 | 148033.5226 |   4376.80 | BRAZIL                    | LHzXa71U2AGqfbqj1yYYqw2MEXq99dWmY     | 12-124-309-3821 | y even multipliers according to the regu
-       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily 
+       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily
        679 | Customer#000000679 | 145188.0664 |   1394.44 | IRAN                      | IJf1FlZL9I9m,rvofcoKy5pRUOjUQV        | 20-146-696-9508 | ely pending frays boost carefully
        160 | Customer#000000160 | 138511.7370 |   4363.17 | JORDAN                    | 5soVQ3dOCRBWBS                        | 23-428-666-4806 | olites. silently ironic accounts cajole furious
        883 | Customer#000000883 | 128224.1349 |    479.96 | CANADA                    | qVQ8rWNU5KZYDcS                       | 13-526-239-6950 | uctions are carefully across the regular, regular asymptote
@@ -94,18 +94,18 @@ GROUP BY
 ORDER BY
 	revenue DESC
 LIMIT 20;
- c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+ c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
-       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
-       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 
+       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto
+       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole
        223 | Customer#000000223 | 218652.8040 |   7476.20 | SAUDI ARABIA              | ftau6Pk,brboMyEl,,kFm                 | 30-193-643-1517 | al, regular requests run furiously blithely silent packages. blithely ironic accounts across the furious
        613 | Customer#000000613 | 186092.2017 |   6679.75 | EGYPT                     | AJT,26RbanTdEHOBgTWg                  | 14-275-416-1669 | ironic, pending deposits: quickl
        355 | Customer#000000355 | 168184.4825 |   8727.90 | KENYA                     | 205r3Xg9ZWjPZNX1z                     | 24-656-787-6091 | ly bold requests detect furiously. unusual instructions sleep aft
        872 | Customer#000000872 | 166831.7294 |   -858.61 | PERU                      | vLP7iNZBK4B,HANFTKabVI3AO Y9O8H       | 27-357-139-7164 |  detect. packages wake slyly express foxes. even deposits ru
        805 | Customer#000000805 | 165239.8440 |    511.69 | IRAN                      | wCKx5zcHvwpSffyc9qfi9dvqcm9LT,cLAG    | 20-732-989-5653 | busy sentiments. pending packages haggle among the express requests-- slyly regular excuses above the slyl
        427 | Customer#000000427 | 148033.5226 |   4376.80 | BRAZIL                    | LHzXa71U2AGqfbqj1yYYqw2MEXq99dWmY     | 12-124-309-3821 | y even multipliers according to the regu
-       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily 
+       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily
        679 | Customer#000000679 | 145188.0664 |   1394.44 | IRAN                      | IJf1FlZL9I9m,rvofcoKy5pRUOjUQV        | 20-146-696-9508 | ely pending frays boost carefully
        160 | Customer#000000160 | 138511.7370 |   4363.17 | JORDAN                    | 5soVQ3dOCRBWBS                        | 23-428-666-4806 | olites. silently ironic accounts cajole furious
        883 | Customer#000000883 | 128224.1349 |    479.96 | CANADA                    | qVQ8rWNU5KZYDcS                       | 13-526-239-6950 | uctions are carefully across the regular, regular asymptote
@@ -152,18 +152,18 @@ GROUP BY
 ORDER BY
 	revenue DESC
 LIMIT 20;
- c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment                                                      
------------+--------------------+-------------+-----------+---------------------------+---------------------------------------+-----------------+---------------------------------------------------------------------------------------------------------------------
+ c_custkey |       c_name       |   revenue   | c_acctbal |          n_name           |               c_address               |     c_phone     |                                                      c_comment
+---------------------------------------------------------------------
        436 | Customer#000000436 | 255187.7382 |   5896.87 | ROMANIA                   | 4DCNzAT842cVYTcaUS94kR0QXHSRM5oco0D6Z | 29-927-687-6390 | olites engage carefully. slyly ironic asymptotes about the ironi
-       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto 
-       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole 
+       640 | Customer#000000640 | 251941.1430 |   3025.84 | BRAZIL                    | j3vjr0 n,pJFG4gIOtC                   | 12-702-315-6637 | lly. furiously quick deposits haggle quickly regular packages. pinto
+       361 | Customer#000000361 | 239204.0858 |   7451.84 | SAUDI ARABIA              | l0F8jMJVe63cb                         | 30-164-267-4590 | fully busy ideas. regular foxes cajole
        223 | Customer#000000223 | 218652.8040 |   7476.20 | SAUDI ARABIA              | ftau6Pk,brboMyEl,,kFm                 | 30-193-643-1517 | al, regular requests run furiously blithely silent packages. blithely ironic accounts across the furious
        613 | Customer#000000613 | 186092.2017 |   6679.75 | EGYPT                     | AJT,26RbanTdEHOBgTWg                  | 14-275-416-1669 | ironic, pending deposits: quickl
        355 | Customer#000000355 | 168184.4825 |   8727.90 | KENYA                     | 205r3Xg9ZWjPZNX1z                     | 24-656-787-6091 | ly bold requests detect furiously. unusual instructions sleep aft
        872 | Customer#000000872 | 166831.7294 |   -858.61 | PERU                      | vLP7iNZBK4B,HANFTKabVI3AO Y9O8H       | 27-357-139-7164 |  detect. packages wake slyly express foxes. even deposits ru
        805 | Customer#000000805 | 165239.8440 |    511.69 | IRAN                      | wCKx5zcHvwpSffyc9qfi9dvqcm9LT,cLAG    | 20-732-989-5653 | busy sentiments. pending packages haggle among the express requests-- slyly regular excuses above the slyl
        427 | Customer#000000427 | 148033.5226 |   4376.80 | BRAZIL                    | LHzXa71U2AGqfbqj1yYYqw2MEXq99dWmY     | 12-124-309-3821 | y even multipliers according to the regu
-       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily 
+       581 | Customer#000000581 | 146369.1712 |   3242.10 | UNITED STATES             | s9SoN9XeVuCri                         | 34-415-978-2518 | ns. quickly regular pinto beans must sleep fluffily
        679 | Customer#000000679 | 145188.0664 |   1394.44 | IRAN                      | IJf1FlZL9I9m,rvofcoKy5pRUOjUQV        | 20-146-696-9508 | ely pending frays boost carefully
        160 | Customer#000000160 | 138511.7370 |   4363.17 | JORDAN                    | 5soVQ3dOCRBWBS                        | 23-428-666-4806 | olites. silently ironic accounts cajole furious
        883 | Customer#000000883 | 128224.1349 |    479.96 | CANADA                    | qVQ8rWNU5KZYDcS                       | 13-526-239-6950 | uctions are carefully across the regular, regular asymptote

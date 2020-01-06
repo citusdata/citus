@@ -9,9 +9,9 @@ SET SEARCH_PATH = procedure_schema;
 CREATE TABLE test_table(id integer , org_id integer);
 CREATE UNIQUE INDEX idx_table ON test_table(id, org_id);
 SELECT create_distributed_table('test_table','id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test_table VALUES(1, 1);
@@ -22,8 +22,8 @@ CREATE PROCEDURE test_procedure_delete_insert(id int, org_id int) LANGUAGE SQL A
 $$;
 CALL test_procedure_delete_insert(2,3);
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |      3
 (1 row)
 
@@ -40,8 +40,8 @@ CALL test_procedure_commit(2,5);
 ERROR:  COMMIT is not allowed in a SQL function
 CONTEXT:  SQL function "test_procedure_commit" during startup
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |      3
 (1 row)
 
@@ -55,8 +55,8 @@ CALL test_procedure_rollback(2,15);
 ERROR:  ROLLBACK is not allowed in a SQL function
 CONTEXT:  SQL function "test_procedure_rollback" during startup
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |      3
 (1 row)
 
@@ -73,8 +73,8 @@ END;
 $$;
 CALL test_procedure_delete_insert(2,3);
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |      3
 (1 row)
 
@@ -90,12 +90,12 @@ $$;
 CALL test_procedure_modify_insert(2,12);
 ERROR:  duplicate key value violates unique constraint "idx_table_100503"
 DETAIL:  Key (id, org_id)=(2, 12) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 SQL statement "INSERT INTO test_table VALUES (tt_id, tt_org_id)"
 PL/pgSQL function test_procedure_modify_insert(integer,integer) line 5 at SQL statement
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |     12
 (1 row)
 
@@ -110,12 +110,12 @@ $$;
 CALL test_procedure_modify_insert_commit(2,30);
 ERROR:  duplicate key value violates unique constraint "idx_table_100503"
 DETAIL:  Key (id, org_id)=(2, 30) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 SQL statement "INSERT INTO test_table VALUES (tt_id, tt_org_id)"
 PL/pgSQL function test_procedure_modify_insert_commit(integer,integer) line 5 at SQL statement
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   2 |     30
 (1 row)
 
@@ -130,8 +130,8 @@ END;
 $$;
 CALL test_procedure_rollback(2,5);
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- rollback is successfull when insert is on multiple rows
@@ -145,8 +145,8 @@ END;
 $$;
 CALL test_procedure_rollback_2(12, 15);
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- delete is rolled back, update is committed
@@ -161,8 +161,8 @@ $$;
 INSERT INTO test_table VALUES (1, 1), (2, 2);
 CALL test_procedure_rollback_3(2,15);
 SELECT * FROM test_table ORDER BY 1, 2;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
   1 |      1
   2 |     15
 (2 rows)
@@ -190,15 +190,15 @@ BEGIN
 END;
 $$;
 SELECT * from test_table;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
 (0 rows)
 
 call test_procedure(1,1);
 call test_procedure(20, 20);
 SELECT * from test_table;
- id | org_id 
-----+--------
+ id | org_id
+---------------------------------------------------------------------
 (0 rows)
 
 \set VERBOSITY terse

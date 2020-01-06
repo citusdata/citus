@@ -11,32 +11,32 @@ SET client_min_messages TO DEBUG1;
 SELECT
    foo.user_id
 FROM
-    (SELECT 
-    	DISTINCT users_table_local.user_id 
-     FROM 
-     	users_table_local, events_table_local 
-     WHERE 
-     	users_table_local.user_id = events_table_local.user_id AND 
+    (SELECT
+    	DISTINCT users_table_local.user_id
+     FROM
+     	users_table_local, events_table_local
+     WHERE
+     	users_table_local.user_id = events_table_local.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo,
-    (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+    (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (5,6,7,8)
      ORDER BY 1 DESC LIMIT 5
      ) as bar
     WHERE bar.user_id = foo.user_id
     ORDER BY 1 DESC;
-DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT users_table_local.user_id FROM subquery_local_tables.users_table_local, subquery_local_tables.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table_local.user_id DESC LIMIT 5
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table_local.user_id FROM subquery_local_tables.users_table_local, subquery_local_tables.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table_local.user_id DESC LIMIT 5
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 3_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC LIMIT 5
-DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) foo.user_id) ORDER BY foo.user_id DESC
- user_id 
----------
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) foo.user_id) ORDER BY foo.user_id DESC
+ user_id
+---------------------------------------------------------------------
        6
        5
        4
@@ -48,29 +48,29 @@ DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT foo.user_id FRO
 SELECT
    foo.user_id
 FROM
-    (SELECT 
-    	DISTINCT users_table_local.user_id 
-     FROM 
-     	users_table_local, events_table_local 
-     WHERE 
-     	users_table_local.user_id = events_table_local.user_id AND 
+    (SELECT
+    	DISTINCT users_table_local.user_id
+     FROM
+     	users_table_local, events_table_local
+     WHERE
+     	users_table_local.user_id = events_table_local.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC LIMIT 5
      ) as foo,
-    (SELECT 
-    	DISTINCT users_table.user_id 
-     FROM 
-     	users_table, events_table 
-     WHERE 
-     	users_table.user_id = events_table.user_id AND 
+    (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
      event_type IN (5,6,7,8)
      ) as bar
     WHERE bar.user_id = foo.user_id
     ORDER BY 1 DESC;
-DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT users_table_local.user_id FROM subquery_local_tables.users_table_local, subquery_local_tables.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table_local.user_id DESC LIMIT 5
-DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) foo.user_id) ORDER BY foo.user_id DESC
- user_id 
----------
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table_local.user_id FROM subquery_local_tables.users_table_local, subquery_local_tables.events_table_local WHERE ((users_table_local.user_id OPERATOR(pg_catalog.=) events_table_local.user_id) AND (events_table_local.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table_local.user_id DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) foo.user_id) ORDER BY foo.user_id DESC
+ user_id
+---------------------------------------------------------------------
        6
        5
        4
@@ -81,14 +81,14 @@ DEBUG:  Plan 5 query after replacing subqueries and CTEs: SELECT foo.user_id FRO
 -- subqueries in WHERE could be replaced even if they are on the local tables
 SELECT DISTINCT user_id
 FROM users_table
-WHERE 
-	user_id IN (SELECT DISTINCT value_2 FROM users_table_local WHERE value_1 = 1) 
+WHERE
+	user_id IN (SELECT DISTINCT value_2 FROM users_table_local WHERE value_1 = 1)
 ORDER BY 1 LIMIT 5;
-DEBUG:  generating subplan 6_1 for subquery SELECT DISTINCT value_2 FROM subquery_local_tables.users_table_local WHERE (value_1 OPERATOR(pg_catalog.=) 1)
-DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))) ORDER BY user_id LIMIT 5
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT value_2 FROM subquery_local_tables.users_table_local WHERE (value_1 OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer))) ORDER BY user_id LIMIT 5
 DEBUG:  push down of limit count: 5
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -96,31 +96,31 @@ DEBUG:  push down of limit count: 5
        5
 (5 rows)
 
--- subquery in FROM -> FROM -> FROM should be replaced if 
+-- subquery in FROM -> FROM -> FROM should be replaced if
 -- it contains onle local tables
-SELECT 
-	DISTINCT user_id 
-FROM 
+SELECT
+	DISTINCT user_id
+FROM
 	(
-		SELECT users_table.user_id FROM users_table, 
+		SELECT users_table.user_id FROM users_table,
 							(
-								SELECT 
+								SELECT
 									event_type, user_id
 								FROM
-									(SELECT event_type, users_table.user_id FROM users_table, 
+									(SELECT event_type, users_table.user_id FROM users_table,
 															(SELECT user_id, event_type FROM events_table_local WHERE value_2 < 3 OFFSET 3) as foo
 															WHERE foo.user_id = users_table.user_id
 															) bar
 							) as baz
 									WHERE baz.user_id = users_table.user_id
 	) as sub1
-	ORDER BY 1 DESC 
+	ORDER BY 1 DESC
 	LIMIT 3;
-DEBUG:  generating subplan 7_1 for subquery SELECT user_id, event_type FROM subquery_local_tables.events_table_local WHERE (value_2 OPERATOR(pg_catalog.<) 3) OFFSET 3
-DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT users_table.user_id FROM public.users_table, (SELECT bar.event_type, bar.user_id FROM (SELECT foo.event_type, users_table_1.user_id FROM public.users_table users_table_1, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) users_table_1.user_id)) bar) baz WHERE (baz.user_id OPERATOR(pg_catalog.=) users_table.user_id)) sub1 ORDER BY user_id DESC LIMIT 3
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, event_type FROM subquery_local_tables.events_table_local WHERE (value_2 OPERATOR(pg_catalog.<) 3) OFFSET 3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT users_table.user_id FROM public.users_table, (SELECT bar.event_type, bar.user_id FROM (SELECT foo.event_type, users_table_1.user_id FROM public.users_table users_table_1, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) users_table_1.user_id)) bar) baz WHERE (baz.user_id OPERATOR(pg_catalog.=) users_table.user_id)) sub1 ORDER BY user_id DESC LIMIT 3
 DEBUG:  push down of limit count: 3
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        6
        5
        4
@@ -133,18 +133,18 @@ SELECT user_id, array_length(events_table, 1)
 FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
-    SELECT 
+    SELECT
     	u.user_id, e.event_type::text AS event, e.time
-    FROM 
+    FROM
     	users_table AS u,
         events_table AS e
-    WHERE u.user_id = e.user_id AND 
-    		u.user_id IN 
+    WHERE u.user_id = e.user_id AND
+    		u.user_id IN
     		(
-    			SELECT 
-    				user_id 
-    			FROM 
-    				users_table 
+    			SELECT
+    				user_id
+    			FROM
+    				users_table
     			WHERE value_2 >= 5
 			    AND  EXISTS (SELECT user_id FROM events_table_local WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1)
 				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
@@ -154,20 +154,20 @@ FROM (
   GROUP BY user_id
 ) q
 ORDER BY 2 DESC, 1;
-DEBUG:  generating subplan 8_1 for subquery SELECT user_id FROM subquery_local_tables.events_table_local WHERE ((event_type OPERATOR(pg_catalog.>) 1) AND (event_type OPERATOR(pg_catalog.<=) 3) AND (value_3 OPERATOR(pg_catalog.>) (1)::double precision))
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM subquery_local_tables.events_table_local WHERE ((event_type OPERATOR(pg_catalog.>) 1) AND (event_type OPERATOR(pg_catalog.<=) 3) AND (value_3 OPERATOR(pg_catalog.>) (1)::double precision))
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 8_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 OPERATOR(pg_catalog.>=) 5) AND (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('8_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type OPERATOR(pg_catalog.>) 3) AND (events_table.event_type OPERATOR(pg_catalog.<=) 4) AND (events_table.value_3 OPERATOR(pg_catalog.>) (1)::double precision) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)))))) LIMIT 5
-DEBUG:  Plan 8 query after replacing subqueries and CTEs: SELECT user_id, array_length(events_table, 1) AS array_length FROM (SELECT t.user_id, array_agg(t.event ORDER BY t."time") AS events_table FROM (SELECT u.user_id, (e.event_type)::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('8_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))) t GROUP BY t.user_id) q ORDER BY (array_length(events_table, 1)) DESC, user_id
- user_id | array_length 
----------+--------------
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 OPERATOR(pg_catalog.>=) 5) AND (EXISTS (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type OPERATOR(pg_catalog.>) 3) AND (events_table.event_type OPERATOR(pg_catalog.<=) 4) AND (events_table.value_3 OPERATOR(pg_catalog.>) (1)::double precision) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)))))) LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, array_length(events_table, 1) AS array_length FROM (SELECT t.user_id, array_agg(t.event ORDER BY t."time") AS events_table FROM (SELECT u.user_id, (e.event_type)::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))) t GROUP BY t.user_id) q ORDER BY (array_length(events_table, 1)) DESC, user_id
+ user_id | array_length
+---------------------------------------------------------------------
        5 |          364
 (1 row)
 
 -- subquery (i.e., subquery_2) in WHERE->FROM should be replaced due to local tables
-SELECT 
-	user_id 
-FROM 
-	users_table 
+SELECT
+	user_id
+FROM
+	users_table
 WHERE
  user_id IN
 (
@@ -233,10 +233,10 @@ WHERE
 GROUP BY user_id
 HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
-DEBUG:  generating subplan 10_1 for subquery SELECT user_id, count(*) AS count_pay FROM subquery_local_tables.users_table_local WHERE ((user_id OPERATOR(pg_catalog.>=) 1) AND (user_id OPERATOR(pg_catalog.<=) 3) AND (value_1 OPERATOR(pg_catalog.>) 3) AND (value_1 OPERATOR(pg_catalog.<) 5)) GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) 1) LIMIT 10
-DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT subquery_top.user_id FROM (SELECT subquery_1.user_id, subquery_2.count_pay FROM ((SELECT users_table_1.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 1) AND (events_table.event_type OPERATOR(pg_catalog.<) 3)) UNION SELECT users_table_1.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 2) AND (events_table.event_type OPERATOR(pg_catalog.<) 4))) subquery_1 LEFT JOIN (SELECT intermediate_result.user_id, intermediate_result.count_pay FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, count_pay bigint)) subquery_2 ON ((subquery_1.user_id OPERATOR(pg_catalog.=) subquery_2.user_id))) GROUP BY subquery_1.user_id, subquery_2.count_pay) subquery_top GROUP BY subquery_top.count_pay, subquery_top.user_id)) GROUP BY user_id HAVING ((count(*) OPERATOR(pg_catalog.>) 1) AND (sum(value_2) OPERATOR(pg_catalog.>) 29)) ORDER BY user_id
- user_id 
----------
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, count(*) AS count_pay FROM subquery_local_tables.users_table_local WHERE ((user_id OPERATOR(pg_catalog.>=) 1) AND (user_id OPERATOR(pg_catalog.<=) 3) AND (value_1 OPERATOR(pg_catalog.>) 3) AND (value_1 OPERATOR(pg_catalog.<) 5)) GROUP BY user_id HAVING (count(*) OPERATOR(pg_catalog.>) 1) LIMIT 10
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT subquery_top.user_id FROM (SELECT subquery_1.user_id, subquery_2.count_pay FROM ((SELECT users_table_1.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 1) AND (events_table.event_type OPERATOR(pg_catalog.<) 3)) UNION SELECT users_table_1.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table users_table_1, public.events_table WHERE ((users_table_1.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table_1.user_id OPERATOR(pg_catalog.>=) 1) AND (users_table_1.user_id OPERATOR(pg_catalog.<=) 3) AND (events_table.event_type OPERATOR(pg_catalog.>) 2) AND (events_table.event_type OPERATOR(pg_catalog.<) 4))) subquery_1 LEFT JOIN (SELECT intermediate_result.user_id, intermediate_result.count_pay FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, count_pay bigint)) subquery_2 ON ((subquery_1.user_id OPERATOR(pg_catalog.=) subquery_2.user_id))) GROUP BY subquery_1.user_id, subquery_2.count_pay) subquery_top GROUP BY subquery_top.count_pay, subquery_top.user_id)) GROUP BY user_id HAVING ((count(*) OPERATOR(pg_catalog.>) 1) AND (sum(value_2) OPERATOR(pg_catalog.>) 29)) ORDER BY user_id
+ user_id
+---------------------------------------------------------------------
        2
        3
 (2 rows)

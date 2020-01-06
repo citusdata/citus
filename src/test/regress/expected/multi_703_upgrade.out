@@ -8,15 +8,15 @@ INSERT INTO pg_dist_shard_placement
   (1, 1, 1, 0, 'localhost', :worker_1_port);
 -- if there are no worker nodes which match the shards this should fail
 ALTER EXTENSION citus UPDATE TO '7.0-3';
-ERROR:  There is no node at "localhost:57637"
+ERROR:  There is no node at "localhost:xxxxx"
 CONTEXT:  PL/pgSQL function citus.find_groupid_for_node(text,integer) line 6 at RAISE
 -- if you add a matching worker the upgrade should succeed
 INSERT INTO pg_dist_node (nodename, nodeport, groupid)
   VALUES ('localhost', :worker_1_port, 1);
 ALTER EXTENSION citus UPDATE TO '7.0-3';
 SELECT * FROM pg_dist_placement;
- placementid | shardid | shardstate | shardlength | groupid 
--------------+---------+------------+-------------+---------
+ placementid | shardid | shardstate | shardlength | groupid
+---------------------------------------------------------------------
            1 |       1 |          1 |           0 |       1
 (1 row)
 

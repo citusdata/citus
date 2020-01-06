@@ -1,958 +1,958 @@
 Parsed test spec with 7 sessions
 
 starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s2-update-1 deadlock-checker-call s1-update-2 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s2-update-1: 
+step s2-update-1:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s1-update-2: 
+f
+step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-1: <... completed>
 step s1-update-2: <... completed>
 error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-update-1-rep-2 s2-update-2-rep-2 s2-update-1-rep-2 deadlock-checker-call s1-update-2-rep-2 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-update-1-rep-2: 
+step s1-update-1-rep-2:
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2-rep-2: 
+step s2-update-2-rep-2:
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
 
-step s2-update-1-rep-2: 
+step s2-update-1-rep-2:
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s1-update-2-rep-2: 
+f
+step s1-update-2-rep-2:
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-1-rep-2: <... completed>
 step s1-update-2-rep-2: <... completed>
 error in steps deadlock-checker-call s2-update-1-rep-2 s1-update-2-rep-2: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-set-2pc s2-set-2pc s1-update-1 s2-update-2 s2-update-1 deadlock-checker-call s1-update-2 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-set-2pc: 
+step s1-set-2pc:
 	set citus.multi_shard_commit_protocol TO '2pc';
 
-step s2-set-2pc: 
+step s2-set-2pc:
 	set citus.multi_shard_commit_protocol TO '2pc';
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s2-update-1: 
+step s2-update-1:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s1-update-2: 
+f
+step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-1: <... completed>
 step s1-update-2: <... completed>
 error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-upsert-select-all deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s1-update-2: 
+step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-upsert-select-all: 
+f
+step s2-upsert-select-all:
 	INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s1-update-2: <... completed>
 step s2-upsert-select-all: <... completed>
 error in steps deadlock-checker-call s1-update-2 s2-upsert-select-all: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-ddl deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s1-update-2: 
+step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-ddl: 
+f
+step s2-ddl:
 	ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s1-update-2: <... completed>
 step s2-ddl: <... completed>
 error in steps deadlock-checker-call s1-update-2 s2-ddl: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-insert-dist-10 s2-insert-local-10 s2-insert-dist-10 s1-insert-local-10 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s1-insert-dist-10: 
+step s1-insert-dist-10:
   INSERT INTO deadlock_detection_test VALUES (10, 10);
 
-step s2-insert-local-10: 
+step s2-insert-local-10:
   INSERT INTO local_deadlock_table VALUES (10, 10);
 
-step s2-insert-dist-10: 
+step s2-insert-dist-10:
   INSERT INTO deadlock_detection_test VALUES (10, 10);
  <waiting ...>
-step s1-insert-local-10: 
+step s1-insert-local-10:
   INSERT INTO local_deadlock_table VALUES (10, 10);
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-insert-dist-10: <... completed>
 step s1-insert-local-10: <... completed>
 error in steps deadlock-checker-call s2-insert-dist-10 s1-insert-local-10: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s2-insert-ref-10 s1-insert-ref-11 s2-insert-ref-11 s1-insert-ref-10 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s2-insert-ref-10: 
+step s2-insert-ref-10:
   INSERT INTO deadlock_detection_reference VALUES (10, 10);
 
-step s1-insert-ref-11: 
+step s1-insert-ref-11:
   INSERT INTO deadlock_detection_reference VALUES (11, 11);
 
-step s2-insert-ref-11: 
+step s2-insert-ref-11:
   INSERT INTO deadlock_detection_reference VALUES (11, 11);
  <waiting ...>
-step s1-insert-ref-10: 
+step s1-insert-ref-10:
   INSERT INTO deadlock_detection_reference VALUES (10, 10);
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-insert-ref-11: <... completed>
 step s1-insert-ref-10: <... completed>
 error in steps deadlock-checker-call s2-insert-ref-11 s1-insert-ref-10: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s2-insert-ref-10 s1-update-1 deadlock-checker-call s2-update-1 s1-insert-ref-10 deadlock-checker-call s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s2-insert-ref-10: 
+step s2-insert-ref-10:
   INSERT INTO deadlock_detection_reference VALUES (10, 10);
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-update-1: 
+f
+step s2-update-1:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
  <waiting ...>
-step s1-insert-ref-10: 
+step s1-insert-ref-10:
   INSERT INTO deadlock_detection_reference VALUES (10, 10);
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-1: <... completed>
 step s1-insert-ref-10: <... completed>
 error in steps deadlock-checker-call s2-update-1 s1-insert-ref-10: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s1-update-1 s2-update-2 s3-update-3 deadlock-checker-call s1-update-2 s2-update-3 s3-update-1 deadlock-checker-call s3-commit s2-commit s1-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s1-update-2: 
+f
+step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step s3-update-1: 
+step s3-update-1:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-3: <... completed>
 step s3-update-1: <... completed>
 error in steps deadlock-checker-call s2-update-3 s3-update-1: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 step s1-update-2: <... completed>
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s2-update-1 s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s2-update-3 deadlock-checker-call s3-commit s2-commit s1-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s2-update-1: 
+step s2-update-1:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
  <waiting ...>
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-update-3: 
+f
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
 error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 step s1-update-1: <... completed>
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s4-update-4 s2-update-3 deadlock-checker-call s3-commit s2-commit s1-commit s4-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s4-update-4: 
+f
+step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
 error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s4-update-1 s1-update-1 deadlock-checker-call s2-update-2 s3-update-3 s2-update-3 s3-update-2 deadlock-checker-call s3-commit s2-commit s4-commit s1-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s4-update-1: 
+step s4-update-1:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 1;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-update-2: 
+f
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-3: <... completed>
 step s3-update-2: <... completed>
 error in steps deadlock-checker-call s2-update-3 s3-update-2: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
 step s1-update-1: <... completed>
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s1-update-1 s4-update-4 s2-update-2 s3-update-3 s3-update-2 s4-update-1 s1-update-4 deadlock-checker-call s1-commit s4-commit s2-update-3 deadlock-checker-call s2-commit s3-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s4-update-4: 
+step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
  <waiting ...>
-step s4-update-1: 
+step s4-update-1:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 1;
  <waiting ...>
-step s1-update-4: 
+step s1-update-4:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s4-update-1: <... completed>
 step s1-update-4: <... completed>
 error in steps deadlock-checker-call s4-update-1 s1-update-4: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
 error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s1-update-1 s5-update-5 s3-update-2 s2-update-3 s4-update-4 s3-update-4 deadlock-checker-call s6-update-6 s4-update-6 s1-update-5 s5-update-1 deadlock-checker-call s1-commit s5-commit s6-commit s4-commit s3-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s5-begin: 
+step s5-begin:
   BEGIN;
 
-step s6-begin: 
+step s6-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s5-update-5: 
+step s5-update-5:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
 
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
 
-step s4-update-4: 
+step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
-step s3-update-4: 
+step s3-update-4:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 4;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s6-update-6: 
+f
+step s6-update-6:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 
-step s4-update-6: 
+step s4-update-6:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 6;
  <waiting ...>
-step s1-update-5: 
+step s1-update-5:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 5;
  <waiting ...>
-step s5-update-1: 
+step s5-update-1:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s1-update-5: <... completed>
 step s5-update-1: <... completed>
 error in steps deadlock-checker-call s1-update-5 s5-update-1: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s5-commit: 
+step s5-commit:
   COMMIT;
 
-step s6-commit: 
+step s6-commit:
   COMMIT;
 
 step s4-update-6: <... completed>
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
 step s3-update-4: <... completed>
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s6-update-6 s5-update-5 s5-update-6 s4-update-4 s1-update-4 s4-update-5 deadlock-checker-call s2-update-3 s3-update-2 s2-update-2 s3-update-3 deadlock-checker-call s6-commit s5-commit s4-commit s1-commit s3-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s5-begin: 
+step s5-begin:
   BEGIN;
 
-step s6-begin: 
+step s6-begin:
   BEGIN;
 
-step s6-update-6: 
+step s6-update-6:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 
-step s5-update-5: 
+step s5-update-5:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
 
-step s5-update-6: 
+step s5-update-6:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 6;
  <waiting ...>
-step s4-update-4: 
+step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
-step s1-update-4: 
+step s1-update-4:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
  <waiting ...>
-step s4-update-5: 
+step s4-update-5:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 5;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s2-update-3: 
+f
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
  <waiting ...>
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-2: <... completed>
 step s3-update-3: <... completed>
 error in steps deadlock-checker-call s2-update-2 s3-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s6-commit: 
+step s6-commit:
   COMMIT;
 
 step s5-update-6: <... completed>
-step s5-commit: 
+step s5-commit:
   COMMIT;
 
 step s4-update-5: <... completed>
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
 step s1-update-4: <... completed>
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s5-update-5 s3-update-2 s2-update-2 s4-update-4 s3-update-4 s4-update-5 s1-update-4 deadlock-checker-call s6-update-6 s5-update-6 s6-update-5 deadlock-checker-call s5-commit s6-commit s4-commit s3-commit s1-commit s2-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s5-begin: 
+step s5-begin:
   BEGIN;
 
-step s6-begin: 
+step s6-begin:
   BEGIN;
 
-step s5-update-5: 
+step s5-update-5:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
 
-step s3-update-2: 
+step s3-update-2:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 2;
 
-step s2-update-2: 
+step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
  <waiting ...>
-step s4-update-4: 
+step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
-step s3-update-4: 
+step s3-update-4:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 4;
  <waiting ...>
-step s4-update-5: 
+step s4-update-5:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 5;
  <waiting ...>
-step s1-update-4: 
+step s1-update-4:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s6-update-6: 
+f
+step s6-update-6:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 
-step s5-update-6: 
+step s5-update-6:
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 6;
  <waiting ...>
-step s6-update-5: 
+step s6-update-5:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 5;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s5-update-6: <... completed>
 step s6-update-5: <... completed>
 error in steps deadlock-checker-call s5-update-6 s6-update-5: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s5-commit: 
+step s5-commit:
   COMMIT;
 
 step s4-update-5: <... completed>
-step s6-commit: 
+step s6-commit:
   COMMIT;
 
-step s4-commit: 
+step s4-commit:
   COMMIT;
 
 step s3-update-4: <... completed>
-step s3-commit: 
+step s3-commit:
   COMMIT;
 
 step s2-update-2: <... completed>
 step s1-update-4: <... completed>
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s1-update-1 s3-update-3 s2-update-4 s2-update-3 s4-update-2 s5-random-adv-lock s4-random-adv-lock s3-update-1 s1-update-2-4 deadlock-checker-call deadlock-checker-call s5-commit s4-commit s2-commit s1-commit s3-commit
-step s1-begin: 
+step s1-begin:
   BEGIN;
 
-step s2-begin: 
+step s2-begin:
   BEGIN;
 
-step s3-begin: 
+step s3-begin:
   BEGIN;
 
-step s4-begin: 
+step s4-begin:
   BEGIN;
 
-step s5-begin: 
+step s5-begin:
   BEGIN;
 
-step s1-update-1: 
+step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
-step s3-update-3: 
+step s3-update-3:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 3;
 
-step s2-update-4: 
+step s2-update-4:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 4;
 
-step s2-update-3: 
+step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
-step s4-update-2: 
+step s4-update-2:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 2;
 
-step s5-random-adv-lock: 
+step s5-random-adv-lock:
   SELECT pg_advisory_xact_lock(8765);
 
 pg_advisory_xact_lock
 
-               
-step s4-random-adv-lock: 
+
+step s4-random-adv-lock:
   SELECT pg_advisory_xact_lock(8765);
  <waiting ...>
-step s3-update-1: 
+step s3-update-1:
   UPDATE deadlock_detection_test SET some_val = 3 WHERE user_id = 1;
  <waiting ...>
-step s1-update-2-4: 
+step s1-update-2-4:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2 OR user_id = 4;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s2-update-3: <... completed>
 error in steps deadlock-checker-call s2-update-3: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-f              
-step s5-commit: 
+f
+step s5-commit:
   COMMIT;
 
 step s4-random-adv-lock: <... completed>
 pg_advisory_xact_lock
 
-               
-step s4-commit: 
+
+step s4-commit:
   COMMIT;
 
 step s1-update-2-4: <... completed>
-step s2-commit: 
+step s2-commit:
   COMMIT;
 
-step s1-commit: 
+step s1-commit:
   COMMIT;
 
 step s3-update-1: <... completed>
-step s3-commit: 
+step s3-commit:
   COMMIT;
 

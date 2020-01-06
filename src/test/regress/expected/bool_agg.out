@@ -3,50 +3,50 @@ CREATE SCHEMA bool_agg;
 SET search_path TO bool_agg;
 CREATE TABLE bool_test (id int, val int, flag bool, kind int);
 SELECT create_distributed_table('bool_agg.bool_test','id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO bool_test VALUES (1, 1, true, 99), (2, 2, false, 99), (2, 3, true, 88);
 -- mix of true and false
 SELECT bool_and(flag), bool_or(flag), every(flag) FROM bool_test;
- bool_and | bool_or | every 
-----------+---------+-------
+ bool_and | bool_or | every
+---------------------------------------------------------------------
  f        | t       | f
 (1 row)
 
 SELECT kind, bool_and(flag), bool_or(flag), every(flag) FROM bool_test GROUP BY kind ORDER BY 2;
- kind | bool_and | bool_or | every 
-------+----------+---------+-------
+ kind | bool_and | bool_or | every
+---------------------------------------------------------------------
    99 | f        | t       | f
    88 | t        | t       | t
 (2 rows)
 
 -- expressions in aggregate
 SELECT bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test;
- bool_or | bool_and 
----------+----------
+ bool_or | bool_and
+---------------------------------------------------------------------
  t       | f
 (1 row)
 
 SELECT kind, bool_or(val > 2 OR id < 2), bool_and(val < 3) FROM bool_test GROUP BY kind ORDER BY 3;
- kind | bool_or | bool_and 
-------+---------+----------
+ kind | bool_or | bool_and
+---------------------------------------------------------------------
    88 | t       | f
    99 | t       | t
 (2 rows)
 
 -- 1 & 3, 1 | 3
 SELECT bit_and(val), bit_or(val) FROM bool_test WHERE flag;
- bit_and | bit_or 
----------+--------
+ bit_and | bit_or
+---------------------------------------------------------------------
        1 |      3
 (1 row)
 
 SELECT flag, bit_and(val), bit_or(val) FROM bool_test GROUP BY flag ORDER BY flag;
- flag | bit_and | bit_or 
-------+---------+--------
+ flag | bit_and | bit_or
+---------------------------------------------------------------------
  f    |       2 |      2
  t    |       1 |      3
 (2 rows)

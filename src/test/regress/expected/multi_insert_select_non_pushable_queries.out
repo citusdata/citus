@@ -1,19 +1,19 @@
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Insert into local table
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 CREATE TABLE test_table_1(id int);
 INSERT INTO test_table_1
 SELECT user_id FROM users_table;
 ERROR:  cannot INSERT rows from a distributed query into a local table
 HINT:  Consider using CREATE TEMPORARY TABLE tmp AS SELECT ... and inserting from the temporary table.
 DROP TABLE test_table_1;
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Vanilla funnel query
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the JOIN is not an equi join
 INSERT INTO agg_results_third (user_id, value_1_agg)
 SELECT user_id, array_length(events_table, 1)
@@ -32,11 +32,11 @@ FROM (
 ) q;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 --  Funnel grouped by whether or not a user has done an event
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the JOIN is not an equi join left part of the UNION
 -- is not equi join
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
@@ -160,18 +160,18 @@ FROM (
 ) t GROUP BY user_id, hasdone_event;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  generating subplan 10_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102])))
-DEBUG:  generating subplan 10_2 for subquery SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
-DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
-DEBUG:  generating subplan 9_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102]))) UNION SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
+DEBUG:  generating subplan XXX_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
+DEBUG:  generating subplan XXX_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102]))) UNION SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 RESET client_min_messages;
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Funnel, grouped by the number of times a user has done an event
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the right of the UNION query is not joined on
 -- the partition key
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg)
@@ -311,20 +311,20 @@ ORDER BY
   count_pay;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  generating subplan 19_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12))
-DEBUG:  generating subplan 19_2 for subquery SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
-DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('19_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
-DEBUG:  generating subplan 18_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12)) UNION SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12))
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12)) UNION SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 RESET client_min_messages;
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Most recently seen users_table events_table
-------------------------------------
+---------------------------------------------------------------------
 -- Note that we don't use ORDER BY/LIMIT yet
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since lateral join is not an equi join
 INSERT INTO agg_results_third (user_id, agg_time, value_2_agg)
 SELECT
@@ -412,11 +412,11 @@ FROM (
 ORDER BY user_lastseen DESC;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Count the number of distinct users_table who are in segment X and Y and Z
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since partition key is NOT IN
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
@@ -444,11 +444,11 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find customers who have done X, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since join is not an euqi join
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -465,11 +465,11 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND event_type = users_table.user_id);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who haven’t done X, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the join is not an equi join
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -486,11 +486,11 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND event_type=users_table.user_id);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X and Y, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the second join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -500,11 +500,11 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id!=users_table.user_id);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the first join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -513,11 +513,11 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the second join is not an equi join
 INSERT INTO agg_results_third(user_id, value_2_agg)
   SELECT user_id,
@@ -572,11 +572,11 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
                      HAVING Count(*) > 2);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find me all users_table who has done some event and has filters
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable due to NOT IN
 INSERT INTO agg_results_third(user_id)
 Select user_id
@@ -617,11 +617,11 @@ And event_type  in
    And value_2 > 25);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Which events_table did people who has done some specific events_table
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable due to NOT IN
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
@@ -643,11 +643,11 @@ WHERE event_type IN (SELECT user_id from events_table WHERE event_type > 500 and
 GROUP BY user_id, event_type;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find my assets that have the highest probability and fetch their metadata
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- not pushable since the join is not an equi join
 INSERT INTO agg_results_third(user_id, value_1_agg, value_3_agg)
 SELECT

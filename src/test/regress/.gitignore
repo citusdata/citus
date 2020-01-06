@@ -22,3 +22,7 @@
 
 # python
 *.pyc
+
+# output from diff normalization that shouldn't be commited
+*.unmodified
+*.modified

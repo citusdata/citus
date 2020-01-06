@@ -16,9 +16,9 @@ SELECT run_command_on_coordinator_and_workers($cf$
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 $cf$);
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_coordinator_and_workers($cf$
@@ -28,9 +28,9 @@ SELECT run_command_on_coordinator_and_workers($cf$
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 $cf$);
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ... use that function to create a custom equality operator...
@@ -42,9 +42,9 @@ SELECT run_command_on_coordinator_and_workers($co$
         HASHES
     );
 $co$);
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ... and create a custom operator family for hash indexes...
@@ -52,7 +52,7 @@ CREATE OPERATOR FAMILY cats_op_fam USING hash;
 -- ... create a test HASH function. Though it is a poor hash function,
 -- it is acceptable for our tests
 CREATE FUNCTION test_composite_type_hash(test_composite_type) RETURNS int
-AS 'SELECT hashtext( ($1.i + $1.i2)::text);'      
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
 LANGUAGE SQL
 IMMUTABLE
 RETURNS NULL ON NULL INPUT;
@@ -74,51 +74,51 @@ CREATE TABLE composite_type_partitioned_table
 );
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO composite_type_partitioned_table VALUES  (1, '(1, 2)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (2, '(3, 4)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (3, '(5, 6)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (4, '(7, 8)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (5, '(9, 10)'::test_composite_type);
 SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_composite_type;
- id |  col  
-----+-------
+ id |  col
+---------------------------------------------------------------------
   4 | (7,8)
 (1 row)
 
 UPDATE composite_type_partitioned_table SET id = 6 WHERE col =  '(7, 8)'::test_composite_type;
 SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_composite_type;
- id |  col  
-----+-------
+ id |  col
+---------------------------------------------------------------------
   6 | (7,8)
 (1 row)
 
 -- create and distribute a table on enum type column
 CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
 CREATE TABLE bugs (
-    id integer, 
+    id integer,
     status bug_status
 );
 SELECT create_distributed_table('bugs', 'status', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO bugs VALUES  (1, 'new');
 INSERT INTO bugs VALUES  (2, 'open');
 INSERT INTO bugs VALUES  (3, 'closed');
 INSERT INTO bugs VALUES  (4, 'closed');
 INSERT INTO bugs VALUES  (5, 'open');
 SELECT * FROM bugs WHERE status =  'closed'::bug_status;
- id | status 
-----+--------
+ id | status
+---------------------------------------------------------------------
   3 | closed
   4 | closed
 (2 rows)
@@ -126,40 +126,40 @@ SELECT * FROM bugs WHERE status =  'closed'::bug_status;
 UPDATE bugs SET status = 'closed'::bug_status WHERE id = 2;
 ERROR:  modifying the partition value of rows is not allowed
 SELECT * FROM bugs WHERE status = 'open'::bug_status;
- id | status 
-----+--------
+ id | status
+---------------------------------------------------------------------
   2 | open
   5 | open
 (2 rows)
 
 -- create and distribute a table on varchar column
-CREATE TABLE varchar_hash_partitioned_table    
+CREATE TABLE varchar_hash_partitioned_table
 (
 	id int,
     name varchar
 );
 SELECT create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
--- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
+-- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table
 INSERT INTO varchar_hash_partitioned_table VALUES  (1, 'Jason');
 INSERT INTO varchar_hash_partitioned_table VALUES  (2, 'Ozgun');
 INSERT INTO varchar_hash_partitioned_table VALUES  (3, 'Onder');
 INSERT INTO varchar_hash_partitioned_table VALUES  (4, 'Sumedh');
 INSERT INTO varchar_hash_partitioned_table VALUES  (5, 'Marco');
 SELECT * FROM varchar_hash_partitioned_table WHERE id = 1;
- id | name  
-----+-------
+ id | name
+---------------------------------------------------------------------
   1 | Jason
 (1 row)
 
 UPDATE varchar_hash_partitioned_table SET id = 6 WHERE name = 'Jason';
 SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
- id | name  
-----+-------
+ id | name
+---------------------------------------------------------------------
   6 | Jason
 (1 row)
 

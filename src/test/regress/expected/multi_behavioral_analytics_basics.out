@@ -1,8 +1,8 @@
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Vanilla funnel query
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 INSERT INTO agg_results (user_id, value_1_agg)
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -20,16 +20,16 @@ FROM (
 ) q;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      2 |     2 | 1.5000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 --  Funnel grouped by whether or not a user has done an event
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 INSERT INTO agg_results (user_id, value_1_agg, value_2_agg )
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event)
 FROM (
@@ -69,16 +69,16 @@ FROM (
 ) t GROUP BY user_id, hasdone_event;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      4 |     2 | 1.5000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Funnel, grouped by the number of times a user has done an event
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
 SELECT
   user_id,
@@ -146,18 +146,18 @@ ORDER BY
   count_pay;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      7 |     3 | 1.7142857142857143
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Most recently seen users_table events_table
-------------------------------------
+---------------------------------------------------------------------
 -- Note that we don't use ORDER BY/LIMIT yet
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results (user_id, agg_time, value_2_agg)
 SELECT
@@ -187,16 +187,16 @@ FROM (
 ORDER BY user_lastseen DESC;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      3 |     3 | 2.0000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Count the number of distinct users_table who are in segment X and Y and Z
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results (user_id)
 SELECT DISTINCT user_id
@@ -206,16 +206,16 @@ WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      5 |     5 | 3.8000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Count the number of distinct users_table who are in at least two of X and Y and Z segments
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 SELECT user_id
@@ -227,16 +227,16 @@ GROUP BY user_id
 HAVING count(distinct value_1) >= 2;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find customers who have done X, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -245,16 +245,16 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type>1  AND event_type < 5 AND value_3 > 2 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
     20 |     6 | 3.7500000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who haven’t done X, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -263,16 +263,16 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=1 AND value_3 > 4 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      4 |     2 | 4.2500000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X and Y, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -282,16 +282,16 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=2 AND value_3 > 1 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
     29 |     5 | 3.1034482758620690
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
@@ -300,16 +300,16 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id=users_table.user_id);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
     11 |     1 | 5.0000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_2_agg)
   SELECT user_id,
@@ -328,16 +328,16 @@ INSERT INTO agg_results(user_id, value_2_agg)
                      HAVING Count(*) > 2);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      4 |     2 | 3.5000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find me all users_table who logged in more than once
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg)
 SELECT user_id, value_1 from
@@ -347,16 +347,16 @@ SELECT user_id, value_1 from
 ) as a;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |          avg           
--------+-------+------------------------
+ count | count |          avg
+---------------------------------------------------------------------
      1 |     1 | 1.00000000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find me all users_table who has done some event and has filters
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 Select user_id
@@ -370,16 +370,16 @@ And user_id in
    And value_2 > 1);
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
     11 |     4 | 3.1818181818181818
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Which events_table did people who has done some specific events_table
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
@@ -387,16 +387,16 @@ WHERE user_id in (SELECT user_id from events_table WHERE event_type > 3 and even
 GROUP BY user_id, event_type;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
     34 |     6 | 3.4411764705882353
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find me all the users_table who has done some event more than three times
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 select user_id from
@@ -409,16 +409,16 @@ where event_type = 4 group by user_id having count(*) > 3
 ) as a;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      4 |     4 | 2.5000000000000000
 (1 row)
 
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 -- Find my assets that have the highest probability and fetch their metadata
-------------------------------------
-------------------------------------
+---------------------------------------------------------------------
+---------------------------------------------------------------------
 TRUNCATE agg_results;
 INSERT INTO agg_results(user_id, value_1_agg, value_3_agg)
 SELECT
@@ -437,8 +437,8 @@ FROM
   WHERE users_table.value_1 < 3;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
   3488 |     6 | 3.5372706422018349
 (1 row)
 
@@ -461,8 +461,8 @@ FROM
   WHERE temp.value_1 < 3;
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
- count | count |        avg         
--------+-------+--------------------
+ count | count |        avg
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000
 (1 row)
 
@@ -485,8 +485,8 @@ FROM
   WHERE temp.value_1 < 3
   ORDER BY 1, 2;
 SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
- count | count |        avg         |          avg           
--------+-------+--------------------+------------------------
+ count | count |        avg         |          avg
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000 | 0.16666666666666666667
 (1 row)
 
@@ -508,8 +508,8 @@ FROM
   ON users_ids.user_id = temp.user_id
   ORDER BY 1, 2;
 SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
- count | count |        avg         |          avg           
--------+-------+--------------------+------------------------
+ count | count |        avg         |          avg
+---------------------------------------------------------------------
      6 |     6 | 3.5000000000000000 | 0.16666666666666666667
 (1 row)
 

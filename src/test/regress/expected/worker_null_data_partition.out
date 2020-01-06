@@ -23,9 +23,9 @@ SELECT usesysid AS userid FROM pg_user WHERE usename = current_user \gset
 SELECT worker_range_partition_table(:JobId, :Range_TaskId, :Select_Query_Text,
        				    :Partition_Column_Text, :Partition_Column_Type,
 				    ARRAY[0, 10]::_int4);
- worker_range_partition_table 
-------------------------------
- 
+ worker_range_partition_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Copy partitioned data files into tables for testing purposes
@@ -33,14 +33,14 @@ COPY :Range_Table_Part_00 FROM :'Range_Table_File_00';
 COPY :Range_Table_Part_01 FROM :'Range_Table_File_01';
 COPY :Range_Table_Part_02 FROM :'Range_Table_File_02';
 SELECT COUNT(*) FROM :Range_Table_Part_00;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
 SELECT COUNT(*) FROM :Range_Table_Part_02;
- count 
--------
+ count
+---------------------------------------------------------------------
    588
 (1 row)
 
@@ -50,8 +50,8 @@ SELECT COUNT(*) AS diff_lhs_00 FROM (
        :Select_All FROM :Range_Table_Part_00 EXCEPT ALL
        (:Select_All FROM supplier WHERE :Partition_Column < 0 OR
                                        	:Partition_Column IS NULL) ) diff;
- diff_lhs_00 
--------------
+ diff_lhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -59,16 +59,16 @@ SELECT COUNT(*) AS diff_lhs_01 FROM (
        :Select_All FROM :Range_Table_Part_01 EXCEPT ALL
        :Select_All FROM supplier WHERE :Partition_Column >= 0 AND
        		   		       :Partition_Column < 10 ) diff;
- diff_lhs_01 
--------------
+ diff_lhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs_02 FROM (
        :Select_All FROM supplier WHERE :Partition_Column >= 10 EXCEPT ALL
        :Select_All FROM :Range_Table_Part_02 ) diff;
- diff_rhs_02 
--------------
+ diff_rhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -76,8 +76,8 @@ SELECT COUNT(*) AS diff_rhs_00 FROM (
        (:Select_All FROM supplier WHERE :Partition_Column < 0 OR
                                         :Partition_Column IS NULL) EXCEPT ALL
        :Select_All FROM :Range_Table_Part_00 ) diff;
- diff_rhs_00 
--------------
+ diff_rhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -85,16 +85,16 @@ SELECT COUNT(*) AS diff_rhs_01 FROM (
        :Select_All FROM supplier WHERE :Partition_Column >= 0 AND
        		   		       :Partition_Column < 10 EXCEPT ALL
        :Select_All FROM :Range_Table_Part_01 ) diff;
- diff_rhs_01 
--------------
+ diff_rhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs_02 FROM (
        :Select_All FROM supplier WHERE :Partition_Column >= 10 EXCEPT ALL
        :Select_All FROM :Range_Table_Part_02 ) diff;
- diff_rhs_02 
--------------
+ diff_rhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -116,23 +116,23 @@ SELECT COUNT(*) AS diff_rhs_02 FROM (
 SELECT worker_hash_partition_table(:JobId, :Hash_TaskId, :Select_Query_Text,
        				   :Partition_Column_Text, :Partition_Column_Type,
 				   ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
- worker_hash_partition_table 
------------------------------
- 
+ worker_hash_partition_table
+---------------------------------------------------------------------
+
 (1 row)
 
 COPY :Hash_Table_Part_00 FROM :'Hash_Table_File_00';
 COPY :Hash_Table_Part_01 FROM :'Hash_Table_File_01';
 COPY :Hash_Table_Part_02 FROM :'Hash_Table_File_02';
 SELECT COUNT(*) FROM :Hash_Table_Part_00;
- count 
--------
+ count
+---------------------------------------------------------------------
    282
 (1 row)
 
 SELECT COUNT(*) FROM :Hash_Table_Part_02;
- count 
--------
+ count
+---------------------------------------------------------------------
    102
 (1 row)
 
@@ -142,24 +142,24 @@ SELECT COUNT(*) AS diff_lhs_00 FROM (
        :Select_All FROM :Hash_Table_Part_00 EXCEPT ALL
        (:Select_All FROM supplier WHERE (:Hash_Mod_Function = 0) OR
                                        	 :Partition_Column IS NULL) ) diff;
- diff_lhs_00 
--------------
+ diff_lhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_lhs_01 FROM (
        :Select_All FROM :Hash_Table_Part_01 EXCEPT ALL
        :Select_All FROM supplier WHERE (:Hash_Mod_Function = 1) ) diff;
- diff_lhs_01 
--------------
+ diff_lhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_lhs_02 FROM (
        :Select_All FROM :Hash_Table_Part_02 EXCEPT ALL
        :Select_All FROM supplier WHERE (:Hash_Mod_Function = 2) ) diff;
- diff_lhs_02 
--------------
+ diff_lhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 
@@ -167,24 +167,24 @@ SELECT COUNT(*) AS diff_rhs_00 FROM (
        (:Select_All FROM supplier WHERE (:Hash_Mod_Function = 0) OR
                                        	 :Partition_Column IS NULL) EXCEPT ALL
        :Select_All FROM :Hash_Table_Part_00 ) diff;
- diff_rhs_00 
--------------
+ diff_rhs_00
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs_01 FROM (
        :Select_All FROM supplier WHERE (:Hash_Mod_Function = 1) EXCEPT ALL
        :Select_All FROM :Hash_Table_Part_01 ) diff;
- diff_rhs_01 
--------------
+ diff_rhs_01
+---------------------------------------------------------------------
            0
 (1 row)
 
 SELECT COUNT(*) AS diff_rhs_02 FROM (
        :Select_All FROM supplier WHERE (:Hash_Mod_Function = 2) EXCEPT ALL
        :Select_All FROM :Hash_Table_Part_02 ) diff;
- diff_rhs_02 
--------------
+ diff_rhs_02
+---------------------------------------------------------------------
            0
 (1 row)
 

@@ -3,17 +3,17 @@ Parsed test spec with 3 sessions
 starting permutation: s1-begin s2-begin s1-update-dist-table s2-lock-ref-table-placement-on-coordinator s1-lock-ref-table-placement-on-coordinator s2-update-dist-table deadlock-checker-call s1-end s2-end
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s1-update-dist-table: 
+step s1-update-dist-table:
     update dist_table set b = 2 where a = 1;
 
-step s2-lock-ref-table-placement-on-coordinator: 
+step s2-lock-ref-table-placement-on-coordinator:
     DO $$
       DECLARE refshardid int;
       BEGIN
@@ -22,7 +22,7 @@ step s2-lock-ref-table-placement-on-coordinator:
       END
     $$;
 
-step s1-lock-ref-table-placement-on-coordinator: 
+step s1-lock-ref-table-placement-on-coordinator:
     DO $$
       DECLARE refshardid int;
       BEGIN
@@ -31,113 +31,113 @@ step s1-lock-ref-table-placement-on-coordinator:
       END
     $$;
  <waiting ...>
-step s2-update-dist-table: 
+step s2-update-dist-table:
     update dist_table set b = 2 where a = 1;
  <waiting ...>
-step deadlock-checker-call: 
+step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
 
-t              
+t
 step s1-lock-ref-table-placement-on-coordinator: <... completed>
 step s2-update-dist-table: <... completed>
 error in steps deadlock-checker-call s1-lock-ref-table-placement-on-coordinator s2-update-dist-table: ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-end: 
+step s1-end:
     END;
 
-step s2-end: 
+step s2-end:
     END;
 
 master_remove_node
 
-               
+
 
 starting permutation: s1-begin s2-begin s1-update-ref-table s2-sleep s2-view-dist s2-view-worker s2-end s1-end
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s1-update-ref-table: 
+step s1-update-ref-table:
     update ref_table set a = a + 1;
 
-step s2-sleep: 
+step s2-sleep:
 	SELECT pg_sleep(0.5);
 
-pg_sleep       
+pg_sleep
 
-               
-step s2-view-dist: 
+
+step s2-view-dist:
 	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;	
 
-query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
+query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname
 
 
     update ref_table set a = a + 1;
-coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
+coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
 
     update ref_table set a = a + 1;
-localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-step s2-view-worker: 
-	SELECT query, query_hostname, query_hostport, master_query_host_name, 
-           master_query_host_port, state, wait_event_type, wait_event, usename, datname 
+localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+step s2-view-worker:
+	SELECT query, query_hostname, query_hostport, master_query_host_name,
+           master_query_host_port, state, wait_event_type, wait_event, usename, datname
     FROM citus_worker_stat_activity
-    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND 
+    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
           query NOT ILIKE '%dump_local_wait_edges%'
     ORDER BY query, query_hostport DESC;
 
-query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname        
+query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname
 
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression     
-step s2-end: 
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+step s2-end:
     END;
 
-step s1-end: 
+step s1-end:
     END;
 
 master_remove_node
 
-               
+
 
 starting permutation: s1-begin s2-begin s1-update-ref-table s2-active-transactions s1-end s2-end
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s1-update-ref-table: 
+step s1-update-ref-table:
     update ref_table set a = a + 1;
 
-step s2-active-transactions: 
+step s2-active-transactions:
 	-- Admin should be able to see all transactions
 	SELECT count(*) FROM get_all_active_transactions();
 	SELECT count(*) FROM get_global_active_transactions();
 
-count          
+count
 
-2              
-count          
+2
+count
 
-6              
-step s1-end: 
+6
+step s1-end:
     END;
 
-step s2-end: 
+step s2-end:
     END;
 
 master_remove_node
 
-               
+

@@ -5,9 +5,9 @@
 SET citus.next_shard_id TO 870000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify that the citus extension can't be dropped while distributed tables exist
@@ -30,9 +30,9 @@ COMMIT;
 -- recreate testtableddl
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify that the table can be dropped
@@ -42,14 +42,14 @@ CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 -- create table and do create empty shard test here, too
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT 1 FROM master_create_empty_shard('testtableddl');
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -58,18 +58,18 @@ DROP TABLE testtableddl;
 RESET citus.shard_replication_factor;
 -- ensure no metadata of distributed tables are remaining
 SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey | colocationid | repmodel 
---------------+------------+---------+--------------+----------
+ logicalrelid | partmethod | partkey | colocationid | repmodel
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_dist_shard;
- logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
---------------+---------+--------------+---------------+---------------
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM pg_dist_shard_placement;
- shardid | shardstate | shardlength | nodename | nodeport | placementid 
----------+------------+-------------+----------+----------+-------------
+ shardid | shardstate | shardlength | nodename | nodeport | placementid
+---------------------------------------------------------------------
 (0 rows)
 
 -- check that the extension now can be dropped (and recreated)
@@ -77,14 +77,14 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
@@ -93,9 +93,9 @@ CREATE TABLE testserialtable(id serial, group_id integer);
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- should not be able to add additional serial columns
@@ -122,7 +122,7 @@ DROP TABLE testserialtable;
 \c - - - :worker_1_port
 \ds
       List of relations
- Schema | Name | Type | Owner 
---------+------+------+-------
+ Schema | Name | Type | Owner
+---------------------------------------------------------------------
 (0 rows)
 

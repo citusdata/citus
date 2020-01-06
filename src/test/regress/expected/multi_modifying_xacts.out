@@ -13,27 +13,27 @@ CREATE TABLE labs (
 	name text NOT NULL
 );
 SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('researchers', 2, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_distributed_table('labs', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('labs', 1, 1);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- might be confusing to have two people in the same lab with the same name
@@ -49,8 +49,8 @@ DELETE FROM researchers WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers VALUES (2, 1, 'John Backus'), (12, 1, 'Frances E. Allen');
 COMMIT;
 SELECT name FROM researchers WHERE lab_id = 1 AND id % 10 = 2;
-       name       
-------------------
+       name
+---------------------------------------------------------------------
  John Backus
  Frances E. Allen
 (2 rows)
@@ -62,8 +62,8 @@ DELETE FROM researchers WHERE id = 14 AND lab_id = 2;
 ROLLBACK;
 -- should have rolled everything back
 SELECT * FROM researchers WHERE id = 15 AND lab_id = 2;
- id | lab_id | name 
-----+--------+------
+ id | lab_id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- abort a modification
@@ -71,8 +71,8 @@ BEGIN;
 DELETE FROM researchers WHERE lab_id = 1 AND id = 1;
 ABORT;
 SELECT name FROM researchers WHERE lab_id = 1 AND id = 1;
-     name     
---------------
+     name
+---------------------------------------------------------------------
  Donald Knuth
 (1 row)
 
@@ -90,8 +90,8 @@ SAVEPOINT hire_thompson;
 INSERT INTO researchers VALUES (6, 3, 'Ken Thompson');
 COMMIT;
 SELECT name FROM researchers WHERE lab_id = 3 AND id = 6;
-     name     
---------------
+     name
+---------------------------------------------------------------------
  Ken Thompson
 (1 row)
 
@@ -114,8 +114,8 @@ INSERT INTO researchers VALUES (8, 4, 'Douglas Engelbart');
 ROLLBACK TO hire_engelbart;
 COMMIT;
 SELECT name FROM researchers WHERE lab_id = 4;
-   name   
-----------
+   name
+---------------------------------------------------------------------
  Jim Gray
 (1 row)
 
@@ -137,8 +137,8 @@ INSERT INTO researchers VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs VALUES (5, 'Los Alamos');
 COMMIT;
 SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
- id | lab_id |       name        | id |    name    
-----+--------+-------------------+----+------------
+ id | lab_id |       name        | id |    name
+---------------------------------------------------------------------
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (1 row)
 
@@ -153,15 +153,15 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
 DETAIL:  Key (lab_id, name)=(6, Leslie Lamport) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 ABORT;
 -- SELECTs may occur after a modification: First check that selecting
 -- from the modified node works.
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -176,8 +176,8 @@ AND    sp.nodeport = :worker_1_port
 AND    s.logicalrelid = 'researchers'::regclass;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -200,15 +200,15 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 ABORT;
 -- but the DDL should correctly roll back
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
- Column |  Type  | Modifiers 
---------+--------+-----------
+ Column |  Type  | Modifiers
+---------------------------------------------------------------------
  id     | bigint | not null
  name   | text   | not null
 (2 rows)
 
 SELECT * FROM labs WHERE id = 6;
- id |   name    
-----+-----------
+ id |   name
+---------------------------------------------------------------------
   6 | Bell Labs
 (1 row)
 
@@ -243,8 +243,8 @@ ROLLBACK;
 BEGIN;
 \copy labs from stdin delimiter ','
 SELECT name FROM labs WHERE id = 10;
-      name      
-----------------
+      name
+---------------------------------------------------------------------
  Weyland-Yutani
  Weyland-Yutani
 (2 rows)
@@ -257,16 +257,16 @@ BEGIN;
 \copy labs from stdin delimiter ','
 COMMIT;
 SELECT name FROM labs WHERE id = 11 OR id = 12 ORDER BY id;
-      name      
-----------------
+      name
+---------------------------------------------------------------------
  Planet Express
  fsociety
 (2 rows)
 
 -- 1pc failure test
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -279,22 +279,22 @@ DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
 COMMIT;
 -- verify rollback
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id |      name      
-----+--------+----------------
+ id | lab_id |      name
+---------------------------------------------------------------------
   9 |      6 | Leslie Lamport
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- 2pc failure and success tests
 SET citus.multi_shard_commit_protocol TO '2pc';
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -307,14 +307,14 @@ DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
 COMMIT;
 -- verify rollback
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id |      name      
-----+--------+----------------
+ id | lab_id |      name
+---------------------------------------------------------------------
   9 |      6 | Leslie Lamport
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -324,8 +324,8 @@ BEGIN;
 COMMIT;
 -- verify success
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id |         name         
-----+--------+----------------------
+ id | lab_id |         name
+---------------------------------------------------------------------
   9 |      6 | Leslie Lamport
  17 |      6 |  'Bjarne Stroustrup'
  18 |      6 |  'Dennis Ritchie'
@@ -333,8 +333,8 @@ SELECT * FROM researchers WHERE lab_id = 6;
 
 -- verify 2pc
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -350,8 +350,8 @@ SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS 
     END;
 $rli$ LANGUAGE plpgsql;')
 ORDER BY nodeport;
- nodename  | nodeport | success |     result      
------------+----------+---------+-----------------
+ nodename  | nodeport | success |     result
+---------------------------------------------------------------------
  localhost |    57637 | t       | CREATE FUNCTION
  localhost |    57638 | t       | CREATE FUNCTION
 (2 rows)
@@ -359,8 +359,8 @@ ORDER BY nodeport;
 -- register after insert trigger
 SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
 ORDER BY nodeport, shardid;
- nodename  | nodeport | shardid | success |     result     
------------+----------+---------+---------+----------------
+ nodename  | nodeport | shardid | success |     result
+---------------------------------------------------------------------
  localhost |    57637 | 1200000 | t       | CREATE TRIGGER
  localhost |    57637 | 1200001 | t       | CREATE TRIGGER
  localhost |    57638 | 1200000 | t       | CREATE TRIGGER
@@ -377,16 +377,16 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
-WARNING:  could not commit transaction for shard 1200001 on any active node
+WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
 -- verify everyhing including delete is rolled back
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id |         name         
-----+--------+----------------------
+ id | lab_id |         name
+---------------------------------------------------------------------
   9 |      6 | Leslie Lamport
  17 |      6 |  'Bjarne Stroustrup'
  18 |      6 |  'Dennis Ritchie'
@@ -395,8 +395,8 @@ SELECT * FROM researchers WHERE lab_id = 6;
 -- cleanup triggers and the function
 SELECT * from run_command_on_placements('researchers', 'drop trigger reject_large_researcher_id on %s')
 ORDER BY nodeport, shardid;
- nodename  | nodeport | shardid | success |    result    
------------+----------+---------+---------+--------------
+ nodename  | nodeport | shardid | success |    result
+---------------------------------------------------------------------
  localhost |    57637 | 1200000 | t       | DROP TRIGGER
  localhost |    57637 | 1200001 | t       | DROP TRIGGER
  localhost |    57638 | 1200000 | t       | DROP TRIGGER
@@ -405,8 +405,8 @@ ORDER BY nodeport, shardid;
 
 SELECT * FROM run_command_on_workers('drop function reject_large_id()')
 ORDER BY nodeport;
- nodename  | nodeport | success |    result     
------------+----------+---------+---------------
+ nodename  | nodeport | success |    result
+---------------------------------------------------------------------
  localhost |    57637 | t       | DROP FUNCTION
  localhost |    57638 | t       | DROP FUNCTION
 (2 rows)
@@ -423,13 +423,13 @@ ABORT;
 -- can perform parallel DDL even a connection is used for multiple shards
 BEGIN;
 SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
- lab_id 
---------
+ lab_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
- lab_id 
---------
+ lab_id
+---------------------------------------------------------------------
 (0 rows)
 
 ALTER TABLE researchers ADD COLUMN motto text;
@@ -438,13 +438,13 @@ ROLLBACK;
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
- lab_id 
---------
+ lab_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
- lab_id 
---------
+ lab_id
+---------------------------------------------------------------------
 (0 rows)
 
 ALTER TABLE researchers ADD COLUMN motto text;
@@ -457,8 +457,8 @@ ALTER TABLE labs ADD COLUMN score float;
 ROLLBACK;
 -- should have rolled everything back
 SELECT * FROM labs WHERE id = 12;
- id |   name   
-----+----------
+ id |   name
+---------------------------------------------------------------------
  12 | fsociety
 (1 row)
 
@@ -468,15 +468,15 @@ CREATE TABLE objects (
 	name text NOT NULL
 );
 SELECT master_create_distributed_table('objects', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('objects', 1, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test primary key violations
@@ -484,13 +484,13 @@ BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_pkey_1200003"
-DETAIL:  Key (id)=(1) already exists.
-CONTEXT:  while executing command on localhost:57637
+DETAIL:  Key (id)=(X) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects WHERE id = 1;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- and placements should still be healthy...
@@ -500,8 +500,8 @@ FROM   pg_dist_shard_placement AS sp,
 WHERE  sp.shardid = s.shardid
 AND    sp.shardstate = 1
 AND    s.logicalrelid = 'objects'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -531,13 +531,13 @@ ERROR:  illegal value
 COMMIT;
 -- so the data should noy be persisted
 SELECT * FROM objects WHERE id = 2;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs WHERE id = 7;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- and none of placements should be inactive
@@ -549,8 +549,8 @@ AND    sp.nodename = 'localhost'
 AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -583,13 +583,13 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs WHERE id = 8;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- all placements should remain healthy
@@ -600,8 +600,8 @@ WHERE  sp.shardid = s.shardid
 AND    sp.shardstate = 1
 AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -620,11 +620,11 @@ INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
+WARNING:  failed to commit transaction on localhost:xxxxx
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
   2 | BAD
 (1 row)
 
@@ -637,8 +637,8 @@ AND    sp.nodename = 'localhost'
 AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -663,21 +663,21 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
+WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57638
-WARNING:  could not commit transaction for shard 1200002 on any active node
-WARNING:  could not commit transaction for shard 1200003 on any active node
+WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  could not commit transaction for shard xxxxx on any active node
+WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM labs WHERE id = 8;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- all placements should remain healthy
@@ -688,8 +688,8 @@ WHERE  sp.shardid = s.shardid
 AND    sp.shardstate = 1
 AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -704,19 +704,19 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:57637
-WARNING:  could not commit transaction for shard 1200002 on any active node
+WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  could not commit transaction for shard xxxxx on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
 SELECT * FROM objects WHERE id = 1;
- id | name  
-----+-------
+ id | name
+---------------------------------------------------------------------
   1 | apple
 (1 row)
 
 SELECT * FROM labs WHERE id = 8;
- id | name 
-----+------
+ id | name
+---------------------------------------------------------------------
 (0 rows)
 
 -- labs should be healthy, but one object placement shouldn't be
@@ -728,8 +728,8 @@ AND      (s.logicalrelid = 'objects'::regclass OR
 	      s.logicalrelid = 'labs'::regclass)
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
- logicalrelid | shardstate | count 
---------------+------------+-------
+ logicalrelid | shardstate | count
+---------------------------------------------------------------------
  labs         |          1 |     1
  objects      |          1 |     1
  objects      |          3 |     1
@@ -738,9 +738,9 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- some append-partitioned tests for good measure
 CREATE TABLE append_researchers ( LIKE researchers );
 SELECT master_create_distributed_table('append_researchers', 'id', 'append');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
@@ -758,8 +758,8 @@ BEGIN;
 INSERT INTO append_researchers VALUES (0, 0, 'John Backus');
 COMMIT;
 SELECT * FROM append_researchers WHERE id = 0;
- id | lab_id |    name     
-----+--------+-------------
+ id | lab_id |    name
+---------------------------------------------------------------------
   0 |      0 | John Backus
 (1 row)
 
@@ -768,8 +768,8 @@ BEGIN;
 DELETE FROM append_researchers WHERE id = 0;
 ROLLBACK;
 SELECT * FROM append_researchers WHERE id = 0;
- id | lab_id |    name     
-----+--------+-------------
+ id | lab_id |    name
+---------------------------------------------------------------------
   0 |      0 | John Backus
 (1 row)
 
@@ -781,8 +781,8 @@ ERROR:  cannot run INSERT command which targets multiple shards
 HINT:  Make sure the value for partition column "id" falls into a single shard.
 ROLLBACK;
 SELECT * FROM append_researchers;
- id | lab_id |    name     
-----+--------+-------------
+ id | lab_id |    name
+---------------------------------------------------------------------
   0 |      0 | John Backus
 (1 row)
 
@@ -790,16 +790,16 @@ SELECT * FROM append_researchers;
 -- let's add some tests for them
 CREATE TABLE reference_modifying_xacts (key int, value int);
 SELECT create_reference_table('reference_modifying_xacts');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- very basic test, ensure that INSERTs work
 INSERT INTO reference_modifying_xacts VALUES (1, 1);
 SELECT * FROM reference_modifying_xacts;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |     1
 (1 row)
 
@@ -807,8 +807,8 @@ SELECT * FROM reference_modifying_xacts;
 BEGIN;
 INSERT INTO reference_modifying_xacts VALUES (2, 2);
 SELECT * FROM reference_modifying_xacts;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |     1
    2 |     2
 (2 rows)
@@ -816,8 +816,8 @@ SELECT * FROM reference_modifying_xacts;
 COMMIT;
 -- we should be able to see the insert outside of the transaction as well
 SELECT * FROM reference_modifying_xacts;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |     1
    2 |     2
 (2 rows)
@@ -826,8 +826,8 @@ SELECT * FROM reference_modifying_xacts;
 BEGIN;
 INSERT INTO reference_modifying_xacts VALUES (3, 3);
 SELECT * FROM reference_modifying_xacts;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |     1
    2 |     2
    3 |     3
@@ -836,8 +836,8 @@ SELECT * FROM reference_modifying_xacts;
 ROLLBACK;
 -- see that we've not inserted
 SELECT * FROM reference_modifying_xacts;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |     1
    2 |     2
 (2 rows)
@@ -892,8 +892,8 @@ WHERE    sp.shardid = s.shardid
 AND      s.logicalrelid = 'reference_modifying_xacts'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
-       logicalrelid        | shardstate | count 
----------------------------+------------+-------
+       logicalrelid        | shardstate | count
+---------------------------------------------------------------------
  reference_modifying_xacts |          1 |     2
 (1 row)
 
@@ -911,9 +911,9 @@ SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE hash_modifying_xacts (key int, value int);
 SELECT create_distributed_table('hash_modifying_xacts', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- let's try to expand the xact participants
@@ -955,8 +955,8 @@ ERROR:  illegal value
 COMMIT;
 -- ensure that the value didn't go into the reference table
 SELECT * FROM reference_modifying_xacts WHERE key = 55;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 -- now lets fail on of the workers for the hash distributed table table
@@ -978,8 +978,8 @@ COMMIT;
 ERROR:  illegal value
 -- ensure that the values didn't go into the reference table
 SELECT * FROM reference_modifying_xacts WHERE key = 12;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 -- all placements should be healthy
@@ -987,12 +987,12 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR 
+AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
 		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
-       logicalrelid        | shardstate | count 
----------------------------+------------+-------
+       logicalrelid        | shardstate | count
+---------------------------------------------------------------------
  reference_modifying_xacts |          1 |     2
  hash_modifying_xacts      |          1 |     4
 (2 rows)
@@ -1015,18 +1015,18 @@ INSERT INTO reference_modifying_xacts VALUES (999, 3);
 ERROR:  illegal value
 COMMIT;
 SELECT * FROM hash_modifying_xacts WHERE key = 80;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM reference_modifying_xacts WHERE key = 66;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM reference_modifying_xacts WHERE key = 999;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 -- all placements should be healthy
@@ -1034,12 +1034,12 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR 
+AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
 		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
-       logicalrelid        | shardstate | count 
----------------------------+------------+-------
+       logicalrelid        | shardstate | count
+---------------------------------------------------------------------
  reference_modifying_xacts |          1 |     2
  hash_modifying_xacts      |          1 |     4
 (2 rows)
@@ -1047,22 +1047,22 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- now show that all modifications to reference
 -- tables are done in 2PC
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
 INSERT INTO reference_modifying_xacts VALUES (70, 70);
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- reset the transactions table
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -1070,8 +1070,8 @@ BEGIN;
 INSERT INTO reference_modifying_xacts VALUES (71, 71);
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -1080,15 +1080,15 @@ SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 CREATE TABLE hash_modifying_xacts_second (key int, value int);
 SELECT create_distributed_table('hash_modifying_xacts_second', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- reset the transactions table
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -1097,36 +1097,36 @@ INSERT INTO hash_modifying_xacts_second VALUES (72, 1);
 INSERT INTO reference_modifying_xacts VALUES (72, 3);
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- reset the transactions table
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
 DELETE FROM reference_modifying_xacts;
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- reset the transactions table
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
 UPDATE reference_modifying_xacts SET key = 10;
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -1146,30 +1146,30 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 SET citus.next_shard_id TO 1200015;
 CREATE TABLE reference_failure_test (key int, value int);
 SELECT create_reference_table('reference_failure_test');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- create a hash distributed table
 SET citus.shard_count TO 4;
 CREATE TABLE numbers_hash_failure_test(key int, value int);
 SELECT create_distributed_table('numbers_hash_failure_test', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ensure that the shard is created for this user
 \c - test_user - :worker_1_port
 \dt reference_failure_test_1200015
                       List of relations
- Schema |              Name              | Type  |   Owner   
---------+--------------------------------+-------+-----------
+ Schema |              Name              | Type  |   Owner
+---------------------------------------------------------------------
  public | reference_failure_test_1200015 | table | test_user
 (1 row)
 
--- now connect with the default user, 
+-- now connect with the default user,
 -- and rename the existing user
 \c - :default_user - :worker_1_port
 ALTER USER test_user RENAME TO test_user_new;
@@ -1177,21 +1177,21 @@ ALTER USER test_user RENAME TO test_user_new;
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection error: localhost:57637
+ERROR:  connection error: localhost:xxxxx
 COMMIT;
 -- show that no data go through the table and shard states are good
 SET client_min_messages to 'ERROR';
 SELECT * FROM reference_failure_test;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 RESET client_min_messages;
@@ -1203,22 +1203,22 @@ WHERE    sp.shardid = s.shardid
 AND      s.logicalrelid = 'reference_failure_test'::regclass	
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
-      logicalrelid      | shardstate | count 
-------------------------+------------+-------
+      logicalrelid      | shardstate | count
+---------------------------------------------------------------------
  reference_failure_test |          1 |     2
 (1 row)
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
 -- some placements are invalid before abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+ shardid | shardstate | nodename  | nodeport
+---------------------------------------------------------------------
  1200016 |          3 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
@@ -1232,10 +1232,10 @@ ORDER BY shardid, nodeport;
 ABORT;
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
- count 
--------
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1244,8 +1244,8 @@ SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+ shardid | shardstate | nodename  | nodeport
+---------------------------------------------------------------------
  1200016 |          1 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
@@ -1258,15 +1258,15 @@ ORDER BY shardid, nodeport;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
 -- check shard states before commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+ shardid | shardstate | nodename  | nodeport
+---------------------------------------------------------------------
  1200016 |          3 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
@@ -1283,8 +1283,8 @@ SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
- shardid | shardstate | nodename  | nodeport 
----------+------------+-----------+----------
+ shardid | shardstate | nodename  | nodeport
+---------------------------------------------------------------------
  1200016 |          3 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
@@ -1297,10 +1297,10 @@ ORDER BY shardid, nodeport;
 
 -- verify data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:57637
-WARNING:  connection error: localhost:57637
- count 
--------
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: localhost:xxxxx
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -1310,15 +1310,15 @@ ALTER USER test_user RENAME TO test_user_new;
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection error: localhost:57638
--- connect back to the master with the proper user to continue the tests 
+ERROR:  connection error: localhost:xxxxx
+-- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;
 SET citus.next_placement_id TO 1200033;
 -- unbreak both nodes by renaming the user back to the original name
 SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_user');
- nodename  | nodeport | success |   result   
------------+----------+---------+------------
+ nodename  | nodeport | success |   result
+---------------------------------------------------------------------
  localhost |    57637 | t       | ALTER ROLE
  localhost |    57638 | t       | ALTER ROLE
 (2 rows)
@@ -1326,8 +1326,8 @@ SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_us
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
 SELECT * FROM run_command_on_workers('DROP USER test_user');
- nodename  | nodeport | success |  result   
------------+----------+---------+-----------
+ nodename  | nodeport | success |  result
+---------------------------------------------------------------------
  localhost |    57637 | t       | DROP ROLE
  localhost |    57638 | t       | DROP ROLE
 (2 rows)
@@ -1342,9 +1342,9 @@ CREATE TABLE usergroups (
     name text
 );
 SELECT create_reference_table('usergroups');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE itemgroups (
@@ -1352,9 +1352,9 @@ CREATE TABLE itemgroups (
     name text
 );
 SELECT create_reference_table('itemgroups');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE users (
@@ -1363,9 +1363,9 @@ CREATE TABLE users (
     user_group int
 );
 SELECT create_distributed_table('users', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE items (
@@ -1374,9 +1374,9 @@ CREATE TABLE items (
     item_group int
 );
 SELECT create_distributed_table('items', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Table to find values that live in different shards on the same node
@@ -1388,8 +1388,8 @@ JOIN
 USING (shardid)
 ORDER BY
   id;
- id |  shard_name   | nodename  | nodeport 
-----+---------------+-----------+----------
+ id |  shard_name   | nodename  | nodeport
+---------------------------------------------------------------------
   1 | users_1200022 | localhost |    57637
   2 | users_1200025 | localhost |    57638
   3 | users_1200023 | localhost |    57638
@@ -1410,8 +1410,8 @@ INSERT INTO items VALUES (1, 'item-1');
 INSERT INTO items VALUES (6, 'item-6');
 END;
 SELECT user_id FROM items ORDER BY user_id;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        6
 (2 rows)
@@ -1425,14 +1425,14 @@ ROLLBACK;
 -- perform parallel DDL after a co-located table has been read over 1 connection
 BEGIN;
 SELECT id FROM users WHERE id = 1;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
 (1 row)
 
 SELECT id FROM users WHERE id = 6;
- id 
-----
+ id
+---------------------------------------------------------------------
   6
 (1 row)
 
@@ -1442,14 +1442,14 @@ ROLLBACK;
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 SELECT id FROM users WHERE id = 1;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
 (1 row)
 
 SELECT id FROM users WHERE id = 6;
- id 
-----
+ id
+---------------------------------------------------------------------
   6
 (1 row)
 
@@ -1459,14 +1459,14 @@ ROLLBACK;
 BEGIN;
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 SELECT id FROM users JOIN items ON (id = user_id) WHERE id = 1;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
 (1 row)
 
 SELECT id FROM users JOIN items ON (id = user_id) WHERE id = 6;
- id 
-----
+ id
+---------------------------------------------------------------------
   6
 (1 row)
 
@@ -1476,38 +1476,38 @@ BEGIN;
 \COPY users FROM STDIN WITH CSV
 -- now read from the reference table over each connection
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 2;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- perform a DDL command on the reference table errors
 -- because the current implementation of COPY always opens one connection
--- per placement SELECTs have to use those connections for correctness  
+-- per placement SELECTs have to use those connections for correctness
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 1200036, which has been read over multiple connections
+ERROR:  cannot perform DDL on placement xxxxx, which has been read over multiple connections
 END;
 BEGIN;
 -- establish multiple connections to a node
 \COPY users FROM STDIN WITH CSV
 -- read from the reference table over each connection
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 2;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- perform a DDL command on a co-located reference table
 ALTER TABLE usergroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 1200034 since a co-located placement has been read over multiple connections
+ERROR:  cannot perform DDL on placement xxxxx since a co-located placement has been read over multiple connections
 END;
 BEGIN;
 -- make a modification over connection 1
@@ -1522,13 +1522,13 @@ END;
 BEGIN;
 DELETE FROM users;
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 6;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 END;
@@ -1539,15 +1539,15 @@ BEGIN;
 \COPY users FROM STDIN WITH CSV
 -- Uses first connection, which wrote the row with id = 2
 SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 2;
- id | name  | user_group | gid | name  
-----+-------+------------+-----+-------
+ id | name  | user_group | gid | name
+---------------------------------------------------------------------
   2 | onder |          2 |   2 | group
 (1 row)
 
 -- Should use second connection, which wrote the row with id = 4
 SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 4;
- id | name  | user_group | gid | name  
-----+-------+------------+-----+-------
+ id | name  | user_group | gid | name
+---------------------------------------------------------------------
   4 | murat |          2 |   2 | group
 (1 row)
 
@@ -1565,8 +1565,8 @@ $BODY$ LANGUAGE plpgsql;
 SELECT insert_abort();
 ERROR:  do not insert
 SELECT name FROM labs WHERE id = 1001;
- name 
-------
+ name
+---------------------------------------------------------------------
 (0 rows)
 
 -- if function_opens_transaction-block is disabled the insert commits immediately
@@ -1574,8 +1574,8 @@ SET citus.function_opens_transaction_block TO off;
 SELECT insert_abort();
 ERROR:  do not insert
 SELECT name FROM labs WHERE id = 1001;
-     name      
----------------
+     name
+---------------------------------------------------------------------
  Rollback Labs
 (1 row)
 

@@ -15,8 +15,8 @@ WHERE
 	l_partkey = p_partkey
 	AND l_shipdate >= date '1995-09-01'
 	AND l_shipdate < date '1995-09-01' + interval '1' year;
-    promo_revenue    
----------------------
+    promo_revenue
+---------------------------------------------------------------------
  32.1126387112005225
 (1 row)
 

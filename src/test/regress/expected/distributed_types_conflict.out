@@ -1,8 +1,8 @@
 SET citus.next_shard_id TO 20020000;
 CREATE SCHEMA type_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
-       run_command_on_workers        
--------------------------------------
+       run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
@@ -33,15 +33,15 @@ SET search_path TO type_conflict;
    WHERE pg_class.relname = 'local_table'
      AND attnum > 0
 ORDER BY attnum;
-   relname   | attname |             typname              
--------------+---------+----------------------------------
+   relname   | attname |             typname
+---------------------------------------------------------------------
  local_table | a       | int4
  local_table | b       | my_precious_type(citus_backup_0)
 (2 rows)
 
 SELECT * FROM local_table;
- a  |             b              
-----+----------------------------
+ a  |             b
+---------------------------------------------------------------------
  42 | ("always bring a towel",t)
 (1 row)
 
@@ -49,38 +49,38 @@ SELECT * FROM local_table;
 SET search_path TO type_conflict;
 -- make sure worker_create_or_replace correctly generates new names while types are existing
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int, c int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type AS (a int, b int, c int, d int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE TYPE type_conflict.multi_conflicting_type_with_a_really_long_name_that_truncates AS (a int, b int, c int, d int);');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -93,8 +93,8 @@ FROM pg_attribute
          JOIN pg_type AS atttype ON (atttypid = atttype.oid)
 WHERE pg_type.typname LIKE 'multi_conflicting_type%'
 GROUP BY pg_type.typname;
-                             typname                             |             fields             
------------------------------------------------------------------+--------------------------------
+                             typname                             |             fields
+---------------------------------------------------------------------
  multi_conflicting_type                                          | a int4, b int4, c int4, d int4
  multi_conflicting_type(citus_backup_0)                          | a int4, b int4
  multi_conflicting_type(citus_backup_1)                          | a int4, b int4, c int4

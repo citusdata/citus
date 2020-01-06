@@ -206,15 +206,15 @@ CREATE TABLE wide_table
 	long_column_200 int
 );
 SELECT create_distributed_table('wide_table', 'long_column_001');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
 SHOW citus.max_task_string_size;
- citus.max_task_string_size 
-----------------------------
+ citus.max_task_string_size
+---------------------------------------------------------------------
  12288
 (1 row)
 
@@ -232,8 +232,8 @@ ERROR:  Task failed to execute
 CONTEXT:  PL/pgSQL function raise_failed_execution(text) line 6 at RAISE
 -- following will succeed since it fetches few columns
 SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
- long_column_001 | long_column_002 | long_column_003 
------------------+-----------------+-----------------
+ long_column_001 | long_column_002 | long_column_003
+---------------------------------------------------------------------
 (0 rows)
 
 RESET client_min_messages;

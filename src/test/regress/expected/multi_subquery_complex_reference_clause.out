@@ -7,9 +7,9 @@
 -- SET citus.next_shard_id TO 1400000;
 CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('user_buy_test_table', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO user_buy_test_table VALUES(1,2,1);
@@ -18,9 +18,9 @@ INSERT INTO user_buy_test_table VALUES(3,4,2);
 INSERT INTO user_buy_test_table VALUES(7,5,2);
 CREATE TABLE users_return_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('users_return_test_table', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO users_return_test_table VALUES(4,1,1);
@@ -30,8 +30,8 @@ INSERT INTO users_return_test_table VALUES(3,2,2);
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN users_ref_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -39,8 +39,8 @@ SELECT count(*) FROM
 SELECT count(*) FROM
   (SELECT random(), k_no FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1 WHERE k_no = 47;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -49,8 +49,8 @@ SELECT subquery_1.item_id FROM
   (SELECT user_buy_test_table.item_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.item_id = users_ref_test_table.id) subquery_1
 ORDER BY 1;
- item_id 
----------
+ item_id
+---------------------------------------------------------------------
        2
        3
        4
@@ -62,8 +62,8 @@ SELECT subquery_1.user_id FROM
   (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_1
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -86,8 +86,8 @@ DETAIL:  There exist a reference table in the outer part of the outer join
 SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table RIGHT JOIN user_buy_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -101,8 +101,8 @@ DETAIL:  There exist a reference table in the outer part of the outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN users_ref_test_table
   ON user_buy_test_table.item_id = users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -110,8 +110,8 @@ SELECT count(*) FROM
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -119,8 +119,8 @@ SELECT count(*) FROM
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -131,8 +131,8 @@ SELECT count(*) FROM
   LEFT JOIN
   (SELECT tt1.user_id, random() FROM user_buy_test_table as tt1 LEFT JOIN users_ref_test_table as ref
    ON tt1.user_id = ref.id) subquery_2 ON subquery_1.user_id = subquery_2.user_id;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -144,8 +144,8 @@ SELECT count(*) FROM
 (SELECT DISTINCT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id > users_ref_test_table.id AND users_ref_test_table.k_no > 44 AND user_buy_test_table.user_id > 44) subquery_2
 WHERE subquery_1.user_id = subquery_2.user_id ;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -165,8 +165,8 @@ SELECT subquery_2.id
    			ON tt1.user_id = ref.id) subquery_2
    	ON subquery_1.user_id = subquery_2.user_id
 	ORDER BY 1 DESC LIMIT 5;
- id 
-----
+ id
+---------------------------------------------------------------------
   3
   2
   1
@@ -203,8 +203,8 @@ FROM
       INNER JOIN events_reference_table ON (events_reference_table.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |  sum  
----------+-------
+ user_id |  sum
+---------------------------------------------------------------------
        2 | 31248
        3 | 15120
        4 | 14994
@@ -223,8 +223,8 @@ FROM
       INNER JOIN (SELECT *, random() FROM events_reference_table) as ref_all ON (ref_all.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |  sum  
----------+-------
+ user_id |  sum
+---------------------------------------------------------------------
        2 | 31248
        3 | 15120
        4 | 14994
@@ -236,16 +236,16 @@ FROM
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
 -- table function cannot be used without subquery pushdown
 SELECT count(*) FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id = users_ref_test_table.id;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -253,15 +253,15 @@ SELECT count(*) FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table LEFT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -281,11 +281,11 @@ SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 30_1 for subquery SELECT id FROM random() users_ref_test_table(id)
-DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT random() AS random FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(id double precision)) users_ref_test_table(id) ON (((user_buy_test_table.item_id)::double precision OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM random() users_ref_test_table(id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT random() AS random FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id double precision)) users_ref_test_table(id) ON (((user_buy_test_table.item_id)::double precision OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -295,11 +295,11 @@ SELECT count(*) FROM
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1
 WHERE item_id = 6;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 31_1 for subquery SELECT id FROM generate_series((random())::integer, 10) users_ref_test_table(id)
-DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.item_id FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) users_ref_test_table(id) ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1 WHERE (item_id OPERATOR(pg_catalog.=) 6)
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM generate_series((random())::integer, 10) users_ref_test_table(id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.item_id FROM (public.user_buy_test_table JOIN (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) users_ref_test_table(id) ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1 WHERE (item_id OPERATOR(pg_catalog.=) 6)
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -310,15 +310,15 @@ SELECT count(*) FROM
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 32_1 for subquery SELECT user_id FROM public.user_buy_test_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 32_2 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT users_ref_test_table.id FROM generate_series(1, 10) users_ref_test_table(id)
-DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
+DEBUG:  generating subplan XXX_2 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT users_ref_test_table.id FROM generate_series(1, 10) users_ref_test_table(id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- count 
--------
+ count
+---------------------------------------------------------------------
     14
 (1 row)
 
@@ -327,24 +327,24 @@ RESET client_min_messages;
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN (SELECT 4 AS id) users_ref_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- subquery without FROM triggers subquery pushdown
 SELECT count(*) FROM user_buy_test_table JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- subquery without FROM can be the inner relationship in an outer join
 SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -362,15 +362,15 @@ SELECT count(*) FROM
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 39_1 for subquery SELECT user_id FROM public.user_buy_test_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 39_2 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('39_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT users_ref_test_table.id FROM (SELECT 5 AS id) users_ref_test_table
-DEBUG:  Plan 39 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('39_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
+DEBUG:  generating subplan XXX_2 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT users_ref_test_table.id FROM (SELECT 5 AS id) users_ref_test_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -383,15 +383,15 @@ SELECT * FROM
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 42_1 for subquery SELECT user_id FROM public.user_buy_test_table
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.user_buy_test_table
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 42_2 for subquery SELECT users_ref_test_table.id FROM public.users_ref_test_table UNION SELECT intermediate_result.user_id FROM read_intermediate_result('42_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
-DEBUG:  Plan 42 query after replacing subqueries and CTEs: SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('42_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) sub ORDER BY id DESC
+DEBUG:  generating subplan XXX_2 for subquery SELECT users_ref_test_table.id FROM public.users_ref_test_table UNION SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer)) sub ORDER BY id DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- id 
-----
+ id
+---------------------------------------------------------------------
   7
   6
   5
@@ -409,15 +409,15 @@ SELECT * FROM
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan 45_1 for subquery SELECT user_id, (random() OPERATOR(pg_catalog.*) (0)::double precision) FROM (SELECT user_buy_test_table.user_id FROM public.user_buy_test_table) sub2
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, (random() OPERATOR(pg_catalog.*) (0)::double precision) FROM (SELECT user_buy_test_table.user_id FROM public.user_buy_test_table) sub2
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan 45_2 for subquery SELECT sub1.id, (random() OPERATOR(pg_catalog.*) (0)::double precision) FROM (SELECT users_ref_test_table.id FROM public.users_ref_test_table) sub1 UNION SELECT intermediate_result.user_id, intermediate_result."?column?" FROM read_intermediate_result('45_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "?column?" double precision)
-DEBUG:  Plan 45 query after replacing subqueries and CTEs: SELECT id, "?column?" FROM (SELECT intermediate_result.id, intermediate_result."?column?" FROM read_intermediate_result('45_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer, "?column?" double precision)) sub ORDER BY id DESC
+DEBUG:  generating subplan XXX_2 for subquery SELECT sub1.id, (random() OPERATOR(pg_catalog.*) (0)::double precision) FROM (SELECT users_ref_test_table.id FROM public.users_ref_test_table) sub1 UNION SELECT intermediate_result.user_id, intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "?column?" double precision)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, "?column?" FROM (SELECT intermediate_result.id, intermediate_result."?column?" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id integer, "?column?" double precision)) sub ORDER BY id DESC
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- id | ?column? 
-----+----------
+ id | ?column?
+---------------------------------------------------------------------
   7 |        0
   6 |        0
   5 |        0
@@ -436,8 +436,8 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        7
        3
        2
@@ -452,8 +452,8 @@ SELECT * FROM
 	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
- user_id | ?column? 
----------+----------
+ user_id | ?column?
+---------------------------------------------------------------------
        7 |        0
        3 |        0
        2 |        0
@@ -476,8 +476,8 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table WHERE user_id in (select id from users_ref_test_table)) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        3
        2
        1
@@ -493,8 +493,8 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        7
        3
        2
@@ -526,8 +526,8 @@ FROM
       LEFT JOIN events_reference_table ON (events_reference_table.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |  sum  
----------+-------
+ user_id |  sum
+---------------------------------------------------------------------
        2 | 31248
        3 | 15120
        4 | 14994
@@ -594,8 +594,8 @@ SELECT * FROM
               user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        3
        4
        5
@@ -631,8 +631,8 @@ FROM
    FROM events_reference_table
    INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id) GROUP BY users_table.user_id) AS events_all
 LEFT JOIN events_table ON (events_all.usr_id = events_table.user_id) GROUP BY 2 ORDER BY 1 DESC, 2 DESC LIMIT 5;
- max | usr_id 
------+--------
+ max | usr_id
+---------------------------------------------------------------------
  432 |      2
  391 |      4
  364 |      5
@@ -715,8 +715,8 @@ FROM
 ORDER BY
   user_id DESC
 LIMIT 10;
- user_id |            lastseen             
----------+---------------------------------
+ user_id |            lastseen
+---------------------------------------------------------------------
        1 | Thu Nov 23 21:54:46.924477 2017
        1 | Thu Nov 23 21:54:46.924477 2017
        1 | Thu Nov 23 21:54:46.924477 2017
@@ -772,8 +772,8 @@ GROUP BY
   "generated_group_field"
 ORDER BY
   generated_group_field DESC, value DESC;
- value | generated_group_field 
--------+-----------------------
+ value | generated_group_field
+---------------------------------------------------------------------
      2 |                     5
      1 |                     3
      3 |                     2
@@ -818,8 +818,8 @@ FROM
     ) segmentalias_1) "tempQuery"
 GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
- value_3 | cnt 
----------+-----
+ value_3 | cnt
+---------------------------------------------------------------------
        0 |   7
       10 |  21
        4 |  21
@@ -871,8 +871,8 @@ LIMIT 10) "some_users"
 ORDER BY
   value_3 DESC
 LIMIT 10;
- user_id | value_3 
----------+---------
+ user_id | value_3
+---------------------------------------------------------------------
        3 |       5
        3 |       5
        3 |       5
@@ -920,8 +920,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
- cnt | generated_group_field 
------+-----------------------
+ cnt | generated_group_field
+---------------------------------------------------------------------
  336 |                     2
  210 |                     1
  210 |                     3
@@ -999,8 +999,8 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
- user_id | sum | length | hasdone_event  
----------+-----+--------+----------------
+ user_id | sum | length | hasdone_event
+---------------------------------------------------------------------
        2 |  72 |     14 | Has done event
        3 | 238 |     14 | Has done event
          |   1 |     14 | Has done event
@@ -1034,8 +1034,8 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
- user_id | sum | length | hasdone_event  
----------+-----+--------+----------------
+ user_id | sum | length | hasdone_event
+---------------------------------------------------------------------
        1 |  55 |     14 | Has done event
        2 |  88 |     14 | Has done event
        3 |  83 |     14 | Has done event
@@ -1080,8 +1080,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
- cnt | generated_group_field 
------+-----------------------
+ cnt | generated_group_field
+---------------------------------------------------------------------
  737 |                     5
  679 |                     1
  591 |                     2
@@ -1184,8 +1184,8 @@ INNER JOIN
 ORDER BY
   types
 LIMIT 5;
- types 
--------
+ types
+---------------------------------------------------------------------
      0
      0
      0
@@ -1264,8 +1264,8 @@ GROUP BY
   types
 ORDER BY
   types;
- types | sumofeventtype 
--------+----------------
+ types | sumofeventtype
+---------------------------------------------------------------------
      0 |            217
      2 |            191
      3 |             31
@@ -1324,8 +1324,8 @@ INNER JOIN
       WHERE value_1 > 2 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
- types | sumofeventtype 
--------+----------------
+ types | sumofeventtype
+---------------------------------------------------------------------
      0 |            191
      1 |            191
      2 |             31
@@ -1347,10 +1347,10 @@ SELECT count(*) FROM
 (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_2
 WHERE subquery_1.user_id != subquery_2.user_id ;
-DEBUG:  generating subplan 84_1 for subquery SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.user_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))
-DEBUG:  Plan 84 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('84_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) subquery_2 WHERE (subquery_1.user_id OPERATOR(pg_catalog.<>) subquery_2.user_id)
- count 
--------
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.user_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT user_buy_test_table.user_id, random() AS random FROM (public.user_buy_test_table LEFT JOIN public.users_ref_test_table ON ((user_buy_test_table.item_id OPERATOR(pg_catalog.>) users_ref_test_table.id)))) subquery_1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) subquery_2 WHERE (subquery_1.user_id OPERATOR(pg_catalog.<>) subquery_2.user_id)
+ count
+---------------------------------------------------------------------
     67
 (1 row)
 
@@ -1393,8 +1393,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
-DEBUG:  generating subplan 86_1 for subquery SELECT user_id, value_2 AS generated_group_field FROM public.users_table users
-DEBUG:  Plan 86 query after replacing subqueries and CTEs: SELECT count(*) AS cnt, generated_group_field FROM (SELECT "eventQuery".user_id, random() AS random, "eventQuery".generated_group_field FROM (SELECT multi_group_wrapper_1."time", multi_group_wrapper_1.event_user_id, multi_group_wrapper_1.user_id, left_group_by_1.generated_group_field, random() AS random FROM ((SELECT temp_data_queries."time", temp_data_queries.event_user_id, user_filters_1.user_id FROM ((SELECT events."time", events.user_id AS event_user_id FROM public.events_table events WHERE (events.user_id OPERATOR(pg_catalog.>) 2)) temp_data_queries JOIN (SELECT users.user_id FROM public.users_reference_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 2) AND (users.value_2 OPERATOR(pg_catalog.=) 5))) user_filters_1 ON ((temp_data_queries.event_user_id OPERATOR(pg_catalog.<) user_filters_1.user_id)))) multi_group_wrapper_1 RIGHT JOIN (SELECT intermediate_result.user_id, intermediate_result.generated_group_field FROM read_intermediate_result('86_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, generated_group_field integer)) left_group_by_1 ON ((left_group_by_1.user_id OPERATOR(pg_catalog.>) multi_group_wrapper_1.event_user_id)))) "eventQuery") "pushedDownQuery" GROUP BY generated_group_field ORDER BY (count(*)) DESC, generated_group_field LIMIT 10
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_2 AS generated_group_field FROM public.users_table users
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS cnt, generated_group_field FROM (SELECT "eventQuery".user_id, random() AS random, "eventQuery".generated_group_field FROM (SELECT multi_group_wrapper_1."time", multi_group_wrapper_1.event_user_id, multi_group_wrapper_1.user_id, left_group_by_1.generated_group_field, random() AS random FROM ((SELECT temp_data_queries."time", temp_data_queries.event_user_id, user_filters_1.user_id FROM ((SELECT events."time", events.user_id AS event_user_id FROM public.events_table events WHERE (events.user_id OPERATOR(pg_catalog.>) 2)) temp_data_queries JOIN (SELECT users.user_id FROM public.users_reference_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 2) AND (users.value_2 OPERATOR(pg_catalog.=) 5))) user_filters_1 ON ((temp_data_queries.event_user_id OPERATOR(pg_catalog.<) user_filters_1.user_id)))) multi_group_wrapper_1 RIGHT JOIN (SELECT intermediate_result.user_id, intermediate_result.generated_group_field FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, generated_group_field integer)) left_group_by_1 ON ((left_group_by_1.user_id OPERATOR(pg_catalog.>) multi_group_wrapper_1.event_user_id)))) "eventQuery") "pushedDownQuery" GROUP BY generated_group_field ORDER BY (count(*)) DESC, generated_group_field LIMIT 10
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 RESET client_min_messages;
@@ -1426,8 +1426,8 @@ SELECT foo.user_id FROM
   SELECT m.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   WHERE event_type > 100
 ) as foo;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- not pushdownable since group by is on the reference table column
@@ -1438,8 +1438,8 @@ SELECT foo.user_id FROM
   GROUP BY r.user_id
 ) as foo
 ORDER BY 1 DESC;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        6
        5
        4
@@ -1456,8 +1456,8 @@ SELECT foo.user_id FROM
   GROUP BY r.user_id, m.user_id
 ) as foo
 ORDER BY 1 LIMIT 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1471,8 +1471,8 @@ SELECT foo.user_id FROM
 ) as foo
 ORDER BY 1 DESC
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        6
        6
        6
@@ -1486,8 +1486,8 @@ SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1502,8 +1502,8 @@ SELECT foo.user_id FROM
   SELECT DISTINCT ON(r.user_id, m.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo
 ORDER BY 1 LIMIT 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1519,8 +1519,8 @@ FROM
 ORDER BY time DESC
 LIMIT 5
 OFFSET 0;
- distinct_users | event_type |              time               
-----------------+------------+---------------------------------
+ distinct_users | event_type |              time
+---------------------------------------------------------------------
               1 |          6 | Thu Nov 23 21:54:46.924477 2017
               4 |          1 | Thu Nov 23 18:10:21.338399 2017
               3 |          2 | Thu Nov 23 18:08:26.550729 2017
@@ -1539,8 +1539,8 @@ ON (events_dist.user_id = users_ref.distinct_users)
 ORDER BY time DESC
 LIMIT 5
 OFFSET 0;
- distinct_users | event_type |              time               
-----------------+------------+---------------------------------
+ distinct_users | event_type |              time
+---------------------------------------------------------------------
               1 |          6 | Thu Nov 23 21:54:46.924477 2017
               4 |          1 | Thu Nov 23 18:10:21.338399 2017
               3 |          2 | Thu Nov 23 18:08:26.550729 2017
@@ -1557,8 +1557,8 @@ FROM
 ORDER BY time DESC
 LIMIT 5
 OFFSET 0;
- distinct_users | event_type |              time               
-----------------+------------+---------------------------------
+ distinct_users | event_type |              time
+---------------------------------------------------------------------
               1 |          6 | Thu Nov 23 21:54:46.924477 2017
               4 |          1 | Thu Nov 23 18:10:21.338399 2017
               3 |          2 | Thu Nov 23 18:08:26.550729 2017
@@ -1573,8 +1573,8 @@ SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
 ) as foo;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM
@@ -1582,8 +1582,8 @@ SELECT * FROM
   SELECT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
   GROUP BY 1
 ) as foo;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- similiar to the above examples, this time there is a subquery
@@ -1593,8 +1593,8 @@ SELECT * FROM
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
 ) as foo
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1610,8 +1610,8 @@ SELECT * FROM
 ) as foo
 ORDER BY 1 DESC
 LIMIT 4;
- user_id | user_id 
----------+---------
+ user_id | user_id
+---------------------------------------------------------------------
        6 |       6
        5 |       5
        4 |       4
@@ -1633,19 +1633,19 @@ SELECT * FROM
 ) as foo
 ORDER BY 1 DESC
 LIMIT 4;
- user_id | value_4 
----------+---------
-       6 |        
-       5 |        
-       4 |        
-       3 |        
+ user_id | value_4
+---------------------------------------------------------------------
+       6 |
+       5 |
+       4 |
+       3 |
 (4 rows)
 
 -- test the read_intermediate_result() for GROUP BYs
 BEGIN;
 SELECT broadcast_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,200) s');
- broadcast_intermediate_result 
--------------------------------
+ broadcast_intermediate_result
+---------------------------------------------------------------------
                            200
 (1 row)
 
@@ -1663,8 +1663,8 @@ GROUP BY res.val_square) squares
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1680,8 +1680,8 @@ JOIN
    FROM read_intermediate_result('squares', 'binary') AS res (val int, val_square int)) squares ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1704,8 +1704,8 @@ squares
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1729,8 +1729,8 @@ GROUP BY res2.val_square) squares
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        4
 (2 rows)
@@ -1753,8 +1753,8 @@ FROM
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -1778,8 +1778,8 @@ JOIN
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        4
 (2 rows)
@@ -1798,8 +1798,8 @@ FROM
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        5
        6
 (2 rows)
@@ -1822,8 +1822,8 @@ JOIN
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        6
 (1 row)
 

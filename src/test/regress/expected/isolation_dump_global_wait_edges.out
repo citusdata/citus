@@ -1,19 +1,19 @@
 Parsed test spec with 4 sessions
 
 starting permutation: s1-begin s2-begin s1-update s2-update detector-dump-wait-edges s1-abort s2-abort
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s1-update: 
+step s1-update:
     UPDATE distributed_table SET y = 1 WHERE x = 1;
 
-step s2-update: 
+step s2-update:
     UPDATE distributed_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges: 
+step detector-dump-wait-edges:
     SELECT
         waiting_transaction_num,
         blocking_transaction_num,
@@ -28,39 +28,39 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-357            356            f              
+357            356            f
 transactionnumberwaitingtransactionnumbers
 
-356                           
-357            356            
-step s1-abort: 
+356
+357            356
+step s1-abort:
     ABORT;
 
 step s2-update: <... completed>
-step s2-abort: 
+step s2-abort:
     ABORT;
 
 
 starting permutation: s1-begin s2-begin s3-begin s1-update s2-update s3-update detector-dump-wait-edges s1-abort s2-abort s3-abort
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
     BEGIN;
 
-step s3-begin: 
+step s3-begin:
     BEGIN;
 
-step s1-update: 
+step s1-update:
     UPDATE distributed_table SET y = 1 WHERE x = 1;
 
-step s2-update: 
+step s2-update:
     UPDATE distributed_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step s3-update: 
+step s3-update:
     UPDATE distributed_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges: 
+step detector-dump-wait-edges:
     SELECT
         waiting_transaction_num,
         blocking_transaction_num,
@@ -75,22 +75,22 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-361            360            f              
-362            360            f              
-362            361            t              
+361            360            f
+362            360            f
+362            361            t
 transactionnumberwaitingtransactionnumbers
 
-360                           
-361            360            
-362            360,361        
-step s1-abort: 
+360
+361            360
+362            360,361
+step s1-abort:
     ABORT;
 
 step s2-update: <... completed>
-step s2-abort: 
+step s2-abort:
     ABORT;
 
 step s3-update: <... completed>
-step s3-abort: 
+step s3-abort:
     ABORT;
 

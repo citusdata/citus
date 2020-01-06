@@ -31,8 +31,8 @@ SELECT datname,
     datname = current_database(),
     usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
-  datname   | ?column? | ?column? 
-------------+----------+----------
+  datname   | ?column? | ?column?
+---------------------------------------------------------------------
  regression | t        | t
 (1 row)
 
@@ -45,8 +45,8 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -114,8 +114,8 @@ ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
 -- show running version
 SHOW citus.version;
- citus.version 
----------------
+ citus.version
+---------------------------------------------------------------------
  9.2devel
 (1 row)
 
@@ -128,8 +128,8 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -152,8 +152,8 @@ CREATE TABLE version_mismatch_table(column1 int);
 INSERT INTO version_mismatch_table(column1) VALUES(5);
 -- Test SELECT
 SELECT * FROM version_mismatch_table ORDER BY column1;
- column1 
----------
+ column1
+---------------------------------------------------------------------
        0
        1
        2
@@ -168,10 +168,10 @@ SELECT d.datname as "Name",
        pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
 FROM pg_catalog.pg_database d
 ORDER BY 1;
-    Name    |  Owner   |   Access privileges   
-------------+----------+-----------------------
- postgres   | postgres | 
- regression | postgres | 
+    Name    |  Owner   |   Access privileges
+---------------------------------------------------------------------
+ postgres   | postgres |
+ regression | postgres |
  template0  | postgres | =c/postgres          +
             |          | postgres=CTc/postgres
  template1  | postgres | =c/postgres          +
@@ -216,8 +216,8 @@ ALTER EXTENSION citus UPDATE;
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
       List of relations
- Schema | Name | Type | Owner 
---------+------+------+-------
+ Schema | Name | Type | Owner
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -230,8 +230,8 @@ SELECT datname,
     datname = current_database(),
     usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
-  datname   | ?column? | ?column? 
-------------+----------+----------
+  datname   | ?column? | ?column?
+---------------------------------------------------------------------
  regression | t        | t
 (1 row)
 
@@ -271,8 +271,8 @@ SELECT datname,
     datname = current_database(),
     usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
- datname | ?column? | ?column? 
----------+----------+----------
+ datname | ?column? | ?column?
+---------------------------------------------------------------------
  another | t        | t
 (1 row)
 
@@ -308,8 +308,8 @@ SELECT
     *
 FROM
     test_deamon.maintenance_deamon_died('another');
- maintenance_deamon_died 
--------------------------
+ maintenance_deamon_died
+---------------------------------------------------------------------
  t
 (1 row)
 
