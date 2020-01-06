@@ -836,7 +836,7 @@ SELECT create_distributed_table('referenced_by_reference_table', 'id');
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
 SELECT create_reference_table('reference_table');
 ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
-DETAIL:  A reference table can only have reference keys to other reference tables
+DETAIL:  A reference table can only have reference keys to other reference tables or a local table in coordinator
 -- test foreign key creation on CREATE TABLE from + to reference table
 DROP TABLE reference_table;
 CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
@@ -886,7 +886,7 @@ SELECT create_reference_table('reference_table');
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
 ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
-DETAIL:  A reference table can only have reference keys to other reference tables
+DETAIL:  A reference table can only have reference keys to other reference tables or a local table in coordinator
 -- test foreign key creation on ALTER TABLE to reference table
 CREATE TABLE references_to_reference_table(id int, referencing_column int);
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
@@ -920,7 +920,8 @@ SELECT create_reference_table('reference_table');
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
 ERROR:  cannot create foreign key constraint
-DETAIL:  Referenced table must be a distributed table or a reference table.
+DETAIL:  Referenced table must be a distributed table or a reference table or a local table in coordinator.
+HINT:  To define foreign constraint between reference tables and local tables, consider adding coordinator to pg_dist_node as well.
 -- test foreign key creation on ALTER TABLE on self referencing reference table
 DROP TABLE self_referencing_reference_table;
 CREATE TABLE self_referencing_reference_table(
