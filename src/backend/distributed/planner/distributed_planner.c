@@ -66,14 +66,10 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);
-static PlannedStmt * CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan,
-												  Query *originalQuery, Query *query,
-												  ParamListInfo boundParams,
-												  PlannerRestrictionContext *
-												  plannerRestrictionContext);
+static PlannedStmt * CreateDistributedPlannedStmt(
+	DistributedPlanningContext *planContext);
 static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
 											   Query *query, ParamListInfo boundParams,
 											   bool hasUnresolvedParams,
@@ -88,8 +84,6 @@ static int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
-static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
-								  DistributedPlan *distributedPlan);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
@@ -117,6 +111,10 @@ static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boun
 static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
 static bool UpdateReferenceTablesWithShard(Node *node, void *context);
+static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
+												 Const *distributionKeyValue);
+static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
+										 List *rangeTableList, int rteIdCounter);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -124,10 +122,16 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = false;
-	Query *originalQuery = NULL;
 	bool setPartitionedTablesInherited = false;
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 	int rteIdCounter = 1;
+	bool fastPathRouterQuery = false;
+	Const *distributionKeyValue = NULL;
+	DistributedPlanningContext planContext = {
+		.query = parse,
+		.cursorOptions = cursorOptions,
+		.boundParams = boundParams,
+	};
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -151,10 +155,24 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		else
 		{
 			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+			if (needsDistributedPlanning)
+			{
+				fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
+			}
 		}
 	}
 
-	if (needsDistributedPlanning)
+	if (fastPathRouterQuery)
+	{
+		/*
+		 *  We need to copy the parse tree because the FastPathPlanner modifies
+		 *  it. In the next branch we do the same for other distributed queries
+		 *  too, but for those it needs to be done AFTER calling
+		 *  AssignRTEIdentities.
+		 */
+		planContext.originalQuery = copyObject(parse);
+	}
+	else if (needsDistributedPlanning)
 	{
 		/*
 		 * Inserting into a local table needs to go through the regular postgres
@@ -173,13 +191,12 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 		/*
 		 * standard_planner scribbles on it's input, but for deparsing we need the
-		 * unmodified form. Note that we keep RTE_RELATIONs with their identities
-		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
-		 * of the query tree. Note that we copy the query tree once we're sure it's a
-		 * distributed query.
+		 * unmodified form. Note that before copying we call
+		 * AssignRTEIdentities, which is needed because these identities need
+		 * to be present in the copied query too.
 		 */
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
-		originalQuery = copyObject(parse);
+		planContext.originalQuery = copyObject(parse);
 
 		setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(rangeTableList,
@@ -193,75 +210,42 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	ReplaceTableVisibleFunction((Node *) parse);
 
 	/* create a restriction context and put it at the end if context list */
-	PlannerRestrictionContext *plannerRestrictionContext =
-		CreateAndPushPlannerRestrictionContext();
+	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+
+	/*
+	 * We keep track of how many times we've recursed into the planner, primarily
+	 * to detect whether we are in a function call. We need to make sure that the
+	 * PlannerLevel is decremented exactly once at the end of the next PG_TRY
+	 * block, both in the happy case and when an error occurs.
+	 */
+	PlannerLevel++;
+
 
 	PG_TRY();
 	{
-		/*
-		 * We keep track of how many times we've recursed into the planner, primarily
-		 * to detect whether we are in a function call. We need to make sure that the
-		 * PlannerLevel is decremented exactly once at the end of this PG_TRY block,
-		 * both in the happy case and when an error occurs.
-		 */
-		PlannerLevel++;
-
-		/*
-		 * For trivial queries, we're skipping the standard_planner() in
-		 * order to eliminate its overhead.
-		 *
-		 * Otherwise, call into standard planner. This is required because the Citus
-		 * planner relies on both the restriction information per table and parse tree
-		 * transformations made by postgres' planner.
-		 */
-
-		if (needsDistributedPlanning && FastPathRouterQuery(originalQuery))
+		if (fastPathRouterQuery)
 		{
-			result = FastPathPlanner(originalQuery, parse, boundParams);
+			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
 		}
 		else
 		{
-			result = standard_planner(parse, cursorOptions, boundParams);
-
+			/*
+			 * Call into standard_planner because the Citus planner relies on both the
+			 * restriction information per table and parse tree transformations made by
+			 * postgres' planner.
+			 */
+			planContext.plan = standard_planner(planContext.query,
+												planContext.cursorOptions,
+												planContext.boundParams);
 			if (needsDistributedPlanning)
 			{
-				/* may've inlined new relation rtes */
-				rangeTableList = ExtractRangeTableEntryList(parse);
-				rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+				result = PlanDistributedStmt(&planContext, rangeTableList, rteIdCounter);
 			}
-		}
-
-		if (needsDistributedPlanning)
-		{
-			uint64 planId = NextPlanId++;
-
-			result = CreateDistributedPlannedStmt(planId, result, originalQuery, parse,
-												  boundParams, plannerRestrictionContext);
-
-			setPartitionedTablesInherited = true;
-			AdjustPartitioningForDistributedPlanning(rangeTableList,
-													 setPartitionedTablesInherited);
-		}
-		else
-		{
-			bool hasExternParam = false;
-			DistributedPlan *delegatePlan = TryToDelegateFunctionCall(parse,
-																	  &hasExternParam);
-			if (delegatePlan != NULL)
+			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
 			{
-				result = FinalizePlan(result, delegatePlan);
-			}
-			else if (hasExternParam)
-			{
-				/*
-				 * As in CreateDistributedPlannedStmt, try dissuade planner when planning
-				 * potentially failed due to unresolved prepared statement parameters.
-				 */
-				result->planTree->total_cost = FLT_MAX / 100000000;
+				result = planContext.plan;
 			}
 		}
-
-		PlannerLevel--;
 	}
 	PG_CATCH();
 	{
@@ -273,6 +257,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	PG_END_TRY();
 
+	PlannerLevel--;
 
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
@@ -551,29 +536,90 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 
 
 /*
+ * PlanFastPathDistributedStmt creates a distributed planned statement using
+ * the FastPathPlanner.
+ */
+static PlannedStmt *
+PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
+							Const *distributionKeyValue)
+{
+	planContext->plannerRestrictionContext->fastPathRestrictionContext->
+	fastPathRouterQuery = true;
+	planContext->plannerRestrictionContext->fastPathRestrictionContext->
+	distributionKeyValue = distributionKeyValue;
+
+	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
+										planContext->boundParams);
+
+	return CreateDistributedPlannedStmt(planContext);
+}
+
+
+/*
+ * PlanDistributedStmt creates a distributed planned statement using the PG
+ * planner.
+ */
+static PlannedStmt *
+PlanDistributedStmt(DistributedPlanningContext *planContext,
+					List *rangeTableList,
+					int rteIdCounter)
+{
+	/* may've inlined new relation rtes */
+	rangeTableList = ExtractRangeTableEntryList(planContext->query);
+	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+
+
+	PlannedStmt *result = CreateDistributedPlannedStmt(planContext);
+
+	bool setPartitionedTablesInherited = true;
+	AdjustPartitioningForDistributedPlanning(rangeTableList,
+											 setPartitionedTablesInherited);
+
+	return result;
+}
+
+
+/*
+ * DissuadePlannerFromUsingPlan try dissuade planner when planning a plan that
+ * potentially failed due to unresolved prepared statement parameters.
+ */
+void
+DissuadePlannerFromUsingPlan(PlannedStmt *plan)
+{
+	/*
+	 * Arbitrarily high cost, but low enough that it can be added up
+	 * without overflowing by choose_custom_plan().
+	 */
+	plan->planTree->total_cost = FLT_MAX / 100000000;
+}
+
+
+/*
  * CreateDistributedPlannedStmt encapsulates the logic needed to transform a particular
  * query into a distributed plan that is encapsulated by a PlannedStmt.
  */
 static PlannedStmt *
-CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *originalQuery,
-							 Query *query, ParamListInfo boundParams,
-							 PlannerRestrictionContext *plannerRestrictionContext)
+CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 {
+	uint64 planId = NextPlanId++;
 	bool hasUnresolvedParams = false;
 	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
+		planContext->plannerRestrictionContext->joinRestrictionContext;
 
-	if (HasUnresolvedExternParamsWalker((Node *) originalQuery, boundParams))
+	if (HasUnresolvedExternParamsWalker((Node *) planContext->originalQuery,
+										planContext->boundParams))
 	{
 		hasUnresolvedParams = true;
 	}
 
-	plannerRestrictionContext->joinRestrictionContext =
+	planContext->plannerRestrictionContext->joinRestrictionContext =
 		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
 	DistributedPlan *distributedPlan =
-		CreateDistributedPlan(planId, originalQuery, query, boundParams,
-							  hasUnresolvedParams, plannerRestrictionContext);
+		CreateDistributedPlan(planId, planContext->originalQuery, planContext->query,
+							  planContext->boundParams,
+							  hasUnresolvedParams,
+							  planContext->plannerRestrictionContext);
 
 	/*
 	 * If no plan was generated, prepare a generic error to be emitted.
@@ -618,7 +664,7 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	distributedPlan->planId = planId;
 
 	/* create final plan by combining local plan with distributed plan */
-	PlannedStmt *resultPlan = FinalizePlan(localPlan, distributedPlan);
+	PlannedStmt *resultPlan = FinalizePlan(planContext->plan, distributedPlan);
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
@@ -626,14 +672,11 @@ CreateDistributedPlannedStmt(uint64 planId, PlannedStmt *localPlan, Query *origi
 	 * if it is planned as a multi shard modify query.
 	 */
 	if ((distributedPlan->planningError ||
-		 (IsUpdateOrDelete(originalQuery) && IsMultiTaskPlan(distributedPlan))) &&
+		 (IsUpdateOrDelete(planContext->originalQuery) && IsMultiTaskPlan(
+			  distributedPlan))) &&
 		hasUnresolvedParams)
 	{
-		/*
-		 * Arbitrarily high cost, but low enough that it can be added up
-		 * without overflowing by choose_custom_plan().
-		 */
-		resultPlan->planTree->total_cost = FLT_MAX / 100000000;
+		DissuadePlannerFromUsingPlan(resultPlan);
 	}
 
 	return resultPlan;
@@ -656,7 +699,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 {
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
-
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -866,7 +908,14 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 static void
 FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
 {
-	RecordSubPlansUsedInPlan(plan, originalQuery);
+	/*
+	 * Fast path queries, we cannot have any subplans by their definition,
+	 * so skip expensive traversals.
+	 */
+	if (!plan->fastPathRouterPlan)
+	{
+		RecordSubPlansUsedInPlan(plan, originalQuery);
+	}
 }
 
 
@@ -1065,7 +1114,7 @@ GetDistributedPlan(CustomScan *customScan)
  * FinalizePlan combines local plan with distributed plan and creates a plan
  * which can be run by the PostgreSQL executor.
  */
-static PlannedStmt *
+PlannedStmt *
 FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 {
 	PlannedStmt *finalPlan = NULL;
@@ -1870,6 +1919,9 @@ CreateAndPushPlannerRestrictionContext(void)
 	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
 
+	plannerRestrictionContext->fastPathRestrictionContext =
+		palloc0(sizeof(FastPathRestrictionContext));
+
 	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
 
 	/* we'll apply logical AND as we add tables */
@@ -1928,6 +1980,10 @@ ResetPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionCont
 
 	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
+
+	plannerRestrictionContext->fastPathRestrictionContext =
+		palloc0(sizeof(FastPathRestrictionContext));
+
 
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;

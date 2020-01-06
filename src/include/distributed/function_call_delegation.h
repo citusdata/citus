@@ -10,10 +10,12 @@
 #define FUNCTION_CALL_DELEGATION_H
 
 #include "postgres.h"
+
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_physical_planner.h"
 
 
-DistributedPlan * TryToDelegateFunctionCall(Query *query, bool *hasParam);
+PlannedStmt * TryToDelegateFunctionCall(DistributedPlanningContext *planContext);
 
 
 #endif /* FUNCTION_CALL_DELEGATION_H */
