@@ -35,6 +35,7 @@
 #include "postgres.h"
 
 #include "distributed/distributed_planner.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/multi_physical_planner.h" /* only to use some utility functions */
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
@@ -52,6 +53,7 @@
 #else
 #include "optimizer/clauses.h"
 #endif
+#include "tcop/pquery.h"
 
 bool EnableFastPathRouterPlanner = true;
 
@@ -95,7 +97,6 @@ FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo boundParams)
 	parse->jointree->quals =
 		(Node *) eval_const_expressions(NULL, (Node *) parse->jointree->quals);
 
-
 	PlannedStmt *result = GeneratePlaceHolderPlannedStmt(originalQuery);
 
 	return result;
@@ -126,7 +127,9 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	/* there is only a single relation rte */
 	seqScanNode->scanrelid = 1;
 
-	plan->targetlist = copyObject(parse->targetList);
+	plan->targetlist =
+		copyObject(FetchStatementTargetList((Node *) parse));
+
 	plan->qual = NULL;
 	plan->lefttree = NULL;
 	plan->righttree = NULL;
@@ -139,6 +142,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 	result->rtable = copyObject(parse->rtable);
 	result->planTree = (Plan *) plan;
+	result->hasReturning = (parse->returningList != NIL);
 
 	Oid relationId = ExtractFirstDistributedTableId(parse);
 	result->relationOids = list_make1_oid(relationId);
@@ -158,7 +162,8 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  *      and it should be ANDed with any other filters. Also, the distribution
  *      key should only exists once in the WHERE clause. So basically,
  *          SELECT ... FROM dist_table WHERE dist_key = X
- *   - No returning for UPDATE/DELETE queries
+ *   - All INSERT statements (including multi-row INSERTs) as long as the commands
+ *     don't have any sublinks/CTEs etc
  */
 bool
 FastPathRouterQuery(Query *query)
@@ -171,21 +176,26 @@ FastPathRouterQuery(Query *query)
 		return false;
 	}
 
-	if (!(query->commandType == CMD_SELECT || query->commandType == CMD_UPDATE ||
-		  query->commandType == CMD_DELETE))
+	/*
+	 * We want to deal with only very simple queries. Some of the
+	 * checks might be too restrictive, still we prefer this way.
+	 */
+	if (query->cteList != NIL || query->hasSubLinks ||
+		query->setOperations != NULL || query->hasTargetSRFs ||
+		query->hasModifyingCTE)
 	{
 		return false;
 	}
 
-	/*
-	 * We want to deal with only very simple select queries. Some of the
-	 * checks might be too restrictive, still we prefer this way.
-	 */
-	if (query->cteList != NIL || query->returningList != NIL ||
-		query->hasSubLinks || query->setOperations != NULL ||
-		query->hasTargetSRFs || query->hasModifyingCTE)
+	if (CheckInsertSelectQuery(query))
 	{
+		/* we don't support INSERT..SELECT in the fast-path */
 		return false;
+	}
+	else if (query->commandType == CMD_INSERT)
+	{
+		/* we don't need to do any further checks, all INSERTs are fast-path */
+		return true;
 	}
 
 	/* make sure that the only range table in FROM clause */

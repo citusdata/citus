@@ -105,15 +105,44 @@ ERROR:  modifying the partition value of rows is not allowed
 UPDATE modify_fast_path SET key = 2::numeric WHERE key = 1;
 DEBUG:  modifying the partition value of rows is not allowed
 ERROR:  modifying the partition value of rows is not allowed
--- returning is not supported via fast-path
+-- returning is supported via fast-path
+INSERT INTO modify_fast_path (key, value_1) VALUES (1,1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
+DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
  key | value_1 | value_2
 ---------------------------------------------------------------------
-(0 rows)
+   1 |       1 |
+(1 row)
 
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, key;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+ value_1 | key
+---------------------------------------------------------------------
+       1 |   2
+(1 row)
+
+DELETE FROM modify_fast_path WHERE key = 2 RETURNING value_1 * 15, value_1::numeric * 16;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+ ?column? | ?column?
+---------------------------------------------------------------------
+       15 |       16
+(1 row)
+
+-- still, non-immutable functions are not supported
+INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, random() * key;
+DEBUG:  non-IMMUTABLE functions are not allowed in the RETURNING clause
+ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
 DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries

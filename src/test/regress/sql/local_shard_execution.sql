@@ -485,6 +485,65 @@ BEGIN;
 	EXECUTE remote_prepare_param(1);
 COMMIT;
 
+PREPARE local_insert_prepare_no_param AS INSERT INTO distributed_table VALUES (1+0*random(), '11',21::int) ON CONFLICT(key) DO UPDATE SET value = '29' || '28' RETURNING *, key + 1, value || '30', age * 15;
+PREPARE local_insert_prepare_param (int) AS INSERT INTO distributed_table VALUES ($1+0*random(), '11',21::int) ON CONFLICT(key) DO UPDATE SET value = '29' || '28' RETURNING *, key + 1, value || '30', age * 15;
+BEGIN;
+	-- 6 local execution without params
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
+
+	-- 6 local executions with params
+	EXECUTE local_insert_prepare_param(1);
+	EXECUTE local_insert_prepare_param(5);
+	EXECUTE local_insert_prepare_param(6);
+	EXECUTE local_insert_prepare_param(1);
+	EXECUTE local_insert_prepare_param(5);
+	EXECUTE local_insert_prepare_param(6);
+
+	-- followed by a non-local execution
+	EXECUTE remote_prepare_param(2);
+COMMIT;
+
+PREPARE local_multi_row_insert_prepare_no_param AS
+	INSERT INTO distributed_table VALUES (1,'55', 21), (5,'15',33) ON CONFLICT (key) WHERE key > 3 and key < 4 DO UPDATE SET value = '88' || EXCLUDED.value;
+
+PREPARE local_multi_row_insert_prepare_no_param_multi_shard AS
+	INSERT INTO distributed_table VALUES (6,'55', 21), (5,'15',33) ON CONFLICT (key) WHERE key > 3 AND key < 4 DO UPDATE SET value = '88' || EXCLUDED.value;;
+
+PREPARE local_multi_row_insert_prepare_params(int,int) AS
+	INSERT INTO distributed_table VALUES ($1,'55', 21), ($2,'15',33) ON CONFLICT (key) WHERE key > 3 and key < 4 DO UPDATE SET value = '88' || EXCLUDED.value;;
+INSERT INTO reference_table VALUES (11);
+BEGIN;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+
+	EXECUTE local_multi_row_insert_prepare_params(1,6);
+	EXECUTE local_multi_row_insert_prepare_params(1,5);
+	EXECUTE local_multi_row_insert_prepare_params(6,5);
+	EXECUTE local_multi_row_insert_prepare_params(5,1);
+	EXECUTE local_multi_row_insert_prepare_params(5,6);
+	EXECUTE local_multi_row_insert_prepare_params(5,1);
+
+	-- one task is remote
+	EXECUTE local_multi_row_insert_prepare_params(5,11);
+ROLLBACK;
+
+
 
 -- failures of local execution should rollback both the
 -- local execution and remote executions
@@ -618,6 +677,32 @@ BEGIN;
 	SELECT count(*) FROM collections_list;
 	SELECT * FROM collections_list ORDER BY 1,2,3,4;
 COMMIT;
+
+
+TRUNCATE collections_list;
+
+-- make sure that even if local execution is used, the sequence values
+-- are generated locally
+ALTER SEQUENCE collections_list_key_seq NO MINVALUE NO MAXVALUE;
+
+PREPARE serial_prepared_local AS INSERT INTO collections_list (collection_id) VALUES (0) RETURNING key, ser;
+
+SELECT setval('collections_list_key_seq', 4);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 5);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 499);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 700);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 708);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 709);
+EXECUTE serial_prepared_local;
+
+-- and, one remote test
+SELECT setval('collections_list_key_seq', 10);
+EXECUTE serial_prepared_local;
 
 -- the final queries for the following CTEs are going to happen on the intermediate results only
 -- one of them will be executed remotely, and the other is locally
