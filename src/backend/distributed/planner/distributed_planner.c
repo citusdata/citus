@@ -70,11 +70,9 @@ static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
-static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
-											   Query *query, ParamListInfo boundParams,
-											   bool hasUnresolvedParams,
-											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
+static DistributedPlan * CreateDistributedPlan(uint64 planId,
+											   DistributedPlanningContext *planContext,
+											   bool hasUnresolvedParams);
 static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
 static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
@@ -690,21 +688,20 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
  * 3. Logical planner
  */
 static DistributedPlan *
-CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
-					  boundParams, bool hasUnresolvedParams,
-					  PlannerRestrictionContext *plannerRestrictionContext)
+CreateDistributedPlan(uint64 planId, DistributedPlanningContext *planContext, bool
+					  hasUnresolvedParams)
 {
 	DistributedPlan *distributedPlan = NULL;
-	bool hasCtes = originalQuery->cteList != NIL;
+	bool hasCtes = planContext->originalQuery->cteList != NIL;
 
-	if (IsModifyCommand(originalQuery))
+	if (IsModifyCommand(planContext->originalQuery))
 	{
 		EnsureModificationsCanRun();
 
-		Oid targetRelationId = ModifyQueryResultRelationId(query);
+		Oid targetRelationId = ModifyQueryResultRelationId(planContext->query);
 		EnsurePartitionTableNotReplicated(targetRelationId);
 
-		if (InsertSelectIntoDistributedTable(originalQuery))
+		if (InsertSelectIntoDistributedTable(planContext->originalQuery))
 		{
 			if (hasUnresolvedParams)
 			{
@@ -716,14 +713,16 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 				return NULL;
 			}
 
-			distributedPlan =
-				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext);
+			distributedPlan = CreateInsertSelectPlan(planId, planContext->originalQuery,
+													 planContext->
+													 plannerRestrictionContext);
 		}
 		else
 		{
 			/* modifications are always routed through the same planner/executor */
 			distributedPlan =
-				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+				CreateModifyPlan(planContext->originalQuery, planContext->query,
+								 planContext->plannerRestrictionContext);
 		}
 
 		/* the functions above always return a plan, possibly with an error */
@@ -731,7 +730,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, planContext->originalQuery);
 
 			return distributedPlan;
 		}
@@ -749,11 +748,11 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		 * produce distributed query plans.
 		 */
 
-		distributedPlan = CreateRouterPlan(originalQuery, query,
-										   plannerRestrictionContext);
+		distributedPlan = CreateRouterPlan(planContext->originalQuery, planContext->query,
+										   planContext->plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
+			FinalizeDistributedPlan(distributedPlan, planContext->originalQuery);
 
 			return distributedPlan;
 		}
@@ -781,7 +780,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	}
 
 	/* force evaluation of bound params */
-	boundParams = copyParamList(boundParams);
+	planContext->boundParams = copyParamList(planContext->boundParams);
 
 	/*
 	 * If there are parameters that do have a value in boundParams, replace
@@ -789,14 +788,17 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * query into pieces (during recursive planning) or deparse parts of
 	 * the query (during subquery pushdown planning).
 	 */
-	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
-													boundParams);
+	planContext->originalQuery = (Query *) ResolveExternalParams(
+		(Node *) planContext->originalQuery,
+		planContext->boundParams);
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and return the resulting plans to subPlanList.
 	 */
-	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
+	List *subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId,
+															 planContext->originalQuery,
+															 planContext->
 															 plannerRestrictionContext);
 
 	/*
@@ -814,7 +816,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (list_length(subPlanList) > 0 || hasCtes)
 	{
-		Query *newQuery = copyObject(originalQuery);
+		Query *newQuery = copyObject(planContext->originalQuery);
 		bool setPartitionedTablesInherited = false;
 		PlannerRestrictionContext *currentPlannerRestrictionContext =
 			CurrentPlannerRestrictionContext();
@@ -837,17 +839,18 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		 * being contiguous.
 		 */
 
-		standard_planner(newQuery, 0, boundParams);
+		standard_planner(newQuery, 0, planContext->boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
-		memcpy(query, newQuery, sizeof(Query));
+		memcpy(planContext->query, newQuery, sizeof(Query));
+
+		planContext->boundParams = NULL;
 
 		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
-		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
-												plannerRestrictionContext);
+		distributedPlan = CreateDistributedPlan(planId, planContext, false);
 		distributedPlan->subPlanList = subPlanList;
 
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, planContext->originalQuery);
 
 		return distributedPlan;
 	}
@@ -857,9 +860,9 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * logical planner cannot handle DML commands so return the plan with the
 	 * error.
 	 */
-	if (IsModifyCommand(originalQuery))
+	if (IsModifyCommand(planContext->originalQuery))
 	{
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
+		FinalizeDistributedPlan(distributedPlan, planContext->originalQuery);
 
 		return distributedPlan;
 	}
@@ -869,10 +872,12 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * If we get here and there are still CTEs that means that none of the CTEs are
 	 * referenced. We therefore also strip the CTEs from the rewritten query.
 	 */
-	query->cteList = NIL;
-	Assert(originalQuery->cteList == NIL);
+	planContext->query->cteList = NIL;
+	Assert(planContext->originalQuery->cteList == NIL);
 
-	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(planContext->originalQuery,
+														planContext->query,
+														planContext->
 														plannerRestrictionContext);
 	MultiLogicalPlanOptimize(logicalPlan);
 
@@ -887,12 +892,12 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 	/* Create the physical plan */
 	distributedPlan = CreatePhysicalDistributedPlan(logicalPlan,
-													plannerRestrictionContext);
+													planContext->plannerRestrictionContext);
 
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
-	FinalizeDistributedPlan(distributedPlan, originalQuery);
+	FinalizeDistributedPlan(distributedPlan, planContext->originalQuery);
 
 	return distributedPlan;
 }
