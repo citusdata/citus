@@ -32,6 +32,7 @@ fi
 
 if test -z "${VANILLATEST:-}"
 then
+	touch "$file1"  # when adding a new test the expected file does not exist
 	sed -Ef $BASEDIR/normalize.sed < $file1 > "$file1.modified"
 	mv "$file1" "$file1.unmodified"
 	mv "$file1.modified" "$file1"
