@@ -263,7 +263,7 @@ ORDER BY
 LIMIT 10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- ORDER BY in the window function is an aggragate
+-- ORDER BY in the window function is an aggregate
 SELECT
 	user_id, rank() OVER my_win as rnk, avg(value_2) as avg_val_2
 FROM

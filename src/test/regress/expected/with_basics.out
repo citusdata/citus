@@ -1,5 +1,6 @@
 -- Test the basic CTE functionality and expected error messages
 SET search_path TO 'with_basics';
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 CREATE TYPE with_basics.xy AS (x int, y int);
 -- CTEs in FROM should work
 WITH cte AS (

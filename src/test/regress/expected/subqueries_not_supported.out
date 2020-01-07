@@ -3,6 +3,7 @@
 -- ===================================================================
 CREATE SCHEMA not_supported;
 SET search_path TO not_supported, public;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 SET client_min_messages TO DEBUG1;
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 -- we don't support subqueries with local tables when they are not leaf queries

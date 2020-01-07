@@ -3,6 +3,7 @@
 --
 -- no need to set shardid sequence given that we're not creating any shards
 SET citus.next_shard_id TO 570032;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- Check that we error out if shard min/max values are not exactly same.
 SELECT
 	avg(unit_price)

@@ -27,8 +27,10 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/errormessage.h"
 #include "distributed/extended_op_node_utils.h"
 #include "distributed/function_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
@@ -59,19 +61,19 @@
 /* Config variable managed via guc.c */
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
 double CountDistinctErrorRate = 0.0; /* precision of count(distinct) approximate */
-
+int CoordinatorAggregationStrategy = COORDINATOR_AGGREGATION_ROW_GATHER;
 
 typedef struct MasterAggregateWalkerContext
 {
+	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	AttrNumber columnId;
-	bool pullDistinctColumns;
 } MasterAggregateWalkerContext;
 
 typedef struct WorkerAggregateWalkerContext
 {
+	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	List *expressionList;
 	bool createGroupByClause;
-	bool pullDistinctColumns;
 } WorkerAggregateWalkerContext;
 
 
@@ -189,7 +191,8 @@ static void ParentSetNewChild(MultiNode *parentNode, MultiNode *oldChildNode,
 static void ApplyExtendedOpNodes(MultiExtendedOp *originalNode,
 								 MultiExtendedOp *masterNode,
 								 MultiExtendedOp *workerNode);
-static void TransformSubqueryNode(MultiTable *subqueryNode);
+static void TransformSubqueryNode(MultiTable *subqueryNode, bool
+								  requiresIntermediateRowPullUp);
 static MultiExtendedOp * MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties);
@@ -203,7 +206,7 @@ static Expr * AddTypeConversion(Node *originalAggregate, Node *newExpression);
 static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties);
-static bool TargetListHasAggragates(List *targetEntryList);
+static bool TargetListHasAggregates(List *targetEntryList);
 static void ProcessTargetListForWorkerQuery(List *targetEntryList,
 											ExtendedOpNodeProperties *
 											extendedOpNodeProperties,
@@ -267,12 +270,18 @@ static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
 
 /* Local functions forward declarations for aggregate expression checks */
-static void ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode);
-static void ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression);
-static void ErrorIfUnsupportedJsonAggregate(AggregateType type,
-											Aggref *aggregateExpression);
-static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
-												MultiNode *logicalPlanNode);
+static bool RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfContainsNonPushdownableAggregate(
+	MultiNode *logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
+	Aggref *arrayAggregateExpression);
+static DeferredErrorMessage * DeferErrorIfUnsupportedJsonAggregate(AggregateType type,
+																   Aggref *
+																   aggregateExpression);
+static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(
+	Aggref *aggregateExpression,
+	MultiNode *
+	logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
 static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 											  MultiExtendedOp *opNode,
@@ -315,16 +324,29 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	ListCell *collectNodeCell = NULL;
 	ListCell *tableNodeCell = NULL;
 	MultiNode *logicalPlanNode = (MultiNode *) multiLogicalPlan;
-
+	bool requiresIntermediateRowPullUp = RequiresIntermediateRowPullUp(logicalPlanNode);
 	List *extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 	ExtendedOpNodeProperties extendedOpNodeProperties = BuildExtendedOpNodeProperties(
-		extendedOpNode);
+		extendedOpNode, requiresIntermediateRowPullUp);
 
-	if (!extendedOpNodeProperties.groupedByDisjointPartitionColumn)
+	if (!extendedOpNodeProperties.groupedByDisjointPartitionColumn &&
+		!extendedOpNodeProperties.pullUpIntermediateRows)
 	{
-		/* check that we can optimize aggregates in the plan */
-		ErrorIfContainsUnsupportedAggregate(logicalPlanNode);
+		DeferredErrorMessage *aggregatePushdownError =
+			DeferErrorIfContainsNonPushdownableAggregate(logicalPlanNode);
+
+		if (aggregatePushdownError != NULL)
+		{
+			if (CoordinatorAggregationStrategy == COORDINATOR_AGGREGATION_DISABLED)
+			{
+				RaiseDeferredError(aggregatePushdownError, ERROR);
+			}
+			else
+			{
+				extendedOpNodeProperties.pullUpIntermediateRows = true;
+			}
+		}
 	}
 
 	/*
@@ -382,7 +404,6 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	 * clause list to the worker operator node. We then push the worker operator
 	 * node below the collect node.
 	 */
-
 	MultiExtendedOp *masterExtendedOpNode =
 		MasterExtendedOpNode(extendedOpNode, &extendedOpNodeProperties);
 	MultiExtendedOp *workerExtendedOpNode =
@@ -396,8 +417,23 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
-			ErrorIfContainsUnsupportedAggregate((MultiNode *) tableNode);
-			TransformSubqueryNode(tableNode);
+			DeferredErrorMessage *error =
+				DeferErrorIfContainsNonPushdownableAggregate((MultiNode *) tableNode);
+			bool subqueryRequiresIntermediateRowPullUp = false;
+
+			if (error != NULL)
+			{
+				if (CoordinatorAggregationStrategy == COORDINATOR_AGGREGATION_DISABLED)
+				{
+					RaiseDeferredError(error, ERROR);
+				}
+				else
+				{
+					subqueryRequiresIntermediateRowPullUp = true;
+				}
+			}
+
+			TransformSubqueryNode(tableNode, subqueryRequiresIntermediateRowPullUp);
 		}
 	}
 
@@ -1281,15 +1317,22 @@ ApplyExtendedOpNodes(MultiExtendedOp *originalNode, MultiExtendedOp *masterNode,
  * operator node.
  */
 static void
-TransformSubqueryNode(MultiTable *subqueryNode)
+TransformSubqueryNode(MultiTable *subqueryNode, bool requiresIntermediateRowPullUp)
 {
+	if (CoordinatorAggregationStrategy != COORDINATOR_AGGREGATION_DISABLED &&
+		RequiresIntermediateRowPullUp((MultiNode *) subqueryNode))
+	{
+		requiresIntermediateRowPullUp = true;
+	}
+
 	MultiExtendedOp *extendedOpNode =
 		(MultiExtendedOp *) ChildNode((MultiUnaryNode *) subqueryNode);
 	MultiNode *collectNode = ChildNode((MultiUnaryNode *) extendedOpNode);
 	MultiNode *collectChildNode = ChildNode((MultiUnaryNode *) collectNode);
 
 	ExtendedOpNodeProperties extendedOpNodeProperties =
-		BuildExtendedOpNodeProperties(extendedOpNode);
+		BuildExtendedOpNodeProperties(extendedOpNode, requiresIntermediateRowPullUp);
+
 	MultiExtendedOp *masterExtendedOpNode =
 		MasterExtendedOpNode(extendedOpNode, &extendedOpNodeProperties);
 	MultiExtendedOp *workerExtendedOpNode =
@@ -1369,8 +1412,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	MasterAggregateWalkerContext *walkerContext = palloc0(
 		sizeof(MasterAggregateWalkerContext));
 
+	walkerContext->extendedOpNodeProperties = extendedOpNodeProperties;
 	walkerContext->columnId = 1;
-	walkerContext->pullDistinctColumns = extendedOpNodeProperties->pullDistinctColumns;
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -1509,16 +1552,62 @@ static Expr *
 MasterAggregateExpression(Aggref *originalAggregate,
 						  MasterAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate);
-	Expr *newMasterExpression = NULL;
 	const uint32 masterTableId = 1;  /* one table on the master node */
 	const Index columnLevelsUp = 0;  /* normal column */
 	const AttrNumber argumentId = 1; /* our aggregates have single arguments */
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
+	Expr *newMasterExpression = NULL;
 	AggClauseCosts aggregateCosts;
 
-	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
-		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-		walkerContext->pullDistinctColumns)
+	if (walkerContext->extendedOpNodeProperties->pullUpIntermediateRows)
+	{
+		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
+
+		TargetEntry *targetEntry;
+		foreach_ptr(targetEntry, aggregate->args)
+		{
+			targetEntry->expr = (Expr *)
+								makeVar(masterTableId, walkerContext->columnId,
+										exprType((Node *) targetEntry->expr),
+										exprTypmod((Node *) targetEntry->expr),
+										exprCollation((Node *) targetEntry->expr),
+										columnLevelsUp);
+			walkerContext->columnId++;
+		}
+
+		aggregate->aggdirectargs = NIL;
+		Expr *directarg;
+		foreach_ptr(directarg, originalAggregate->aggdirectargs)
+		{
+			if (!IsA(directarg, Const) && !IsA(directarg, Param))
+			{
+				Var *var = makeVar(masterTableId, walkerContext->columnId,
+								   exprType((Node *) directarg),
+								   exprTypmod((Node *) directarg),
+								   exprCollation((Node *) directarg),
+								   columnLevelsUp);
+				aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
+				walkerContext->columnId++;
+			}
+			else
+			{
+				aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, directarg);
+			}
+		}
+
+		if (aggregate->aggfilter)
+		{
+			aggregate->aggfilter = (Expr *)
+								   makeVar(masterTableId, walkerContext->columnId,
+										   BOOLOID, -1, InvalidOid, columnLevelsUp);
+			walkerContext->columnId++;
+		}
+
+		newMasterExpression = (Expr *) aggregate;
+	}
+	else if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
+			 CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
+			 walkerContext->extendedOpNodeProperties->pullDistinctColumns)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 		List *varList = pull_var_clause_default((Node *) aggregate);
@@ -1834,7 +1923,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
-	else if (aggregateType == AGGREGATE_CUSTOM)
+	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		HeapTuple aggTuple =
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
@@ -2087,7 +2176,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	bool hasDistinctOn = originalOpNode->hasDistinctOn;
 
 	int originalGroupClauseLength = list_length(originalGroupClauseList);
-	bool queryHasAggregates = TargetListHasAggragates(originalTargetEntryList);
+	bool queryHasAggregates = TargetListHasAggregates(originalTargetEntryList);
 
 	/* initialize to default values */
 	memset(&queryTargetList, 0, sizeof(queryTargetList));
@@ -2102,8 +2191,17 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	/* targetProjectionNumber starts from 1 */
 	queryTargetList.targetProjectionNumber = 1;
 
-	/* worker query always include all the group by entries in the query */
-	queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
+	/*
+	 * only push down grouping to worker query when pushing down aggregates
+	 */
+	if (extendedOpNodeProperties->pullUpIntermediateRows)
+	{
+		queryGroupClause.groupClauseList = NIL;
+	}
+	else
+	{
+		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
+	}
 
 	/*
 	 * nextSortGroupRefIndex is used by group by, window and order by clauses.
@@ -2122,41 +2220,44 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 									  &queryHavingQual, &queryTargetList,
 									  &queryGroupClause);
 
-	ProcessDistinctClauseForWorkerQuery(originalDistinctClause, hasDistinctOn,
-										queryGroupClause.groupClauseList,
-										queryHasAggregates, &queryDistinctClause,
-										&distinctPreventsLimitPushdown);
-
 	ProcessWindowFunctionsForWorkerQuery(originalWindowClause, originalTargetEntryList,
 										 &queryWindowClause, &queryTargetList);
 
-	/*
-	 * Order by and limit clauses are relevant to each other, and processing
-	 * them together makes it handy for us.
-	 *
-	 * The other parts of the query might have already prohibited pushing down
-	 * LIMIT and ORDER BY clauses as described below:
-	 *      (1) Creating a new group by clause during aggregate mutation, or
-	 *      (2) Distinct clause is not pushed down
-	 */
-	bool groupByExtended =
-		list_length(queryGroupClause.groupClauseList) > originalGroupClauseLength;
-	if (!groupByExtended && !distinctPreventsLimitPushdown)
+	if (!extendedOpNodeProperties->pullUpIntermediateRows)
 	{
-		/* both sort and limit clauses rely on similar information */
-		OrderByLimitReference limitOrderByReference =
-			BuildOrderByLimitReference(hasDistinctOn,
-									   groupedByDisjointPartitionColumn,
-									   originalGroupClauseList,
-									   originalSortClauseList,
-									   originalTargetEntryList);
+		ProcessDistinctClauseForWorkerQuery(originalDistinctClause, hasDistinctOn,
+											queryGroupClause.groupClauseList,
+											queryHasAggregates, &queryDistinctClause,
+											&distinctPreventsLimitPushdown);
 
-		ProcessLimitOrderByForWorkerQuery(limitOrderByReference, originalLimitCount,
-										  originalLimitOffset, originalSortClauseList,
-										  originalGroupClauseList,
-										  originalTargetEntryList,
-										  &queryOrderByLimit,
-										  &queryTargetList);
+		/*
+		 * Order by and limit clauses are relevant to each other, and processing
+		 * them together makes it handy for us.
+		 *
+		 * The other parts of the query might have already prohibited pushing down
+		 * LIMIT and ORDER BY clauses as described below:
+		 *      (1) Creating a new group by clause during aggregate mutation, or
+		 *      (2) Distinct clause is not pushed down
+		 */
+		bool groupByExtended =
+			list_length(queryGroupClause.groupClauseList) > originalGroupClauseLength;
+		if (!groupByExtended && !distinctPreventsLimitPushdown)
+		{
+			/* both sort and limit clauses rely on similar information */
+			OrderByLimitReference limitOrderByReference =
+				BuildOrderByLimitReference(hasDistinctOn,
+										   groupedByDisjointPartitionColumn,
+										   originalGroupClauseList,
+										   originalSortClauseList,
+										   originalTargetEntryList);
+
+			ProcessLimitOrderByForWorkerQuery(limitOrderByReference, originalLimitCount,
+											  originalLimitOffset, originalSortClauseList,
+											  originalGroupClauseList,
+											  originalTargetEntryList,
+											  &queryOrderByLimit,
+											  &queryTargetList);
+		}
 	}
 
 	/* finally, fill the extended op node with the data we gathered */
@@ -2187,7 +2288,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
  * the worker with two expressions count() and sum(). Thus, a single target entry
  * might end up with multiple expressions in the worker query.
  *
- * The function doesn't change the aggragates in the window functions and sends them
+ * The function doesn't change the aggregates in the window functions and sends them
  * as-is. The reason is that Citus currently only supports pushing down window
  * functions as-is. As we implement pull-to-master window functions, we should
  * revisit here as well.
@@ -2211,8 +2312,8 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 	WorkerAggregateWalkerContext *workerAggContext =
 		palloc0(sizeof(WorkerAggregateWalkerContext));
 
+	workerAggContext->extendedOpNodeProperties = extendedOpNodeProperties;
 	workerAggContext->expressionList = NIL;
-	workerAggContext->pullDistinctColumns = extendedOpNodeProperties->pullDistinctColumns;
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -2274,8 +2375,6 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 								  QueryTargetList *queryTargetList,
 								  QueryGroupClause *queryGroupClause)
 {
-	TargetEntry *targetEntry = NULL;
-
 	if (originalHavingQual == NULL)
 	{
 		return;
@@ -2291,13 +2390,14 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		 */
 		WorkerAggregateWalkerContext *workerAggContext = palloc0(
 			sizeof(WorkerAggregateWalkerContext));
+
+		workerAggContext->extendedOpNodeProperties = extendedOpNodeProperties;
 		workerAggContext->expressionList = NIL;
-		workerAggContext->pullDistinctColumns =
-			extendedOpNodeProperties->pullDistinctColumns;
 		workerAggContext->createGroupByClause = false;
 
 		WorkerAggregateWalker(originalHavingQual, workerAggContext);
 		List *newExpressionList = workerAggContext->expressionList;
+		TargetEntry *targetEntry = NULL;
 
 		ExpandWorkerTargetEntry(newExpressionList, targetEntry,
 								workerAggContext->createGroupByClause,
@@ -2348,7 +2448,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
  * and DISTINCT ON clauses to the worker queries.
  *
  * The function also sets distinctPreventsLimitPushdown. As the name reveals,
- * distinct could prevent pushwing down LIMIT clauses later in the planning.
+ * distinct could prevent pushing down LIMIT clauses later in the planning.
  * For the details, see the comments in the function.
  *
  *     inputs: distinctClause, hasDistinctOn, groupClauseList, queryHasAggregates
@@ -2362,14 +2462,14 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
 									QueryDistinctClause *queryDistinctClause,
 									bool *distinctPreventsLimitPushdown)
 {
-	bool distinctClauseSupersetofGroupClause = false;
+	*distinctPreventsLimitPushdown = false;
 
 	if (distinctClause == NIL)
 	{
 		return;
 	}
 
-	*distinctPreventsLimitPushdown = false;
+	bool distinctClauseSupersetofGroupClause = false;
 
 	if (groupClauseList == NIL ||
 		IsGroupBySubsetOfDistinct(groupClauseList, distinctClause))
@@ -2412,16 +2512,16 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
  * pushdown.
  *
  * TODO: Citus only supports pushing down window clauses as-is under certain circumstances.
- * And, at this point in the planning, we are guaraanted to process a window function
+ * And, at this point in the planning, we are guaranteed to process a window function
  * which is safe to pushdown as-is. It should also be possible to pull the relevant data
  * to the coordinator and apply the window clauses for the remaining cases.
  *
  * Note that even though Citus only pushes down the window functions, it may need to
  * modify the target list of the worker query when the window function refers to
- * an avg(). The reason is that any aggragate which is also referred by other
- * target entries would be mutated by Citus. Thus, we add a copy of the same aggragate
+ * an avg(). The reason is that any aggregate which is also referred by other
+ * target entries would be mutated by Citus. Thus, we add a copy of the same aggregate
  * to the worker target list to make sure that the window function refers to the
- * non-mutated aggragate.
+ * non-mutated aggregate.
  *
  *     inputs: windowClauseList, originalTargetEntryList
  *     outputs: queryWindowClause, queryTargetList
@@ -2463,10 +2563,10 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 
 		/*
 		 * Note that even Citus does push down the window clauses as-is, we may still need to
-		 * add the generated entries to the target list. The reason is that the same aggragates
-		 * might be referred from another target entry that is a bare aggragate (e.g., no window
-		 * functions), which would have been mutated. For instance, when an average aggragate
-		 * is mutated on the target list, the window function would refer to a sum aggragate,
+		 * add the generated entries to the target list. The reason is that the same aggregates
+		 * might be referred from another target entry that is a bare aggregate (e.g., no window
+		 * functions), which would have been mutated. For instance, when an average aggregate
+		 * is mutated on the target list, the window function would refer to a sum aggregate,
 		 * which is obviously wrong.
 		 */
 		queryTargetList->targetEntryList = list_concat(queryTargetList->targetEntryList,
@@ -2551,11 +2651,11 @@ BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionCo
 
 
 /*
- * TargetListHasAggragates returns true if any of the elements in the
- * target list contain aggragates that are not inside the window functions.
+ * TargetListHasAggregates returns true if any of the elements in the
+ * target list contain aggregates that are not inside the window functions.
  */
 static bool
-TargetListHasAggragates(List *targetEntryList)
+TargetListHasAggregates(List *targetEntryList)
 {
 	ListCell *targetEntryCell = NULL;
 
@@ -2614,7 +2714,7 @@ ExpandWorkerTargetEntry(List *expressionList, TargetEntry *originalTargetEntry,
 		TargetEntry *newTargetEntry =
 			GenerateWorkerTargetEntry(originalTargetEntry, newExpression,
 									  queryTargetList->targetProjectionNumber);
-		(queryTargetList->targetProjectionNumber)++;
+		queryTargetList->targetProjectionNumber++;
 		queryTargetList->targetEntryList =
 			lappend(queryTargetList->targetEntryList, newTargetEntry);
 
@@ -2682,7 +2782,7 @@ GenerateWorkerTargetEntry(TargetEntry *targetEntry, Expr *workerExpression,
 	 */
 	if (targetEntry)
 	{
-		newTargetEntry = copyObject(targetEntry);
+		newTargetEntry = flatCopyTargetEntry(targetEntry);
 	}
 	else
 	{
@@ -2699,7 +2799,7 @@ GenerateWorkerTargetEntry(TargetEntry *targetEntry, Expr *workerExpression,
 		newTargetEntry->resname = columnNameString->data;
 	}
 
-	/* we can generate a target entry without any expressions */
+	/* we can't generate a target entry without an expression */
 	Assert(workerExpression != NULL);
 
 	/* force resjunk to false as we may need this on the master */
@@ -2795,13 +2895,40 @@ static List *
 WorkerAggregateExpressionList(Aggref *originalAggregate,
 							  WorkerAggregateWalkerContext *walkerContext)
 {
-	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	List *workerAggregateList = NIL;
+
+	if (walkerContext->extendedOpNodeProperties->pullUpIntermediateRows)
+	{
+		TargetEntry *targetEntry;
+		foreach_ptr(targetEntry, originalAggregate->args)
+		{
+			workerAggregateList = lappend(workerAggregateList, targetEntry->expr);
+		}
+
+		Expr *directarg;
+		foreach_ptr(directarg, originalAggregate->aggdirectargs)
+		{
+			if (!IsA(directarg, Const) && !IsA(directarg, Param))
+			{
+				workerAggregateList = lappend(workerAggregateList, directarg);
+			}
+		}
+
+		if (originalAggregate->aggfilter)
+		{
+			workerAggregateList = lappend(workerAggregateList,
+										  originalAggregate->aggfilter);
+		}
+
+		return workerAggregateList;
+	}
+
+	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	AggClauseCosts aggregateCosts;
 
 	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
-		walkerContext->pullDistinctColumns)
+		walkerContext->extendedOpNodeProperties->pullDistinctColumns)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
 		List *columnList = pull_var_clause_default((Node *) aggregate);
@@ -2910,7 +3037,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
-	else if (aggregateType == AGGREGATE_CUSTOM)
+	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		HeapTuple aggTuple =
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
@@ -3019,10 +3146,17 @@ GetAggregateType(Aggref *aggregateExpression)
 
 	if (AggregateEnabledCustom(aggregateExpression))
 	{
-		return AGGREGATE_CUSTOM;
+		return AGGREGATE_CUSTOM_COMBINE;
 	}
 
-	ereport(ERROR, (errmsg("unsupported aggregate function %s", aggregateProcName)));
+	if (CoordinatorAggregationStrategy == COORDINATOR_AGGREGATION_DISABLED)
+	{
+		ereport(ERROR, (errmsg("unsupported aggregate function %s", aggregateProcName)));
+	}
+	else
+	{
+		return AGGREGATE_CUSTOM_ROW_GATHER;
+	}
 }
 
 
@@ -3337,14 +3471,59 @@ MakeIntegerConstInt64(int64 integerValue)
 
 
 /*
- * ErrorIfContainsUnsupportedAggregate extracts aggregate expressions from the
- * logical plan, walks over them and uses helper functions to check if we can
- * transform these aggregate expressions and push them down to worker nodes.
- * These helper functions error out if we cannot transform the aggregates.
+ * RequiresIntermediateRowPullUp checks for if any aggregates cannot be pushed down.
  */
-static void
-ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
+static bool
+RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 {
+	if (CoordinatorAggregationStrategy == COORDINATOR_AGGREGATION_DISABLED)
+	{
+		return false;
+	}
+
+	List *opNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
+	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
+
+	List *targetList = extendedOpNode->targetList;
+
+	/*
+	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
+	 * specified.
+	 */
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
+										   PVC_INCLUDE_WINDOWFUNCS);
+
+	Node *expression = NULL;
+	foreach_ptr(expression, expressionList)
+	{
+		/* only consider aggregate expressions */
+		if (!IsA(expression, Aggref))
+		{
+			continue;
+		}
+
+		AggregateType aggregateType = GetAggregateType((Aggref *) expression);
+		Assert(aggregateType != AGGREGATE_INVALID_FIRST);
+
+		if (aggregateType == AGGREGATE_CUSTOM_ROW_GATHER)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * DeferErrorIfContainsNonPushdownableAggregate extracts aggregate expressions from
+ * the logical plan, walks over them and uses helper functions to check if we
+ * can transform these aggregate expressions and push them down to worker nodes.
+ */
+static DeferredErrorMessage *
+DeferErrorIfContainsNonPushdownableAggregate(MultiNode *logicalPlanNode)
+{
+	DeferredErrorMessage *error = NULL;
 	List *opNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
@@ -3380,91 +3559,118 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 		 */
 		if (aggregateType == AGGREGATE_ARRAY_AGG)
 		{
-			ErrorIfUnsupportedArrayAggregate(aggregateExpression);
+			error = DeferErrorIfUnsupportedArrayAggregate(aggregateExpression);
 		}
 		else if (aggregateType == AGGREGATE_JSONB_AGG ||
 				 aggregateType == AGGREGATE_JSON_AGG)
 		{
-			ErrorIfUnsupportedJsonAggregate(aggregateType, aggregateExpression);
+			error = DeferErrorIfUnsupportedJsonAggregate(aggregateType,
+														 aggregateExpression);
 		}
 		else if (aggregateType == AGGREGATE_JSONB_OBJECT_AGG ||
 				 aggregateType == AGGREGATE_JSON_OBJECT_AGG)
 		{
-			ErrorIfUnsupportedJsonAggregate(aggregateType, aggregateExpression);
+			error = DeferErrorIfUnsupportedJsonAggregate(aggregateType,
+														 aggregateExpression);
 		}
 		else if (aggregateExpression->aggdistinct)
 		{
-			ErrorIfUnsupportedAggregateDistinct(aggregateExpression, logicalPlanNode);
+			error = DeferErrorIfUnsupportedAggregateDistinct(aggregateExpression,
+															 logicalPlanNode);
+		}
+
+		if (error != NULL)
+		{
+			return error;
 		}
 	}
+
+	return NULL;
 }
 
 
 /*
- * ErrorIfUnsupportedArrayAggregate checks if we can transform the array aggregate
+ * DeferErrorIfUnsupportedArrayAggregate checks if we can transform the array aggregate
  * expression and push it down to the worker node. If we cannot transform the
  * aggregate, this function errors.
  */
-static void
-ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression)
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression)
 {
 	/* if array_agg has order by, we error out */
 	if (arrayAggregateExpression->aggorder)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("array_agg with order by is unsupported")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "array_agg with order by is unsupported",
+							 NULL, NULL);
 	}
 
 	/* if array_agg has distinct, we error out */
 	if (arrayAggregateExpression->aggdistinct)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("array_agg (distinct) is unsupported")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "array_agg (distinct) is unsupported",
+							 NULL, NULL);
 	}
+
+	return NULL;
 }
 
 
 /*
- * ErrorIfUnsupportedJsonAggregate checks if we can transform the json
+ * DeferErrorIfUnsupportedJsonAggregate checks if we can transform the json
  * aggregate expression and push it down to the worker node. If we cannot
  * transform the aggregate, this function errors.
  */
-static void
-ErrorIfUnsupportedJsonAggregate(AggregateType type,
-								Aggref *aggregateExpression)
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedJsonAggregate(AggregateType type,
+									 Aggref *aggregateExpression)
 {
 	/* if json aggregate has order by, we error out */
-	if (aggregateExpression->aggorder)
+	if (aggregateExpression->aggdistinct || aggregateExpression->aggorder)
 	{
+		StringInfoData errorDetail;
+		initStringInfo(&errorDetail);
 		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s with order by is unsupported", name)));
+
+		appendStringInfoString(&errorDetail, name);
+		if (aggregateExpression->aggorder)
+		{
+			appendStringInfoString(&errorDetail, " with order by is unsupported");
+		}
+		else
+		{
+			appendStringInfoString(&errorDetail, " (distinct) is unsupported");
+		}
+
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED, errorDetail.data,
+							 NULL, NULL);
 	}
 
-	/* if json aggregate has distinct, we error out */
-	if (aggregateExpression->aggdistinct)
-	{
-		const char *name = AggregateNames[type];
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s (distinct) is unsupported", name)));
-	}
+	return NULL;
 }
 
 
 /*
- * ErrorIfUnsupportedAggregateDistinct checks if we can transform the aggregate
+ * DeferErrorIfUnsupportedAggregateDistinct checks if we can transform the aggregate
  * (distinct expression) and push it down to the worker node. It handles count
  * (distinct) separately to check if we can use distinct approximations. If we
  * cannot transform the aggregate, this function errors.
  */
-static void
-ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
-									MultiNode *logicalPlanNode)
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
+										 MultiNode *logicalPlanNode)
 {
-	char *errorDetail = NULL;
+	const char *errorDetail = NULL;
 	bool distinctSupported = true;
 
 	AggregateType aggregateType = GetAggregateType(aggregateExpression);
+
+	/* If we're aggregating on coordinator, this becomes simple. */
+	if (aggregateType == AGGREGATE_CUSTOM_ROW_GATHER)
+	{
+		return NULL;
+	}
 
 	/*
 	 * We partially support count(distinct) in subqueries, other distinct aggregates in
@@ -3480,9 +3686,10 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 			Var *column = (Var *) lfirst(columnCell);
 			if (column->varattno <= 0)
 			{
-				ereport(ERROR, (errmsg("cannot compute count (distinct)"),
-								errdetail("Non-column references are not supported "
-										  "yet")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot compute count (distinct)",
+									 "Non-column references are not supported yet",
+									 NULL);
 			}
 		}
 	}
@@ -3496,9 +3703,10 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 			if (multiTable->relationId == SUBQUERY_RELATION_ID ||
 				multiTable->relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
 			{
-				ereport(ERROR, (errmsg("cannot compute aggregate (distinct)"),
-								errdetail("Only count(distinct) aggregate is "
-										  "supported in subqueries")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot compute aggregate (distinct)",
+									 "Only count(distinct) aggregate is "
+									 "supported in subqueries", NULL);
 			}
 		}
 	}
@@ -3513,12 +3721,14 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 		/* if extension for distinct approximation is loaded, we are good */
 		if (distinctExtensionId != InvalidOid)
 		{
-			return;
+			return NULL;
 		}
 		else
 		{
-			ereport(ERROR, (errmsg("cannot compute count (distinct) approximation"),
-							errhint("You need to have the hll extension loaded.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot compute count (distinct) approximation",
+								 NULL,
+								 "You need to have the hll extension loaded.");
 		}
 	}
 
@@ -3580,21 +3790,19 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	/* if current aggregate expression isn't supported, error out */
 	if (!distinctSupported)
 	{
+		const char *errorHint = NULL;
 		if (aggregateType == AGGREGATE_COUNT)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot compute aggregate (distinct)"),
-							errdetail("%s", errorDetail),
-							errhint("You can load the hll extension from contrib "
-									"packages and enable distinct approximations.")));
+			errorHint = "You can load the hll extension from contrib "
+						"packages and enable distinct approximations.";
 		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot compute aggregate (distinct)"),
-							errdetail("%s", errorDetail)));
-		}
+
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot compute aggregate (distinct)",
+							 errorDetail, errorHint);
 	}
+
+	return NULL;
 }
 
 
