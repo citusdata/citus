@@ -1133,6 +1133,16 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.use_custom_path",
+		gettext_noop("Replaces citus' planner with a custom path in the standard planner"),
+		NULL,
+		&UseCustomPath,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomStringVariable(
 		"citus.local_hostname",
 		gettext_noop("Sets the hostname when connecting back to itself."),

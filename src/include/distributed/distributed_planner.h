@@ -32,7 +32,7 @@
 
 /* level of planner calls */
 extern int PlannerLevel;
-
+extern bool UseCustomPath;
 
 typedef struct RelationRestrictionContext
 {
