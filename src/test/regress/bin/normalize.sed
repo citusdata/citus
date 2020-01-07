@@ -82,3 +82,6 @@ s/DEBUG:  Plan [0-9]+/DEBUG:  Plan XXX/g
 s/generating subplan [0-9]+\_/generating subplan XXX\_/g
 s/read_intermediate_result\('[0-9]+_/read_intermediate_result('XXX_/g
 s/Subplan [0-9]+\_/Subplan XXX\_/g
+
+# Plan numbers in insert select
+s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('insert_select_XXX_/g
