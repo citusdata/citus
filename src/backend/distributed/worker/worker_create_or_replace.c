@@ -258,31 +258,7 @@ CreateRenameProcStmt(const ObjectAddress *address, char *newName)
 {
 	RenameStmt *stmt = makeNode(RenameStmt);
 
-	switch (get_func_prokind(address->objectId))
-	{
-		case PROKIND_AGGREGATE:
-		{
-			stmt->renameType = OBJECT_AGGREGATE;
-			break;
-		}
-
-		case PROKIND_PROCEDURE:
-		{
-			stmt->renameType = OBJECT_PROCEDURE;
-			break;
-		}
-
-		case PROKIND_FUNCTION:
-		{
-			stmt->renameType = OBJECT_FUNCTION;
-			break;
-		}
-
-		default:
-			elog(ERROR, "Unexpected prokind");
-			return NULL;
-	}
-
+	stmt->renameType = OBJECT_ROUTINE;
 	stmt->object = (Node *) ObjectWithArgsFromOid(address->objectId);
 	stmt->newname = newName;
 

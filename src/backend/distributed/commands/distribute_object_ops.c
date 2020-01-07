@@ -337,6 +337,41 @@ static DistributeObjectOps Procedure_Rename = {
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
 };
+static DistributeObjectOps Routine_AlterObjectDepends = {
+	.deparse = DeparseAlterFunctionDependsStmt,
+	.qualify = QualifyAlterFunctionDependsStmt,
+	.preprocess = PreprocessAlterFunctionDependsStmt,
+	.postprocess = NULL,
+	.address = AlterFunctionDependsStmtObjectAddress,
+};
+static DistributeObjectOps Routine_AlterObjectSchema = {
+	.deparse = DeparseAlterFunctionSchemaStmt,
+	.qualify = QualifyAlterFunctionSchemaStmt,
+	.preprocess = PreprocessAlterFunctionSchemaStmt,
+	.postprocess = PostprocessAlterFunctionSchemaStmt,
+	.address = AlterFunctionSchemaStmtObjectAddress,
+};
+static DistributeObjectOps Routine_AlterOwner = {
+	.deparse = DeparseAlterFunctionOwnerStmt,
+	.qualify = QualifyAlterFunctionOwnerStmt,
+	.preprocess = PreprocessAlterFunctionOwnerStmt,
+	.postprocess = NULL,
+	.address = AlterFunctionOwnerObjectAddress,
+};
+static DistributeObjectOps Routine_Drop = {
+	.deparse = DeparseDropFunctionStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropFunctionStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+static DistributeObjectOps Routine_Rename = {
+	.deparse = DeparseRenameFunctionStmt,
+	.qualify = QualifyRenameFunctionStmt,
+	.preprocess = PreprocessRenameFunctionStmt,
+	.postprocess = NULL,
+	.address = RenameFunctionStmtObjectAddress,
+};
 static DistributeObjectOps Schema_Drop = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -440,6 +475,11 @@ GetDistributeObjectOps(Node *node)
 					return &Procedure_AlterObjectDepends;
 				}
 
+				case OBJECT_ROUTINE:
+				{
+					return &Routine_AlterObjectDepends;
+				}
+
 				default:
 				{
 					return &NoDistributeOps;
@@ -477,6 +517,11 @@ GetDistributeObjectOps(Node *node)
 					return &Procedure_AlterObjectSchema;
 				}
 
+				case OBJECT_ROUTINE:
+				{
+					return &Routine_AlterObjectSchema;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterObjectSchema;
@@ -512,6 +557,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_PROCEDURE:
 				{
 					return &Procedure_AlterOwner;
+				}
+
+				case OBJECT_ROUTINE:
+				{
+					return &Routine_AlterOwner;
 				}
 
 				case OBJECT_TYPE:
@@ -665,6 +715,11 @@ GetDistributeObjectOps(Node *node)
 					return &Procedure_Drop;
 				}
 
+				case OBJECT_ROUTINE:
+				{
+					return &Routine_Drop;
+				}
+
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Drop;
@@ -730,6 +785,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_PROCEDURE:
 				{
 					return &Procedure_Rename;
+				}
+
+				case OBJECT_ROUTINE:
+				{
+					return &Routine_Rename;
 				}
 
 				case OBJECT_TYPE:

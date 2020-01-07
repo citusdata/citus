@@ -39,6 +39,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+#include "utils/regproc.h"
 
 
 /* forward declaration for deparse functions */
@@ -105,6 +106,11 @@ ObjectTypeToKeyword(ObjectType objtype)
 		case OBJECT_AGGREGATE:
 		{
 			return "AGGREGATE";
+		}
+
+		case OBJECT_ROUTINE:
+		{
+			return "ROUTINE";
 		}
 
 		default:
@@ -623,13 +629,9 @@ AppendFunctionNameList(StringInfo buf, List *objects, ObjectType objtype)
 static void
 AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 {
-	char *functionName = NULL;
-	char *schemaName = NULL;
-
 	Oid funcid = LookupFuncWithArgs(objtype, func, true);
-	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 
-	if (!HeapTupleIsValid(proctup))
+	if (funcid == InvalidOid)
 	{
 		/*
 		 * DROP FUNCTION IF EXISTS absent_function arrives here
@@ -637,65 +639,33 @@ AppendFunctionName(StringInfo buf, ObjectWithArgs *func, ObjectType objtype)
 		 * There is no namespace associated with the nonexistent function,
 		 * thus we return the function name as it is provided
 		 */
+		char *functionName = NULL;
+		char *schemaName = NULL;
+
 		DeconstructQualifiedName(func->objname, &schemaName, &functionName);
+
+		char *qualifiedFunctionName = quote_qualified_identifier(schemaName,
+																 functionName);
+		appendStringInfoString(buf, qualifiedFunctionName);
+
+		if (!func->args_unspecified)
+		{
+			/*
+			 * The function is not found, but there is an argument list specified, this has
+			 * some known issues with the "any" type. However this is mostly a bug in
+			 * postgres' TypeNameListToString. For now the best we can do until we understand
+			 * the underlying cause better.
+			 */
+
+			const char *args = TypeNameListToString(func->objargs);
+			appendStringInfo(buf, "(%s)", args);
+		}
 	}
 	else
 	{
-		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
-		functionName = NameStr(procform->proname);
-		functionName = pstrdup(functionName); /* we release the tuple before used */
-		schemaName = get_namespace_name(procform->pronamespace);
-
-		ReleaseSysCache(proctup);
+		char *functionSignature = format_procedure_qualified(funcid);
+		appendStringInfoString(buf, functionSignature);
 	}
-
-	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
-	appendStringInfoString(buf, qualifiedFunctionName);
-
-	if (OidIsValid(funcid))
-	{
-		/*
-		 * If the function exists we want to use pg_get_function_identity_arguments to
-		 * serialize its canonical arguments
-		 */
-
-		/*
-		 * Set search_path to NIL so that all objects outside of pg_catalog will be
-		 * schema-prefixed. pg_catalog will be added automatically when we call
-		 * PushOverrideSearchPath(), since we set addCatalog to true;
-		 */
-		OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-		overridePath->schemas = NIL;
-		overridePath->addCatalog = true;
-
-		PushOverrideSearchPath(overridePath);
-
-		Datum sqlTextDatum = DirectFunctionCall1(pg_get_function_identity_arguments,
-												 ObjectIdGetDatum(funcid));
-
-		/* revert back to original search_path */
-		PopOverrideSearchPath();
-
-		const char *args = TextDatumGetCString(sqlTextDatum);
-		appendStringInfo(buf, "(%s)", args);
-	}
-	else if (!func->args_unspecified)
-	{
-		/*
-		 * The function is not found, but there is an argument list specified, this has
-		 * some known issues with the "any" type. However this is mostly a bug in
-		 * postgres' TypeNameListToString. For now the best we can do until we understand
-		 * the underlying cause better.
-		 */
-
-		const char *args = TypeNameListToString(func->objargs);
-		appendStringInfo(buf, "(%s)", args);
-	}
-
-	/*
-	 * If the type is not found, and no argument list given we don't append anything here.
-	 * This will cause mostly the same sql as the original statement.
-	 */
 }
 
 

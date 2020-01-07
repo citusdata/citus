@@ -38,7 +38,8 @@ AssertObjectTypeIsFunctional(ObjectType type)
 {
 	Assert(type == OBJECT_AGGREGATE ||
 		   type == OBJECT_FUNCTION ||
-		   type == OBJECT_PROCEDURE);
+		   type == OBJECT_PROCEDURE ||
+		   type == OBJECT_ROUTINE);
 }
 
 
