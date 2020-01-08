@@ -322,7 +322,7 @@ $cmd$, 'task_assignment_test_table_2');
 SELECT count(DISTINCT value) FROM explain_outputs;
  count
 ---------------------------------------------------------------------
-     2
+     1
 (1 row)
 
 RESET citus.task_assignment_policy;

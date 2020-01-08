@@ -233,7 +233,8 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 
 		if (workerNode == NULL)
 		{
-			elog(WARNING, "Failed Node Lookup with Id %d", nodeId);
+			elog(DEBUG4, "Failed Node Lookup with Id %d, write to local file", nodeId);
+			entry->writeLocalFile = true;
 			continue;
 		}
 
