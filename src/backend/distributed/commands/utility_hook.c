@@ -49,6 +49,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
@@ -864,7 +865,8 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryString = applyCommand->data;
+		task->query = NULL;
+		task->queryStringLazy = applyCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -899,7 +901,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
-	task->queryString = concatenatedCommands;
+	task->queryStringLazy = concatenatedCommands;
 
 	foreach(workerNodeCell, workerNodes)
 	{

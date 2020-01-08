@@ -116,6 +116,7 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *pla
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 List *rangeTableList, int rteIdCounter);
 
+
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
@@ -132,6 +133,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		.cursorOptions = cursorOptions,
 		.boundParams = boundParams,
 	};
+
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{

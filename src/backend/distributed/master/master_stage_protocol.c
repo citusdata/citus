@@ -515,7 +515,8 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryString = StringJoin(commandList, ';');
+		task->query = NULL;
+		task->queryStringLazy = StringJoin(commandList, ';');
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NIL;
 		task->anchorShardId = shardId;

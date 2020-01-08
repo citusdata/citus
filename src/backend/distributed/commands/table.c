@@ -1319,7 +1319,8 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryString = applyCommand->data;
+		task->query = NULL;
+		task->queryStringLazy = applyCommand->data;
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;

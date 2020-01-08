@@ -111,7 +111,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
-	StringInfo queryString = NULL;
 	Task *task = NULL;
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
@@ -364,12 +363,9 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
-	queryString = makeStringInfo();
-	pg_get_query_def(planContext->query, queryString);
-
 	task = CitusMakeNode(Task);
 	task->taskType = SELECT_TASK;
-	task->queryString = queryString->data;
+	task->query = planContext->query;
 	task->taskPlacementList = placementList;
 	task->anchorShardId = shardInterval->shardId;
 	task->replicationModel = distTable->replicationModel;

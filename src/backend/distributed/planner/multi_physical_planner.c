@@ -2449,7 +2449,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
 								ApplyLogRedaction(queryString->data))));
-		subqueryTask->queryString = queryString->data;
+		subqueryTask->queryStringLazy = queryString->data;
 	}
 
 	subqueryTask->dependentTaskList = NULL;
@@ -3977,7 +3977,7 @@ CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType, char *queryStrin
 	task->taskId = taskId;
 	task->taskType = taskType;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
-	task->queryString = queryString;
+	task->queryStringLazy = queryString;
 
 	return task;
 }
@@ -4244,7 +4244,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 
 		/* convert filter query task into map task */
 		Task *mapTask = filterTask;
-		mapTask->queryString = mapQueryString->data;
+		mapTask->queryStringLazy = mapQueryString->data;
 		mapTask->taskType = MAP_TASK;
 
 		mapTaskList = lappend(mapTaskList, mapTask);
@@ -4266,7 +4266,7 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 
 	/* wrap repartition query string around filter query string */
 	StringInfo mapQueryString = makeStringInfo();
-	char *filterQueryString = filterTask->queryString;
+	char *filterQueryString = filterTask->queryStringLazy;
 	char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
 	PartitionType partitionType = mapMergeJob->partitionType;
 
