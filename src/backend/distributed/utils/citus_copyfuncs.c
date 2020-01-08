@@ -117,7 +117,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 
 	COPY_NODE_FIELD(subPlanList);
 	COPY_NODE_FIELD(usedSubPlanNodeList);
-
+	COPY_SCALAR_FIELD(fastPathRouterPlan);
 	COPY_NODE_FIELD(planningError);
 }
 
