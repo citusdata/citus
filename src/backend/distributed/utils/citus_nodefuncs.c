@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "catalog/pg_namespace_d.h"
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
@@ -19,6 +20,9 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/version_compat.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 static const char *CitusNodeTagNamesD[] = {
 	"MultiNode",
@@ -142,12 +146,44 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 
 
 /*
+ * UnsetRangeTblExtraData changes an RTE that contains extradata back into a
+ * normal RTE_RELATION for the shard.
+ * IMPORTANT: This only works when the shard is present on the machine in
+ * question.
+ */
+void
+UnsetRangeTblExtraData(RangeTblEntry *rte)
+{
+	char *fragmentSchemaName = NULL;
+	char *fragmentTableName = NULL;
+
+	bool dataExtracted = ExtractRangeTblExtraData(
+		rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
+	if (!dataExtracted)
+	{
+		return;
+	}
+
+	Assert(fragmentSchemaName != NULL);
+	Oid schemaOid = GetSysCacheOid1Compat(NAMESPACENAME, Anum_pg_namespace_oid,
+										  CStringGetDatum(fragmentSchemaName));
+
+	rte->rtekind = RTE_RELATION;
+	rte->functions = NIL;
+	rte->relid = get_relname_relid(fragmentTableName, schemaOid);
+}
+
+
+/*
  * ExtractRangeTblExtraData extracts extra data stored for a range table entry
  * that previously has been stored with
  * Set/ModifyRangeTblExtraData. Parameters can be NULL if unintersting. It is
  * valid to use the function on a RTE without extra data.
+ *
+ * If the RTE has extra data the function will return true, if not it will
+ * return false.
  */
-void
+bool
 ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 						 char **fragmentSchemaName, char **fragmentTableName,
 						 List **tableIdList)
@@ -178,20 +214,20 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	/* only function RTEs have our special extra data */
 	if (rte->rtekind != RTE_FUNCTION)
 	{
-		return;
+		return false;
 	}
 
 	/* we only ever generate one argument */
 	if (list_length(rte->functions) != 1)
 	{
-		return;
+		return false;
 	}
 
 	/* should pretty much always be a FuncExpr, but be liberal in what we expect... */
 	RangeTblFunction *fauxFunction = linitial(rte->functions);
 	if (!IsA(fauxFunction->funcexpr, FuncExpr))
 	{
-		return;
+		return false;
 	}
 
 	FuncExpr *fauxFuncExpr = (FuncExpr *) fauxFunction->funcexpr;
@@ -202,7 +238,7 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	 */
 	if (fauxFuncExpr->funcid != CitusExtraDataContainerFuncId())
 	{
-		return;
+		return false;
 	}
 
 	/*
@@ -214,7 +250,7 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	{
 		ereport(ERROR, (errmsg("unexpected number of function arguments to "
 							   "citus_extradata_container")));
-		return;
+		return false;
 	}
 
 	/* extract rteKind */
@@ -255,6 +291,8 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 
 		*tableIdList = (List *) deserializedList;
 	}
+
+	return true;
 }
 
 
