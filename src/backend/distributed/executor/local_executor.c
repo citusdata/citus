@@ -73,6 +73,7 @@
 #include "miscadmin.h"
 
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
@@ -143,7 +144,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		const char *shardQueryString = task->queryString;
+		const char *shardQueryString = TaskQueryString(task);
 		Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes, numParams);
 
 		/*
@@ -167,7 +168,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		LogLocalCommand(shardQueryString);
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, task->queryString);
+			ExecuteLocalTaskPlan(scanState, localPlan, TaskQueryString(task));
 	}
 
 	return totalRowsProcessed;
@@ -505,4 +506,36 @@ DisableLocalExecution(void)
 	set_config_option("citus.enable_local_execution", "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
+ * TaskQueryString generates task->queryStringLazy if missing.
+ *
+ * For performance reasons, the queryString is generated lazily. For example
+ * for local queries it is always needed to generate it.
+ */
+char *
+TaskQueryString(Task *task)
+{
+	if (task->queryStringLazy != NULL)
+	{
+		return task->queryStringLazy;
+	}
+	Assert(task->query != NULL);
+
+
+	/*
+	 * Switch to the memory context of the task before generating the query
+	 * string. This way the query string is not freed in between multiple
+	 * executions of a prepared statement.
+	 */
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+	StringInfo queryString = makeStringInfo();
+
+	pg_get_query_def(task->query, queryString);
+
+	task->queryStringLazy = queryString->data;
+	MemoryContextSwitchTo(previousContext);
+	return queryString->data;
 }

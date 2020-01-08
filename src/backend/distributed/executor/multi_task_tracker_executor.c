@@ -1060,7 +1060,8 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 
 				StringInfo mapFetchTaskQueryString = MapFetchTaskQueryString(task,
 																			 mapTask);
-				task->queryString = mapFetchTaskQueryString->data;
+				task->query = NULL;
+				task->queryStringLazy = mapFetchTaskQueryString->data;
 				taskExecution->querySourceNodeIndex = mapTaskExecution->currentNodeIndex;
 			}
 
@@ -1576,7 +1577,7 @@ TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task)
 	 */
 
 	StringInfo sqlTaskQueryString = makeStringInfo();
-	char *escapedTaskQueryString = quote_literal_cstr(task->queryString);
+	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryString(task));
 
 	if (BinaryMasterCopyFormat)
 	{
@@ -1611,7 +1612,7 @@ TrackerQueueTask(TaskTracker *taskTracker, Task *task)
 	HTAB *taskStateHash = taskTracker->taskStateHash;
 
 	/* wrap a task assignment query outside the original query */
-	StringInfo taskAssignmentQuery = TaskAssignmentQuery(task, task->queryString);
+	StringInfo taskAssignmentQuery = TaskAssignmentQuery(task, TaskQueryString(task));
 
 	TrackerTaskState *taskState = TaskStateHashEnter(taskStateHash, task->jobId,
 													 task->taskId);
@@ -2731,7 +2732,8 @@ JobCleanupTask(uint64 jobId)
 	jobCleanupTask->jobId = jobId;
 	jobCleanupTask->taskId = JOB_CLEANUP_TASK_ID;
 	jobCleanupTask->replicationModel = REPLICATION_MODEL_INVALID;
-	jobCleanupTask->queryString = jobCleanupQuery->data;
+	jobCleanupTask->query = NULL;
+	jobCleanupTask->queryStringLazy = jobCleanupQuery->data;
 
 	return jobCleanupTask;
 }
@@ -2767,9 +2769,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 			if (!taskTracker->connectionBusy)
 			{
 				/* assign through task tracker to manage resource utilization */
-				StringInfo jobCleanupQuery = TaskAssignmentQuery(jobCleanupTask,
-																 jobCleanupTask->
-																 queryString);
+				StringInfo jobCleanupQuery = TaskAssignmentQuery(
+					jobCleanupTask, TaskQueryString(jobCleanupTask));
 
 				jobCleanupQuerySent = MultiClientSendQuery(taskTracker->connectionId,
 														   jobCleanupQuery->data);
@@ -2850,7 +2851,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 											 nodeName, nodePort, (int) queryStatus),
 									  errhint("Manually clean job resources on node "
 											  "\"%s:%u\" by running \"%s\" ", nodeName,
-											  nodePort, jobCleanupTask->queryString)));
+											  nodePort, TaskQueryString(
+												  jobCleanupTask))));
 				}
 				else
 				{
@@ -2868,7 +2870,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 										 nodePort, (int) resultStatus),
 								  errhint("Manually clean job resources on node "
 										  "\"%s:%u\" by running \"%s\" ", nodeName,
-										  nodePort, jobCleanupTask->queryString)));
+										  nodePort, TaskQueryString(jobCleanupTask))));
 			}
 			else
 			{

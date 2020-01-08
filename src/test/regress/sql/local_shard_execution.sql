@@ -462,6 +462,15 @@ INSERT INTO distributed_table VALUES (1, '11',21), (2,'22',22), (3,'33',33), (4,
 
 
 PREPARE local_prepare_no_param AS SELECT count(*) FROM distributed_table WHERE key = 1;
+PREPARE local_prepare_no_param_subquery AS
+SELECT DISTINCT trim(value) FROM (
+    SELECT value FROM distributed_table
+    WHERE
+        key IN (1, 6, 500, 701)
+        AND (select 2) > random()
+        order by 1
+        limit 2
+    ) t;
 PREPARE local_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key = $1;
 PREPARE remote_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key != $1;
 BEGIN;
@@ -472,6 +481,14 @@ BEGIN;
 	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
+
+	-- 6 local execution without params and some subqueries
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
 
 	-- 6 local executions with params
 	EXECUTE local_prepare_param(1);
@@ -733,6 +750,28 @@ BEGIN;
     DELETE FROM reference_table RETURNING key;
 COMMIT;
 
+-- however complex the query, local execution can handle
+SET client_min_messages TO LOG;
+SET citus.log_local_commands TO ON;
+WITH cte_1 AS
+  (SELECT *
+   FROM
+     (WITH cte_1 AS
+        (SELECT *
+         FROM distributed_table
+         WHERE key = 1) SELECT *
+      FROM cte_1) AS foo)
+SELECT count(*)
+FROM cte_1
+JOIN distributed_table USING (key)
+WHERE distributed_table.key = 1
+  AND distributed_table.key IN
+    (SELECT key
+     FROM distributed_table
+     WHERE key = 1);
+
+RESET client_min_messages;
+RESET citus.log_local_commands;
 
 \c - - - :master_port
 
