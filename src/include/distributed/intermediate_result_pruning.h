@@ -16,11 +16,14 @@
 extern bool LogIntermediateResults;
 
 extern List * FindSubPlansUsedInNode(Node *node);
-extern List * FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
+extern List * FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 											 char *resultId);
 extern HTAB * MakeIntermediateResultHTAB(void);
 extern void RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 										   DistributedPlan *distributedPlan);
 
+extern IntermediateResultsHashEntry * SearchIntermediateResult(HTAB
+															   *intermediateResultsHash,
+															   char *resultId);
 
 #endif /* INTERMEDIATE_RESULT_PRUNING_H */

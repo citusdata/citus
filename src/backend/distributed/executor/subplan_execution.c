@@ -63,8 +63,12 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		ParamListInfo params = NULL;
 		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
+
+		IntermediateResultsHashEntry *entry =
+			SearchIntermediateResult(intermediateResultsHash, resultId);
+
 		List *workerNodeList =
-			FindAllWorkerNodesUsingSubplan(intermediateResultsHash, resultId);
+			FindAllWorkerNodesUsingSubplan(entry, resultId);
 
 		/*
 		 * Write intermediate results to local file only if there is no worker
@@ -79,7 +83,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		 * if it is not used at all, but for modifications we have to execute
 		 * the queries.
 		 */
-		if (workerNodeList == NIL)
+		if (workerNodeList == NIL || entry->writeLocalFile)
 		{
 			writeLocalFile = true;
 

@@ -24,12 +24,9 @@
 /* controlled via GUC, used mostly for testing */
 bool LogIntermediateResults = false;
 
-static List * AppendAllAccessedWorkerNodes(List *workerNodeList,
+static List * AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 										   DistributedPlan *distributedPlan,
 										   int workerNodeCount);
-static IntermediateResultsHashEntry * SearchIntermediateResult(HTAB
-															   *intermediateResultsHash,
-															   char *resultId);
 
 
 /*
@@ -101,11 +98,13 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 		IntermediateResultsHashEntry *entry = SearchIntermediateResult(
 			intermediateResultsHash, resultId);
 
-		/* no need to traverse the whole plan if all the workers are hit */
-		if (list_length(entry->nodeIdList) == workerNodeCount)
+		/*
+		 * There is no need to traverse the whole plan if the intermediate result
+		 * will be written to a local file and send to all nodes
+		 */
+		if (list_length(entry->nodeIdList) == workerNodeCount && entry->writeLocalFile)
 		{
 			elog(DEBUG4, "Subplan %s is used in all workers", resultId);
-
 			break;
 		}
 		else
@@ -117,11 +116,11 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			 * workers will be in the node list. We can improve intermediate result
 			 * pruning by deciding which reference table shard will be accessed earlier
 			 */
-			entry->nodeIdList = AppendAllAccessedWorkerNodes(entry->nodeIdList,
-															 distributedPlan,
+			entry->nodeIdList = AppendAllAccessedWorkerNodes(entry, distributedPlan,
 															 workerNodeCount);
 
-			elog(DEBUG4, "Subplan %s is used in %lu", resultId, distributedPlan->planId);
+			elog(DEBUG4, "Subplan %s is used in plan %lu", resultId,
+				 distributedPlan->planId);
 		}
 	}
 
@@ -148,11 +147,15 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
  * all the workers with placements are appended to the list. This effectively
  * means that if there is a reference table access in the distributed plan, all
  * the workers will be in the resulting list.
+ *
+ * If there exists any tasks that can be locally executed, we set a flag to
+ * indicate that the file should be written to local as well
  */
 static List *
-AppendAllAccessedWorkerNodes(List *workerNodeList, DistributedPlan *distributedPlan, int
-							 workerNodeCount)
+AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
+							 DistributedPlan *distributedPlan, int workerNodeCount)
 {
+	List *workerNodeList = entry->nodeIdList;
 	List *taskList = distributedPlan->workerJob->taskList;
 	ListCell *taskCell = NULL;
 
@@ -165,10 +168,21 @@ AppendAllAccessedWorkerNodes(List *workerNodeList, DistributedPlan *distributedP
 			ShardPlacement *placement = lfirst(placementCell);
 			workerNodeList = list_append_unique_int(workerNodeList, placement->nodeId);
 
-			/* early return if all the workers are accessed */
-			if (list_length(workerNodeList) == workerNodeCount)
+			/* early return if all the workers are accessed, and the result is written to local file */
+			if (list_length(workerNodeList) == workerNodeCount && entry->writeLocalFile)
 			{
 				return workerNodeList;
+			}
+		}
+
+		/* if there is a single and local task placement, write results to local file */
+		if (list_length(task->taskPlacementList) == 1)
+		{
+			ShardPlacement *placement = linitial(task->taskPlacementList);
+
+			if (placement->groupId == GetLocalGroupId())
+			{
+				entry->writeLocalFile = true;
 			}
 		}
 	}
@@ -206,12 +220,10 @@ MakeIntermediateResultHTAB()
  * may need to access subplan results.
  */
 List *
-FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
+FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 							   char *resultId)
 {
 	List *workerNodeList = NIL;
-	IntermediateResultsHashEntry *entry =
-		SearchIntermediateResult(intermediateResultsHash, resultId);
 
 	ListCell *nodeIdCell = NULL;
 	foreach(nodeIdCell, entry->nodeIdList)
@@ -219,7 +231,7 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 		uint32 nodeId = lfirst_int(nodeIdCell);
 		WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
 
-		if(workerNode == NULL)
+		if (workerNode == NULL)
 		{
 			elog(WARNING, "Failed Node Lookup with Id %d", nodeId);
 			continue;
@@ -245,7 +257,7 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
  *
  * If an entry is not found, creates a new entry with sane defaults.
  */
-static IntermediateResultsHashEntry *
+IntermediateResultsHashEntry *
 SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 {
 	bool found = false;
@@ -256,6 +268,7 @@ SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 	/* use sane defaults */
 	if (!found)
 	{
+		entry->writeLocalFile = false;
 		entry->nodeIdList = NIL;
 	}
 
