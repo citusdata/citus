@@ -22,7 +22,8 @@ extern void SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 extern void ModifyRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 									char *fragmentSchemaName, char *fragmentTableName,
 									List *tableIdList);
-extern void ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
+extern void UnsetRangeTblExtraData(RangeTblEntry *rte);
+extern bool ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 									 char **fragmentSchemaName, char **fragmentTableName,
 									 List **tableIdList);
 extern CitusRTEKind GetRangeTblKind(RangeTblEntry *rte);
