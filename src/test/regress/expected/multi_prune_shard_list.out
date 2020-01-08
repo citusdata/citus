@@ -227,6 +227,142 @@ SELECT * FROM coerce_hash WHERE id = 1.0::numeric;
   1 | test value
 (1 row)
 
+-- same queries with PREPARE
+PREPARE coerce_bigint(bigint) AS SELECT * FROM coerce_hash WHERE id=$1::bigint;
+PREPARE coerce_numeric(bigint) AS SELECT * FROM coerce_hash WHERE id=$1::numeric;
+PREPARE coerce_numeric_2(numeric) AS SELECT * FROM coerce_hash WHERE id=$1;
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_bigint(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
+EXECUTE coerce_numeric_2(1);
+ id |   value
+---------------------------------------------------------------------
+  1 | test value
+(1 row)
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
 NOTICE:  drop cascades to 9 other objects
