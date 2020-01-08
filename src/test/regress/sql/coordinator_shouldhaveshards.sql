@@ -18,6 +18,11 @@ SELECT create_distributed_table('test','x', colocate_with := 'none');
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_placement USING (shardid)
 WHERE logicalrelid = 'test'::regclass AND groupid = 0;
 
+--- enable logging to see which tasks are executed locally
+SET client_min_messages TO LOG;
+SET citus.log_local_commands TO ON;
+
+
 -- INSERT..SELECT with COPY under the covers
 INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
 

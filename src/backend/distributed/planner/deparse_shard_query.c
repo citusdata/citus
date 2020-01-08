@@ -17,6 +17,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -105,13 +106,13 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		}
 
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
-								task->queryString == NULL ? "(null)" :
-								ApplyLogRedaction(task->queryString))));
+								TaskQueryString(task) == NULL ? "(null)" :
+								ApplyLogRedaction(TaskQueryString(task)))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
-								ApplyLogRedaction(task->queryString))));
+								ApplyLogRedaction(TaskQueryString(task)))));
 	}
 }
 
@@ -162,7 +163,7 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		valuesRTE->values_lists = oldValuesLists;
 	}
 
-	task->queryString = queryString->data;
+	task->queryStringLazy = queryString->data;
 }
 
 

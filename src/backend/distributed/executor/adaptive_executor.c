@@ -132,8 +132,11 @@
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -905,7 +908,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
  * a distributed plan.
  */
 static DistributedExecution *
-CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
+CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
+						   bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize,
 						   TransactionProperties *xactProperties)
@@ -3130,9 +3134,9 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	int querySent = 0;
 
 	char *queryString = NULL;
-	if (task->queryString != NULL)
+	if (list_length(task->perPlacementQueryStrings) == 0)
 	{
-		queryString = task->queryString;
+		queryString = TaskQueryString(task);
 	}
 	else
 	{
