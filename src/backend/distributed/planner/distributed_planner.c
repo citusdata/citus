@@ -1755,12 +1755,43 @@ GetQueryFromPath(List *tlist, RangeTblEntry *rte)
 	Query *q = makeNode(Query);
 	q->commandType = CMD_SELECT;
 	q->rtable = list_make1(rte);
-	q->targetList = tlist;
+
+	List *newTargetList = NIL;
+	TargetEntry *target = NULL;
+	foreach_ptr(target, tlist)
+	{
+		Var *var = castNode(Var, target->expr);
+		TargetEntry *newTarget = makeTargetEntry(
+			(Expr *) makeVar(
+				1,
+				var->varattno,
+				var->vartype,
+				var->vartypmod,
+				var->varcollid,
+				var->varlevelsup
+			),
+			target->resno,
+			target->resname,
+			target->resjunk
+		);
+		newTargetList = lappend(newTargetList, newTarget);
+	}
+
+	q->targetList = newTargetList;
 	q->jointree = makeNode(FromExpr);
 	RangeTblRef *rr = makeNode(RangeTblRef);
 	rr->rtindex = 1;
 	q->jointree->fromlist = list_make1(rr);
 	return q;
+}
+
+
+static Index
+VarnoFromFirstTargetEntry(List *tlist)
+{
+	TargetEntry *entry = linitial_node(TargetEntry, tlist);
+	Var *var = castNode(Var, entry->expr);
+	return var->varno;
 }
 
 
@@ -1809,7 +1840,7 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	distributedPlan->hasReturning = true;
 
 	CustomScan *plan = makeNode(CustomScan);
-	plan->scan.scanrelid = 1;
+	plan->scan.scanrelid = VarnoFromFirstTargetEntry(tlist);
 	plan->flags = best_path->flags;
 	plan->methods = &AdaptiveExecutorCustomScanMethods;
 	plan->custom_private = list_make1(distributedPlan);
