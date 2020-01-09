@@ -437,12 +437,14 @@ ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, O
 		if (IsMultiStatementTransaction())
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				/* TODO: is this error applicable ? */
-				errmsg(
-					"cannot define foreign key constraint between local tables "
-					"and reference tables in a transaction block, udf block, or "
-					"distributed CTE subquery")));
+
+			                /* TODO: is this error applicable ? */
+							errmsg(
+								"cannot define foreign key constraint between local tables "
+								"and reference tables in a transaction block, udf block, or "
+								"distributed CTE subquery")));
 		}
+
 		/*
 		 * Check if we are in the coordinator and coordinator can have reference
 		 * table replicas
