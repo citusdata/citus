@@ -24,6 +24,7 @@
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
+#include "distributed/local_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -365,8 +366,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	task = CitusMakeNode(Task);
 	task->taskType = SELECT_TASK;
-	task->query = planContext->query;
-	task->taskPlacementList = placementList;
+	SetTaskQueryAndPlacementList(task, planContext->query, placementList);
 	task->anchorShardId = shardInterval->shardId;
 	task->replicationModel = distTable->replicationModel;
 
