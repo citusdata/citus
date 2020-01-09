@@ -111,14 +111,14 @@ bool LocalExecutionHappened = false;
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
-static Query * LocalShardQuery(Query *workerJobQuery, Task *task, ParamListInfo
+static Query * LocalShardQuery(Task *task, ParamListInfo
 							   boundParams, int *numParams,
 							   Oid **parameterTypes);
 static bool ReplaceShardReferencesWalker(Node *node, Task *task);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
 static bool TaskAccessesLocalNode(Task *task);
-static void LogLocalCommand(Job *workerJob, Task *task);
+static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -139,7 +139,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	ParamListInfo paramListInfo = copyParamList(executorState->es_param_list_info);
 	ListCell *taskCell = NULL;
 	uint64 totalRowsProcessed = 0;
-	Job *workerJob = scanState->distributedPlan->workerJob;
 	int numParams = -1;
 	Oid *parameterTypes = NULL;
 
@@ -147,8 +146,8 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		Query *shardQuery = LocalShardQuery(
-			workerJob->jobQuery, task, paramListInfo, &numParams, &parameterTypes);
+		Query *shardQuery = LocalShardQuery(task, paramListInfo, &numParams,
+											&parameterTypes);
 
 		/*
 		 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
@@ -168,7 +167,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 */
 		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 
-		LogLocalCommand(workerJob, task);
+		LogLocalCommand(task);
 
 		totalRowsProcessed +=
 			ExecuteLocalTaskPlan(scanState, localPlan, TaskQueryString(task));
@@ -185,7 +184,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
  * or not. See the comments in the function for the details.
  */
 static Query *
-LocalShardQuery(Query *workerJobQuery, Task *task, ParamListInfo boundParams,
+LocalShardQuery(Task *task, ParamListInfo boundParams,
 				int *numParams, Oid **parameterTypes)
 {
 	/*
@@ -199,7 +198,7 @@ LocalShardQuery(Query *workerJobQuery, Task *task, ParamListInfo boundParams,
 	 */
 	if (task->query != NULL)
 	{
-		Query *shardQuery = copyObject(workerJobQuery);
+		Query *shardQuery = copyObject(task->query);
 
 		ReplaceShardReferencesWalker((Node *) shardQuery, task);
 
@@ -600,7 +599,7 @@ ErrorIfLocalExecutionHappened(void)
  * meaning it is part of distributed execution.
  */
 static void
-LogLocalCommand(Job *workerJob, Task *task)
+LogLocalCommand(Task *task)
 {
 	if (!(LogRemoteCommands || LogLocalCommands))
 	{
