@@ -32,64 +32,68 @@ extern void AssertObjectTypeIsFunctional(ObjectType type);
 extern void QualifyTreeNode(Node *stmt);
 extern char * DeparseTreeNode(Node *stmt);
 
-/* forward declarations for deparse_collation_stmts.c */
-extern char * DeparseDropCollationStmt(DropStmt *stmt);
-extern char * DeparseRenameCollationStmt(RenameStmt *stmt);
-extern char * DeparseAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern char * DeparseAlterCollationOwnerStmt(AlterOwnerStmt *stmt);
+/* forward declarations for deparse_attribute_stmts.c */
+extern char * DeparseRenameAttributeStmt(Node *);
 
-extern void QualifyDropCollationStmt(DropStmt *stmt);
-extern void QualifyRenameCollationStmt(RenameStmt *stmt);
-extern void QualifyAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern void QualifyAlterCollationOwnerStmt(AlterOwnerStmt *stmt);
+/* forward declarations for deparse_collation_stmts.c */
+extern char * DeparseDropCollationStmt(Node *stmt);
+extern char * DeparseRenameCollationStmt(Node *stmt);
+extern char * DeparseAlterCollationSchemaStmt(Node *stmt);
+extern char * DeparseAlterCollationOwnerStmt(Node *stmt);
+
+extern void QualifyDropCollationStmt(Node *stmt);
+extern void QualifyRenameCollationStmt(Node *stmt);
+extern void QualifyAlterCollationSchemaStmt(Node *stmt);
+extern void QualifyAlterCollationOwnerStmt(Node *stmt);
 
 /* forward declarations for deparse_type_stmts.c */
-extern char * DeparseCompositeTypeStmt(CompositeTypeStmt *stmt);
-extern char * DeparseCreateEnumStmt(CreateEnumStmt *stmt);
-extern char * DeparseDropTypeStmt(DropStmt *stmt);
-extern char * DeparseAlterEnumStmt(AlterEnumStmt *stmt);
-extern char * DeparseAlterTypeStmt(AlterTableStmt *stmt);
-extern char * DeparseRenameTypeStmt(RenameStmt *stmt);
-extern char * DeparseRenameTypeAttributeStmt(RenameStmt *stmt);
-extern char * DeparseAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern char * DeparseAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
+extern char * DeparseCompositeTypeStmt(Node *stmt);
+extern char * DeparseCreateEnumStmt(Node *stmt);
+extern char * DeparseDropTypeStmt(Node *stmt);
+extern char * DeparseAlterEnumStmt(Node *stmt);
+extern char * DeparseAlterTypeStmt(Node *stmt);
+extern char * DeparseRenameTypeStmt(Node *stmt);
+extern char * DeparseRenameTypeAttributeStmt(Node *stmt);
+extern char * DeparseAlterTypeSchemaStmt(Node *stmt);
+extern char * DeparseAlterTypeOwnerStmt(Node *stmt);
 
-extern void QualifyRenameTypeStmt(RenameStmt *stmt);
-extern void QualifyRenameTypeAttributeStmt(RenameStmt *stmt);
-extern void QualifyAlterEnumStmt(AlterEnumStmt *stmt);
-extern void QualifyAlterTypeStmt(AlterTableStmt *stmt);
-extern void QualifyCompositeTypeStmt(CompositeTypeStmt *stmt);
-extern void QualifyCreateEnumStmt(CreateEnumStmt *stmt);
-extern void QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern void QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt);
+extern void QualifyRenameAttributeStmt(Node *stmt);
+extern void QualifyRenameTypeStmt(Node *stmt);
+extern void QualifyRenameTypeAttributeStmt(Node *stmt);
+extern void QualifyAlterEnumStmt(Node *stmt);
+extern void QualifyAlterTypeStmt(Node *stmt);
+extern void QualifyCompositeTypeStmt(Node *stmt);
+extern void QualifyCreateEnumStmt(Node *stmt);
+extern void QualifyAlterTypeSchemaStmt(Node *stmt);
+extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 
-extern ObjectAddress * GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
+extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
+extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
 
 /* forward declarations for deparse_function_stmts.c */
-extern char * DeparseDropFunctionStmt(DropStmt *stmt);
-extern char * DeparseAlterFunctionStmt(AlterFunctionStmt *stmt);
+extern char * DeparseDropFunctionStmt(Node *stmt);
+extern char * DeparseAlterFunctionStmt(Node *stmt);
 
-extern char * DeparseRenameFunctionStmt(RenameStmt *stmt);
-extern char * DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern char * DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
-extern char * DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
+extern char * DeparseRenameFunctionStmt(Node *stmt);
+extern char * DeparseAlterFunctionSchemaStmt(Node *stmt);
+extern char * DeparseAlterFunctionOwnerStmt(Node *stmt);
+extern char * DeparseAlterFunctionDependsStmt(Node *stmt);
 
-extern void QualifyAlterFunctionStmt(AlterFunctionStmt *stmt);
-extern void QualifyRenameFunctionStmt(RenameStmt *stmt);
-extern void QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt);
-extern void QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt);
-extern void QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt);
+extern void QualifyAlterFunctionStmt(Node *stmt);
+extern void QualifyRenameFunctionStmt(Node *stmt);
+extern void QualifyAlterFunctionSchemaStmt(Node *stmt);
+extern void QualifyAlterFunctionOwnerStmt(Node *stmt);
+extern void QualifyAlterFunctionDependsStmt(Node *stmt);
 
 /* forward declarations for deparse_role_stmts.c */
-extern char * DeparseAlterRoleStmt(AlterRoleStmt *stmt);
+extern char * DeparseAlterRoleStmt(Node *stmt);
 
 /* forward declarations for deparse_extension_stmts.c */
-extern Value * GetExtensionOption(List *extensionOptions, const
-								  char *defname);
-extern char * DeparseCreateExtensionStmt(CreateExtensionStmt *stmt);
-extern char * DeparseDropExtensionStmt(DropStmt *stmt);
-extern char * DeparseAlterExtensionSchemaStmt(
-	AlterObjectSchemaStmt *alterExtensionSchemaStmt);
-extern char * DeparseAlterExtensionStmt(AlterExtensionStmt *alterExtensionStmt);
+extern Value * GetExtensionOption(List *extensionOptions,
+								  const char *defname);
+extern char * DeparseCreateExtensionStmt(Node *stmt);
+extern char * DeparseDropExtensionStmt(Node *stmt);
+extern char * DeparseAlterExtensionSchemaStmt(Node *stmt);
+extern char * DeparseAlterExtensionStmt(Node *stmt);
 
 #endif /* CITUS_DEPARSER_H */

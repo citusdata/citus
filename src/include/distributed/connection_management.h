@@ -209,8 +209,8 @@ extern MultiConnection * GetNodeConnection(uint32 flags, const char *hostname,
 extern MultiConnection * StartNodeConnection(uint32 flags, const char *hostname,
 											 int32 port);
 extern MultiConnection * GetNodeUserDatabaseConnection(uint32 flags, const char *hostname,
-													   int32 port, const char *user, const
-													   char *database);
+													   int32 port, const char *user,
+													   const char *database);
 extern List * StartWorkerListConnections(List *workerList, uint32 flags, const char *user,
 										 const char *database);
 extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,

@@ -197,8 +197,8 @@ StartNodeConnection(uint32 flags, const char *hostname, int32 port)
  * See StartNodeUserDatabaseConnection for details.
  */
 MultiConnection *
-GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, const
-							  char *user, const char *database)
+GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
+							  const char *user, const char *database)
 {
 	MultiConnection *connection = StartNodeUserDatabaseConnection(flags, hostname, port,
 																  user, database);
@@ -250,8 +250,8 @@ StartWorkerListConnections(List *workerNodeList, uint32 flags, const char *user,
  * that's not desired use the Get* variant.
  */
 MultiConnection *
-StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, const
-								char *user, const char *database)
+StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
+								const char *user, const char *database)
 {
 	ConnectionHashKey key;
 	MultiConnection *connection;

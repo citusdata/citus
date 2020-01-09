@@ -26,10 +26,11 @@ CreatePolicyCommands(Oid relationId)
 }
 
 
-/* placeholder for PlanCreatePolicyStmt */
+/* placeholder for PreprocessCreatePolicyStmt */
 List *
-PlanCreatePolicyStmt(CreatePolicyStmt *stmt)
+PreprocessCreatePolicyStmt(Node *node, const char *queryString)
 {
+	CreatePolicyStmt *stmt = castNode(CreatePolicyStmt, node);
 	Oid relationId = RangeVarGetRelid(stmt->table,
 									  AccessExclusiveLock,
 									  false);
@@ -45,9 +46,9 @@ PlanCreatePolicyStmt(CreatePolicyStmt *stmt)
 }
 
 
-/* placeholder for PlanAlterPolicyStmt */
+/* placeholder for PreprocessAlterPolicyStmt */
 List *
-PlanAlterPolicyStmt(AlterPolicyStmt *stmt)
+PreprocessAlterPolicyStmt(Node *node, const char *queryString)
 {
 	/* placeholder for future implementation */
 	return NIL;
@@ -76,9 +77,9 @@ ErrorIfUnsupportedPolicyExpr(Node *expr)
 }
 
 
-/* placeholder for PlanDropPolicyStmt */
+/* placeholder for PreprocessDropPolicyStmt */
 List *
-PlanDropPolicyStmt(DropStmt *stmt, const char *queryString)
+PreprocessDropPolicyStmt(Node *node, const char *queryString)
 {
 	/* placeholder for future implementation */
 	return NIL;

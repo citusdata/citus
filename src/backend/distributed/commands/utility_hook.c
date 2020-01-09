@@ -4,7 +4,7 @@
  *
  * The utility hook is called by PostgreSQL when processing any command
  * that is not SELECT, UPDATE, DELETE, INSERT, in place of the regular
- * ProcessUtility function. We use this primarily to implement (or in
+ * PostprocessUtility function. We use this primarily to implement (or in
  * some cases prevent) DDL commands and COPY on distributed tables.
  *
  * For DDL commands that affect distributed tables, we check whether
@@ -18,7 +18,7 @@
  * on their distribution column value instead of writing it to the local
  * table on the coordinator. For COPY from a distributed table, we
  * replace the table with a SELECT * FROM table and pass it back to
- * ProcessUtility, which will plan the query via the distributed planner
+ * PostprocessUtility, which will plan the query via the distributed planner
  * hook.
  *
  * Copyright (c) Citus Data, Inc.
@@ -41,6 +41,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
@@ -72,11 +73,6 @@ static int activeDropSchemaOrDBs = 0;
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
-static void PostProcessUtility(Node *parsetree);
-static List * PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString);
-static List * PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString);
-static List * PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt,
-										 const char *queryString);
 static bool IsDropSchemaOrDB(Node *parsetree);
 
 
@@ -289,7 +285,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsMultiStatementTransaction() && ShouldPropagateSetCommand(setStmt))
 		{
-			ProcessVariableSetStmt(setStmt, queryString);
+			PostprocessVariableSetStmt(setStmt, queryString);
 		}
 	}
 
@@ -368,245 +364,21 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, TruncateStmt))
 	{
-		ProcessTruncateStatement((TruncateStmt *) parsetree);
+		PostprocessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
 	/* only generate worker DDLJobs if propagation is enabled */
+	const DistributeObjectOps *ops = NULL;
 	if (EnableDDLPropagation)
 	{
 		/* copy planned statement since we might scribble on it or its utilityStmt */
 		pstmt = copyObject(pstmt);
 		parsetree = pstmt->utilityStmt;
+		ops = GetDistributeObjectOps(parsetree);
 
-		if (IsA(parsetree, IndexStmt))
+		if (ops && ops->preprocess)
 		{
-			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
-		}
-
-		if (IsA(parsetree, ReindexStmt))
-		{
-			ddlJobs = PlanReindexStmt((ReindexStmt *) parsetree, queryString);
-		}
-
-		if (IsA(parsetree, DropStmt))
-		{
-			DropStmt *dropStatement = (DropStmt *) parsetree;
-			switch (dropStatement->removeType)
-			{
-				case OBJECT_COLLATION:
-				{
-					ddlJobs = PlanDropCollationStmt(dropStatement);
-					break;
-				}
-
-				case OBJECT_INDEX:
-				{
-					ddlJobs = PlanDropIndexStmt(dropStatement, queryString);
-					break;
-				}
-
-				case OBJECT_TABLE:
-				{
-					ProcessDropTableStmt(dropStatement);
-					break;
-				}
-
-				case OBJECT_SCHEMA:
-				{
-					ProcessDropSchemaStmt(dropStatement);
-					break;
-				}
-
-				case OBJECT_POLICY:
-				{
-					ddlJobs = PlanDropPolicyStmt(dropStatement, queryString);
-					break;
-				}
-
-				case OBJECT_TYPE:
-				{
-					ddlJobs = PlanDropTypeStmt(dropStatement, queryString);
-					break;
-				}
-
-				case OBJECT_PROCEDURE:
-				case OBJECT_AGGREGATE:
-				case OBJECT_FUNCTION:
-				{
-					ddlJobs = PlanDropFunctionStmt(dropStatement, queryString);
-					break;
-				}
-
-				case OBJECT_EXTENSION:
-				{
-					ddlJobs = PlanDropExtensionStmt(dropStatement, queryString);
-					break;
-				}
-
-				default:
-				{
-					/* unsupported type, skipping*/
-				}
-			}
-		}
-
-		if (IsA(parsetree, AlterEnumStmt))
-		{
-			ddlJobs = PlanAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
-		}
-
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (alterTableStmt->relkind == OBJECT_TABLE ||
-				alterTableStmt->relkind == OBJECT_FOREIGN_TABLE ||
-				alterTableStmt->relkind == OBJECT_INDEX)
-			{
-				ddlJobs = PlanAlterTableStmt(alterTableStmt, queryString);
-			}
-
-			if (alterTableStmt->relkind == OBJECT_TYPE)
-			{
-				ddlJobs = PlanAlterTypeStmt(alterTableStmt, queryString);
-			}
-		}
-
-		/*
-		 * ALTER ... RENAME statements have their node type as RenameStmt.
-		 * So intercept RenameStmt to tackle these commands.
-		 */
-		if (IsA(parsetree, RenameStmt))
-		{
-			RenameStmt *renameStmt = (RenameStmt *) parsetree;
-
-			switch (renameStmt->renameType)
-			{
-				case OBJECT_COLLATION:
-				{
-					ddlJobs = PlanRenameCollationStmt(renameStmt, queryString);
-					break;
-				}
-
-				case OBJECT_TYPE:
-				{
-					ddlJobs = PlanRenameTypeStmt(renameStmt, queryString);
-					break;
-				}
-
-				case OBJECT_ATTRIBUTE:
-				{
-					ddlJobs = PlanRenameAttributeStmt(renameStmt, queryString);
-					break;
-				}
-
-				case OBJECT_PROCEDURE:
-				case OBJECT_AGGREGATE:
-				case OBJECT_FUNCTION:
-				{
-					ddlJobs = PlanRenameFunctionStmt(renameStmt, queryString);
-					break;
-				}
-
-				default:
-				{
-					ddlJobs = PlanRenameStmt(renameStmt, queryString);
-					break;
-				}
-			}
-		}
-
-		/* handle distributed CLUSTER statements */
-		if (IsA(parsetree, ClusterStmt))
-		{
-			ddlJobs = PlanClusterStmt((ClusterStmt *) parsetree, queryString);
-		}
-
-		/*
-		 * ALTER ... SET SCHEMA statements have their node type as AlterObjectSchemaStmt.
-		 * So, we intercept AlterObjectSchemaStmt to tackle these commands.
-		 */
-		if (IsA(parsetree, AlterObjectSchemaStmt))
-		{
-			ddlJobs = PlanAlterObjectSchemaStmt(
-				castNode(AlterObjectSchemaStmt, parsetree), queryString);
-		}
-
-		if (IsA(parsetree, GrantStmt))
-		{
-			ddlJobs = PlanGrantStmt((GrantStmt *) parsetree);
-		}
-
-		if (IsA(parsetree, AlterOwnerStmt))
-		{
-			ddlJobs = PlanAlterOwnerStmt(castNode(AlterOwnerStmt, parsetree),
-										 queryString);
-		}
-
-		if (IsA(parsetree, CreatePolicyStmt))
-		{
-			ddlJobs = PlanCreatePolicyStmt((CreatePolicyStmt *) parsetree);
-		}
-
-		if (IsA(parsetree, AlterPolicyStmt))
-		{
-			ddlJobs = PlanAlterPolicyStmt((AlterPolicyStmt *) parsetree);
-		}
-
-		if (IsA(parsetree, CompositeTypeStmt))
-		{
-			ddlJobs = PlanCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree),
-											queryString);
-		}
-
-		if (IsA(parsetree, CreateEnumStmt))
-		{
-			ddlJobs = PlanCreateEnumStmt(castNode(CreateEnumStmt, parsetree),
-										 queryString);
-		}
-
-		if (IsA(parsetree, AlterFunctionStmt))
-		{
-			ddlJobs = PlanAlterFunctionStmt(castNode(AlterFunctionStmt, parsetree),
-											queryString);
-		}
-
-		if (IsA(parsetree, CreateFunctionStmt))
-		{
-			ddlJobs = PlanCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
-											 queryString);
-		}
-
-		if (IsA(parsetree, AlterObjectDependsStmt))
-		{
-			ddlJobs = PlanAlterObjectDependsStmt(
-				castNode(AlterObjectDependsStmt, parsetree), queryString);
-		}
-
-		if (IsA(parsetree, AlterExtensionStmt))
-		{
-			ddlJobs = PlanAlterExtensionUpdateStmt(castNode(AlterExtensionStmt,
-															parsetree), queryString);
-		}
-
-		if (IsA(parsetree, AlterExtensionContentsStmt))
-		{
-			ereport(NOTICE, (errmsg(
-								 "Citus does not propagate adding/dropping member objects"),
-							 errhint(
-								 "You can add/drop the member objects on the workers as well.")));
-		}
-
-		/*
-		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
-		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
-		 * the distributed environment. We warn out here.
-		 */
-		if (IsA(parsetree, AlterTableMoveAllStmt))
-		{
-			ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
-									 "commands to worker nodes"),
-							  errhint("Connect to worker nodes directly to manually "
-									  "move all tables.")));
+			ddlJobs = ops->preprocess(parsetree, queryString);
 		}
 	}
 	else
@@ -635,9 +407,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				 * the validation step should be skipped on the distributed table.
 				 * Therefore, we check whether the given ALTER TABLE statement is a
 				 * FOREIGN KEY constraint and if so disable the validation step.
-				 * Note that validation is done on the shard level when DDL
-				 * propagation is enabled. Unlike the preceeding Plan* calls, the
-				 * following eagerly executes some tasks on workers.
+				 * Note validation is done on the shard level when DDL propagation
+				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
 				parsetree = WorkerProcessAlterTableStmt(alterTableStmt, queryString);
 			}
@@ -743,49 +514,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 */
 	if (EnableDDLPropagation)
 	{
-		if (IsA(parsetree, CompositeTypeStmt))
+		if (ops && ops->postprocess)
 		{
-			ProcessCompositeTypeStmt(castNode(CompositeTypeStmt, parsetree), queryString);
-		}
+			List *processJobs = ops->postprocess(parsetree, queryString);
 
-		if (IsA(parsetree, CreateEnumStmt))
-		{
-			ProcessCreateEnumStmt(castNode(CreateEnumStmt, parsetree), queryString);
-		}
-
-		if (IsA(parsetree, DefineStmt))
-		{
-			DefineStmt *defineStmt = castNode(DefineStmt, parsetree);
-
-			if (defineStmt->kind == OBJECT_COLLATION)
+			if (processJobs)
 			{
-				ddlJobs = ProcessCollationDefineStmt(defineStmt, queryString);
+				Assert(ddlJobs == NIL); /* jobs should not have been set before */
+				ddlJobs = processJobs;
 			}
-		}
-
-		if (IsA(parsetree, AlterObjectSchemaStmt))
-		{
-			ProcessAlterObjectSchemaStmt(castNode(AlterObjectSchemaStmt, parsetree),
-										 queryString);
-		}
-
-		if (IsA(parsetree, AlterEnumStmt))
-		{
-			ProcessAlterEnumStmt(castNode(AlterEnumStmt, parsetree), queryString);
-		}
-
-		if (IsA(parsetree, CreateFunctionStmt))
-		{
-			Assert(ddlJobs == NIL); /* jobs should not have been set before */
-			ddlJobs = ProcessCreateFunctionStmt(castNode(CreateFunctionStmt, parsetree),
-												queryString);
-		}
-
-		if (IsA(parsetree, AlterRoleStmt))
-		{
-			Assert(ddlJobs == NIL); /* jobs should not have been set before */
-			ddlJobs = ProcessAlterRoleStmt(castNode(AlterRoleStmt, parsetree),
-										   queryString);
 		}
 
 		if (IsA(parsetree, AlterRoleSetStmt) && EnableAlterRolePropagation)
@@ -822,7 +559,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		CreateStmt *createStatement = (CreateStmt *) parsetree;
 
-		ProcessCreateTableStmtPartitionOf(createStatement);
+		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);
 	}
 
 	/*
@@ -833,27 +570,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
 
-		ProcessAlterTableStmtAttachPartition(alterTableStatement);
-	}
-
-	/*
-	 * We call PlanCreateExtensionStmt and ProcessCreateExtensionStmt after standard_ProcessUtility
-	 * does its work to learn the schema that the extension belongs to (if statement does not include
-	 * WITH SCHEMA clause)
-	 */
-	if (EnableDDLPropagation && IsA(parsetree, CreateExtensionStmt))
-	{
-		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
-															parsetree);
-
-		ddlJobs = PlanCreateExtensionStmt(createExtensionStmt, queryString);
-		ProcessCreateExtensionStmt(createExtensionStmt, queryString);
-	}
-
-	/* don't run post-process code for local commands */
-	if (ddlJobs != NIL)
-	{
-		PostProcessUtility(parsetree);
+		PostprocessAlterTableStmtAttachPartition(alterTableStatement, queryString);
 	}
 
 	/*
@@ -869,17 +586,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
 	{
-		ListCell *ddlJobCell = NULL;
-
 		if (IsA(parsetree, AlterTableStmt))
 		{
-			PostProcessAlterTableStmt(castNode(AlterTableStmt, parsetree));
+			PostprocessAlterTableStmt(castNode(AlterTableStmt, parsetree));
 		}
 
-		foreach(ddlJobCell, ddlJobs)
+		DDLJob *ddlJob = NULL;
+		foreach_ptr(ddlJob, ddlJobs)
 		{
-			DDLJob *ddlJob = (DDLJob *) lfirst(ddlJobCell);
-
 			ExecuteDistributedDDLJob(ddlJob);
 		}
 	}
@@ -889,7 +603,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
 
-		ProcessVacuumStmt(vacuumStmt, queryString);
+		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}
 
 	/*
@@ -915,94 +629,6 @@ IsDropSchemaOrDB(Node *parsetree)
 	DropStmt *dropStatement = (DropStmt *) parsetree;
 	return (dropStatement->removeType == OBJECT_SCHEMA) ||
 		   (dropStatement->removeType == OBJECT_DATABASE);
-}
-
-
-/*
- * PlanRenameAttributeStmt called for RenameStmt's that are targetting an attribute eg.
- * type attributes. Based on the relation type the attribute gets renamed it dispatches to
- * a specialized implementation if present, otherwise return an empty list for its DDLJobs
- */
-static List *
-PlanRenameAttributeStmt(RenameStmt *stmt, const char *queryString)
-{
-	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
-
-	switch (stmt->relationType)
-	{
-		case OBJECT_TYPE:
-		{
-			return PlanRenameTypeAttributeStmt(stmt, queryString);
-		}
-
-		default:
-		{
-			/* unsupported relation for attribute rename, do nothing */
-			return NIL;
-		}
-	}
-}
-
-
-/*
- * PlanAlterOwnerStmt gets called for statements that change the ownership of an object.
- * Based on the type of object the ownership gets changed for it dispatches to a
- * specialized implementation or returns an empty list of DDLJobs for objects that do not
- * have an implementation provided.
- */
-static List *
-PlanAlterOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_COLLATION:
-		{
-			return PlanAlterCollationOwnerStmt(stmt, queryString);
-		}
-
-		case OBJECT_TYPE:
-		{
-			return PlanAlterTypeOwnerStmt(stmt, queryString);
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			return PlanAlterFunctionOwnerStmt(stmt, queryString);
-		}
-
-		default:
-		{
-			/* do nothing for unsupported alter owner statements */
-			return NIL;
-		}
-	}
-}
-
-
-/*
- * PlanAlterObjectDependsStmt gets called during the planning phase for
- * ALTER ... DEPENDS ON EXTENSION ... statements. Based on the object type we call out to
- * a specialized implementation. If no implementation is available we do nothing, eg. we
- * allow the local node to execute.
- */
-static List *
-PlanAlterObjectDependsStmt(AlterObjectDependsStmt *stmt, const char *queryString)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_PROCEDURE:
-		case OBJECT_FUNCTION:
-		{
-			return PlanAlterFunctionDependsStmt(stmt, queryString);
-		}
-
-		default:
-		{
-			return NIL;
-		}
-	}
 }
 
 
@@ -1171,20 +797,6 @@ CurrentSearchPath(void)
 	list_free(searchPathList);
 
 	return (currentSearchPath->len > 0 ? currentSearchPath->data : NULL);
-}
-
-
-/*
- * PostProcessUtility performs additional tasks after a utility's local portion
- * has been completed.
- */
-static void
-PostProcessUtility(Node *parsetree)
-{
-	if (IsA(parsetree, IndexStmt))
-	{
-		PostProcessIndexStmt(castNode(IndexStmt, parsetree));
-	}
 }
 
 

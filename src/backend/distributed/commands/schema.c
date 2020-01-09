@@ -31,12 +31,13 @@
 
 
 /*
- * ProcessDropSchemaStmt invalidates the foreign key cache if any table created
+ * PreprocessDropSchemaStmt invalidates the foreign key cache if any table created
  * under dropped schema involved in any foreign key relationship.
  */
-void
-ProcessDropSchemaStmt(DropStmt *dropStatement)
+List *
+PreprocessDropSchemaStmt(Node *node, const char *queryString)
 {
+	DropStmt *dropStatement = castNode(DropStmt, node);
 	Relation pgClass = NULL;
 	HeapTuple heapTuple = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -48,7 +49,7 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 
 	if (dropStatement->behavior != DROP_CASCADE)
 	{
-		return;
+		return NIL;
 	}
 
 	foreach(dropSchemaCell, dropStatement->objects)
@@ -91,7 +92,7 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 
 				systable_endscan(scanDescriptor);
 				heap_close(pgClass, NoLock);
-				return;
+				return NIL;
 			}
 
 			heapTuple = systable_getnext(scanDescriptor);
@@ -100,69 +101,21 @@ ProcessDropSchemaStmt(DropStmt *dropStatement)
 		systable_endscan(scanDescriptor);
 		heap_close(pgClass, NoLock);
 	}
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterObjectSchemaStmt is called by citus' utility hook for AlterObjectSchemaStmt
- * parsetrees. It dispatches the statement based on the object type for which the schema
- * is being altered.
- *
- * A (potentially empty) list of DDLJobs is being returned with the jobs on how to
- * distribute the change into the cluster.
- */
-List *
-PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_TYPE:
-		{
-			return PlanAlterTypeSchemaStmt(stmt, queryString);
-		}
-
-		case OBJECT_COLLATION:
-		{
-			return PlanAlterCollationSchemaStmt(stmt, queryString);
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			return PlanAlterFunctionSchemaStmt(stmt, queryString);
-		}
-
-		case OBJECT_EXTENSION:
-		{
-			return PlanAlterExtensionSchemaStmt(stmt, queryString);
-		}
-
-		default:
-		{
-			/* do nothing for unsupported objects */
-			break;
-		}
-	}
-
-	/*
-	 * old behaviour, needs to be reconciled to the above switch statement for all
-	 * objectType's relating to tables. Maybe it is as easy to support
-	 * ALTER TABLE ... SET SCHEMA
-	 */
-	return PlanAlterTableSchemaStmt(stmt, queryString);
-}
-
-
-/*
- * PlanAlterTableSchemaStmt determines whether a given ALTER ... SET SCHEMA
+ * PreprocessAlterTableSchemaStmt determines whether a given ALTER ... SET SCHEMA
  * statement involves a distributed table and issues a warning if so. Because
  * we do not support distributed ALTER ... SET SCHEMA, this function always
  * returns NIL.
  */
 List *
-PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	if (stmt->relation == NULL)
 	{
 		return NIL;
@@ -185,50 +138,4 @@ PlanAlterTableSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 							  "change schemas of affected objects.")));
 
 	return NIL;
-}
-
-
-/*
- * ProcessAlterObjectSchemaStmt is called by multi_ProcessUtility _after_ the command has
- * been applied to the local postgres. It is useful to create potentially new dependencies
- * of this object (the new schema) on the workers before the command gets applied to the
- * remote objects.
- */
-void
-ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_TYPE:
-		{
-			ProcessAlterTypeSchemaStmt(stmt, queryString);
-			return;
-		}
-
-		case OBJECT_COLLATION:
-		{
-			ProcessAlterCollationSchemaStmt(stmt, queryString);
-			return;
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			ProcessAlterFunctionSchemaStmt(stmt, queryString);
-			return;
-		}
-
-		case OBJECT_EXTENSION:
-		{
-			ProcessAlterExtensionSchemaStmt(stmt, queryString);
-			return;
-		}
-
-		default:
-		{
-			/* do nothing for unsupported objects */
-			return;
-		}
-	}
 }

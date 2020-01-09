@@ -38,13 +38,14 @@ static DefElem * makeDefElemInt(char *name, int value);
 bool EnableAlterRolePropagation = false;
 
 /*
- * ProcessAlterRoleStmt actually creates the plan we need to execute for alter
+ * PostprocessAlterRoleStmt actually creates the plan we need to execute for alter
  * role statement. We need to do it this way because we need to use the encrypted
  * password, which is, in some cases, created at standardProcessUtility.
  */
 List *
-ProcessAlterRoleStmt(AlterRoleStmt *stmt, const char *queryString)
+PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 	ListCell *optionCell = NULL;
 
 	if (!EnableAlterRolePropagation || !IsCoordinator())

@@ -84,7 +84,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, distributedTableId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor,
 									 useExclusiveConnections);

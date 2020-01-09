@@ -110,12 +110,12 @@ IsSettingSafeToPropagate(char *name)
 
 
 /*
- * ProcessVariableSetStmt actually does the work of propagating a provided SET stmt
+ * PostprocessVariableSetStmt actually does the work of propagating a provided SET stmt
  * to currently-participating worker nodes and adding the SET command test to a string
  * keeping track of all propagated SET commands since (sub-)xact start.
  */
 void
-ProcessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
+PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 {
 	dlist_iter iter;
 	const bool raiseInterrupts = true;

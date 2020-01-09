@@ -15,10 +15,11 @@
 #include "distributed/metadata_cache.h"
 
 
-/* placeholder for PlanClusterStmt */
+/* placeholder for PreprocessClusterStmt */
 List *
-PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand)
+PreprocessClusterStmt(Node *node, const char *clusterCommand)
 {
+	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);
 	bool showPropagationWarning = false;
 
 	/* CLUSTER all */

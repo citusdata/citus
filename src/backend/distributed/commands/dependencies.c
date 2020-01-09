@@ -24,16 +24,17 @@
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 
+typedef bool (*AddressPredicate)(const ObjectAddress *);
+
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
-												 bool (*predicate)(const
-																   ObjectAddress *));
+												 AddressPredicate predicate);
 
 bool EnableDependencyCreation = true;
 
 /*
- * EnsureDependenciesExists finds all the dependencies that we support and makes sure
- * these are available on all workers. If not available they will be created on the
+ * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
+ * sure these are available on all workers. If not available they will be created on the
  * workers via a separate session that will be committed directly so that the objects are
  * visible to potentially multiple sessions creating the shards.
  *
@@ -47,7 +48,7 @@ bool EnableDependencyCreation = true;
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
  */
 void
-EnsureDependenciesExistsOnAllNodes(const ObjectAddress *target)
+EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	/* local variables to work with dependencies */
 	List *dependenciesWithCommands = NIL;
@@ -324,8 +325,7 @@ ShouldPropagateObject(const ObjectAddress *address)
  * only containing the ObjectAddress *'s for which the predicate returned true.
  */
 static List *
-FilterObjectAddressListByPredicate(List *objectAddressList,
-								   bool (*predicate)(const ObjectAddress *))
+FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
 {
 	List *result = NIL;
 	ListCell *objectAddressListCell = NULL;

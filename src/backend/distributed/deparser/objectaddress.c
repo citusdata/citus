@@ -18,310 +18,42 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_extension_d.h"
 
-static ObjectAddress * AlterTableStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok);
-static ObjectAddress * RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok);
-static ObjectAddress * AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt,
-														  bool missing_ok);
-static ObjectAddress * RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool
-														missing_ok);
-static ObjectAddress * AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok);
-static ObjectAddress * AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt,
-														   bool missing_ok);
-static ObjectAddress * CreateExtensionStmtObjectAddress(CreateExtensionStmt *stmt, bool
-														missing_ok);
-static ObjectAddress * AlterExtensionStmtObjectAddress(
-	AlterExtensionStmt *alterExtensionStmt, bool missing_ok);
 
 /*
  * GetObjectAddressFromParseTree returns the ObjectAddress of the main target of the parse
  * tree.
  */
-ObjectAddress *
+ObjectAddress
 GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 {
-	switch (parseTree->type)
+	const DistributeObjectOps *ops = GetDistributeObjectOps(parseTree);
+
+	if (!ops->address)
 	{
-		case T_CompositeTypeStmt:
-		{
-			return CompositeTypeStmtObjectAddress(castNode(CompositeTypeStmt, parseTree),
-												  missing_ok);
-		}
-
-		case T_AlterTableStmt:
-		{
-			return AlterTableStmtObjectAddress(castNode(AlterTableStmt, parseTree),
-											   missing_ok);
-		}
-
-		case T_CreateEnumStmt:
-		{
-			return CreateEnumStmtObjectAddress(castNode(CreateEnumStmt, parseTree),
-											   missing_ok);
-		}
-
-		case T_AlterEnumStmt:
-		{
-			return AlterEnumStmtObjectAddress(castNode(AlterEnumStmt, parseTree),
-											  missing_ok);
-		}
-
-		case T_RenameStmt:
-		{
-			return RenameStmtObjectAddress(castNode(RenameStmt, parseTree), missing_ok);
-		}
-
-		case T_AlterObjectSchemaStmt:
-		{
-			return AlterObjectSchemaStmtObjectAddress(castNode(AlterObjectSchemaStmt,
-															   parseTree), missing_ok);
-		}
-
-		case T_AlterOwnerStmt:
-		{
-			return AlterOwnerStmtObjectAddress(castNode(AlterOwnerStmt, parseTree),
-											   missing_ok);
-		}
-
-		case T_AlterFunctionStmt:
-		{
-			return AlterFunctionStmtObjectAddress(castNode(AlterFunctionStmt, parseTree),
-												  missing_ok);
-		}
-
-		case T_CreateFunctionStmt:
-		{
-			return CreateFunctionStmtObjectAddress(
-				castNode(CreateFunctionStmt, parseTree), missing_ok);
-		}
-
-		case T_AlterObjectDependsStmt:
-		{
-			return AlterObjectDependsStmtObjectAddress(
-				castNode(AlterObjectDependsStmt, parseTree), missing_ok);
-		}
-
-		case T_DefineStmt:
-		{
-			DefineStmt *stmt = castNode(DefineStmt, parseTree);
-
-			switch (stmt->kind)
-			{
-				case OBJECT_AGGREGATE:
-				{
-					return DefineAggregateStmtObjectAddress(stmt, missing_ok);
-				}
-
-				case OBJECT_COLLATION:
-				{
-					return DefineCollationStmtObjectAddress(stmt, missing_ok);
-				}
-
-				default:
-				{
-					break;
-				}
-			}
-
-			ereport(ERROR, (errmsg(
-								"unsupported object type to get object address for DefineStmt")));
-			return NULL;
-		}
-
-		case T_CreateExtensionStmt:
-		{
-			return CreateExtensionStmtObjectAddress(castNode(CreateExtensionStmt,
-															 parseTree), missing_ok);
-		}
-
-		case T_AlterExtensionStmt:
-		{
-			return AlterExtensionStmtObjectAddress(castNode(AlterExtensionStmt,
-															parseTree), missing_ok);
-		}
-
-		default:
-		{
-			/*
-			 * should not be reached, indicates the coordinator is sending unsupported
-			 * statements
-			 */
-			ereport(ERROR, (errmsg("unsupported statement to get object address for")));
-			return NULL;
-		}
+		ereport(ERROR, (errmsg("unsupported statement to get object address for")));
 	}
+
+	return ops->address(parseTree, missing_ok);
 }
 
 
-static ObjectAddress *
-AlterTableStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
+ObjectAddress
+RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
-	switch (stmt->relkind)
-	{
-		case OBJECT_TYPE:
-		{
-			return AlterTypeStmtObjectAddress(stmt, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported alter statement to get object address for"
-								   )));
-		}
-	}
-}
-
-
-static ObjectAddress *
-RenameStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
-{
-	switch (stmt->renameType)
-	{
-		case OBJECT_TYPE:
-		{
-			return RenameTypeStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_ATTRIBUTE:
-		{
-			return RenameAttributeStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_COLLATION:
-		{
-			return RenameCollationStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			return RenameFunctionStmtObjectAddress(stmt, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported rename statement to get object address "
-								   "for")));
-		}
-	}
-}
-
-
-static ObjectAddress *
-AlterObjectSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_TYPE:
-		{
-			return AlterTypeSchemaStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_COLLATION:
-		{
-			return AlterCollationSchemaStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			return AlterFunctionSchemaStmtObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_EXTENSION:
-		{
-			return AlterExtensionSchemaStmtObjectAddress(stmt, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported alter schema statement to get object "
-								   "address for")));
-		}
-	}
-}
-
-
-static ObjectAddress *
-RenameAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
-{
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 
 	switch (stmt->relationType)
 	{
 		case OBJECT_TYPE:
 		{
-			return RenameTypeAttributeStmtObjectAddress(stmt, missing_ok);
+			return RenameTypeAttributeStmtObjectAddress(node, missing_ok);
 		}
 
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported alter rename attribute statement to get "
 								   "object address for")));
-		}
-	}
-}
-
-
-static ObjectAddress *
-AlterOwnerStmtObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_COLLATION:
-		{
-			ObjectAddress *address = palloc(sizeof(ObjectAddress));
-			*address = AlterCollationOwnerObjectAddress(stmt);
-			return address;
-		}
-
-		case OBJECT_TYPE:
-		{
-			return AlterTypeOwnerObjectAddress(stmt, missing_ok);
-		}
-
-		case OBJECT_PROCEDURE:
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-		{
-			return AlterFunctionOwnerObjectAddress(stmt, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported alter owner statement to get object "
-								   "address for")));
-		}
-	}
-}
-
-
-/*
- * AlterObjectDependsStmtObjectAddress resolves the ObjectAddress for the object targeted
- * by the AlterObjectDependStmt. This is done by dispatching the call to the object
- * specific implementation based on the ObjectType captured in the original statement. If
- * a specific implementation is not present an error will be raised. This is a developer
- * error since this function should only be reachable by calls of supported types.
- *
- * If missing_ok is set to fails the object specific implementation is supposed to raise
- * an error explaining the user the object is not existing.
- */
-static ObjectAddress *
-AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_ok)
-{
-	switch (stmt->objectType)
-	{
-		case OBJECT_PROCEDURE:
-		case OBJECT_FUNCTION:
-		{
-			return AlterFunctionDependsStmtObjectAddress(stmt, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported alter depends on extension statement to "
-								   "get object address for")));
 		}
 	}
 }
@@ -335,13 +67,13 @@ AlterObjectDependsStmtObjectAddress(AlterObjectDependsStmt *stmt, bool missing_o
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-static ObjectAddress *
-CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
-								 missing_ok)
+ObjectAddress
+CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
 {
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
+	ObjectAddress address = { 0 };
 
-	const char *extensionName = createExtensionStmt->extname;
+	const char *extensionName = stmt->extname;
 
 	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
 
@@ -353,7 +85,7 @@ CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
 							   extensionName)));
 	}
 
-	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
+	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
 
 	return address;
 }
@@ -367,13 +99,13 @@ CreateExtensionStmtObjectAddress(CreateExtensionStmt *createExtensionStmt, bool
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-static ObjectAddress *
-AlterExtensionStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt, bool
-								missing_ok)
+ObjectAddress
+AlterExtensionStmtObjectAddress(Node *node, bool missing_ok)
 {
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
+	ObjectAddress address = { 0 };
 
-	const char *extensionName = alterExtensionStmt->extname;
+	const char *extensionName = stmt->extname;
 
 	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
 
@@ -385,7 +117,7 @@ AlterExtensionStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt, bool
 							   extensionName)));
 	}
 
-	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
+	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
 
 	return address;
 }

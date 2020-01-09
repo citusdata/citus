@@ -16,6 +16,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
@@ -163,14 +164,15 @@ CreateCollationDDLsIdempotent(Oid collationId)
 
 
 ObjectAddress
-AlterCollationOwnerObjectAddress(AlterOwnerStmt *stmt)
+AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Relation relation;
 
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
 	return get_object_address(stmt->objectType, stmt->object, &relation,
-							  AccessExclusiveLock, false);
+							  AccessExclusiveLock, missing_ok);
 }
 
 
@@ -217,13 +219,14 @@ FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 
 
 List *
-PlanDropCollationStmt(DropStmt *stmt)
+PreprocessDropCollationStmt(Node *node, const char *queryString)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
+
 	/*
 	 * We swap the list of objects to remove during deparse so we need a reference back to
 	 * the old list to put back
 	 */
-	ListCell *addressCell = NULL;
 	List *distributedTypeAddresses = NIL;
 
 	if (!ShouldPropagate())
@@ -253,10 +256,10 @@ PlanDropCollationStmt(DropStmt *stmt)
 	/*
 	 * remove the entries for the distributed objects on dropping
 	 */
-	foreach(addressCell, distributedTypeAddresses)
+	ObjectAddress *addressItem = NULL;
+	foreach_ptr(addressItem, distributedTypeAddresses)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
-		UnmarkObjectDistributed(address);
+		UnmarkObjectDistributed(addressItem);
 	}
 
 	/*
@@ -279,19 +282,20 @@ PlanDropCollationStmt(DropStmt *stmt)
 
 
 /*
- * PlanAlterCollationOwnerStmt is called for change of ownership of collations
+ * PreprocessAlterCollationOwnerStmt is called for change of ownership of collations
  * before the ownership is changed on the local instance.
  *
  * If the type for which the owner is changed is distributed we execute the change on all
  * the workers to keep the type in sync across the cluster.
  */
 List *
-PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
-	ObjectAddress *collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(collationAddress))
+	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&collationAddress))
 	{
 		return NIL;
 	}
@@ -311,7 +315,7 @@ PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
 
 
 /*
- * PlanRenameCollationStmt is called when the user is renaming the collation. The invocation happens
+ * PreprocessRenameCollationStmt is called when the user is renaming the collation. The invocation happens
  * before the statement is applied locally.
  *
  * As the collation already exists we have access to the ObjectAddress for the collation, this is
@@ -319,10 +323,11 @@ PlanAlterCollationOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
  * executed on all the workers to keep the collation in sync across the cluster.
  */
 List *
-PlanRenameCollationStmt(RenameStmt *stmt, const char *queryString)
+PreprocessRenameCollationStmt(Node *node, const char *queryString)
 {
-	ObjectAddress *collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(collationAddress))
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&collationAddress))
 	{
 		return NIL;
 	}
@@ -345,18 +350,19 @@ PlanRenameCollationStmt(RenameStmt *stmt, const char *queryString)
 
 
 /*
- * PlanAlterCollationSchemaStmt is executed before the statement is applied to the local
+ * PreprocessAlterCollationSchemaStmt is executed before the statement is applied to the local
  * postgres instance.
  *
  * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
-PlanAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
-	ObjectAddress *collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(collationAddress))
+	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&collationAddress))
 	{
 		return NIL;
 	}
@@ -377,23 +383,26 @@ PlanAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryStrin
 
 
 /*
- * ProcessAlterCollationSchemaStmt is executed after the change has been applied locally, we
+ * PostprocessAlterCollationSchemaStmt is executed after the change has been applied locally, we
  * can now use the new dependencies of the type to ensure all its dependencies exist on
  * the workers before we apply the commands remotely.
  */
-void
-ProcessAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+List *
+PostprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
-	ObjectAddress *collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(collationAddress))
+	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&collationAddress))
 	{
-		return;
+		return NIL;
 	}
 
 	/* dependencies have changed (schema) let's ensure they exist */
-	EnsureDependenciesExistsOnAllNodes(collationAddress);
+	EnsureDependenciesExistOnAllNodes(&collationAddress);
+
+	return NIL;
 }
 
 
@@ -401,15 +410,16 @@ ProcessAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt, const char *querySt
  * RenameCollationStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress *
-RenameCollationStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+ObjectAddress
+RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_COLLATION);
 
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	Oid collationOid = get_collation_oid((List *) stmt->object, missing_ok);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, CollationRelationId, collationOid);
 
-	ObjectAddressSet(*address, CollationRelationId, collationOid);
 	return address;
 }
 
@@ -423,9 +433,10 @@ RenameCollationStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress *
-AlterCollationSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+ObjectAddress
+AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
 	List *name = (List *) stmt->object;
@@ -445,8 +456,8 @@ AlterCollationSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_
 		}
 	}
 
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, CollationRelationId, collationOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, CollationRelationId, collationOid);
 	return address;
 }
 
@@ -544,31 +555,31 @@ GenerateBackupNameForCollationCollision(const ObjectAddress *address)
 }
 
 
-ObjectAddress *
-DefineCollationStmtObjectAddress(DefineStmt *stmt, bool missing_ok)
+ObjectAddress
+DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
+	DefineStmt *stmt = castNode(DefineStmt, node);
 	Assert(stmt->kind == OBJECT_COLLATION);
 
 	Oid collOid = get_collation_oid(stmt->defnames, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-
-	ObjectAddressSet(*address, CollationRelationId, collOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, CollationRelationId, collOid);
 
 	return address;
 }
 
 
 /*
- * ProcessCollationDefineStmt executed after the extension has been
+ * PostprocessDefineCollationStmt executed after the collation has been
  * created locally and before we create it on the worker nodes.
- * As we now have access to ObjectAddress of the extension that is just
+ * As we now have access to ObjectAddress of the collation that is just
  * created, we can mark it as distributed to make sure that its
  * dependencies exist on all nodes.
  */
 List *
-ProcessCollationDefineStmt(DefineStmt *stmt, const char *queryString)
+PostprocessDefineCollationStmt(Node *node, const char *queryString)
 {
-	Assert(stmt->kind == OBJECT_COLLATION);
+	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
 
 	if (!ShouldPropagate())
 	{
@@ -584,18 +595,13 @@ ProcessCollationDefineStmt(DefineStmt *stmt, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress *collationAddress =
-		DefineCollationStmtObjectAddress(stmt, false);
+	ObjectAddress collationAddress =
+		DefineCollationStmtObjectAddress(node, false);
 
-	if (collationAddress->objectId == InvalidOid)
-	{
-		return NIL;
-	}
+	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
-	EnsureDependenciesExistsOnAllNodes(collationAddress);
-
-	MarkObjectDistributed(collationAddress);
+	MarkObjectDistributed(&collationAddress);
 
 	return NodeDDLTaskList(ALL_WORKERS, CreateCollationDDLsIdempotent(
-							   collationAddress->objectId));
+							   collationAddress.objectId));
 }

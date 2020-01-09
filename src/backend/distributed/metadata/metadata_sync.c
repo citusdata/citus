@@ -394,7 +394,7 @@ MetadataCreateCommands(void)
 		 * visible to all sessions creating shards.
 		 */
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-		EnsureDependenciesExistsOnAllNodes(&tableAddress);
+		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);

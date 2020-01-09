@@ -32,8 +32,9 @@ static Node * QualifyCollationName(List *func);
  * statement in place and makes the collation name fully qualified.
  */
 void
-QualifyRenameCollationStmt(RenameStmt *stmt)
+QualifyRenameCollationStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_COLLATION);
 
 	stmt->object = QualifyCollationName(castNode(List, stmt->object));
@@ -46,8 +47,9 @@ QualifyRenameCollationStmt(RenameStmt *stmt)
  * statement in place and makes the collation name fully qualified.
  */
 void
-QualifyAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt)
+QualifyAlterCollationSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
 	stmt->object = QualifyCollationName(castNode(List, stmt->object));
@@ -60,8 +62,9 @@ QualifyAlterCollationSchemaStmt(AlterObjectSchemaStmt *stmt)
  * statement in place and makes the collation name fully qualified.
  */
 void
-QualifyAlterCollationOwnerStmt(AlterOwnerStmt *stmt)
+QualifyAlterCollationOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
 	stmt->object = QualifyCollationName(castNode(List, stmt->object));
@@ -74,8 +77,9 @@ QualifyAlterCollationOwnerStmt(AlterOwnerStmt *stmt)
  * statement in place and makes the collation name fully qualified.
  */
 void
-QualifyDropCollationStmt(DropStmt *stmt)
+QualifyDropCollationStmt(Node *node)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
 	List *names = NIL;
 	List *name = NIL;
 

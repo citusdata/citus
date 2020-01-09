@@ -71,8 +71,9 @@ static char * CopyAndConvertToUpperCase(const char *str);
  * DeparseAlterFunctionStmt builds and returns a string representing the AlterFunctionStmt
  */
 char *
-DeparseAlterFunctionStmt(AlterFunctionStmt *stmt)
+DeparseAlterFunctionStmt(Node *node)
 {
+	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -427,8 +428,9 @@ AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
  * DeparseRenameFunctionStmt builds and returns a string representing the RenameStmt
  */
 char *
-DeparseRenameFunctionStmt(RenameStmt *stmt)
+DeparseRenameFunctionStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -458,8 +460,9 @@ AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt)
  * DeparseAlterFunctionSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
  */
 char *
-DeparseAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
+DeparseAlterFunctionSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -489,8 +492,9 @@ AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
  * DeparseAlterFunctionOwnerStmt builds and returns a string representing the AlterOwnerStmt
  */
 char *
-DeparseAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
+DeparseAlterFunctionOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -520,8 +524,9 @@ AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
  * DeparseAlterFunctionDependsStmt builds and returns a string representing the AlterObjectDependsStmt
  */
 char *
-DeparseAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
+DeparseAlterFunctionDependsStmt(Node *node)
 {
+	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
@@ -551,8 +556,9 @@ AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt)
  * DeparseDropFunctionStmt builds and returns a string representing the DropStmt
  */
 char *
-DeparseDropFunctionStmt(DropStmt *stmt)
+DeparseDropFunctionStmt(Node *node)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 

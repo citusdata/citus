@@ -11,9 +11,9 @@
 #include "distributed/commands.h"
 
 
-/* placeholder for PlanGrantStmt */
+/* placeholder for PreprocessGrantStmt */
 List *
-PlanGrantStmt(GrantStmt *grantStmt)
+PreprocessGrantStmt(Node *node, const char *queryString)
 {
 	return NIL;
 }

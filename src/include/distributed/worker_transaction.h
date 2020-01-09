@@ -32,9 +32,8 @@ typedef enum TargetWorkerSet
 extern List * GetWorkerTransactions(void);
 extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode);
 extern void SendCommandToWorker(char *nodeName, int32 nodePort, const char *command);
-extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const
-									   char *nodeUser,
-									   const char *command);
+extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet,
+									   const char *nodeUser, const char *command);
 extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
 extern void SendCommandToWorkersWithMetadata(const char *command);

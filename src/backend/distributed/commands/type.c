@@ -101,7 +101,7 @@ static bool ShouldPropagateTypeCreate(void);
 
 
 /*
- * PlanCompositeTypeStmt is called during the creation of a composite type. It is executed
+ * PreprocessCompositeTypeStmt is called during the creation of a composite type. It is executed
  * before the statement is applied locally.
  *
  * We decide if the compisite type needs to be replicated to the worker, and if that is
@@ -112,7 +112,7 @@ static bool ShouldPropagateTypeCreate(void);
  * access to the ObjectAddress of the new type.
  */
 List *
-PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
+PreprocessCompositeTypeStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
 	{
@@ -136,7 +136,7 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/* fully qualify before lookup and later deparsing */
-	QualifyTreeNode((Node *) stmt);
+	QualifyTreeNode(node);
 
 	/*
 	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
@@ -146,7 +146,7 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 	 * type previously has been attempted to be created in a transaction which did not
 	 * commit on the coordinator.
 	 */
-	const char *compositeTypeStmtSql = DeparseCompositeTypeStmt(stmt);
+	const char *compositeTypeStmtSql = DeparseCompositeTypeStmt(node);
 	compositeTypeStmtSql = WrapCreateOrReplace(compositeTypeStmtSql);
 
 	/*
@@ -164,45 +164,46 @@ PlanCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
 
 
 /*
- * ProcessCompositeTypeStmt is executed after the type has been created locally and before
+ * PostprocessCompositeTypeStmt is executed after the type has been created locally and before
  * we create it on the remote servers. Here we have access to the ObjectAddress of the new
  * type which we use to make sure the type's dependencies are on all nodes.
  */
-void
-ProcessCompositeTypeStmt(CompositeTypeStmt *stmt, const char *queryString)
+List *
+PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 {
 	/* same check we perform during planning of the statement */
 	if (!ShouldPropagateTypeCreate())
 	{
-		return;
+		return NIL;
 	}
 
 	/*
 	 * find object address of the just created object, because the type has been created
 	 * locally it can't be missing
 	 */
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	EnsureDependenciesExistsOnAllNodes(typeAddress);
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	MarkObjectDistributed(typeAddress);
+	MarkObjectDistributed(&typeAddress);
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterTypeStmt is invoked for alter type statements for composite types.
+ * PreprocessAlterTypeStmt is invoked for alter type statements for composite types.
  *
  * Normally we would have a process step as well to re-ensure dependencies exists, however
  * this is already implemented by the post processing for adding columns to tables.
  */
 List *
-PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
+PreprocessAlterTypeStmt(Node *node, const char *queryString)
 {
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(stmt->relkind == OBJECT_TYPE);
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
@@ -229,7 +230,7 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
 
 
 /*
- * PlanCreateEnumStmt is called before the statement gets applied locally.
+ * PreprocessCreateEnumStmt is called before the statement gets applied locally.
  *
  * It decides if the create statement will be applied to the workers and if that is the
  * case returns a list of DDLJobs that will be executed _after_ the statement has been
@@ -239,24 +240,21 @@ PlanAlterTypeStmt(AlterTableStmt *stmt, const char *queryString)
  * ObjectAddress for the new type just yet.
  */
 List *
-PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
+PreprocessCreateEnumStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
 	{
 		return NIL;
 	}
 
-	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
-	 * it is off we will never get here
-	 */
+	/* managing types can only be done on the coordinator */
 	EnsureCoordinator();
 
 	/* enforce fully qualified typeName for correct deparsing and lookup */
-	QualifyTreeNode((Node *) stmt);
+	QualifyTreeNode(node);
 
 	/* reconstruct creation statement in a portable fashion */
-	const char *createEnumStmtSql = DeparseCreateEnumStmt(stmt);
+	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
 	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
 
 	/*
@@ -275,37 +273,38 @@ PlanCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
 
 
 /*
- * ProcessCreateEnumStmt is called after the statement has been applied locally, but
+ * PostprocessCreateEnumStmt is called after the statement has been applied locally, but
  * before the plan on how to create the types on the workers has been executed.
  *
  * We apply the same checks to verify if the type should be distributed, if that is the
  * case we resolve the ObjectAddress for the just created object, distribute its
  * dependencies to all the nodes, and mark the object as distributed.
  */
-void
-ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
+List *
+PostprocessCreateEnumStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
 	{
-		return;
+		return NIL;
 	}
 
 	/* lookup type address of just created type */
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	EnsureDependenciesExistsOnAllNodes(typeAddress);
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
 	/*
 	 * now that the object has been created and distributed to the workers we mark them as
 	 * distributed so we know to keep them up to date and recreate on a new node in the
 	 * future
 	 */
-	MarkObjectDistributed(typeAddress);
+	MarkObjectDistributed(&typeAddress);
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterEnumStmt handles ALTER TYPE ... ADD VALUE for enum based types. Planning
+ * PreprocessAlterEnumStmt handles ALTER TYPE ... ADD VALUE for enum based types. Planning
  * happens before the statement has been applied locally.
  *
  * Since it is an alter of an existing type we actually have the ObjectAddress. This is
@@ -313,13 +312,12 @@ ProcessCreateEnumStmt(CreateEnumStmt *stmt, const char *queryString)
  * workers directly to keep the types in sync accross the cluster.
  */
 List *
-PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
+PreprocessAlterEnumStmt(Node *node, const char *queryString)
 {
 	List *commands = NIL;
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
@@ -338,8 +336,8 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	 */
 	EnsureCoordinator();
 
-	QualifyTreeNode((Node *) stmt);
-	const char *alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
+	QualifyTreeNode(node);
+	const char *alterEnumStmtSql = DeparseTreeNode(node);
 
 	/*
 	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Instead of
@@ -347,7 +345,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	 * we directly connect to workers and execute the commands remotely.
 	 */
 #if PG_VERSION_NUM < 120000
-	if (AlterEnumIsAddValue(stmt))
+	if (AlterEnumIsAddValue(castNode(AlterEnumStmt, node)))
 	{
 		/*
 		 * a plan cannot be made as it will be committed via 2PC when ran through the
@@ -366,7 +364,7 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 
 
 /*
- * ProcessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
+ * PostprocessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
  *
  * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower than 12
  * to distribute the call. Before pg12 these statements could not be called in a
@@ -381,16 +379,9 @@ PlanAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
  * For pg12 the statements can be called in a transaction but will only become visible
  * when the transaction commits. This is behaviour that is ok to perform in a 2PC.
  */
-void
-ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
+List *
+PostprocessAlterEnumStmt(Node *node, const char *queryString)
 {
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
-	{
-		return;
-	}
-
 	/*
 	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Normally we
 	 * would propagate the statements in a xact block to perform 2pc on changes via ddl.
@@ -400,6 +391,13 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 	 * planning.
 	 */
 #if PG_VERSION_NUM < 120000
+	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
+	{
+		return NIL;
+	}
+
 	if (AlterEnumIsAddValue(stmt))
 	{
 		/*
@@ -433,17 +431,21 @@ ProcessAlterEnumStmt(AlterEnumStmt *stmt, const char *queryString)
 		}
 	}
 #endif
+
+	return NIL;
 }
 
 
 /*
- * PlanDropTypeStmt is called for all DROP TYPE statements. For all types in the list that
+ * PreprocessDropTypeStmt is called for all DROP TYPE statements. For all types in the list that
  * citus has distributed to the workers it will drop the type on the workers as well. If
  * no types in the drop list are distributed no calls will be made to the workers.
  */
 List *
-PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
+PreprocessDropTypeStmt(Node *node, const char *queryString)
 {
+	DropStmt *stmt = castNode(DropStmt, node);
+
 	/*
 	 * We swap the list of objects to remove during deparse so we need a reference back to
 	 * the old list to put back
@@ -501,7 +503,7 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
 
 
 /*
- * PlanRenameTypeStmt is called when the user is renaming the type. The invocation happens
+ * PreprocessRenameTypeStmt is called when the user is renaming the type. The invocation happens
  * before the statement is applied locally.
  *
  * As the type already exists we have access to the ObjectAddress for the type, this is
@@ -509,20 +511,19 @@ PlanDropTypeStmt(DropStmt *stmt, const char *queryString)
  * executed on all the workers to keep the types in sync across the cluster.
  */
 List *
-PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
+PreprocessRenameTypeStmt(Node *node, const char *queryString)
 {
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
 
 	/* fully qualify */
-	QualifyTreeNode((Node *) stmt);
+	QualifyTreeNode(node);
 
 	/* deparse sql*/
-	const char *renameStmtSql = DeparseTreeNode((Node *) stmt);
+	const char *renameStmtSql = DeparseTreeNode(node);
 
 	EnsureSequentialModeForTypeDDL();
 
@@ -536,21 +537,21 @@ PlanRenameTypeStmt(RenameStmt *stmt, const char *queryString)
 
 
 /*
- * PlanRenameTypeAttributeStmt is called for changes of attribute names for composite
+ * PreprocessRenameTypeAttributeStmt is called for changes of attribute names for composite
  * types. Planning is called before the statement is applied locally.
  *
  * For distributed types we apply the attribute renames directly on all the workers to
  * keep the type in sync across the cluster.
  */
 List *
-PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
+PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
@@ -569,19 +570,19 @@ PlanRenameTypeAttributeStmt(RenameStmt *stmt, const char *queryString)
 
 
 /*
- * PlanAlterTypeSchemaStmt is executed before the statement is applied to the local
+ * PreprocessAlterTypeSchemaStmt is executed before the statement is applied to the local
  * postgres instance.
  *
  * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
-PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
@@ -602,42 +603,44 @@ PlanAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
 
 
 /*
- * ProcessAlterTypeSchemaStmt is executed after the change has been applied locally, we
+ * PostprocessAlterTypeSchemaStmt is executed after the change has been applied locally, we
  * can now use the new dependencies of the type to ensure all its dependencies exist on
  * the workers before we apply the commands remotely.
  */
-void
-ProcessAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt, const char *queryString)
+List *
+PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
-		return;
+		return NIL;
 	}
 
 	/* dependencies have changed (schema) let's ensure they exist */
-	EnsureDependenciesExistsOnAllNodes(typeAddress);
+	EnsureDependenciesExistOnAllNodes(&typeAddress);
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterTypeOwnerStmt is called for change of ownership of types before the
+ * PreprocessAlterTypeOwnerStmt is called for change of ownership of types before the
  * ownership is changed on the local instance.
  *
  * If the type for which the owner is changed is distributed we execute the change on all
  * the workers to keep the type in sync across the cluster.
  */
 List *
-PlanAlterTypeOwnerStmt(AlterOwnerStmt *stmt, const char *queryString)
+PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
-	const ObjectAddress *typeAddress = GetObjectAddressFromParseTree((Node *) stmt,
-																	 false);
-	if (!ShouldPropagateObject(typeAddress))
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&typeAddress))
 	{
 		return NIL;
 	}
@@ -815,13 +818,14 @@ EnumValsList(Oid typeOid)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress *
-CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
+ObjectAddress
+CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
+	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->typevar);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -835,13 +839,14 @@ CompositeTypeStmtObjectAddress(CompositeTypeStmt *stmt, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress *
-CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
+ObjectAddress
+CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
+	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -855,15 +860,16 @@ CreateEnumStmtObjectAddress(CreateEnumStmt *stmt, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress *
-AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
+ObjectAddress
+AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(stmt->relkind == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -873,13 +879,14 @@ AlterTypeStmtObjectAddress(AlterTableStmt *stmt, bool missing_ok)
  * AlterEnumStmtObjectAddress return the ObjectAddress of the enum type that is the
  * object of the AlterEnumStmt. Errors is missing_ok is false.
  */
-ObjectAddress *
-AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
+ObjectAddress
+AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
+	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -889,15 +896,16 @@ AlterEnumStmtObjectAddress(AlterEnumStmt *stmt, bool missing_ok)
  * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress *
-RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+ObjectAddress
+RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_TYPE);
 
 	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -912,9 +920,10 @@ RenameTypeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress *
-AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
+ObjectAddress
+AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	List *names = (List *) stmt->object;
@@ -956,8 +965,8 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
 		}
 	}
 
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -971,16 +980,17 @@ AlterTypeSchemaStmtObjectAddress(AlterObjectSchemaStmt *stmt, bool missing_ok)
  * changed as Attributes are not distributed on their own but as a side effect of the
  * whole type distribution.
  */
-ObjectAddress *
-RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
+ObjectAddress
+RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
@@ -990,15 +1000,16 @@ RenameTypeAttributeStmtObjectAddress(RenameStmt *stmt, bool missing_ok)
  * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the object
  * of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress *
-AlterTypeOwnerObjectAddress(AlterOwnerStmt *stmt, bool missing_ok)
+ObjectAddress
+AlterTypeOwnerObjectAddress(Node *node, bool missing_ok)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*address, TypeRelationId, typeOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TypeRelationId, typeOid);
 
 	return address;
 }
