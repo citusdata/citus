@@ -513,7 +513,8 @@ DisableLocalExecution(void)
  * TaskQueryString generates task->queryStringLazy if missing.
  *
  * For performance reasons, the queryString is generated lazily. For example
- * for local queries it is always needed to generate it.
+ * for local queries it is usually not needed to generate it, so this way we
+ * can skip the expensive deparsing+parsing.
  */
 char *
 TaskQueryString(Task *task)
