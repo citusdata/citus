@@ -60,6 +60,10 @@ extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
 
 /* distributed_intermediate_results.c */
+extern List ** RedistributeTaskListResults(char *resultIdPrefix,
+										   List *selectTaskList,
+										   DistTableCacheEntry *targetRelation,
+										   bool binaryFormat);
 extern List * PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
 									   DistTableCacheEntry *distributionScheme,
 									   bool binaryFormat);
