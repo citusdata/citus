@@ -43,8 +43,9 @@ static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shard
 static char * SourceShardPrefix(char *resultPrefix, uint64 shardId);
 static DistributedResultFragment * TupleToDistributedResultFragment(
 	TupleTableSlot *tupleSlot, DistTableCacheEntry *targetRelation);
-static Tuplestorestate * ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc
-														  resultDescriptor);
+static Tuplestorestate * ExecuteSelectTasksIntoTupleStore(List *taskList,
+														  TupleDesc resultDescriptor,
+														  bool errorOnAnyFailure);
 
 
 /*
@@ -111,31 +112,42 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 	foreach(taskCell, selectTaskList)
 	{
 		Task *selectTask = (Task *) lfirst(taskCell);
-		StringInfo wrappedQuery = makeStringInfo();
 		List *shardPlacementList = selectTask->taskPlacementList;
-
-		ShardPlacement *shardPlacement = linitial(shardPlacementList);
 		char *taskPrefix = SourceShardPrefix(resultIdPrefix, selectTask->anchorShardId);
 		char *partitionMethodString = targetRelation->partitionMethod == 'h' ?
 									  "hash" : "range";
 		const char *binaryFormatString = binaryFormat ? "true" : "false";
+		List *perPlacementQueries = NIL;
 
-		appendStringInfo(wrappedQuery,
-						 "SELECT %d, partition_index"
-						 ", %s || '_' || partition_index::text "
-						 ", rows_written "
-						 "FROM worker_partition_query_result"
-						 "(%s,%s,%d,%s,%s,%s,%s) WHERE rows_written > 0",
-						 shardPlacement->nodeId,
-						 quote_literal_cstr(taskPrefix),
-						 quote_literal_cstr(taskPrefix),
-						 quote_literal_cstr(selectTask->queryString),
-						 partitionColumnIndex,
-						 quote_literal_cstr(partitionMethodString),
-						 minValuesString->data, maxValuesString->data,
-						 binaryFormatString);
+		/*
+		 * We need to know which placement could successfully execute the query,
+		 * so we form a different query per placement, each of which returning
+		 * the node id of the placement.
+		 */
+		ListCell *placementCell = NULL;
+		foreach(placementCell, shardPlacementList)
+		{
+			ShardPlacement *shardPlacement = lfirst(placementCell);
+			StringInfo wrappedQuery = makeStringInfo();
+			appendStringInfo(wrappedQuery,
+							 "SELECT %d, partition_index"
+							 ", %s || '_' || partition_index::text "
+							 ", rows_written "
+							 "FROM worker_partition_query_result"
+							 "(%s,%s,%d,%s,%s,%s,%s) WHERE rows_written > 0",
+							 shardPlacement->nodeId,
+							 quote_literal_cstr(taskPrefix),
+							 quote_literal_cstr(taskPrefix),
+							 quote_literal_cstr(selectTask->queryString),
+							 partitionColumnIndex,
+							 quote_literal_cstr(partitionMethodString),
+							 minValuesString->data, maxValuesString->data,
+							 binaryFormatString);
+			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
+		}
 
-		selectTask->queryString = wrappedQuery->data;
+		selectTask->queryString = NULL;
+		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}
 }
 
@@ -244,7 +256,9 @@ ExecutePartitionTaskList(List *taskList, DistTableCacheEntry *targetRelation)
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 4, "rows_written",
 					   INT8OID, -1, 0);
 
-	resultStore = ExecuteSelectTasksIntoTupleStore(taskList, resultDescriptor);
+	bool errorOnAnyFailure = false;
+	resultStore = ExecuteSelectTasksIntoTupleStore(taskList, resultDescriptor,
+												   errorOnAnyFailure);
 
 	List *fragmentList = NIL;
 	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(resultDescriptor,
@@ -298,14 +312,15 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
  * store containing its results.
  */
 static Tuplestorestate *
-ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor)
+ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
+								 bool errorOnAnyFailure)
 {
 	bool hasReturning = true;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool randomAccess = true;
 	bool interTransactions = false;
 	TransactionProperties xactProperties = {
-		.errorOnAnyFailure = true,
+		.errorOnAnyFailure = errorOnAnyFailure,
 		.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED,
 		.requires2PC = false
 	};

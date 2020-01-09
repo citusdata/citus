@@ -181,7 +181,17 @@ typedef struct Task
 	TaskType taskType;
 	uint64 jobId;
 	uint32 taskId;
+
+	/*
+	 * If queryString != NULL, then we have a single query for all placements.
+	 * Otherwise, length of perPlacementQueryStrings is equal to length of
+	 * taskPlacementList and can assign a different query for each placement.
+	 * We need this flexibility when a query should return node specific values.
+	 * For example, on which node did we succeed storing some result files?
+	 */
 	char *queryString;
+	List *perPlacementQueryStrings;
+
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
 	List *dependentTaskList;     /* only applies to compute tasks */
