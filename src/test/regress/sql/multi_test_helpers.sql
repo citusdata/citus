@@ -141,3 +141,17 @@ BEGIN
   END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- partition_task_list_results tests the internal PartitionTasklistResults function
+CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix text,
+                                                                  query text,
+                                                                  target_table regclass,
+                                                                  binaryFormat bool DEFAULT true)
+    RETURNS TABLE(resultId text,
+                  nodeId int,
+                  rowCount bigint,
+                  targetShardId bigint,
+                  targetShardIndex int)
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$partition_task_list_results$$;

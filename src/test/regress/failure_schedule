@@ -6,6 +6,7 @@ test: failure_setup
 test: multi_test_helpers
 test: failure_replicated_partitions
 test: multi_test_catalog_views
+test: failure_distributed_results
 test: failure_ddl
 test: failure_truncate
 test: failure_create_index_concurrently

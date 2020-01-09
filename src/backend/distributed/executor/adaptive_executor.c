@@ -3127,8 +3127,20 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-	char *queryString = task->queryString;
 	int querySent = 0;
+
+	char *queryString = NULL;
+	if (task->queryString != NULL)
+	{
+		queryString = task->queryString;
+	}
+	else
+	{
+		Assert(list_length(task->taskPlacementList) == list_length(
+				   task->perPlacementQueryStrings));
+		queryString = list_nth(task->perPlacementQueryStrings,
+							   placementExecution->placementExecutionIndex);
+	}
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
