@@ -184,7 +184,13 @@ select * FROM (
 ) subq ORDER BY 2, 1 LIMIT 5;
 
 select * FROM (
-    SELECT key, avg(distinct floor(agg1.val/2)) m from aggdata agg1
+    SELECT key k, avg(distinct floor(agg1.val/2)) m from aggdata agg1
+    group by key
+) subq;
+
+-- Test TransformsSubqueryNode with group by not in FROM (failed in past)
+select count(*) FROM (
+    SELECT avg(distinct floor(agg1.val/2)) m from aggdata agg1
     group by key
 ) subq;
 
