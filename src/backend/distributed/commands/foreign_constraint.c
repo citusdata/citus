@@ -400,7 +400,7 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 
 
 /*
- * ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable runs check related to foreign
+ * ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable runs checks related to foreign
  * constraints between local tables and reference tables
  */
 void
@@ -431,6 +431,18 @@ ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, O
 	if ((referencingIsReferenceTable && !referencedIsDistributed) ||
 		(!referencingIsDistributed && referencedIsReferenceTable))
 	{
+		/*
+		 * TODO: I should add a comment for rationale behind it
+		 */
+		if (IsMultiStatementTransaction())
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				/* TODO: is this error applicable ? */
+				errmsg(
+					"cannot define foreign key constraint between local tables "
+					"and reference tables in a transaction block, udf block, or "
+					"distributed CTE subquery")));
+		}
 		/*
 		 * Check if we are in the coordinator and coordinator can have reference
 		 * table replicas
