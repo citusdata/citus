@@ -113,7 +113,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  * - If referencing table is a reference table, error out if the referenced table is not a
  *   a reference table.
  *
- * Note that checks performed in this functions are only done via PostProcessAlterTableStmt
+ * Note that checks performed in this functions are only done via PostprocessAlterTableStmt
  * function. Another allowed case is creating foreign key constraint between a reference
  * table and a local table in coordinator. We do not check that case here as we do not have
  * post process steps for it. See ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable and its
