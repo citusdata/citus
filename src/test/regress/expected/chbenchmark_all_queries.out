@@ -693,7 +693,11 @@ FROM
 WHERE su_suppkey = supplier_no
   AND total_revenue = (SELECT max(total_revenue) FROM revenue)
 ORDER BY su_suppkey;
-ERROR:  relation "chbenchmark_all_queries.supplier_1650035" does not exist
+ su_suppkey |          su_name          | su_address |    su_phone     | total_revenue
+---------------------------------------------------------------------
+          9 | abc                       | def        | ghi             |          3.00
+(1 row)
+
 --Q16
 SELECT
     i_name,

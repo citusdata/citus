@@ -763,8 +763,17 @@ static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
+	ListCell *taskCell = NULL;
 
-	LocalExecutionHappened = true;
+	foreach(taskCell, execution->localTaskList)
+	{
+		Task *task = lfirst(taskCell);
+		if (task->anchorShardId != INVALID_SHARD_ID)
+		{
+			LocalPlacementExecutionHappened = true;
+			break;
+		}
+	}
 
 	/*
 	 * We're deliberately not setting execution->rowsProceessed here. The main reason
@@ -882,7 +891,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * The code-paths that rely on this function do not know how execute
 	 * commands locally.
 	 */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfLocalPlacementExecutionHappened();
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1009,10 +1018,10 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (LocalExecutionHappened)
+	if (LocalPlacementExecutionHappened)
 	{
 		/*
-		 * In case localExecutionHappened, we force the executor to use 2PC.
+		 * In case LocalPlacementExecutionHappened, we force the executor to use 2PC.
 		 * The primary motivation is that at this point we're definitely expanding
 		 * the nodes participated in the transaction. And, by re-generating the
 		 * remote task lists during local query execution, we might prevent the adaptive

@@ -1828,7 +1828,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	/* Citus currently doesn't know how to handle COPY command locally */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfLocalPlacementExecutionHappened();
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);

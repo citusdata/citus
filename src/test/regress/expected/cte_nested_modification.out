@@ -133,9 +133,11 @@ WITH cte_1 AS (
 DELETE FROM tt1
 USING cte_1
 WHERE tt1.id < cte_1.id;
-ERROR:  relation "cte_nested_modifications.tt2_360691" does not exist
 SELECT * FROM tt1 ORDER BY id;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ id | value_1
+---------------------------------------------------------------------
+(0 rows)
+
 ROLLBACK;
 DROP SCHEMA cte_nested_modifications CASCADE;
 NOTICE:  drop cascades to 3 other objects
