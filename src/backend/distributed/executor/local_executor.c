@@ -73,6 +73,7 @@
 #include "miscadmin.h"
 
 #include "catalog/namespace.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
@@ -80,6 +81,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
@@ -718,8 +720,16 @@ TaskQueryString(Task *task)
 
 	if (task->localFastPathQuery)
 	{
-		/* Run steps that were skipped because it was a local fast path query */
-		UpdateRelationToShardNames((Node *) task->query, task->relationShardList);
+		if (UpdateOrDeleteQuery(task->query) &&
+			RequiresMasterEvaluation(task->query))
+		{
+			/* This check is also done in PlanRouterQuery */
+		}
+		else
+		{
+			/* Run steps that were skipped because it was a local fast path query */
+			UpdateRelationToShardNames((Node *) task->query, task->relationShardList);
+		}
 	}
 
 	StringInfo queryString = makeStringInfo();
