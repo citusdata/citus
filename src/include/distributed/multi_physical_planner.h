@@ -223,6 +223,15 @@ typedef struct Task
 	 */
 	bool partiallyLocalOrRemote;
 	Query *query;
+
+	/*
+	 * This is true when this task is a fast path query that can be locally
+	 * executed.  Some steps are skipped in the planner that are only needed
+	 * for deparsing the query. This is normally not needed, but in case of
+	 * logging or EXPLAINing the query we use this field to run these steps
+	 * anyway when deparsing the query for those purposes.
+	 */
+	bool localFastPathQuery;
 } Task;
 
 

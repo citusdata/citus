@@ -262,6 +262,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 	COPY_NODE_FIELD(query);
+	COPY_SCALAR_FIELD(localFastPathQuery);
 }
 
 

@@ -161,11 +161,11 @@ static List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const *distributionKeyValue);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool localFastPathQuery);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool localFastPathQuery);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
@@ -1675,13 +1675,15 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	/* check if this query requires master evaluation */
 	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
+	bool localFastPathQuery = false;
 
 	(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
 									   &placementList, &shardId, &relationShardList,
 									   &prunedShardIntervalListList,
 									   replacePrunedQueryWithDummy,
 									   &isMultiShardModifyQuery,
-									   &partitionKeyValue);
+									   &partitionKeyValue,
+									   &localFastPathQuery);
 	if (*planningError)
 	{
 		return NULL;
@@ -1709,7 +1711,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId, localFastPathQuery);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1728,6 +1730,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	}
 	else if (isMultiShardModifyQuery)
 	{
+		Assert(!localFastPathQuery);
 		job->taskList = QueryPushdownSqlTaskList(originalQuery, job->jobId,
 												 plannerRestrictionContext->
 												 relationRestrictionContext,
@@ -1744,7 +1747,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId, localFastPathQuery);
 	}
 
 	job->requiresMasterEvaluation = requiresMasterEvaluation;
@@ -1839,7 +1842,7 @@ RemoveCoordinatorPlacement(List *placementList)
  */
 static List *
 SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList, uint64 shardId)
+						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(SELECT_TASK);
 	List *relationRowLockList = NIL;
@@ -1856,6 +1859,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
+	task->localFastPathQuery = localFastPathQuery;
 
 	return list_make1(task);
 }
@@ -1908,7 +1912,7 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
  */
 static List *
 SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList, uint64 shardId)
+						  List *placementList, uint64 shardId, bool localFastPathQuery)
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	List *rangeTableList = NIL;
@@ -1933,6 +1937,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;
+	task->localFastPathQuery = localFastPathQuery;
 
 	return list_make1(task);
 }
@@ -2020,7 +2025,8 @@ PlanRouterQuery(Query *originalQuery,
 				List **placementList, uint64 *anchorShardId, List **relationShardList,
 				List **prunedShardIntervalListList,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
-				Const **partitionValueConst)
+				Const **partitionValueConst,
+				bool *localFastPathQuery)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
 
@@ -2035,6 +2041,8 @@ PlanRouterQuery(Query *originalQuery,
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	*placementList = NIL;
+
+	*localFastPathQuery = false;
 
 	/*
 	 * When FastPathRouterQuery() returns true, we know that standard_planner() has
@@ -2069,6 +2077,30 @@ PlanRouterQuery(Query *originalQuery,
 		{
 			ereport(DEBUG2, (errmsg("Distributed planning for a fast-path router "
 									"query")));
+			if (list_length(shardIntervalList) == 1)
+			{
+				ShardInterval *shardInterval = (ShardInterval *) linitial(
+					shardIntervalList);
+				ShardPlacement *shardPlacement =
+					FindShardPlacementOnGroup(GetLocalGroupId(), shardInterval->shardId);
+				if (shardPlacement != NULL &&
+					(!ReferenceTableShardId(shardInterval->shardId) ||
+					 !IsModifyCommand(originalQuery)))
+				{
+					/*
+					 * The query could be executed locally, but that's not a decision
+					 * we can give at the moment. We're only doing some performance
+					 * optimizations if that's how the executor behaves. Otherwise, the
+					 * optimizations would be lost during the execution.
+					 *
+					 * Modifications on reference tables needs to be executed remotely as
+					 * well, so doesn't worth the optimization.
+					 *
+					 * Citus cannot handle EXPLAIN on local tables, so skip those as well.
+					 */
+					*localFastPathQuery = true;
+				}
+			}
 		}
 	}
 	else
@@ -2200,11 +2232,23 @@ PlanRouterQuery(Query *originalQuery,
 		return planningError;
 	}
 
-	/*
-	 * If this is an UPDATE or DELETE query which requires master evaluation,
-	 * don't try update shard names, and postpone that to execution phase.
-	 */
-	if (!(UpdateOrDeleteQuery(originalQuery) && RequiresMasterEvaluation(originalQuery)))
+	if (*localFastPathQuery)
+	{
+		/*
+		 * If this is a local-fast path query, skip this relatively expensive
+		 * traversal because we may not need at all and performance is
+		 * important in this path.
+		 */
+	}
+	else if (UpdateOrDeleteQuery(originalQuery) &&
+			 RequiresMasterEvaluation(originalQuery))
+	{
+		/*
+		 * If this is an UPDATE or DELETE query which requires master evaluation,
+		 * don't try update shard names, and postpone that to execution phase.
+		 */
+	}
+	else
 	{
 		UpdateRelationToShardNames((Node *) originalQuery, *relationShardList);
 	}

@@ -393,6 +393,7 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(rowValuesLists);
 	READ_BOOL_FIELD(partiallyLocalOrRemote);
 	READ_NODE_FIELD(query);
+	READ_BOOL_FIELD(localFastPathQuery);
 
 	READ_DONE();
 }

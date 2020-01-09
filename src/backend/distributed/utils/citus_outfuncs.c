@@ -479,6 +479,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(rowValuesLists);
 	WRITE_BOOL_FIELD(partiallyLocalOrRemote);
 	WRITE_NODE_FIELD(query);
+	WRITE_BOOL_FIELD(localFastPathQuery);
 }
 
 
