@@ -17,11 +17,9 @@ WHERE name = 'hll'
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
- count
----------------------------------------------------------------------
-  2985
-(1 row)
-
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
 -- Check approximate count(distinct) at different precisions / error rates
 SET citus.count_distinct_error_rate = 0.1;
 SELECT count(distinct l_orderkey) FROM lineitem;
@@ -131,8 +129,6 @@ HINT:  You need to have the hll extension loaded.
 -- Check that we can revert config and disable count(distinct) approximations
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
- count
----------------------------------------------------------------------
-  2985
-(1 row)
-
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.

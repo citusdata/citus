@@ -528,45 +528,6 @@ LIMIT 10;
           4
 (10 rows)
 
--- count(distinct) queries work
-SELECT COUNT(DISTINCT l_orderkey)
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity);
- count
----------------------------------------------------------------------
-    13
-(1 row)
-
--- the same queries returning a non-partition column
-SELECT l_quantity
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity)
-ORDER BY l_quantity DESC
-LIMIT 10;
- l_quantity
----------------------------------------------------------------------
-      50.00
-      49.00
-      46.00
-      46.00
-      45.00
-      44.00
-      44.00
-      44.00
-      43.00
-      43.00
-(10 rows)
-
 -- distinct queries work
 SELECT DISTINCT l_quantity
 FROM
@@ -592,61 +553,6 @@ LIMIT 10;
       39.00
 (10 rows)
 
--- count(distinct) queries work
-SELECT COUNT(DISTINCT l_quantity)
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity);
- count
----------------------------------------------------------------------
-    25
-(1 row)
-
--- Check that we support count distinct with a subquery
-SELECT
-	count(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
- count
----------------------------------------------------------------------
-     7
-(1 row)
-
--- We do not support distinct aggregates other than count distinct with a subquery
-SELECT
-	sum(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  Only count(distinct) aggregate is supported in subqueries
-SELECT
-	avg(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  Only count(distinct) aggregate is supported in subqueries
 -- Check supported subquery types.
 SELECT
 	o_custkey,

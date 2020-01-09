@@ -345,28 +345,6 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
 
--- count(distinct) queries work
-SELECT COUNT(DISTINCT l_orderkey)
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity);
-
--- the same queries returning a non-partition column
-SELECT l_quantity
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity)
-ORDER BY l_quantity DESC
-LIMIT 10;
-
 -- distinct queries work
 SELECT DISTINCT l_quantity
 FROM
@@ -378,54 +356,6 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_quantity DESC
 LIMIT 10;
-
--- count(distinct) queries work
-SELECT COUNT(DISTINCT l_quantity)
-FROM
-	lineitem_subquery l
-JOIN
-	orders_subquery o
-ON (l_orderkey = o_orderkey)
-WHERE
-	(o_orderkey < l_quantity);
-
-
--- Check that we support count distinct with a subquery
-
-SELECT
-	count(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
-
--- We do not support distinct aggregates other than count distinct with a subquery
-
-SELECT
-	sum(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
-
-SELECT
-	avg(DISTINCT a)
-FROM (
-	SELECT
-		count(*) a
-	FROM
-		lineitem_subquery
-	GROUP BY
-	   l_orderkey
-) z;
 
 -- Check supported subquery types.
 

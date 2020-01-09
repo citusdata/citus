@@ -44,9 +44,9 @@ FROM
 	SELECT avg(DISTINCT value_1), random() FROM users_table GROUP BY value_2 OFFSET 3
 ) as foo;
 DEBUG:  generating subplan XXX_1 for subquery SELECT avg(DISTINCT value_1) AS avg, random() AS random FROM public.users_table GROUP BY user_id OFFSET 3
-DEBUG:  generating subplan XXX_2 for subquery SELECT count(DISTINCT value_1) AS count, random() AS random FROM public.users_table GROUP BY value_2 OFFSET 3
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
 -- we don't support array_aggs with ORDER BYs
 SELECT
 	*

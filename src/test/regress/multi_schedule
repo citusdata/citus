@@ -177,11 +177,10 @@ test: multi_outer_join
 # Tests covering mostly modification queries and required preliminary
 # functionality related to metadata, shard creation, shard pruning and
 # "hacky" copy script for hash partitioned tables.
-# Note that the order of the following tests are important. multi_complex_count_distinct
-# is independent from the rest of the group, it is added to increase parallelism.
+# Note that the order of the following tests are important.
 # ---
 test: multi_create_fdw
-test: multi_complex_count_distinct multi_select_distinct
+test: multi_select_distinct
 test: multi_modifications
 test: multi_distribution_metadata
 test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards

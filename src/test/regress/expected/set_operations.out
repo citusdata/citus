@@ -850,18 +850,9 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT count(DISTINCT x) AS count FROM recursive_union.test
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_2 for subquery SELECT count(DISTINCT y) AS count FROM recursive_union.test
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint) UNION SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(DISTINCT x) AS count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) t(x) ORDER BY (count(DISTINCT x))
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
 -- other agg. distincts are also supported when group by includes partition key
 select avg(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY x) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY x)) as t(x) ORDER BY 1;
 DEBUG:  Router planner cannot handle multi-shard select queries

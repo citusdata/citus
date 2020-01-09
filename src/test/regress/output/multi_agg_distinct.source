@@ -72,44 +72,6 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
        222 |     1
 (10 rows)
 
--- Check that we support more complex expressions.
-SELECT count(distinct (l_orderkey)) FROM lineitem_range;
- count 
--------
-  2985
-(1 row)
-
-SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
- count 
--------
-  2985
-(1 row)
-
-SELECT count(distinct (l_orderkey % 5)) FROM lineitem_range;
- count 
--------
-     5
-(1 row)
-
--- count(distinct) on non-partition column is allowed
-SELECT count(distinct l_partkey) FROM lineitem_range;
- count 
--------
- 11661
-(1 row)
-
-SELECT count(distinct (l_partkey + 1)) FROM lineitem_range;
- count 
--------
- 11661
-(1 row)
-
-SELECT count(distinct (l_partkey % 5)) FROM lineitem_range;
- count 
--------
-     5
-(1 row)
-
 -- Now test append partitioned tables. First run count(distinct) on a single
 -- sharded table.
 SELECT count(distinct p_mfgr) FROM part;
@@ -127,14 +89,6 @@ SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mf
  Manufacturer#4            |   204
  Manufacturer#5            |   185
 (5 rows)
-
--- We support count(distinct) queries on append partitioned tables
--- both on partition column, and non-partition column.
-SELECT count(distinct o_orderkey), count(distinct o_custkey) FROM orders;
- count | count 
--------+-------
-  2985 |   923
-(1 row)
 
 -- Hash partitioned tables:
 CREATE TABLE lineitem_hash (
@@ -174,44 +128,6 @@ SELECT avg(distinct l_orderkey) FROM lineitem_hash;
           avg          
 -----------------------
  7463.9474036850921273
-(1 row)
-
--- Check that we support more complex expressions.
-SELECT count(distinct (l_orderkey)) FROM lineitem_hash;
- count 
--------
-  2985
-(1 row)
-
-SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
- count 
--------
-  2985
-(1 row)
-
-SELECT count(distinct (l_orderkey % 5)) FROM lineitem_hash;
- count 
--------
-     5
-(1 row)
-
--- count(distinct) on non-partition column is allowed
-SELECT count(distinct l_partkey) FROM lineitem_hash;
- count 
--------
- 11661
-(1 row)
-
-SELECT count(distinct (l_partkey + 1)) FROM lineitem_hash;
- count 
--------
- 11661
-(1 row)
-
-SELECT count(distinct (l_partkey % 5)) FROM lineitem_hash;
- count 
--------
-     5
 (1 row)
 
 -- agg(distinct) is allowed if we group by partition column
