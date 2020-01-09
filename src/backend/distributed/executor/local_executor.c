@@ -509,6 +509,29 @@ DisableLocalExecution(void)
 }
 
 
+void
+SetTaskQueryAndPlacementList(Task *task, Query *query, List *placementList)
+{
+	task->taskPlacementList = placementList;
+
+	if (TaskAccessesLocalNode(task))
+	{
+		task->query = query;
+		task->queryStringLazy = NULL;
+		return;
+	}
+
+	task->query = NULL;
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+	StringInfo queryString = makeStringInfo();
+
+	pg_get_query_def(query, queryString);
+
+	task->queryStringLazy = queryString->data;
+	MemoryContextSwitchTo(previousContext);
+}
+
+
 /*
  * TaskQueryString generates task->queryStringLazy if missing.
  *
