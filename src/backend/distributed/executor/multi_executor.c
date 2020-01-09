@@ -68,7 +68,7 @@ int ExecutorLevel = 0;
 /* local function forward declarations */
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
-static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
+static bool IsValidLocalReferenceTableJoinPlan(PlannedStmt *plan);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -121,6 +121,11 @@ void
 CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
+	/*
+	 * Check if we are in the coordinator and coordinator can have reference
+	 * table replicas
+	 */
+
 	DestReceiver *dest = queryDesc->dest;
 
 	PG_TRY();
@@ -129,19 +134,19 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (CitusHasBeenLoaded())
 		{
-			if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
-				IsMultiStatementTransaction())
+			if (IsValidLocalReferenceTableJoinPlan(queryDesc->plannedstmt) && IsMultiStatementTransaction())
 			{
 				/*
-				 * Currently we don't support this to avoid problems with tuple
-				 * visibility, locking, etc. For example, change to the reference
-				 * table can go through a MultiConnection, which won't be visible
-				 * to the locally planned queries.
-				 */
+				* Currently we don't support this to avoid problems with tuple
+				* visibility, locking, etc. For example, change to the reference
+				* table can go through a MultiConnection, which won't be visible
+				* to the locally planned queries.
+				*/
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot join local tables and reference tables in "
-									   "a transaction block, udf block, or distributed "
-									   "CTE subquery")));
+								errmsg(
+									"cannot join local tables and reference tables in "
+									"a transaction block, udf block, or distributed "
+									"CTE subquery")));
 			}
 		}
 
@@ -577,13 +582,13 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 
 
 /*
- * IsLocalReferenceTableJoinPlan returns true if the given plan joins local tables
- * with reference table shards.
+ * IsValidLocalReferenceTableJoinPlan returns true if the given plan
+ * is a valid join between reference tables and local tables
  *
- * This should be consistent with IsLocalReferenceTableJoin() in distributed_planner.c.
+ * This should be consistent with IsValidLocalReferenceTableJoin() in distributed_planner.c.
  */
 static bool
-IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
+IsValidLocalReferenceTableJoinPlan(PlannedStmt *plan)
 {
 	bool hasReferenceTable = false;
 	bool hasLocalTable = false;
