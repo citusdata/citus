@@ -408,7 +408,7 @@ NodeIsPrimaryWorker(WorkerNode *node)
  * for joining or defining foreign keys between them.
  */
 bool
-CanUseCoordinatorLocalTablesWithReferenceTables()
+CanUseCoordinatorLocalTablesWithReferenceTables(void)
 {
 	/*
 	 * Using local tables of coordinator with reference tables is only allowed
@@ -442,7 +442,7 @@ CanUseCoordinatorLocalTablesWithReferenceTables()
  * "SELECT master_add_node(coordinator_hostname, coordinator_port, groupId => 0)"
  */
 static bool
-NodeHasReferenceTableReplicas()
+NodeHasReferenceTableReplicas(void)
 {
 	bool hasReferenceTableReplica = false;
 
