@@ -271,11 +271,12 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	}
 
 	/*
-	 * Update reference table names (if any) with their only shard's name
-	 * This function is called here as we should have final names of
-	 * relations within the AlterTableStmt before calling AlterTableGetLockLevel
-	 * function below. Also set skip_validation to true if needed.
-	 * See function's leading comment
+	 * Update reference table names (if any) with their only shard's name.
+	 * This function is called here as we should have final names of relations
+	 * within the AlterTableStmt before calling AlterTableGetLockLevel function
+	 * below.
+	 * In the mean time, set skip_validation fields to true if needed.
+	 * See function's leading comment.
 	 */
 	AlterTableUpdateAddFKeyConstraints(alterTableStatement);
 
@@ -307,9 +308,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	/*
 	 * Here we return NIL if referencing table is a local table. This is because
 	 * if referenced table ->
-	 *  - is a local table, then we are all good, the rest is Postgres's.
+	 *  - is a local table, then we are all good, the rest is PostgreSQL's.
 	 *  - is a distributed table, then we already error'ed out in CreateDistributedPlan
-	 *  - is a reference table, then Postgres will just handle the rest as we already
+	 *  - is a reference table, then PostgreSQL will just handle the rest as we already
 	 * replaced reference table with its only shard while traversing the constraints in
 	 * AlterTableUpdateAddFKeyConstraints function
 	 */
@@ -376,7 +377,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 				 */
 			}
 		}
-		if (alterTableType == AT_AddColumn)
+		else if (alterTableType == AT_AddColumn)
 		{
 			/*
 			 * TODO: This code path is nothing beneficial since we do not
@@ -470,23 +471,20 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		/* TODO: I think, we should also error for distributed table -> local table case here */
 
 		/*
-		 * Similarly, here we return NIL if referenced table is a local table, except
-		 * referencing table is a distributed table but not a reference table. This is
-		 * because if referencing table ->
-		 *  - is a local table, then we are all good, the rest is Postgres's.
-		 *  - is a reference table, then Postgres will just handle the rest as we already
-		 * replaced reference table with its only shard while traversing the constraints in
-		 * above loop
+		 * Here we return NIL if referenced table is a local table and referencing
+		 * table is a local table for PostgreSQL to handle the rest as we already
+		 * replaced reference table with its only shard while traversing the
+		 * constraints in AlterTableUpdateAddFKeyConstraints
 		 */
 		if (referencedIsLocalTable)
 		{
-			if (!referencingIsLocalTable && !referencingIsReferenceTable)
+			if (referencingIsReferenceTable)
 			{
-				ddlJob->taskList = NIL;
+				return NIL;
 			}
 			else
 			{
-				return NIL;
+				ddlJob->taskList = NIL;
 			}
 		}
 		else
@@ -509,11 +507,11 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 
 
 /*
- * AlterTableUpdateAddFKeyConstraints function replaces
- * reference table name on table(s) if we are to define foreign key constraint
- * between a local table and a reference table. It can be the the referencing
- * relation or the referenced relation indicated in a "constraint" field within
- * the subcommands. If conditions are not met, this function errors out.
+ * AlterTableUpdateAddFKeyConstraints function replaces reference table name on
+ * table(s) if we are to define foreign key constraint between a local table and
+ * a reference table. It can be the the referencing relation or the referenced
+ * relation indicated in a "constraint" field within the subcommands.
+ * If conditions are not met, this function errors out.
  *
  * Other than this, this function also sets skip_validation to true in foreign
  * constraint subcommands if the referencing table not a local table
@@ -535,15 +533,6 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 										DISTRIBUTE_BY_NONE);
 
 	/*
-	 * If referencing table is a distributed table but not a reference table,
-	 * early exit
-	 */
-	if (!referencingIsLocalTable && !referencingIsReferenceTable)
-	{
-		return;
-	}
-
-	/*
 	 * Iterate subcommands to perform changes on foreign key constraints
 	 */
 	List *commandList = alterTableStatement->cmds;
@@ -560,6 +549,7 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 		}
 
 		/* found an ADD CONSTRAINT subcommand */
+
 		Constraint *constraint = (Constraint *) command->def;
 
 		if (constraint->contype != CONSTR_FOREIGN)
@@ -568,6 +558,24 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 		}
 
 		/* found an ADD CONSTRAINT (foreign key) subcommand */
+
+		/* check for skip_validation field */
+
+		if (!referencingIsLocalTable)
+		{
+			/*
+			 * Foreign constraint validations will be done in workers if referencing
+			 * table is not a distributed table.
+			 * If we do not set this flag, PostgreSQL tries to do additional checking when we drop
+			 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+			 * connections to workers to verify foreign constraints while original
+			 * transaction is in process, which causes deadlock.
+			 *
+			 * Note that if referencing table is a local table, we should perform needed
+			 * checks in coordinator as the command will be executed only in the coordinator.
+			 */
+			constraint->skip_validation = true;
+		}
 
 		/* TODO: should I take lock here */
 		Oid referencedRelationOid = RangeVarGetRelid(constraint->pktable, NoLock,
@@ -609,26 +617,6 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 				referencedRelationOid);
 			constraint->pktable->relname = get_rel_name(referenceTableShardOid);
 		}
-
-		/* check for skip_validation field */
-
-		if (!referencingIsLocalTable)
-		{
-			/*
-			 * Foreign constraint validations will be done in workers if referencing
-			 * table is not a distributed table.
-			 * If we do not set this flag, PostgreSQL tries to do additional checking when we drop
-			 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
-			 * connections to workers to verify foreign constraints while original
-			 * transaction is in process, which causes deadlock.
-			 *
-			 * Note that if referencing table is a local table, we should perform needed
-			 * checks in coordinator as the command will be executed only in the coordinator.
-			 */
-			constraint->skip_validation = true;
-		}
-
-		return;
 	}
 }
 
