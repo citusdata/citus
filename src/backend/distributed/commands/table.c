@@ -583,13 +583,15 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 										  (PartitionMethod(referencedRelationOid) ==
 										   DISTRIBUTE_BY_NONE);
 
+		ErrorIfUnsupportedAlterAddFKeyBetweenReferecenceAndLocalTable(
+			referencingRelationOid,
+			referencedRelationOid,
+			constraint);
+
 		/*
 		 * Replace reference table's name if we are to define foreign key constraint
 		 * between a local table and a reference table
 		 */
-
-		ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(referencingRelationOid,
-															  referencedRelationOid);
 
 		/* reference table references to a local table */
 		if (referencingIsReferenceTable && referencedIsLocalTable)

@@ -116,7 +116,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  * Note that checks performed in this functions are only done via PostprocessAlterTableStmt
  * function. Another allowed case is creating foreign key constraint between a reference
  * table and a local table in coordinator. We do not check that case here as we do not have
- * post process steps for it. See ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable and its
+ * post process steps for it. See ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable and its
  * usage
  */
 void
@@ -183,7 +183,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 									  " or a reference table.")));
 		}
 
-		/* set referenced table related variables here in an optimized way */
+		/* set referenced table related variables here if table is referencing itself */
+
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
@@ -211,11 +212,12 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
+
 		/*
 		 * Foreign keys from reference tables to distributed tables are not
 		 * supported.
 		 */
-		else if (referencingIsReferenceTable && !referencedIsReferenceTable)
+		if (referencingIsReferenceTable && !referencedIsReferenceTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
@@ -400,12 +402,16 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 
 
 /*
- * ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable runs checks related to foreign
- * constraints between local tables and reference tables
+ * ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable runs checks related to ALTER
+ * ADD / DROP foreign key constraints between local tables and reference tables.
+ *
+ * If constraint is not NULL, then we perform checks for ADD command, otherwise we check for DROP.
  */
 void
-ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, Oid
-													  referencedTableOid)
+ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid,
+																  Oid
+																  referencedTableOid,
+																  Constraint *constraint)
 {
 	bool referencingIsDistributed = IsDistributedTable(referencingTableOid);
 	char referencingDistMethod = 0;
@@ -431,18 +437,44 @@ ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, O
 	if ((referencingIsReferenceTable && !referencedIsDistributed) ||
 		(!referencingIsDistributed && referencedIsReferenceTable))
 	{
+		/* constraint is not NULL when the command is ALTER TABLE ADD constraint */
+		if (constraint != NULL)
+		{
+			/*
+			 * "ALTER TABLE reference_table ADD CONSTRAINT fkey FOREIGN KEY REFERENCES
+			 * local_table ON DELETE (UPDATE) CASCADE" commands are not supported
+			 */
+			bool onDeleteOrOnUpdateCascade = (constraint->fk_upd_action ==
+											  FKCONSTR_ACTION_CASCADE ||
+											  constraint->fk_del_action ==
+											  FKCONSTR_ACTION_CASCADE);
+			
+			bool fromReferenceTableToLocalTable = referencingIsReferenceTable && !referencedIsDistributed;
+			
+			if (fromReferenceTableToLocalTable && onDeleteOrOnUpdateCascade)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg(
+									"cannot create foreign key constraint"),
+								errdetail(
+									"Foreign key constraints from reference tables to coordinator "
+									"local tables cannot enforce ON DELETE / UPDATE CASCADE behaviour")));
+			}
+		}
+
+		/* ALTER TABLE ADD / DROP fkey constraint */
+
 		/*
-		 * TODO: I should add a comment for rationale behind it
+		 * For now, we do not allow ALTER TABLE ADD/DROP fkey commands in multi
+		 * statement transactions
 		 */
 		if (IsMultiStatementTransaction())
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-
-			                /* TODO: is this error applicable ? */
 							errmsg(
-								"cannot define foreign key constraint between local tables "
-								"and reference tables in a transaction block, udf block, or "
-								"distributed CTE subquery")));
+								"cannot ADD/DROP foreign key constraint between coordinator "
+								"local tables and reference tables in a transaction block, "
+								"udf block, or distributed CTE subquery")));
 		}
 
 		/*
@@ -453,13 +485,13 @@ ErrorIfUnsupportedFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid, O
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 							errmsg(
-								"cannot create foreign key constraint"),
+								"cannot ADD/DROP foreign key constraint"),
 							errdetail(
 								"Referenced table must be a distributed table"
 								" or a reference table or a local table in coordinator."),
 							errhint(
-								"To define foreign constraint between reference tables "
-								"and local tables, consider adding coordinator "
+								"To ADD/DROP foreign constraint between reference tables "
+								"and coordinator local tables, consider adding coordinator "
 								"to pg_dist_node as well.")));
 		}
 	}
