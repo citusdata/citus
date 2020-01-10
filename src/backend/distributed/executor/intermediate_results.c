@@ -894,7 +894,7 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	while (true)
 	{
-		int waitFlags = WL_SOCKET_READABLE;
+		int waitFlags = WL_SOCKET_READABLE | WL_POSTMASTER_DEATH;
 
 		CopyStatus copyStatus = CopyDataFromConnection(connection, &fileCompat,
 													   &totalBytesWritten);

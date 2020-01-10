@@ -54,6 +54,7 @@ typedef struct NodeToNodeFragmentsTransfer
 
 /* forward declarations of local functions */
 static void WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+									 int partitionColumnIndex,
 									 DistTableCacheEntry *targetRelation,
 									 bool binaryFormat);
 static List * ExecutePartitionTaskList(List *partitionTaskList,
@@ -89,9 +90,13 @@ static void ExecuteFetchTaskList(List *fetchTaskList);
  *
  * returnValue[shardIndex] is list of cstrings each of which is a resultId which
  * correspond to targetRelation->sortedShardIntervalArray[shardIndex].
+ *
+ * partitionColumnIndex determines the column in the selectTaskList to use for
+ * partitioning.
  */
 List **
 RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
+							int partitionColumnIndex,
 							DistTableCacheEntry *targetRelation,
 							bool binaryFormat)
 {
@@ -104,6 +109,7 @@ RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
 	UseCoordinatedTransaction();
 
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, selectTaskList,
+												  partitionColumnIndex,
 												  targetRelation, binaryFormat);
 	return ColocateFragmentsWithRelation(fragmentList, targetRelation);
 }
@@ -119,9 +125,13 @@ RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
  * partition of results. Empty results are omitted. Therefore, if we have N tasks
  * and target relation has M shards, we will have NxM-(number of empty results)
  * fragments.
+ *
+ * partitionColumnIndex determines the column in the selectTaskList to use for
+ * partitioning.
  */
 List *
 PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
@@ -141,7 +151,8 @@ PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
 	 */
 	UseCoordinatedTransaction();
 
-	WrapTasksForPartitioning(resultIdPrefix, selectTaskList, targetRelation,
+	WrapTasksForPartitioning(resultIdPrefix, selectTaskList,
+							 partitionColumnIndex, targetRelation,
 							 binaryFormat);
 	return ExecutePartitionTaskList(selectTaskList, targetRelation);
 }
@@ -154,6 +165,7 @@ PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
  */
 static void
 WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
@@ -164,11 +176,13 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 	ArrayType *minValueArray = NULL;
 	ArrayType *maxValueArray = NULL;
 	Var *partitionColumn = targetRelation->partitionColumn;
-	int partitionColumnIndex = partitionColumn->varoattno - 1;
-	Oid intervalTypeId = partitionColumn->vartype;
-	int32 intervalTypeMod = partitionColumn->vartypmod;
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = 0;
 	Oid intervalTypeOutFunc = InvalidOid;
 	bool intervalTypeVarlena = false;
+
+	GetIntervalTypeInfo(targetRelation->partitionMethod, partitionColumn,
+						&intervalTypeId, &intervalTypeMod);
 	getTypeOutputInfo(intervalTypeId, &intervalTypeOutFunc, &intervalTypeVarlena);
 
 	ShardMinMaxValueArrays(shardIntervalArray, shardCount, intervalTypeOutFunc,

@@ -88,6 +88,7 @@
 #include "foreign/foreign.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -829,6 +830,30 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	}
 
 	return useBinaryCopyFormat;
+}
+
+
+/*
+ * CanUseBinaryCopyFormatForTargetList returns true if we can use binary
+ * copy format for all columns of the given target list.
+ */
+bool
+CanUseBinaryCopyFormatForTargetList(List *targetEntryList)
+{
+	ListCell *targetEntryCell = NULL;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Node *targetExpr = (Node *) targetEntry->expr;
+
+		Oid columnType = exprType(targetExpr);
+		if (!CanUseBinaryCopyFormatForType(columnType))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

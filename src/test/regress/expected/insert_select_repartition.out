@@ -1,0 +1,162 @@
+-- tests behaviour of INSERT INTO ... SELECT with repartitioning
+CREATE SCHEMA insert_select_repartition;
+SET search_path TO 'insert_select_repartition';
+SET citus.next_shard_id TO 4213581;
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+-- Test 1
+-- 4 shards, hash distributed.
+-- Negate distribution column value.
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int);
+SELECT create_distributed_table('source_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO source_table SELECT * FROM generate_series(1, 10);
+CREATE TABLE target_table(a int);
+SELECT create_distributed_table('target_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT -a FROM source_table;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name '?column?'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213585 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213583_to_0,repartitioned_results_from_4213584_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213586 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213582_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213581_to_2,repartitioned_results_from_4213582_to_2,repartitioned_results_from_4213584_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213588 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213581_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
+RESET client_min_messages;
+SELECT * FROM target_table WHERE a=-1 OR a=-3 OR a=-7 ORDER BY a;
+ a
+---------------------------------------------------------------------
+ -7
+ -3
+ -1
+(3 rows)
+
+DROP TABLE source_table, target_table;
+--
+-- Test 2.
+-- range partitioning, composite distribution column
+CREATE TYPE composite_key_type AS (f1 int, f2 text);
+-- source
+CREATE TABLE source_table(f1 int, key composite_key_type, value int, mapped_key composite_key_type);
+SELECT create_distributed_table('source_table', 'key', 'range');
+NOTICE:  using statement-based replication
+DETAIL:  Streaming replication is supported only for hash-distributed tables.
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('source_table', '{"(0,a)","(25,a)"}','{"(24,z)","(49,z)"}');
+INSERT INTO source_table VALUES (0, (0, 'a'), 1, (0, 'a'));
+INSERT INTO source_table VALUES (1, (1, 'b'), 2, (26, 'b'));
+INSERT INTO source_table VALUES (2, (2, 'c'), 3, (3, 'c'));
+INSERT INTO source_table VALUES (3, (4, 'd'), 4, (27, 'd'));
+INSERT INTO source_table VALUES (4, (30, 'e'), 5, (30, 'e'));
+INSERT INTO source_table VALUES (5, (31, 'f'), 6, (31, 'f'));
+INSERT INTO source_table VALUES (6, (32, 'g'), 50, (8, 'g'));
+-- target
+CREATE TABLE target_table(f1 int DEFAULT 0, value int, key composite_key_type);
+SELECT create_distributed_table('target_table', 'key', 'range');
+NOTICE:  using statement-based replication
+DETAIL:  Streaming replication is supported only for hash-distributed tables.
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('target_table', '{"(0,a)","(25,a)"}','{"(24,z)","(49,z)"}');
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT f1, value, mapped_key FROM source_table;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 2 with name 'mapped_key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY key;
+ f1 | value |  key
+---------------------------------------------------------------------
+  0 |     1 | (0,a)
+  2 |     3 | (3,c)
+  6 |    50 | (8,g)
+  1 |     2 | (26,b)
+  3 |     4 | (27,d)
+  4 |     5 | (30,e)
+  5 |     6 | (31,f)
+(7 rows)
+
+SELECT * FROM target_table WHERE key = (26, 'b')::composite_key_type;
+ f1 | value |  key
+---------------------------------------------------------------------
+  1 |     2 | (26,b)
+(1 row)
+
+-- with explicit column names
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table(value, key) SELECT value, mapped_key FROM source_table;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 2 with name 'mapped_key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY key;
+ f1 | value |  key
+---------------------------------------------------------------------
+  0 |     1 | (0,a)
+  0 |     3 | (3,c)
+  0 |    50 | (8,g)
+  0 |     2 | (26,b)
+  0 |     4 | (27,d)
+  0 |     5 | (30,e)
+  0 |     6 | (31,f)
+(7 rows)
+
+-- missing value for a column
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table(key) SELECT mapped_key AS key_renamed FROM source_table;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 1 with name 'key_renamed'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type)
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY key;
+ f1 | value |  key
+---------------------------------------------------------------------
+  0 |       | (0,a)
+  0 |       | (3,c)
+  0 |       | (8,g)
+  0 |       | (26,b)
+  0 |       | (27,d)
+  0 |       | (30,e)
+  0 |       | (31,f)
+(7 rows)
+
+-- missing value for distribution column
+INSERT INTO target_table(value) SELECT value FROM source_table;
+ERROR:  the partition column of table insert_select_repartition.target_table should have a value
+DROP TABLE source_table, target_table;
+SET client_min_messages TO WARNING;
+DROP SCHEMA insert_select_repartition CASCADE;
