@@ -535,7 +535,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	}
 
 	/* get the placements for insert target shard and its intersection with select */
-	List *insertShardPlacementList = FinalizedShardPlacementList(shardId);
+	List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 	List *intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 															selectPlacementList);
 

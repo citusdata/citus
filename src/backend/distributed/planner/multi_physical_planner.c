@@ -5285,7 +5285,7 @@ ActiveShardPlacementLists(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		uint64 anchorShardId = task->anchorShardId;
 
-		List *shardPlacementList = FinalizedShardPlacementList(anchorShardId);
+		List *shardPlacementList = ActiveShardPlacementList(anchorShardId);
 
 		/* filter out shard placements that reside in inactive nodes */
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);

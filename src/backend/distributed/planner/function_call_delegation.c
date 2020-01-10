@@ -327,7 +327,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	placementList = FinalizedShardPlacementList(shardInterval->shardId);
+	placementList = ActiveShardPlacementList(shardInterval->shardId);
 	if (list_length(placementList) != 1)
 	{
 		/* punt on this for now */

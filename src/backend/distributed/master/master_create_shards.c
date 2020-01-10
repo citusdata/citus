@@ -305,7 +305,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 			ShardPlacement *sourcePlacement =
 				(ShardPlacement *) lfirst(sourceShardPlacementCell);
 			int32 groupId = sourcePlacement->groupId;
-			const RelayFileState shardState = FILE_FINALIZED;
+			const ShardState shardState = SHARD_STATE_ACTIVE;
 			const uint64 shardSize = 0;
 
 			/*

@@ -120,7 +120,7 @@ TruncateTaskList(Oid relationId)
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 	}

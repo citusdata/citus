@@ -458,7 +458,7 @@ ColocationTransfers(List *fragmentList, DistTableCacheEntry *targetRelation)
 	foreach(fragmentCell, fragmentList)
 	{
 		DistributedResultFragment *fragment = lfirst(fragmentCell);
-		List *placementList = FinalizedShardPlacementList(fragment->targetShardId);
+		List *placementList = ActiveShardPlacementList(fragment->targetShardId);
 
 		ListCell *placementCell = NULL;
 		foreach(placementCell, placementList)

@@ -134,7 +134,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	List *placementList = FinalizedShardPlacementList(shardInterval->shardId);
+	List *placementList = ActiveShardPlacementList(shardInterval->shardId);
 	if (list_length(placementList) != 1)
 	{
 		/* punt on this for now */

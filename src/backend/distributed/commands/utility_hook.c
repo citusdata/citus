@@ -868,7 +868,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 	}

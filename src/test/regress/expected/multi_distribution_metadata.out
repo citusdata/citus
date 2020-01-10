@@ -112,7 +112,7 @@ SELECT load_shard_placement_array(540001, false);
  {localhost:xxxxx,localhost:xxxxx}
 (1 row)
 
--- only one of which is finalized
+-- only one of which is active
 SELECT load_shard_placement_array(540001, true);
  load_shard_placement_array
 ---------------------------------------------------------------------

@@ -208,7 +208,7 @@ static void OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 
 static bool BinaryOutputFunctionDefined(Oid typeId);
 static List * MasterShardPlacementList(uint64 shardId);
-static List * RemoteFinalizedShardPlacementList(uint64 shardId);
+static List * RemoteActiveShardPlacementList(uint64 shardId);
 static void SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId,
 								  List *connectionList);
 static void SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId,
@@ -915,14 +915,14 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 									  ALLOCSET_DEFAULT_MAXSIZE);
 
 
-	/* release finalized placement list at the end of this function */
+	/* release active placement list at the end of this function */
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	List *finalizedPlacementList = MasterShardPlacementList(shardId);
+	List *activePlacementList = MasterShardPlacementList(shardId);
 
 	MemoryContextSwitchTo(oldContext);
 
-	foreach(placementCell, finalizedPlacementList)
+	foreach(placementCell, activePlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeUser = CurrentUserName();
@@ -981,7 +981,7 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 	}
 
 	/* if all placements failed, error out */
-	if (failedPlacementCount == list_length(finalizedPlacementList))
+	if (failedPlacementCount == list_length(activePlacementList))
 	{
 		ereport(ERROR, (errmsg("could not connect to any active placements")));
 	}
@@ -1097,38 +1097,38 @@ BinaryOutputFunctionDefined(Oid typeId)
 
 
 /*
- * MasterShardPlacementList dispatches the finalized shard placements call
+ * MasterShardPlacementList dispatches the active shard placements call
  * between local or remote master node according to the master connection state.
  */
 static List *
 MasterShardPlacementList(uint64 shardId)
 {
-	List *finalizedPlacementList = NIL;
+	List *activePlacementList = NIL;
 	if (masterConnection == NULL)
 	{
-		finalizedPlacementList = FinalizedShardPlacementList(shardId);
+		activePlacementList = ActiveShardPlacementList(shardId);
 	}
 	else
 	{
-		finalizedPlacementList = RemoteFinalizedShardPlacementList(shardId);
+		activePlacementList = RemoteActiveShardPlacementList(shardId);
 	}
 
-	return finalizedPlacementList;
+	return activePlacementList;
 }
 
 
 /*
- * RemoteFinalizedShardPlacementList gets the finalized shard placement list
+ * RemoteActiveShardPlacementList gets the active shard placement list
  * for the given shard id from the remote master node.
  */
 static List *
-RemoteFinalizedShardPlacementList(uint64 shardId)
+RemoteActiveShardPlacementList(uint64 shardId)
 {
-	List *finalizedPlacementList = NIL;
+	List *activePlacementList = NIL;
 	bool raiseInterrupts = true;
 
 	StringInfo shardPlacementsCommand = makeStringInfo();
-	appendStringInfo(shardPlacementsCommand, FINALIZED_SHARD_PLACEMENTS_QUERY, shardId);
+	appendStringInfo(shardPlacementsCommand, ACTIVE_SHARD_PLACEMENTS_QUERY, shardId);
 
 	if (!SendRemoteCommand(masterConnection, shardPlacementsCommand->data))
 	{
@@ -1161,7 +1161,7 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 			 */
 			shardPlacement->nodeId = -1;
 
-			finalizedPlacementList = lappend(finalizedPlacementList, shardPlacement);
+			activePlacementList = lappend(activePlacementList, shardPlacement);
 		}
 	}
 	else
@@ -1173,7 +1173,7 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 	queryResult = GetRemoteCommandResult(masterConnection, raiseInterrupts);
 	Assert(!queryResult);
 
-	return finalizedPlacementList;
+	return activePlacementList;
 }
 
 
@@ -3248,17 +3248,17 @@ InitializeCopyShardState(CopyShardState *shardState,
 									  ALLOCSET_DEFAULT_INITSIZE,
 									  ALLOCSET_DEFAULT_MAXSIZE);
 
-	/* release finalized placement list at the end of this function */
+	/* release active placement list at the end of this function */
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	List *finalizedPlacementList = MasterShardPlacementList(shardId);
+	List *activePlacementList = MasterShardPlacementList(shardId);
 
 	MemoryContextSwitchTo(oldContext);
 
 	shardState->shardId = shardId;
 	shardState->placementStateList = NIL;
 
-	foreach(placementCell, finalizedPlacementList)
+	foreach(placementCell, activePlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 
@@ -3300,7 +3300,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 	}
 
 	/* if all placements failed, error out */
-	if (failedPlacementCount == list_length(finalizedPlacementList))
+	if (failedPlacementCount == list_length(activePlacementList))
 	{
 		ereport(ERROR, (errmsg("could not connect to any active placements")));
 	}

@@ -199,7 +199,7 @@ ORDER BY s.shardid, sp.nodeport;
 
 -- repair while all placements of one shard in colocation group is unhealthy
 SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-ERROR:  source placement must be in finalized state
+ERROR:  source placement must be in active state
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
 FROM
