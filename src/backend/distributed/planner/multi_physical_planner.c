@@ -3953,7 +3953,7 @@ DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId)
 
 	/* convert the array object to its string representation */
 	FmgrInfo *arrayOutFunction = (FmgrInfo *) palloc0(sizeof(FmgrInfo));
-	fmgr_info(ARRAY_OUT_FUNC_ID, arrayOutFunction);
+	fmgr_info(F_ARRAY_OUT, arrayOutFunction);
 
 	Datum arrayStringDatum = FunctionCall1(arrayOutFunction, arrayObjectDatum);
 	char *arrayString = DatumGetCString(arrayStringDatum);

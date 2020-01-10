@@ -30,7 +30,6 @@
 
 
 /* Definitions local to the physical planner */
-#define ARRAY_OUT_FUNC_ID 751
 #define NON_PRUNABLE_JOIN -1
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
