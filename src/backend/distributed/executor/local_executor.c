@@ -632,7 +632,8 @@ SetTaskQueryAndPlacementList(Task *task, Query *query, List *placementList)
 {
 	task->taskPlacementList = placementList;
 
-	if (TaskAccessesLocalNode(task))
+	/*TODO: get the right condition here */
+	if (true && TaskAccessesLocalNode(task))
 	{
 		task->query = query;
 		task->queryStringLazy = NULL;
