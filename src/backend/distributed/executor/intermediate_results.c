@@ -847,6 +847,8 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 		totalBytesWritten += FetchRemoteIntermediateResult(connection, resultId);
 	}
 
+	UnclaimConnection(connection);
+
 	PG_RETURN_INT64(totalBytesWritten);
 }
 
