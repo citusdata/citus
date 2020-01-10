@@ -1409,11 +1409,10 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	ListCell *targetEntryCell = NULL;
 	Node *originalHavingQual = originalOpNode->havingQual;
 	Node *newHavingQual = NULL;
-	MasterAggregateWalkerContext *walkerContext = palloc0(
-		sizeof(MasterAggregateWalkerContext));
+	MasterAggregateWalkerContext walkerContext = { 0 };
 
-	walkerContext->extendedOpNodeProperties = extendedOpNodeProperties;
-	walkerContext->columnId = 1;
+	walkerContext.extendedOpNodeProperties = extendedOpNodeProperties;
+	walkerContext.columnId = 1;
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -1434,7 +1433,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
 		{
 			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
-												   walkerContext);
+												   &walkerContext);
 			newExpression = (Expr *) newNode;
 		}
 		else
@@ -1447,9 +1446,9 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			const uint32 masterTableId = 1; /* only one table on master node */
 
 			Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
-			column->varattno = walkerContext->columnId;
-			column->varoattno = walkerContext->columnId;
-			walkerContext->columnId++;
+			column->varattno = walkerContext.columnId;
+			column->varoattno = walkerContext.columnId;
+			walkerContext.columnId++;
 
 			if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
 			{
@@ -1473,7 +1472,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 		if (originalHavingQual != NULL)
 		{
-			newHavingQual = MasterAggregateMutator(originalHavingQual, walkerContext);
+			newHavingQual = MasterAggregateMutator(originalHavingQual, &walkerContext);
 		}
 	}
 
@@ -2309,11 +2308,10 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 								QueryGroupClause *queryGroupClause)
 {
 	ListCell *targetEntryCell = NULL;
-	WorkerAggregateWalkerContext *workerAggContext =
-		palloc0(sizeof(WorkerAggregateWalkerContext));
+	WorkerAggregateWalkerContext workerAggContext = { 0 };
 
-	workerAggContext->extendedOpNodeProperties = extendedOpNodeProperties;
-	workerAggContext->expressionList = NIL;
+	workerAggContext.extendedOpNodeProperties = extendedOpNodeProperties;
+	workerAggContext.expressionList = NIL;
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -2325,8 +2323,8 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/* reset walker context */
-		workerAggContext->expressionList = NIL;
-		workerAggContext->createGroupByClause = false;
+		workerAggContext.expressionList = NIL;
+		workerAggContext.createGroupByClause = false;
 
 		/*
 		 * If the query has a window function, we currently assume it's safe to push
@@ -2339,9 +2337,9 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		if (!hasWindowFunction && hasAggregates &&
 			!extendedOpNodeProperties->groupedByDisjointPartitionColumn)
 		{
-			WorkerAggregateWalker((Node *) originalExpression, workerAggContext);
+			WorkerAggregateWalker((Node *) originalExpression, &workerAggContext);
 
-			newExpressionList = workerAggContext->expressionList;
+			newExpressionList = workerAggContext.expressionList;
 		}
 		else
 		{
@@ -2349,7 +2347,7 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		}
 
 		ExpandWorkerTargetEntry(newExpressionList, originalTargetEntry,
-								workerAggContext->createGroupByClause,
+								workerAggContext.createGroupByClause,
 								queryTargetList, queryGroupClause);
 	}
 }
