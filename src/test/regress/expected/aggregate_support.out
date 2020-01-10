@@ -383,19 +383,29 @@ select * FROM (
 (5 rows)
 
 select * FROM (
-    SELECT key, avg(distinct floor(agg1.val/2)) m from aggdata agg1
+    SELECT key k, avg(distinct floor(agg1.val/2)) m from aggdata agg1
     group by key
 ) subq;
- key |  m
+ k |  m
 ---------------------------------------------------------------------
-   1 |   1
-   5 |
-   3 |   2
-   7 |   4
-   6 |
-   2 | 1.5
-   9 |   0
+ 1 |   1
+ 5 |
+ 3 |   2
+ 7 |   4
+ 6 |
+ 2 | 1.5
+ 9 |   0
 (7 rows)
+
+-- Test TransformsSubqueryNode with group by not in FROM (failed in past)
+select count(*) FROM (
+    SELECT avg(distinct floor(agg1.val/2)) m from aggdata agg1
+    group by key
+) subq;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
 
 RESET citus.task_executor_type;
 -- This fails due to table types not being managed properly

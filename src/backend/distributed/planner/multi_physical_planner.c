@@ -65,6 +65,7 @@
 #include "optimizer/var.h"
 #endif
 #include "optimizer/restrictinfo.h"
+#include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
@@ -4221,7 +4222,18 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	}
 	else
 	{
-		partitionColumnName = ColumnName(partitionColumn, rangeTableList);
+		TargetEntry *targetEntry = tlist_member((Expr *) partitionColumn,
+												filterQuery->targetList);
+		if (targetEntry != NULL)
+		{
+			/* targetEntry->resname may be NULL */
+			partitionColumnName = targetEntry->resname;
+		}
+
+		if (partitionColumnName == NULL)
+		{
+			partitionColumnName = ColumnName(partitionColumn, rangeTableList);
+		}
 	}
 
 	foreach(filterTaskCell, filterTaskList)
