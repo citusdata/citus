@@ -62,6 +62,7 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
+static void AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor);
 
 
 /*
@@ -354,8 +355,6 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
 
-	ListCell *targetEntryCell = NULL;
-
 	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
@@ -364,25 +363,7 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	 * different from each other. Cast insert column't type to target
 	 * table's column
 	 */
-	foreach(targetEntryCell, insertSelectQuery->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		Var *insertColumn = (Var *) targetEntry->expr;
-		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
-											   1);
-
-		if (insertColumn->vartype != attr->atttypid)
-		{
-			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
-			coerceExpr->arg = (Expr *) copyObject(insertColumn);
-			coerceExpr->resulttype = attr->atttypid;
-			coerceExpr->resultcollid = attr->attcollation;
-			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
-			coerceExpr->location = -1;
-
-			targetEntry->expr = (Expr *) coerceExpr;
-		}
-	}
+	AddInsertSelectCasts(insertSelectQuery->targetList, destTupleDescriptor);
 
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
@@ -593,4 +574,34 @@ bool
 ExecutingInsertSelect(void)
 {
 	return insertSelectExecutorLevel > 0;
+}
+
+
+/*
+ * AddInsertSelectCasts
+ */
+static void
+AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor)
+{
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Var *insertColumn = (Var *) targetEntry->expr;
+		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
+											   1);
+
+		if (insertColumn->vartype != attr->atttypid)
+		{
+			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
+			coerceExpr->arg = (Expr *) copyObject(insertColumn);
+			coerceExpr->resulttype = attr->atttypid;
+			coerceExpr->resultcollid = attr->attcollation;
+			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+			coerceExpr->location = -1;
+
+			targetEntry->expr = (Expr *) coerceExpr;
+		}
+	}
 }
