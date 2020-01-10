@@ -168,8 +168,11 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 
 		LogLocalCommand(task);
 
+		char *queryString = task->queryStringLazy
+							? task->queryStringLazy
+							: "<optimized out by local execution>";
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, TaskQueryString(task));
+			ExecuteLocalTaskPlan(scanState, localPlan, queryString);
 	}
 
 	return totalRowsProcessed;
