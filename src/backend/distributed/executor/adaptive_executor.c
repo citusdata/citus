@@ -2294,8 +2294,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* create a session for the connection */
 		WorkerSession *session = FindOrCreateWorkerSession(workerPool, connection);
 
-		/* always poll the connection in the first round */
-		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+		/* immediately run the state machine to handle potential failure */
+		ConnectionStateMachine(session);
 	}
 
 	workerPool->lastConnectionOpenTime = GetCurrentTimestamp();
