@@ -874,7 +874,7 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 static bool
 IsRedistributablePlan(Plan *selectPlan, bool hasReturning, bool hasOnConflict)
 {
-	if (hasReturning || hasOnConflict)
+	if (hasReturning)
 	{
 		return false;
 	}

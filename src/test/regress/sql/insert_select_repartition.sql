@@ -43,7 +43,7 @@ INSERT INTO source_table VALUES (5, (31, 'f'), 6, (31, 'f'));
 INSERT INTO source_table VALUES (6, (32, 'g'), 50, (8, 'g'));
 
 -- target
-CREATE TABLE target_table(f1 int DEFAULT 0, value int, key composite_key_type);
+CREATE TABLE target_table(f1 int DEFAULT 0, value int, key composite_key_type PRIMARY KEY);
 SELECT create_distributed_table('target_table', 'key', 'range');
 CALL public.create_range_partitioned_shards('target_table', '{"(0,a)","(25,a)"}','{"(24,z)","(49,z)"}');
 
@@ -68,8 +68,38 @@ INSERT INTO target_table(key) SELECT mapped_key AS key_renamed FROM source_table
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
 
+-- ON CONFLICT
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table(key)
+SELECT mapped_key AS key_renamed FROM source_table
+WHERE (mapped_key).f1 % 2 = 1
+ON CONFLICT (key) DO UPDATE SET f1=1;
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY key;
+
 -- missing value for distribution column
 INSERT INTO target_table(value) SELECT value FROM source_table;
+DROP TABLE source_table, target_table;
+
+-- different column types
+CREATE TABLE target_table(col_1 int primary key, col_2 int);
+SELECT create_distributed_table('target_table','col_1');
+INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+
+CREATE TABLE source_table(col_1 numeric, col_2 numeric, col_3 numeric);
+SELECT create_distributed_table('source_table','col_1');
+INSERT INTO source_table VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table
+SELECT
+	col_1, col_2
+FROM
+	source_table
+ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY 1;
 
 DROP TABLE source_table, target_table;
 
