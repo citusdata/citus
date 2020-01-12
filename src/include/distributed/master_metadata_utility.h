@@ -60,7 +60,7 @@ typedef struct GroupShardPlacement
 	uint64 placementId;     /* sequence that implies this placement creation order */
 	uint64 shardId;
 	uint64 shardLength;
-	RelayFileState shardState;
+	ShardState shardState;
 	int32 groupId;
 } GroupShardPlacement;
 
@@ -75,7 +75,7 @@ typedef struct ShardPlacement
 	uint64 placementId;
 	uint64 shardId;
 	uint64 shardLength;
-	RelayFileState shardState;
+	ShardState shardState;
 	int32 groupId;
 
 	/* the rest of the fields aren't from pg_dist_placement */
@@ -107,8 +107,8 @@ extern void CopyShardPlacement(ShardPlacement *srcPlacement,
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
-extern List * FinalizedShardPlacementList(uint64 shardId);
-extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
+extern List * ActiveShardPlacementList(uint64 shardId);
+extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);

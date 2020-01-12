@@ -1323,7 +1323,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
-		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);
+		task->taskPlacementList = ActiveShardPlacementList(leftShardId);
 		task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
 
 		taskList = lappend(taskList, task);

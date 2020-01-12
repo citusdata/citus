@@ -316,7 +316,7 @@ ReadShardPlacement(READFUNC_ARGS)
 	READ_UINT64_FIELD(placementId);
 	READ_UINT64_FIELD(shardId);
 	READ_UINT64_FIELD(shardLength);
-	READ_ENUM_FIELD(shardState, RelayFileState);
+	READ_ENUM_FIELD(shardState, ShardState);
 	READ_INT_FIELD(groupId);
 	READ_STRING_FIELD(nodeName);
 	READ_UINT_FIELD(nodePort);
@@ -338,7 +338,7 @@ ReadGroupShardPlacement(READFUNC_ARGS)
 	READ_UINT64_FIELD(placementId);
 	READ_UINT64_FIELD(shardId);
 	READ_UINT64_FIELD(shardLength);
-	READ_ENUM_FIELD(shardState, RelayFileState);
+	READ_ENUM_FIELD(shardState, ShardState);
 	READ_INT_FIELD(groupId);
 
 	READ_DONE();

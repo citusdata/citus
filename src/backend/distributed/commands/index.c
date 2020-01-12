@@ -532,7 +532,7 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 
@@ -577,7 +577,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 
@@ -907,7 +907,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 

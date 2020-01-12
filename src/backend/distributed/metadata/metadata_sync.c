@@ -731,7 +731,7 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
-		List *shardPlacementList = FinalizedShardPlacementList(shardId);
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
 		ListCell *shardPlacementCell = NULL;
 
 		foreach(shardPlacementCell, shardPlacementList)

@@ -620,15 +620,15 @@ CopyShardPlacement(ShardPlacement *srcPlacement, ShardPlacement *destPlacement)
 
 /*
  * ShardLength finds shard placements for the given shardId, extracts the length
- * of a finalized shard, and returns the shard's length. This function errors
- * out if we cannot find any finalized shard placements for the given shardId.
+ * of an active shard, and returns the shard's length. This function errors
+ * out if we cannot find any active shard placements for the given shardId.
  */
 uint64
 ShardLength(uint64 shardId)
 {
 	uint64 shardLength = 0;
 
-	List *shardPlacementList = FinalizedShardPlacementList(shardId);
+	List *shardPlacementList = ActiveShardPlacementList(shardId);
 	if (shardPlacementList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not find length of shard " UINT64_FORMAT, shardId),
@@ -664,7 +664,8 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 	if (onlyConsiderActivePlacements)
 	{
 		ScanKeyInit(&scanKey[1], Anum_pg_dist_placement_shardstate,
-					BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(FILE_FINALIZED));
+					BTEqualStrategyNumber, F_INT4EQ,
+					Int32GetDatum(SHARD_STATE_ACTIVE));
 	}
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
@@ -673,53 +674,53 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 													NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	bool hasFinalizedPlacements = HeapTupleIsValid(heapTuple);
+	bool hasActivePlacements = HeapTupleIsValid(heapTuple);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgPlacement, NoLock);
 
-	return hasFinalizedPlacements;
+	return hasActivePlacements;
 }
 
 
 /*
- * FinalizedShardPlacementList finds shard placements for the given shardId from
- * system catalogs, chooses placements that are in finalized state, and returns
+ * ActiveShardPlacementList finds shard placements for the given shardId from
+ * system catalogs, chooses placements that are in active state, and returns
  * these shard placements in a new list.
  */
 List *
-FinalizedShardPlacementList(uint64 shardId)
+ActiveShardPlacementList(uint64 shardId)
 {
-	List *finalizedPlacementList = NIL;
+	List *activePlacementList = NIL;
 	List *shardPlacementList = ShardPlacementList(shardId);
 
 	ListCell *shardPlacementCell = NULL;
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		if (shardPlacement->shardState == FILE_FINALIZED)
+		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
 		{
-			finalizedPlacementList = lappend(finalizedPlacementList, shardPlacement);
+			activePlacementList = lappend(activePlacementList, shardPlacement);
 		}
 	}
 
-	return SortList(finalizedPlacementList, CompareShardPlacementsByWorker);
+	return SortList(activePlacementList, CompareShardPlacementsByWorker);
 }
 
 
 /*
- * FinalizedShardPlacement finds a shard placement for the given shardId from
- * system catalog, chooses a placement that is in finalized state and returns
+ * ActiveShardPlacement finds a shard placement for the given shardId from
+ * system catalog, chooses a placement that is in active state and returns
  * that shard placement. If this function cannot find a healthy shard placement
  * and missingOk is set to false it errors out.
  */
 ShardPlacement *
-FinalizedShardPlacement(uint64 shardId, bool missingOk)
+ActiveShardPlacement(uint64 shardId, bool missingOk)
 {
-	List *finalizedPlacementList = FinalizedShardPlacementList(shardId);
+	List *activePlacementList = ActiveShardPlacementList(shardId);
 	ShardPlacement *shardPlacement = NULL;
 
-	if (list_length(finalizedPlacementList) == 0)
+	if (list_length(activePlacementList) == 0)
 	{
 		if (!missingOk)
 		{
@@ -731,7 +732,7 @@ FinalizedShardPlacement(uint64 shardId, bool missingOk)
 		return shardPlacement;
 	}
 
-	shardPlacement = (ShardPlacement *) linitial(finalizedPlacementList);
+	shardPlacement = (ShardPlacement *) linitial(activePlacementList);
 
 	return shardPlacement;
 }
@@ -1242,14 +1243,13 @@ ShardPlacementOnGroup(uint64 shardId, int groupId)
 
 /*
  * MarkShardPlacementInactive is a wrapper around UpdateShardPlacementState where
- * the state is set to invalid (e.g.,  FILE_INACTIVE). It also marks the partitions
- * of the shard placements as inactive if the shardPlacement belongs to a partitioned
- * table.
+ * the state is set to SHARD_STATE_INACTIVE. It also marks partitions of the
+ * shard placements as inactive if shardPlacement belongs to a partitioned table.
  */
 void
 MarkShardPlacementInactive(ShardPlacement *shardPlacement)
 {
-	UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+	UpdateShardPlacementState(shardPlacement->placementId, SHARD_STATE_INACTIVE);
 
 	/*
 	 * In case the shard belongs to a partitioned table, we make sure to update
@@ -1259,7 +1259,7 @@ MarkShardPlacementInactive(ShardPlacement *shardPlacement)
 	ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
 	if (PartitionedTable(shardInterval->relationId))
 	{
-		UpdatePartitionShardPlacementStates(shardPlacement, FILE_INACTIVE);
+		UpdatePartitionShardPlacementStates(shardPlacement, SHARD_STATE_INACTIVE);
 	}
 }
 

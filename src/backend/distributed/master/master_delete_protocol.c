@@ -434,7 +434,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								  errdetail("Marking this shard placement for "
 											"deletion")));
 
-				UpdateShardPlacementState(placementId, FILE_TO_DELETE);
+				UpdateShardPlacementState(placementId, SHARD_STATE_TO_DELETE);
 
 				continue;
 			}

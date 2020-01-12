@@ -73,7 +73,7 @@ ERROR:  target placement must be in inactive state
 UPDATE pg_dist_placement SET shardstate = 3 WHERE groupid = :worker_2_group and shardid = :newshardid;
 -- also try to copy from an inactive placement
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-ERROR:  source placement must be in finalized state
+ERROR:  source placement must be in active state
 -- "copy" this shard from the first placement to the second one
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
  master_copy_shard_placement

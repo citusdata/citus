@@ -412,7 +412,7 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
 
 		LockShardDistributionMetadata(shardId, ShareLock);
-		List *insertShardPlacementList = FinalizedShardPlacementList(shardId);
+		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
 		relationShard->relationId = targetShardInterval->relationId;

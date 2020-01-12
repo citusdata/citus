@@ -2464,7 +2464,7 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 		uint64 shardId = shardInterval->shardId;
 
 		/* retrieve all active shard placements for this shard */
-		List *newPlacementList = FinalizedShardPlacementList(shardId);
+		List *newPlacementList = ActiveShardPlacementList(shardId);
 
 		if (firstShard)
 		{

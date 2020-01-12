@@ -1069,10 +1069,10 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 			ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
 
 			/*
-			 * We only set shard state if its current state is FILE_FINALIZED, which
-			 * prevents overwriting shard state if it is already set at somewhere else.
+			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
+			 * prevents overwriting shard state if it was already set somewhere else.
 			 */
-			if (shardPlacement->shardState == FILE_FINALIZED)
+			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
 			{
 				MarkShardPlacementInactive(shardPlacement);
 			}
