@@ -1083,7 +1083,7 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-10
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.value_3 AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.value_3
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id, v1, v4 FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 bigint, id double precision)) foo
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT int4(id) AS auto_coerced_by_citus_0, int4(v1) AS auto_coerced_by_citus_1, int8(v4) AS auto_coerced_by_citus_2 FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 bigint, id double precision)) foo
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
@@ -1142,11 +1142,11 @@ DETAIL:  Subquery contains an explicit cast in the same position as the target t
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM read_intermediate_results('{repartitioned_results_from_13300000_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id bigint)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM read_intermediate_results('{repartitioned_results_from_13300001_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id bigint)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM read_intermediate_results('{repartitioned_results_from_13300002_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id bigint)
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM read_intermediate_results('{repartitioned_results_from_13300003_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id bigint)
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT auto_coerced_by_citus_0 FROM read_intermediate_results('{repartitioned_results_from_13300000_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer)
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT auto_coerced_by_citus_0 FROM read_intermediate_results('{repartitioned_results_from_13300001_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer)
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT auto_coerced_by_citus_0 FROM read_intermediate_results('{repartitioned_results_from_13300002_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer)
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT auto_coerced_by_citus_0 FROM read_intermediate_results('{repartitioned_results_from_13300003_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer)
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1165,7 +1165,7 @@ DETAIL:  Subquery contains an aggregation in the same position as the target tab
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'avg'
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
 ERROR:  the partition column value cannot be NULL
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO agg_events
@@ -1240,10 +1240,10 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-10
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first, public.reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 integer, id bigint)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT int4(f2.id) AS auto_coerced_by_citus_0 FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first, public.reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 integer, id bigint)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'id'
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
@@ -2149,7 +2149,7 @@ DETAIL:  Subquery contains an expression that is not a simple column reference i
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name '?column?'
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
 INSERT INTO text_table (part_col) SELECT part_col::text from char_table;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.
@@ -2163,13 +2163,13 @@ DETAIL:  Subquery contains an expression that is not a simple column reference i
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name '?column?'
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
 INSERT INTO text_table (part_col) SELECT val FROM text_table;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'val'
+DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
 INSERT INTO text_table (part_col) SELECT val::text FROM text_table;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.

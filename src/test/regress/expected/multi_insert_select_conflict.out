@@ -54,7 +54,7 @@ FROM
 ON CONFLICT DO NOTHING;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 -- Since partition columns do not match, pull the data to the coordinator
 -- and update the non-partition column. Query is wrapped by CTE to return
 -- ordered result.
@@ -216,9 +216,9 @@ WITH cte AS(
 )
 INSERT INTO target_table ((SELECT * FROM cte) UNION (SELECT * FROM cte_2)) ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  CTE cte is going to be inlined via distributed planning
 DEBUG:  CTE cte_2 is going to be inlined via distributed planning
+DEBUG:  performing repartitioned INSERT ... SELECT
 SELECT * FROM target_table ORDER BY 1;
  col_1 | col_2
 ---------------------------------------------------------------------
@@ -395,7 +395,7 @@ FROM
 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 SELECT * FROM target_table ORDER BY 1;
  col_1 | col_2
 ---------------------------------------------------------------------

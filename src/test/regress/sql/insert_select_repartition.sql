@@ -6,7 +6,6 @@ SET citus.next_shard_id TO 4213581;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 
--- Test 1
 -- 4 shards, hash distributed.
 -- Negate distribution column value.
 SET citus.shard_count TO 4;
@@ -25,8 +24,8 @@ SELECT * FROM target_table WHERE a=-1 OR a=-3 OR a=-7 ORDER BY a;
 DROP TABLE source_table, target_table;
 
 --
--- Test 2.
 -- range partitioning, composite distribution column
+--
 CREATE TYPE composite_key_type AS (f1 int, f2 text);
 
 -- source
@@ -82,13 +81,15 @@ INSERT INTO target_table(value) SELECT value FROM source_table;
 DROP TABLE source_table, target_table;
 
 -- different column types
+-- verifies that we add necessary casts, otherwise even shard routing won't
+-- work correctly and we will see 2 values for the same primary key.
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
-INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
+INSERT INTO target_table VALUES (1,2), (2,3), (3,4), (4,5), (5,6);
 
 CREATE TABLE source_table(col_1 numeric, col_2 numeric, col_3 numeric);
 SELECT create_distributed_table('source_table','col_1');
-INSERT INTO source_table VALUES(1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
+INSERT INTO source_table VALUES (1,1,1), (3,3,3), (5,5,5);
 
 SET client_min_messages TO DEBUG2;
 INSERT INTO target_table
@@ -100,6 +101,27 @@ ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2;
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY 1;
+
+DROP TABLE source_table, target_table;
+
+--
+-- array coercion
+--
+SET citus.shard_count TO 3;
+CREATE TABLE source_table(a int, mapped_key int, c float[]);
+SELECT create_distributed_table('source_table', 'a');
+INSERT INTO source_table VALUES (1, -1, ARRAY[1.1, 2.2, 3.3]), (2, -2, ARRAY[4.5, 5.8]),
+                                (3, -3, ARRAY[]::float[]), (4, -4, ARRAY[3.3]);
+
+SET citus.shard_count TO 2;
+CREATE TABLE target_table(a int, b int[]);
+SELECT create_distributed_table('target_table', 'a');
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a;
 
 DROP TABLE source_table, target_table;
 

@@ -67,15 +67,17 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 												List *insertTargetList);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
-static void AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor);
+static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
+								   Oid targetRelationId);
 static bool IsSupportedRedistributionTarget(Oid targetRelationId);
 static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 												DistTableCacheEntry *targetRelation,
 												List **redistributedResults,
 												bool useBinaryFormat);
 static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
-static bool IsRedistributablePlan(Plan *selectPlan, bool hasReturning, bool
-								  hasOnConflict);
+static bool IsRedistributablePlan(Plan *selectPlan, bool hasReturning);
+static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
+					   int targetTypeMod);
 
 
 /*
@@ -128,7 +130,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		Oid targetRelationId = insertRte->relid;
 		char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
 		bool hasReturning = distributedPlan->hasReturning;
-		bool hasOnConflict = insertSelectQuery->onConflict != NULL;
 		HTAB *shardStateHash = NULL;
 
 		/*
@@ -145,6 +146,16 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 		selectRte->subquery = selectQuery;
 		ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+
+		/*
+		 * If the type of insert column and target table's column type is
+		 * different from each other. Cast insert column't type to target
+		 * table's column
+		 */
+		selectQuery->targetList =
+			AddInsertSelectCasts(insertSelectQuery->targetList,
+								 selectQuery->targetList,
+								 targetRelationId);
 
 		/*
 		 * Make a copy of the query, since pg_plan_query may scribble on it and we
@@ -168,7 +179,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
 
-		if (IsRedistributablePlan(selectPlan->planTree, hasReturning, hasOnConflict) &&
+		if (IsRedistributablePlan(selectPlan->planTree, hasReturning) &&
 			IsSupportedRedistributionTarget(targetRelationId))
 		{
 			ereport(DEBUG1, (errmsg("performing repartitioned INSERT ... SELECT")));
@@ -460,16 +471,6 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
 
-	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
-	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
-
-	/*
-	 * If the type of insert column and target table's column type is
-	 * different from each other. Cast insert column't type to target
-	 * table's column
-	 */
-	AddInsertSelectCasts(insertSelectQuery->targetList, destTupleDescriptor);
-
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
 		ShardInterval *targetShardInterval =
@@ -528,8 +529,6 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 
 		taskIdIndex++;
 	}
-
-	heap_close(distributedRelation, NoLock);
 
 	return taskList;
 }
@@ -683,33 +682,182 @@ ExecutingInsertSelect(void)
 
 
 /*
- * AddInsertSelectCasts makes sure that the types in columns in targetList
- * have the same type as given tuple descriptor by adding necessary type
- * casts.
+ * AddInsertSelectCasts makes sure that the types in columns in the given
+ * target lists have the same type as the columns of the given relation.
+ * It might add casts to ensure that.
+ *
+ * It returns the updated selectTargetList.
  */
-static void
-AddInsertSelectCasts(List *targetList, TupleDesc destTupleDescriptor)
+static List *
+AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
+					 Oid targetRelationId)
 {
-	ListCell *targetEntryCell = NULL;
+	ListCell *insertEntryCell = NULL;
+	ListCell *selectEntryCell = NULL;
+	List *projectedEntries = NIL;
+	List *nonProjectedEntries = NIL;
 
-	foreach(targetEntryCell, targetList)
+	/*
+	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
+	 * the SELECT query match the insert targets. It might contain additional
+	 * items for GROUP BY, etc.
+	 */
+	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
+
+	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
+	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
+
+	int targetEntryIndex = 0;
+	forboth(insertEntryCell, insertTargetList, selectEntryCell, selectTargetList)
 	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		Var *insertColumn = (Var *) targetEntry->expr;
-		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor, targetEntry->resno -
-											   1);
+		TargetEntry *insertEntry = (TargetEntry *) lfirst(insertEntryCell);
+		TargetEntry *selectEntry = (TargetEntry *) lfirst(selectEntryCell);
+		Var *insertColumn = (Var *) insertEntry->expr;
+		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
+											   insertEntry->resno - 1);
 
-		if (insertColumn->vartype != attr->atttypid)
+		Oid sourceType = insertColumn->vartype;
+		Oid targetType = attr->atttypid;
+		if (sourceType != targetType)
 		{
-			CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
-			coerceExpr->arg = (Expr *) copyObject(insertColumn);
-			coerceExpr->resulttype = attr->atttypid;
-			coerceExpr->resultcollid = attr->attcollation;
-			coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
-			coerceExpr->location = -1;
+			insertEntry->expr = CastExpr((Expr *) insertColumn, sourceType, targetType,
+										 attr->attcollation, attr->atttypmod);
 
-			targetEntry->expr = (Expr *) coerceExpr;
+			/*
+			 * We cannot modify the selectEntry in-place, because ORDER BY or
+			 * GROUP BY clauses might be pointing to it with comparison types
+			 * of the source type. So instead we keep the original one as a
+			 * non-projected entry, so GROUP BY and ORDER BY are happy, and
+			 * create a duplicated projected entry with the coerced expression.
+			 */
+			TargetEntry *coercedEntry = copyObject(selectEntry);
+			coercedEntry->expr = CastExpr((Expr *) selectEntry->expr, sourceType,
+										  targetType, attr->attcollation,
+										  attr->atttypmod);
+			coercedEntry->ressortgroupref = 0;
+
+			/*
+			 * The only requirement is that users don't use this name in ORDER BY
+			 * or GROUP BY, and it should be unique across the same query.
+			 */
+			StringInfo resnameString = makeStringInfo();
+			appendStringInfo(resnameString, "auto_coerced_by_citus_%d", targetEntryIndex);
+			coercedEntry->resname = resnameString->data;
+
+			projectedEntries = lappend(projectedEntries, coercedEntry);
+
+			if (selectEntry->ressortgroupref != 0)
+			{
+				selectEntry->resjunk = true;
+				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
+			}
 		}
+		else
+		{
+			projectedEntries = lappend(projectedEntries, selectEntry);
+		}
+
+		targetEntryIndex++;
+	}
+
+	for (int entryIndex = list_length(insertTargetList);
+		 entryIndex < list_length(selectTargetList);
+		 entryIndex++)
+	{
+		nonProjectedEntries = lappend(nonProjectedEntries, list_nth(selectTargetList,
+																	entryIndex));
+	}
+
+	/* selectEntry->resno must be the ordinal number of the entry */
+	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
+	int entryResNo = 1;
+	foreach(selectEntryCell, selectTargetList)
+	{
+		TargetEntry *selectEntry = lfirst(selectEntryCell);
+		selectEntry->resno = entryResNo++;
+	}
+
+	heap_close(distributedRelation, NoLock);
+
+	return selectTargetList;
+}
+
+
+/*
+ * CastExpr returns an expression which casts the given expr from sourceType to
+ * the given targetType.
+ */
+static Expr *
+CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
+		 int targetTypeMod)
+{
+	Oid coercionFuncId = InvalidOid;
+	CoercionPathType coercionType = find_coercion_pathway(targetType, sourceType,
+														  COERCION_EXPLICIT,
+														  &coercionFuncId);
+
+	if (coercionType == COERCION_PATH_FUNC)
+	{
+		FuncExpr *coerceExpr = makeNode(FuncExpr);
+		coerceExpr->funcid = coercionFuncId;
+		coerceExpr->args = list_make1(copyObject(expr));
+		coerceExpr->funccollid = targetCollation;
+		coerceExpr->funcresulttype = targetType;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_RELABELTYPE)
+	{
+		RelabelType *coerceExpr = makeNode(RelabelType);
+		coerceExpr->arg = copyObject(expr);
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resulttypmod = targetTypeMod;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->relabelformat = COERCE_IMPLICIT_CAST;
+		coerceExpr->location = -1;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_ARRAYCOERCE)
+	{
+		Oid sourceBaseType = get_base_element_type(sourceType);
+		Oid targetBaseType = get_base_element_type(targetType);
+
+		CaseTestExpr *elemExpr = makeNode(CaseTestExpr);
+		elemExpr->collation = targetCollation;
+		elemExpr->typeId = sourceBaseType;
+		elemExpr->typeMod = -1;
+
+		Expr *elemCastExpr = CastExpr((Expr *) elemExpr, sourceBaseType,
+									  targetBaseType, targetCollation,
+									  targetTypeMod);
+
+		ArrayCoerceExpr *coerceExpr = makeNode(ArrayCoerceExpr);
+		coerceExpr->arg = copyObject(expr);
+		coerceExpr->elemexpr = elemCastExpr;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resulttypmod = targetTypeMod;
+		coerceExpr->location = -1;
+		coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_COERCEVIAIO)
+	{
+		CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
+		coerceExpr->arg = (Expr *) copyObject(expr);
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+		coerceExpr->location = -1;
+
+		return (Expr *) coerceExpr;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("could not find a conversion path from type %d to %d",
+							   sourceType, targetType)));
 	}
 }
 
@@ -764,16 +912,6 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 	int shardOffset = 0;
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
-
-	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
-	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
-
-	/*
-	 * If the type of insert column and target table's column type is
-	 * different from each other. Cast insert column't type to target
-	 * table's column
-	 */
-	AddInsertSelectCasts(insertSelectQuery->targetList, destTupleDescriptor);
 
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
@@ -839,8 +977,6 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 		taskIdIndex++;
 	}
 
-	heap_close(distributedRelation, NoLock);
-
 	return taskList;
 }
 
@@ -872,7 +1008,7 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
  * IsRedistributablePlan returns true if the given plan is a redistrituable plan.
  */
 static bool
-IsRedistributablePlan(Plan *selectPlan, bool hasReturning, bool hasOnConflict)
+IsRedistributablePlan(Plan *selectPlan, bool hasReturning)
 {
 	if (hasReturning)
 	{
