@@ -268,6 +268,42 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (4 rows)
 
+--
+-- worker queries have more columns than necessary. ExpandWorkerTargetEntry() might
+-- add additional columns to the target list.
+--
+TRUNCATE target_table;
+\set VERBOSITY TERSE
+-- first verify that the SELECT query below fetches 3 projected columns from workers
+SET citus.log_remote_commands TO true; SET client_min_messages TO DEBUG;
+   CREATE TABLE results AS SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
+LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213601 source_table WHERE true GROUP BY a
+LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213602 source_table WHERE true GROUP BY a
+LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213603 source_table WHERE true GROUP BY a
+RESET citus.log_remote_commands; RESET client_min_messages;
+DROP TABLE results;
+-- now verify that we don't write the extra columns to the intermediate result files and
+-- insertion to the target works fine.
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'max'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213604 AS citus_table_alias (a, b) SELECT max, array_agg FROM read_intermediate_results('{repartitioned_results_from_4213602_to_0,repartitioned_results_from_4213603_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(max integer, array_agg integer[])
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213605 AS citus_table_alias (a, b) SELECT max, array_agg FROM read_intermediate_results('{repartitioned_results_from_4213601_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(max integer, array_agg integer[])
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY a;
+ a  |  b
+---------------------------------------------------------------------
+ -4 | {-4}
+ -3 | {-3}
+ -2 | {-2}
+ -1 | {-1}
+(4 rows)
+
 DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

@@ -78,6 +78,7 @@ static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
 static bool IsRedistributablePlan(Plan *selectPlan, bool hasReturning);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
+static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 
 
 /*
@@ -232,6 +233,19 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 								 "partitioning SELECT query by column index %d with name %s",
 								 partitionColumnIndex, quote_literal_cstr(
 									 partitionColumnName))));
+
+			/*
+			 * ExpandWorkerTargetEntry() can add additional columns to the worker
+			 * query. Modify the task queries to only select columns we need.
+			 */
+			int requiredColumnCount = list_length(insertTargetList);
+			List *jobTargetList = distSelectJob->jobQuery->targetList;
+			if (list_length(jobTargetList) > requiredColumnCount)
+			{
+				List *projectedTargetEntries = ListTake(jobTargetList,
+														requiredColumnCount);
+				WrapTaskListForProjection(distSelectTaskList, projectedTargetEntries);
+			}
 
 			List **redistributedResults = RedistributeTaskListResults(distResultPrefix,
 																	  distSelectTaskList,
@@ -1037,4 +1051,42 @@ IsRedistributablePlan(Plan *selectPlan, bool hasReturning)
 	}
 
 	return true;
+}
+
+
+/*
+ * WrapForProjection wraps task->queryString to only select given projected
+ * columns. It modifies the taskList.
+ */
+static void
+WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
+{
+	StringInfo projectedColumnsString = makeStringInfo();
+	int entryIndex = 0;
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, projectedTargetEntries)
+	{
+		if (entryIndex != 0)
+		{
+			appendStringInfoChar(projectedColumnsString, ',');
+		}
+
+		char *columnName = targetEntry->resname;
+		Assert(columnName != NULL);
+		appendStringInfoString(projectedColumnsString, quote_identifier(columnName));
+
+		entryIndex++;
+	}
+
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		Assert(task->queryString != NULL);
+
+		StringInfo wrappedQuery = makeStringInfo();
+		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
+						 projectedColumnsString->data,
+						 task->queryString);
+		task->queryString = wrappedQuery->data;
+	}
 }

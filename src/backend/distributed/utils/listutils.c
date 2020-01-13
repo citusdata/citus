@@ -176,3 +176,29 @@ StringJoin(List *stringList, char delimiter)
 
 	return joinedString->data;
 }
+
+
+/*
+ * ListTake returns the first size elements of given list. If size is greater
+ * than list's length, it returns all elements of list. This is modeled after
+ * the "take" function used in some Scheme implementations.
+ */
+List *
+ListTake(List *pointerList, int size)
+{
+	List *result = NIL;
+	int listIndex = 0;
+	ListCell *pointerCell = NULL;
+
+	foreach(pointerCell, pointerList)
+	{
+		result = lappend(result, lfirst(pointerCell));
+		listIndex++;
+		if (listIndex >= size)
+		{
+			break;
+		}
+	}
+
+	return result;
+}

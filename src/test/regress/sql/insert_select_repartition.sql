@@ -123,6 +123,27 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
 
+--
+-- worker queries have more columns than necessary. ExpandWorkerTargetEntry() might
+-- add additional columns to the target list.
+--
+TRUNCATE target_table;
+\set VERBOSITY TERSE
+
+-- first verify that the SELECT query below fetches 3 projected columns from workers
+SET citus.log_remote_commands TO true; SET client_min_messages TO DEBUG;
+   CREATE TABLE results AS SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
+RESET citus.log_remote_commands; RESET client_min_messages;
+DROP TABLE results;
+
+-- now verify that we don't write the extra columns to the intermediate result files and
+-- insertion to the target works fine.
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a;
+
 DROP TABLE source_table, target_table;
 
 SET client_min_messages TO WARNING;
