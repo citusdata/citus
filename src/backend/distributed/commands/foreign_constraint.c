@@ -448,9 +448,10 @@ ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencin
 											  FKCONSTR_ACTION_CASCADE ||
 											  constraint->fk_del_action ==
 											  FKCONSTR_ACTION_CASCADE);
-			
-			bool fromReferenceTableToLocalTable = referencingIsReferenceTable && !referencedIsDistributed;
-			
+
+			bool fromReferenceTableToLocalTable = referencingIsReferenceTable &&
+												  !referencedIsDistributed;
+
 			if (fromReferenceTableToLocalTable && onDeleteOrOnUpdateCascade)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

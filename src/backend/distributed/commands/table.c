@@ -674,7 +674,7 @@ AlterTableUpdateRefTableAddDropFKeyConstraints(AlterTableStmt *alterTableStateme
 			{
 				/*
 				 * Find referenced table OID by traversing the constraints defined for
-				 * local table. If referenced table is the only shard of a reference 
+				 * local table. If referenced table is the only shard of a reference
 				 * table, find the reference table ownning that shard and perform checks
 				 * via
 				 * ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable
@@ -688,9 +688,13 @@ AlterTableUpdateRefTableAddDropFKeyConstraints(AlterTableStmt *alterTableStateme
 				/* search owner relation only in current search path */
 				bool onlySearchPath = true;
 
-				Oid candidateReferenceTableOid = GetRelationOidOwningShardOid(referencedRelationOid, onlySearchPath);
+				Oid candidateReferenceTableOid = GetRelationOidOwningShardOid(
+					referencedRelationOid, onlySearchPath);
 
-				bool candidateIsReferenceTable = OidIsValid(candidateReferenceTableOid) && (PartitionMethod(candidateReferenceTableOid) == DISTRIBUTE_BY_NONE);
+				bool candidateIsReferenceTable = OidIsValid(candidateReferenceTableOid) &&
+												 (PartitionMethod(
+													  candidateReferenceTableOid) ==
+												  DISTRIBUTE_BY_NONE);
 
 				if (!candidateIsReferenceTable)
 				{
@@ -707,7 +711,7 @@ AlterTableUpdateRefTableAddDropFKeyConstraints(AlterTableStmt *alterTableStateme
 				/*
 				 * Now we have a foreign key constraint to be droped via and ALTER TABLE DROP
 				 * CONSTRAINT command, which is previously defined from a coordinator local
-				 * table to a reference reference table, whose relation id is 
+				 * table to a reference reference table, whose relation id is
 				 * candidateReferenceTableOid
 				 */
 

@@ -652,8 +652,9 @@ IsValidLocalReferenceTableJoinPlan(PlannedStmt *plan)
 		}
 
 		/* check if the relation in range table entry is a know shard relation */
-		Oid ownerRelationOid = GetRelationOidOwningShardOid(rangeTableEntry->relid, onlySearchPath);
-		
+		Oid ownerRelationOid = GetRelationOidOwningShardOid(rangeTableEntry->relid,
+															onlySearchPath);
+
 		if (OidIsValid(ownerRelationOid))
 		{
 			/*

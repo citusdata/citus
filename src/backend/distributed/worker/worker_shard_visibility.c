@@ -31,7 +31,7 @@ PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
 
 /*
  * relation_is_a_known_shard a wrapper around GetRelationOidOwningShardOid(),
- * so see the details there. The function also treats the indexes on shards as 
+ * so see the details there. The function also treats the indexes on shards as
  * if they were shards.
  */
 Datum
@@ -44,7 +44,7 @@ relation_is_a_known_shard(PG_FUNCTION_ARGS)
 
 	/* return if the relation in range table entry is a know shard relation */
 	Oid ownerRelationOid = GetRelationOidOwningShardOid(relationId, onlySearchPath);
-	
+
 	PG_RETURN_BOOL(OidIsValid(ownerRelationOid));
 }
 
@@ -71,10 +71,10 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 	{
 		PG_RETURN_NULL();
 	}
-	
+
 	/* check if the relation in range table entry is a know shard relation */
 	Oid ownerRelationOid = GetRelationOidOwningShardOid(relationId, onlySearchPath);
-	
+
 	if (OidIsValid(ownerRelationOid))
 	{
 		/*
@@ -103,7 +103,7 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 
 
 /*
- * RelationOwningShardRelationOid gets a relationId, returns OID 
+ * RelationOwningShardRelationOid gets a relationId, returns OID
  * of the relation owning the shard if it's a valid shard of it.
  * In case of failure, It returns InvalidOid if missingOk is true,
  * otherwise may error out in subsequent function calls.
