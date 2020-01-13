@@ -563,6 +563,10 @@ INSERT INTO
 	reference_table_test_fifth (value_2, value_3) VALUES (nextval('example_ref_value_seq'), nextval('example_ref_value_seq')::text)
 RETURNING value_1, value_2, value_3;
 
+INSERT INTO
+	reference_table_test_fifth (value_4) VALUES (now())
+RETURNING value_1, value_2, value_3;
+
 UPDATE
 	reference_table_test_fifth SET value_4 = now()
 WHERE

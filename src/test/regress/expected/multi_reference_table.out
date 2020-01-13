@@ -926,6 +926,14 @@ RETURNING value_1, value_2, value_3;
        3 |       1 | 2
 (1 row)
 
+INSERT INTO
+	reference_table_test_fifth (value_4) VALUES (now())
+RETURNING value_1, value_2, value_3;
+ value_1 | value_2 | value_3
+---------------------------------------------------------------------
+       4 |         |
+(1 row)
+
 UPDATE
 	reference_table_test_fifth SET value_4 = now()
 WHERE

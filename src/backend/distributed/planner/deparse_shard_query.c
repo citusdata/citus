@@ -164,6 +164,10 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		valuesRTE->values_lists = oldValuesLists;
 	}
 
+	if (task->query != NULL)
+	{
+		task->query = query;
+	}
 	task->queryStringLazy = queryString->data;
 }
 
