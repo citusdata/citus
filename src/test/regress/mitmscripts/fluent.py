@@ -1,4 +1,5 @@
 from collections import defaultdict
+from itertools import count
 import logging
 import re
 import os
@@ -282,7 +283,7 @@ def build_handler(spec):
 handler = None  # the current handler used to process packets
 command_thread = None  # sits on the fifo and waits for new commands to come in
 captured_messages = queue.Queue()  # where we store messages used for recorder.dump()
-connection_count = 0  # so we can give connections ids in recorder.dump()
+connection_count = count()  # so we can give connections ids in recorder.dump()
 
 def listen_for_commands(fifoname):
 
@@ -338,7 +339,7 @@ def listen_for_commands(fifoname):
 
         if recorder.command is 'reset':
             result = ''
-            connection_count = 0
+            connection_count = count()
         elif recorder.command is not 'dump':
             # this should never happen
             raise Exception('Unrecognized command: {}'.format(recorder.command))
@@ -446,8 +447,7 @@ def tcp_message(flow):
 
     # Keep track of all the different connections, assign a unique id to each
     if not hasattr(flow, 'connection_id'):
-        flow.connection_id = connection_count
-        connection_count += 1  # this is not thread safe but I think that's fine
+        flow.connection_id = next(connection_count)
     tcp_msg.connection_id = flow.connection_id
 
     # The first packet the frontend sends shounld be parsed differently
