@@ -30,6 +30,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_shard_visibility.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "storage/lmgr.h"
@@ -621,61 +622,115 @@ AlterTableUpdateRefTableAddDropFKeyConstraints(AlterTableStmt *alterTableStateme
 		}
 		else if (alterTableType == AT_DropConstraint)
 		{
-			if (!referencingIsReferenceTable)
-			{
-				/* simply continue if referencing table is not a reference table */
-				continue;
-			}
-
-			/*
-			 * Find referenced table OID by traversing the constraints defined for
-			 * reference table's only shard
-			 */
-
-			Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
-				referencingRelationOid);
-
-			const char *constraintName = command->name;
-
-			Oid referencedRelationOid = GetReferencedTableOidByFKeyConstraintName(
-				referenceTableShardOid, constraintName);
-
-			if (!OidIsValid(referencedRelationOid) || IsDistributedTable(
-					referencedRelationOid))
+			if (referencingIsReferenceTable)
 			{
 				/*
-				 * Constraint with constraintName does not belong to a fkey constraint of
-				 * referencing relation or the referencing relation is not a local table.
-				 * Do not replace reference table's name, PostgreSQL will already error out
+				 * Find referenced table OID by traversing the constraints defined for
+				 * reference table's only shard. If referenced table is local table,
+				 * then replace reference table's name and perform checks via
+				 * ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable
 				 */
-				continue;
+
+				Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
+					referencingRelationOid);
+
+				const char *constraintName = command->name;
+
+				Oid referencedRelationOid = GetReferencedTableOidByFKeyConstraintName(
+					referenceTableShardOid, constraintName);
+
+				if (!OidIsValid(referencedRelationOid) || IsDistributedTable(
+						referencedRelationOid))
+				{
+					/*
+					 * Constraint with constraintName does not belong to a fkey constraint of
+					 * referencing relation or the referencing relation is not a local table.
+					 * Do not replace reference table's name and do do not perform checks
+					 * via ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable,
+					 * PostgreSQL will already error out
+					 */
+					continue;
+				}
+
+				/*
+				 * Now we have a foreign key constraint to be droped via and ALTER TABLE DROP
+				 * CONSTRAINT command, which is previously defined from a reference table to
+				 * a coordinator local table
+				 */
+
+				/* we pass constraint to be NULL to perform ALTER TABLE DROP constraint checks */
+				Constraint *constraint = NULL;
+
+				ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(
+					referencingRelationOid,
+					referencedRelationOid,
+					constraint);
+
+				/* rewrite referenced table name */
+				alterTableStatement->relation->relname = get_rel_name(
+					referenceTableShardOid);
 			}
+			else if (referencingIsLocalTable)
+			{
+				/*
+				 * Find referenced table OID by traversing the constraints defined for
+				 * local table. If referenced table is the only shard of a reference 
+				 * table, find the reference table ownning that shard and perform checks
+				 * via
+				 * ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable
+				 */
 
-			/*
-			 * Now we have a foreign key constraint to be droped via and ALTER TABLE DROP
-			 * CONSTRAINT command, which is previously defined from a reference table to
-			 * a coordinator local table
-			 */
+				const char *constraintName = command->name;
 
-			/* we pass constraint to be NULL to perform ALTER TABLE DROP constraint checks */
-			Constraint *constraint = NULL;
+				Oid referencedRelationOid = GetReferencedTableOidByFKeyConstraintName(
+					referencingRelationOid, constraintName);
 
-			ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(
-				referencingRelationOid,
-				referencedRelationOid,
-				constraint);
+				/* search owner relation only in current search path */
+				bool onlySearchPath = true;
 
-			/* rewrite referenced table name */
-			alterTableStatement->relation->relname = get_rel_name(
-				referenceTableShardOid);
+				Oid candidateReferenceTableOid = GetRelationOidOwningShardOid(referencedRelationOid, onlySearchPath);
+
+				bool candidateIsReferenceTable = OidIsValid(candidateReferenceTableOid) && (PartitionMethod(candidateReferenceTableOid) == DISTRIBUTE_BY_NONE);
+
+				if (!candidateIsReferenceTable)
+				{
+					/*
+					 * Constraint with constraintName does not belong to a fkey constraint of
+					 * referencing relation or the referencing relation is not a reference table
+					 * shard. Do do not perform checks
+					 * via ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable,
+					 * PostgreSQL will already error out.
+					 */
+					continue;
+				}
+
+				/*
+				 * Now we have a foreign key constraint to be droped via and ALTER TABLE DROP
+				 * CONSTRAINT command, which is previously defined from a coordinator local
+				 * table to a reference reference table, whose relation id is 
+				 * candidateReferenceTableOid
+				 */
+
+				/* we pass constraint to be NULL to perform ALTER TABLE DROP constraint checks */
+
+				Constraint *constraint = NULL;
+
+				/* perform checks using the reference table itself */
+				ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(
+					referencingRelationOid,
+					candidateReferenceTableOid,
+					constraint);
+			}
 		}
 	}
 }
 
 
 /*
- * GetReferencedTableOidByFKeyConstraintName returns OID of the referenced table that is referenced by
- * table with referencingRelationOid in terms of foreign key constraint with constraintName.
+ * GetReferencedTableOidByFKeyConstraintName returns OID of the referenced table
+ * that is referenced by table with referencingRelationOid in terms of foreign
+ * key constraint with constraintName. It does that by scanning pg_constraint
+ * for foreign key constraints.
  *
  * If there does not exist such a foreign key constraint, returns InvalidOid
  */
