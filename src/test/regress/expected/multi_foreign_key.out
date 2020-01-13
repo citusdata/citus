@@ -919,9 +919,9 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
-ERROR:  cannot create foreign key constraint
+ERROR:  cannot ADD/DROP foreign key constraint
 DETAIL:  Referenced table must be a distributed table or a reference table or a local table in coordinator.
-HINT:  To define foreign constraint between reference tables and local tables, consider adding coordinator to pg_dist_node as well.
+HINT:  To ADD/DROP foreign constraint between reference tables and coordinator local tables, consider adding coordinator to pg_dist_node as well.
 -- test foreign key creation on ALTER TABLE on self referencing reference table
 DROP TABLE self_referencing_reference_table;
 CREATE TABLE self_referencing_reference_table(
