@@ -2,6 +2,7 @@
 -- MULTI_ARRAY_AGG
 --
 SET citus.next_shard_id TO 520000;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL
 AS $$
@@ -9,8 +10,8 @@ SELECT ARRAY(SELECT unnest($1) ORDER BY 1)
 $$;
 -- Check multi_cat_agg() aggregate which is used to implement array_agg()
 SELECT array_cat_agg(i) FROM (VALUES (ARRAY[1,2]), (NULL), (ARRAY[3,4])) AS t(i);
- array_cat_agg 
----------------
+ array_cat_agg
+---------------------------------------------------------------------
  {1,2,3,4}
 (1 row)
 
@@ -24,8 +25,8 @@ ERROR:  array_agg with order by is unsupported
 -- Check array_agg() for different data types and LIMIT clauses
 SELECT array_sort(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                    array_sort                    
---------------------------------------------------
+                    array_sort
+---------------------------------------------------------------------
  {2132,15635,24027,63700,67310,155190}
  {106170}
  {4297,19036,29380,62143,128449,183095}
@@ -40,8 +41,8 @@ SELECT array_sort(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                           array_sort                            
------------------------------------------------------------------
+                           array_sort
+---------------------------------------------------------------------
  {13309.60,21168.23,22824.48,28955.64,45983.16,49620.16}
  {44694.46}
  {2618.76,28733.64,32986.52,39890.88,46796.47,54058.05}
@@ -56,8 +57,8 @@ SELECT array_sort(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                   array_sort                                   
---------------------------------------------------------------------------------
+                                   array_sort
+---------------------------------------------------------------------
  {01-29-1996,01-30-1996,03-13-1996,03-30-1996,04-12-1996,04-21-1996}
  {01-28-1997}
  {10-29-1993,11-09-1993,12-04-1993,12-14-1993,01-16-1994,02-02-1994}
@@ -72,8 +73,8 @@ SELECT array_sort(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 
 SELECT array_sort(array_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                          array_sort                                          
-----------------------------------------------------------------------------------------------
+                                          array_sort
+---------------------------------------------------------------------
  {"AIR       ","FOB       ","MAIL      ","MAIL      ","REG AIR   ","TRUCK     "}
  {"RAIL      "}
  {"AIR       ","FOB       ","RAIL      ","RAIL      ","SHIP      ","TRUCK     "}
@@ -88,8 +89,8 @@ SELECT array_sort(array_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 
 -- Check that we can execute array_agg() within other functions
 SELECT array_length(array_agg(l_orderkey), 1) FROM lineitem;
- array_length 
---------------
+ array_length
+---------------------------------------------------------------------
         12000
 (1 row)
 
@@ -100,8 +101,8 @@ SELECT array_length(array_agg(l_orderkey), 1) FROM lineitem;
 SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(array_agg(l_orderkey)) FROM lineitem
 	WHERE l_quantity < 5 AND l_orderkey > 5500 AND l_orderkey < 9500
 	GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity | count |          avg          |                                            array_sort                                            
-------------+-------+-----------------------+--------------------------------------------------------------------------------------------------
+ l_quantity | count |          avg          |                                            array_sort
+---------------------------------------------------------------------
        1.00 |    17 | 1477.1258823529411765 | {5543,5633,5634,5698,5766,5856,5857,5986,8997,9026,9158,9184,9220,9222,9348,9383,9476}
        2.00 |    19 | 3078.4242105263157895 | {5506,5540,5573,5669,5703,5730,5798,5831,5893,5920,5923,9030,9058,9123,9124,9188,9344,9441,9476}
        3.00 |    14 | 4714.0392857142857143 | {5509,5543,5605,5606,5827,9124,9157,9184,9223,9254,9349,9414,9475,9477}
@@ -111,8 +112,8 @@ SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(array_agg(l_orderk
 SELECT l_quantity, array_sort(array_agg(extract (month FROM o_orderdate))) AS my_month
 	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                    my_month                    
-------------+------------------------------------------------
+ l_quantity |                    my_month
+---------------------------------------------------------------------
        1.00 | {2,3,4,4,4,5,5,5,6,7,7,7,7,9,9,11,11}
        2.00 | {1,3,5,5,5,5,6,6,6,7,7,8,10,10,11,11,11,12,12}
        3.00 | {3,4,5,6,7,7,8,8,8,9,9,10,11,11}
@@ -122,8 +123,8 @@ SELECT l_quantity, array_sort(array_agg(extract (month FROM o_orderdate))) AS my
 SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE l_quantity < 5
 	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                 array_sort                  
-------------+---------------------------------------------
+ l_quantity |                 array_sort
+---------------------------------------------------------------------
        1.00 | {11269,11397,11713,11715,11973,18317,18445}
        2.00 | {11847,18061,18247,18953}
        3.00 | {18249,18315,18699,18951,18955}
@@ -133,15 +134,15 @@ SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE
 -- Check that we can execute array_agg() with an expression containing NULL values
 SELECT array_agg(case when l_quantity > 20 then l_quantity else NULL end)
 	FROM lineitem WHERE l_orderkey < 10;
-                                                                    array_agg                                                                     
---------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                    array_agg
+---------------------------------------------------------------------
  {NULL,36.00,NULL,28.00,24.00,32.00,38.00,45.00,49.00,27.00,NULL,28.00,26.00,30.00,NULL,26.00,50.00,37.00,NULL,NULL,46.00,28.00,38.00,35.00,NULL}
 (1 row)
 
 -- Check that we return NULL in case there are no input rows to array_agg()
 SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
- array_agg 
------------
- 
+ array_agg
+---------------------------------------------------------------------
+
 (1 row)
 

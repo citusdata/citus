@@ -5,28 +5,28 @@ run_command_on_workers
 
 (localhost,57637,t,"CREATE ROLE")
 (localhost,57638,t,"CREATE ROLE")
-step s1-enable-propagation: 
+step s1-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s2-enable-propagation: 
+step s2-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-alter-role-1: 
+step s1-alter-role-1:
     ALTER ROLE alter_role_1 NOSUPERUSER;
 
-step s2-add-node: 
+step s2-add-node:
     SELECT 1 FROM master_add_node('localhost', 57637);
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-add-node: <... completed>
-?column?       
+?column?
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,"DROP ROLE")
@@ -37,25 +37,25 @@ run_command_on_workers
 
 (localhost,57637,t,"CREATE ROLE")
 (localhost,57638,t,"CREATE ROLE")
-step s1-enable-propagation: 
+step s1-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s2-enable-propagation: 
+step s2-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-add-node: 
+step s1-add-node:
     SELECT 1 FROM master_add_node('localhost', 57637);
 
-?column?       
+?column?
 
-1              
-step s2-alter-role-1: 
+1
+step s2-alter-role-1:
     ALTER ROLE alter_role_1 NOSUPERUSER;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-alter-role-1: <... completed>
@@ -69,22 +69,22 @@ run_command_on_workers
 
 (localhost,57637,t,"CREATE ROLE")
 (localhost,57638,t,"CREATE ROLE")
-step s1-enable-propagation: 
+step s1-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s2-enable-propagation: 
+step s2-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-alter-role-1: 
+step s1-alter-role-1:
     ALTER ROLE alter_role_1 NOSUPERUSER;
 
-step s2-alter-role-1: 
+step s2-alter-role-1:
     ALTER ROLE alter_role_1 NOSUPERUSER;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-alter-role-1: <... completed>
@@ -99,22 +99,22 @@ run_command_on_workers
 
 (localhost,57637,t,"CREATE ROLE")
 (localhost,57638,t,"CREATE ROLE")
-step s1-enable-propagation: 
+step s1-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s2-enable-propagation: 
+step s2-enable-propagation:
     SET citus.enable_alter_role_propagation to ON;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-alter-role-1: 
+step s1-alter-role-1:
     ALTER ROLE alter_role_1 NOSUPERUSER;
 
-step s2-alter-role-2: 
+step s2-alter-role-2:
     ALTER ROLE alter_role_2 NOSUPERUSER;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 run_command_on_workers

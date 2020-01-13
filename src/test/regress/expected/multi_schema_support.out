@@ -20,28 +20,28 @@ CREATE TABLE test_schema_support.nation_append(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_append', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('test_schema_support.nation_append');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                    1190000
 (1 row)
 
 -- append table to shard
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard 
-------------------------------
+ master_append_table_to_shard
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support.nation_append;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -52,56 +52,56 @@ CREATE TABLE test_schema_support."nation._'append" (
     n_regionkey integer not null,
     n_comment varchar(152));
 SELECT master_create_distributed_table('test_schema_support."nation._''append"', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('test_schema_support."nation._''append"');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                    1190001
 (1 row)
 
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard 
-------------------------------
+ master_append_table_to_shard
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support."nation._'append";
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
 -- test master_append_table_to_shard with schema with search_path is set
 SET search_path TO test_schema_support;
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard 
-------------------------------
+ master_append_table_to_shard
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM nation_append;
- count 
--------
+ count
+---------------------------------------------------------------------
     12
 (1 row)
 
 -- test with search_path is set and shard name contains special characters
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard 
-------------------------------
+ master_append_table_to_shard
+---------------------------------------------------------------------
                    0.00533333
 (1 row)
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM "nation._'append";
- count 
--------
+ count
+---------------------------------------------------------------------
     12
 (1 row)
 
@@ -116,9 +116,9 @@ CREATE TABLE nation_append_search_path(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy nation_append_search_path FROM STDIN with delimiter '|';
@@ -130,15 +130,15 @@ CREATE TABLE test_schema_support.nation_hash(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test cursors
@@ -149,20 +149,20 @@ DECLARE test_cursor CURSOR FOR
         FROM test_schema_support.nation_append
         WHERE n_nationkey = 1;
 FETCH test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH BACKWARD test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -175,20 +175,20 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_append
         WHERE n_nationkey = 1;
 FETCH test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 FETCH BACKWARD test_cursor;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -198,9 +198,9 @@ SET search_path TO public;
 INSERT INTO test_schema_support.nation_hash(n_nationkey, n_name, n_regionkey) VALUES (6, 'FRANCE', 3);
 -- verify insertion
 SELECT * FROM test_schema_support.nation_hash WHERE n_nationkey = 6;
- n_nationkey |          n_name           | n_regionkey | n_comment 
--------------+---------------------------+-------------+-----------
-           6 | FRANCE                    |           3 | 
+ n_nationkey |          n_name           | n_regionkey | n_comment
+---------------------------------------------------------------------
+           6 | FRANCE                    |           3 |
 (1 row)
 
 -- test with search_path is set
@@ -208,9 +208,9 @@ SET search_path TO test_schema_support;
 INSERT INTO nation_hash(n_nationkey, n_name, n_regionkey) VALUES (7, 'GERMANY', 3);
 -- verify insertion
 SELECT * FROM nation_hash WHERE n_nationkey = 7;
- n_nationkey |          n_name           | n_regionkey | n_comment 
--------------+---------------------------+-------------+-----------
-           7 | GERMANY                   |           3 | 
+ n_nationkey |          n_name           | n_regionkey | n_comment
+---------------------------------------------------------------------
+           7 | GERMANY                   |           3 |
 (1 row)
 
 -- test UDFs with schemas
@@ -254,8 +254,8 @@ LANGUAGE 'plpgsql' IMMUTABLE;
 \c - - - :master_port
 -- UDF in public, table in a schema other than public, search_path is not set
 SELECT dummyFunction(n_nationkey) FROM test_schema_support.nation_hash GROUP BY 1 ORDER BY 1;
- dummyfunction 
----------------
+ dummyfunction
+---------------------------------------------------------------------
  1
  10
  11
@@ -269,8 +269,8 @@ SELECT dummyFunction(n_nationkey) FROM test_schema_support.nation_hash GROUP BY 
 -- UDF in public, table in a schema other than public, search_path is set
 SET search_path TO test_schema_support;
 SELECT public.dummyFunction(n_nationkey) FROM test_schema_support.nation_hash GROUP BY 1 ORDER BY 1;
- dummyfunction 
----------------
+ dummyfunction
+---------------------------------------------------------------------
  1
  10
  11
@@ -323,8 +323,8 @@ LANGUAGE 'plpgsql' IMMUTABLE;
 -- UDF in schema, table in a schema other than public, search_path is not set
 SET search_path TO public;
 SELECT test_schema_support.dummyFunction2(n_nationkey) FROM test_schema_support.nation_hash  GROUP BY 1 ORDER BY 1;
- dummyfunction2 
-----------------
+ dummyfunction2
+---------------------------------------------------------------------
  1
  10
  11
@@ -338,8 +338,8 @@ SELECT test_schema_support.dummyFunction2(n_nationkey) FROM test_schema_support.
 -- UDF in schema, table in a schema other than public, search_path is set
 SET search_path TO test_schema_support;
 SELECT dummyFunction2(n_nationkey) FROM nation_hash  GROUP BY 1 ORDER BY 1;
- dummyfunction2 
-----------------
+ dummyfunction2
+---------------------------------------------------------------------
  1
  10
  11
@@ -384,16 +384,16 @@ CREATE OPERATOR test_schema_support.=== (
 \c - - - :master_port
 -- test with search_path is not set
 SELECT * FROM test_schema_support.nation_hash  WHERE n_nationkey OPERATOR(test_schema_support.===) 1;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
 -- test with search_path is set
 SET search_path TO test_schema_support;
 SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
- n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
--------------+---------------------------+-------------+------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment
+---------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
@@ -402,16 +402,16 @@ SET search_path TO public;
 UPDATE test_schema_support.nation_hash SET n_regionkey = n_regionkey + 1;
 --verify modification
 SELECT * FROM test_schema_support.nation_hash ORDER BY 1,2,3,4;
- n_nationkey |          n_name           | n_regionkey |                                                 n_comment                                                  
--------------+---------------------------+-------------+------------------------------------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
+---------------------------------------------------------------------
            0 | ALGERIA                   |           1 | haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           2 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           2 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
            3 | CANADA                    |           2 | eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
            4 | EGYPT                     |           5 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
            5 | ETHIOPIA                  |           1 | ven packages wake quickly. regu
-           6 | FRANCE                    |           4 | 
-           7 | GERMANY                   |           4 | 
+           6 | FRANCE                    |           4 |
+           7 | GERMANY                   |           4 |
 (8 rows)
 
 --test with search_path is set
@@ -419,16 +419,16 @@ SET search_path TO test_schema_support;
 UPDATE nation_hash SET n_regionkey = n_regionkey + 1;
 --verify modification
 SELECT * FROM nation_hash ORDER BY 1,2,3,4;
- n_nationkey |          n_name           | n_regionkey |                                                 n_comment                                                  
--------------+---------------------------+-------------+------------------------------------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
+---------------------------------------------------------------------
            0 | ALGERIA                   |           2 | haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           3 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           3 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
            3 | CANADA                    |           3 | eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
            4 | EGYPT                     |           6 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
            5 | ETHIOPIA                  |           2 | ven packages wake quickly. regu
-           6 | FRANCE                    |           5 | 
-           7 | GERMANY                   |           5 | 
+           6 | FRANCE                    |           5 |
+           7 | GERMANY                   |           5 |
 (8 rows)
 
 --test COLLATION with schema
@@ -443,28 +443,28 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_comment varchar(152)
 );
 SELECT master_get_table_ddl_events('test_schema_support.nation_hash_collation') ORDER BY 1;
-                                                                                               master_get_table_ddl_events                                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                               master_get_table_ddl_events
+---------------------------------------------------------------------
  ALTER TABLE test_schema_support.nation_hash_collation OWNER TO postgres
  CREATE TABLE test_schema_support.nation_hash_collation (n_nationkey integer NOT NULL, n_name character(25) NOT NULL COLLATE test_schema_support.english, n_regionkey integer NOT NULL, n_comment character varying(152))
 (2 rows)
 
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy test_schema_support.nation_hash_collation FROM STDIN with delimiter '|';
 SELECT * FROM test_schema_support.nation_hash_collation ORDER BY 1,2,3,4;
- n_nationkey |          n_name           | n_regionkey |                                                 n_comment                                                  
--------------+---------------------------+-------------+------------------------------------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
            2 | BRAZIL                    |           1 | y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
@@ -474,8 +474,8 @@ SELECT * FROM test_schema_support.nation_hash_collation ORDER BY 1,2,3,4;
 (6 rows)
 
 SELECT n_comment FROM test_schema_support.nation_hash_collation ORDER BY n_comment COLLATE test_schema_support.english;
-                                                 n_comment                                                  
-------------------------------------------------------------------------------------------------------------
+                                                 n_comment
+---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
  haggle. carefully final deposits detect slyly agai
@@ -493,21 +493,21 @@ CREATE TABLE nation_hash_collation_search_path(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('nation_hash_collation_search_path', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy nation_hash_collation_search_path FROM STDIN with delimiter '|';
 SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
- n_nationkey |          n_name           | n_regionkey |                                                 n_comment                                                  
--------------+---------------------------+-------------+------------------------------------------------------------------------------------------------------------
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
+---------------------------------------------------------------------
            5 | ETHIOPIA                  |           0 | ven packages wake quickly. regu
            4 | EGYPT                     |           4 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
            3 | CANADA                    |           1 | eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -517,8 +517,8 @@ SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC, 2 DESC, 3 DESC,
 (6 rows)
 
 SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLATE english;
-                                                 n_comment                                                  
-------------------------------------------------------------------------------------------------------------
+                                                 n_comment
+---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
  haggle. carefully final deposits detect slyly agai
@@ -538,30 +538,30 @@ CREATE TABLE test_schema_support.nation_hash_composite_types(
     test_col test_schema_support.new_composite_type
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash_composite_types', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, 2);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- insert some data to verify composite type queries
 \copy test_schema_support.nation_hash_composite_types FROM STDIN with delimiter '|';
 SELECT * FROM test_schema_support.nation_hash_composite_types WHERE test_col = '(a,a)'::test_schema_support.new_composite_type;
- n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col 
--------------+---------------------------+-------------+----------------------------------------------------+----------
+ n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai | (a,a)
 (1 row)
 
 --test with search_path is set
 SET search_path TO test_schema_support;
 SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composite_type;
- n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col 
--------------+---------------------------+-------------+----------------------------------------------------+----------
+ n_nationkey |          n_name           | n_regionkey |                     n_comment                      | test_col
+---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai | (a,a)
 (1 row)
 
@@ -570,24 +570,24 @@ SET search_path TO public;
 ALTER TABLE test_schema_support.nation_hash ADD COLUMN new_col INT;
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
- new_col     | integer                | 
+ n_comment   | character varying(152) |
+ new_col     | integer                |
 (5 rows)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
- new_col     | integer                | 
+ n_comment   | character varying(152) |
+ new_col     | integer                |
 (5 rows)
 
 \c - - - :master_port
@@ -596,22 +596,22 @@ NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, 
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
+ n_comment   | character varying(152) |
 (4 rows)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
+ n_comment   | character varying(152) |
 (4 rows)
 
 \c - - - :master_port
@@ -620,24 +620,24 @@ SET search_path TO test_schema_support;
 ALTER TABLE nation_hash ADD COLUMN new_col INT;
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
- new_col     | integer                | 
+ n_comment   | character varying(152) |
+ new_col     | integer                |
 (5 rows)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
- new_col     | integer                | 
+ n_comment   | character varying(152) |
+ new_col     | integer                |
 (5 rows)
 
 \c - - - :master_port
@@ -647,22 +647,22 @@ NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, 
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
+ n_comment   | character varying(152) |
 (4 rows)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-   Column    |          Type          | Modifiers 
--------------+------------------------+-----------
+   Column    |          Type          | Modifiers
+---------------------------------------------------------------------
  n_nationkey | integer                | not null
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
- n_comment   | character varying(152) | 
+ n_comment   | character varying(152) |
 (4 rows)
 
 \c - - - :master_port
@@ -673,16 +673,16 @@ CREATE INDEX index1 ON test_schema_support.nation_hash(n_name);
 --verify INDEX is created
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1'::regclass;
- Column |     Type      | Definition 
---------+---------------+------------
+ Column |     Type      | Definition
+---------------------------------------------------------------------
  n_name | character(25) | n_name
 (1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1_1190003'::regclass;
- Column |     Type      | Definition 
---------+---------------+------------
+ Column |     Type      | Definition
+---------------------------------------------------------------------
  n_name | character(25) | n_name
 (1 row)
 
@@ -701,16 +701,16 @@ CREATE INDEX index1 ON nation_hash(n_name);
 --verify INDEX is created
 SELECT "Column", "Type", "Definition" FROM public.index_attrs WHERE
     relid = 'test_schema_support.index1'::regclass;
- Column |     Type      | Definition 
---------+---------------+------------
+ Column |     Type      | Definition
+---------------------------------------------------------------------
  n_name | character(25) | n_name
 (1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1_1190003'::regclass;
- Column |     Type      | Definition 
---------+---------------+------------
+ Column |     Type      | Definition
+---------------------------------------------------------------------
  n_name | character(25) | n_name
 (1 row)
 
@@ -728,15 +728,15 @@ SET search_path TO public;
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
 SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
- master_copy_shard_placement 
------------------------------
- 
+ master_copy_shard_placement
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify shardstate
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
- shardstate | nodename  | nodeport 
-------------+-----------+----------
+ shardstate | nodename  | nodeport
+---------------------------------------------------------------------
           1 | localhost |    57637
           1 | localhost |    57638
 (2 rows)
@@ -746,15 +746,15 @@ SET search_path TO test_schema_support;
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
 SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
- master_copy_shard_placement 
------------------------------
- 
+ master_copy_shard_placement
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify shardstate
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
- shardstate | nodename  | nodeport 
-------------+-----------+----------
+ shardstate | nodename  | nodeport
+---------------------------------------------------------------------
           1 | localhost |    57637
           1 | localhost |    57638
 (2 rows)
@@ -762,8 +762,8 @@ SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid
 -- test master_apply_delete_command with schemas
 SET search_path TO public;
 SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
- master_apply_delete_command 
------------------------------
+ master_apply_delete_command
+---------------------------------------------------------------------
                            1
 (1 row)
 
@@ -775,8 +775,8 @@ SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_appen
 SET search_path TO test_schema_support;
 \copy nation_append FROM STDIN with delimiter '|';
 SELECT master_apply_delete_command('DELETE FROM nation_append') ;
- master_apply_delete_command 
------------------------------
+ master_apply_delete_command
+---------------------------------------------------------------------
                            1
 (1 row)
 
@@ -808,23 +808,23 @@ CREATE TABLE test_schema_support_join_2.nation_hash (
     n_regionkey integer not null,
     n_comment varchar(152));
 SELECT create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
 SELECT create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
 SELECT create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
@@ -838,8 +838,8 @@ FROM
     test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_nationkey = n2.n_nationkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -853,8 +853,8 @@ FROM
     nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_nationkey = n2.n_nationkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -868,8 +868,8 @@ FROM
     test_schema_support_join_1.nation_hash n1, test_schema_support_join_1.nation_hash_2 n2
 WHERE
     n1.n_nationkey = n2.n_nationkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -883,8 +883,8 @@ FROM
     nation_hash n1, nation_hash_2 n2
 WHERE
     n1.n_nationkey = n2.n_nationkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -900,8 +900,8 @@ FROM
     test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_nationkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -915,8 +915,8 @@ FROM
     nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_nationkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -930,8 +930,8 @@ FROM
     nation_hash n1, nation_hash_2 n2
 WHERE
     n1.n_nationkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -946,8 +946,8 @@ FROM
     test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_regionkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
     14
 (1 row)
 
@@ -961,8 +961,8 @@ FROM
     nation_hash n1, test_schema_support_join_2.nation_hash n2
 WHERE
     n1.n_regionkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
     14
 (1 row)
 
@@ -976,8 +976,8 @@ FROM
     nation_hash n1, nation_hash_2 n2
 WHERE
     n1.n_regionkey = n2.n_regionkey;
- count 
--------
+ count
+---------------------------------------------------------------------
     14
 (1 row)
 
@@ -995,31 +995,31 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CONTEXT:  SQL statement "CREATE USER "test-user""
 PL/pgSQL function run_command_on_coordinator_and_workers(text) line 3 at EXECUTE
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE SCHEMA schema_with_user AUTHORIZATION "test-user";
 CREATE TABLE schema_with_user.test_table(column1 int);
 SELECT create_reference_table('schema_with_user.test_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify that owner of the created schema is test-user
 \c - - - :worker_1_port
 \dn schema_with_user
        List of schemas
-       Name       |   Owner   
-------------------+-----------
+       Name       |   Owner
+---------------------------------------------------------------------
  schema_with_user | test-user
 (1 row)
 
@@ -1028,16 +1028,16 @@ SELECT create_reference_table('schema_with_user.test_table');
 DROP OWNED BY "test-user" CASCADE;
 NOTICE:  drop cascades to table schema_with_user.test_table
 SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
-      run_command_on_workers      
-----------------------------------
+      run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"DROP OWNED")
  (localhost,57638,t,"DROP OWNED")
 (2 rows)
 
 SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');
- run_command_on_coordinator_and_workers 
-----------------------------------------
- 
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
@@ -1045,9 +1045,9 @@ DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 CREATE SCHEMA run_test_schema;
 CREATE TABLE run_test_schema.test_table(id int);
 SELECT create_distributed_table('run_test_schema.test_table','id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- randomly insert data to evaluate below UDFs better
@@ -1056,14 +1056,14 @@ INSERT INTO run_test_schema.test_table VALUES(7);
 INSERT INTO run_test_schema.test_table VALUES(9);
 -- try UDFs which call shard_name as a subroutine
 SELECT sum(result::int) FROM run_command_on_placements('run_test_schema.test_table','SELECT pg_table_size(''%s'')');
-  sum  
--------
+  sum
+---------------------------------------------------------------------
  49152
 (1 row)
 
 SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table','SELECT pg_table_size(''%s'')');
-  sum  
--------
+  sum
+---------------------------------------------------------------------
  24576
 (1 row)
 
@@ -1077,15 +1077,15 @@ CREATE TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!"(id int, "TeNANt_Id" int);
 CREATE TABLE "CiTUS.TEEN2"."CAPITAL_TABLE"(i int, j int);
 -- create distributed table with weird names
 SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('"CiTUS.TEEN2"."CAPITAL_TABLE"', 'i');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- truncate tables with weird names
@@ -1093,8 +1093,8 @@ INSERT INTO "CiTuS.TeeN"."TeeNTabLE.1!?!" VALUES(1, 1);
 INSERT INTO "CiTUS.TEEN2"."CAPITAL_TABLE" VALUES(0, 1);
 TRUNCATE "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE";
 SELECT count(*) FROM "CiTUS.TEEN2"."CAPITAL_TABLE";
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -1106,8 +1106,8 @@ SELECT *
 FROM "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE"
 WHERE "CiTUS.TEEN2"."CAPITAL_TABLE".i = "CiTuS.TeeN"."TeeNTabLE.1!?!"."TeNANt_Id"
 ORDER BY 1,2,3,4;
- id | TeNANt_Id | i | j 
-----+-----------+---+---
+ id | TeNANt_Id | i | j
+---------------------------------------------------------------------
   0 |         1 | 1 | 0
   1 |         0 | 0 | 1
   1 |         1 | 1 | 0
@@ -1123,8 +1123,8 @@ FROM "CiTuS.TeeN"."TeeNTabLE.1!?!", "CiTUS.TEEN2"."CAPITAL_TABLE"
 WHERE "CiTUS.TEEN2"."CAPITAL_TABLE".i = "CiTuS.TeeN"."TeeNTabLE.1!?!"."TeNANt_Id"
 GROUP BY "TeNANt_Id", id, i, j
 HAVING "TeNANt_Id" > 0 AND j >= id ORDER BY "TeNANt_Id";
- id | TeNANt_Id | i | j 
-----+-----------+---+---
+ id | TeNANt_Id | i | j
+---------------------------------------------------------------------
   0 |         1 | 1 | 0
   2 |         3 | 3 | 2
   4 |         4 | 4 | 4
@@ -1136,8 +1136,8 @@ FROM "CiTuS.TeeN"."TeeNTabLE.1!?!" join "CiTUS.TEEN2"."CAPITAL_TABLE" on
 GROUP BY "TeNANt_Id", id, i, j
 HAVING "TeNANt_Id" > 0 AND j >= id
 ORDER BY 1,2,3,4;
- id | TeNANt_Id | i | j 
-----+-----------+---+---
+ id | TeNANt_Id | i | j
+---------------------------------------------------------------------
   0 |         1 | 1 | 0
   2 |         3 | 3 | 2
   4 |         4 | 4 | 4
@@ -1153,8 +1153,8 @@ SELECT * FROM "cTE" join "CiTUS.TEEN2"."CAPITAL_TABLE" on
 GROUP BY "TeNANt_Id", id, i, j
 HAVING "TeNANt_Id" > 0 AND j >= id
 ORDER BY 1,2,3,4;
- id | TeNANt_Id | i | j 
-----+-----------+---+---
+ id | TeNANt_Id | i | j
+---------------------------------------------------------------------
   0 |         1 | 1 | 0
   2 |         3 | 3 | 2
   4 |         4 | 4 | 4
@@ -1172,8 +1172,8 @@ join "CiTUS.TEEN2"."CAPITAL_TABLE" on
 GROUP BY "TeNANt_Id", id, i, j
 HAVING "TeNANt_Id" > 0 AND j >= id
 ORDER BY 1,2,3,4;
- id | TeNANt_Id | i | j 
-----+-----------+---+---
+ id | TeNANt_Id | i | j
+---------------------------------------------------------------------
   0 |         1 | 1 | 0
   2 |         3 | 3 | 2
   4 |         4 | 4 | 4

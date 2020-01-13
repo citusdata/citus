@@ -35,12 +35,12 @@
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
-											   const Oid *parameterTypes, const
-											   char *const *parameterValues);
+											   const Oid *parameterTypes,
+											   const char *const *parameterValues);
 static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const char *command, const char *user,
-											   int parameterCount, const
-											   Oid *parameterTypes,
+											   int parameterCount,
+											   const Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
@@ -316,8 +316,8 @@ SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *use
 static void
 SendCommandToMetadataWorkersParams(const char *command,
 								   const char *user, int parameterCount,
-								   const Oid *parameterTypes, const
-								   char *const *parameterValues)
+								   const Oid *parameterTypes,
+								   const char *const *parameterValues)
 {
 	List *workerNodeList = TargetWorkerSetNodeList(WORKERS_WITH_METADATA, ShareLock);
 
@@ -340,8 +340,8 @@ SendCommandToMetadataWorkersParams(const char *command,
 static void
 SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *command,
 								   const char *user, int parameterCount,
-								   const Oid *parameterTypes, const
-								   char *const *parameterValues)
+								   const Oid *parameterTypes,
+								   const char *const *parameterValues)
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;

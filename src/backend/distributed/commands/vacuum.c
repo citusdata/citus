@@ -49,7 +49,7 @@ static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 
 /*
- * ProcessVacuumStmt processes vacuum statements that may need propagation to
+ * PostprocessVacuumStmt processes vacuum statements that may need propagation to
  * distributed tables. If a VACUUM or ANALYZE command references a distributed
  * table, it is propagated to all involved nodes; otherwise, this function will
  * immediately exit after some error checking.
@@ -59,7 +59,7 @@ static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
  * ANALYZE has already been processed.
  */
 void
-ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
+PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	int relationIndex = 0;
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
@@ -229,7 +229,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
-		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
 	}

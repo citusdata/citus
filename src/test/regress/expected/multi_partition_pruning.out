@@ -6,8 +6,8 @@
 SET citus.next_shard_id TO 770000;
 -- Adding additional l_orderkey = 1 to make this query not router executable
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1 ORDER BY 1,2;
- l_orderkey | l_linenumber | l_shipdate 
-------------+--------------+------------
+ l_orderkey | l_linenumber | l_shipdate
+---------------------------------------------------------------------
           1 |            1 | 03-13-1996
           1 |            2 | 04-12-1996
           1 |            3 | 01-29-1996
@@ -28,23 +28,23 @@ SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 903
 -- trigger the creation of toasted tables and indexes. This in turn prints
 -- non-deterministic debug messages. To avoid this chain, we use l_linenumber.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-  sum  |        avg         
--------+--------------------
+  sum  |        avg
+---------------------------------------------------------------------
  17999 | 3.0189533713518953
 (1 row)
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem
 	WHERE (l_orderkey < 4000 OR l_orderkey > 9030);
-  sum  |        avg         
--------+--------------------
+  sum  |        avg
+---------------------------------------------------------------------
  30184 | 3.0159872102318145
 (1 row)
 
 -- The following query should prune out all shards and return empty results
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem WHERE l_orderkey > 20000;
- sum | avg 
------+-----
-     |    
+ sum | avg
+---------------------------------------------------------------------
+     |
 (1 row)
 
 -- The tests below verify that we can prune shards partitioned over different
@@ -58,9 +58,9 @@ CREATE TABLE varchar_partitioned_table
 	varchar_column varchar(100)
 );
 SELECT create_distributed_table('varchar_partitioned_table', 'varchar_column', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Create logical shards and shard placements with shardid 100,101
@@ -86,9 +86,9 @@ CREATE TABLE array_partitioned_table
 	array_column text[]
 );
 SELECT create_distributed_table('array_partitioned_table', 'array_column', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SET client_min_messages TO DEBUG2;
@@ -122,9 +122,9 @@ CREATE TABLE composite_partitioned_table
 	composite_column composite_type
 );
 SELECT create_distributed_table('composite_partitioned_table', 'composite_column', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SET client_min_messages TO DEBUG2;
@@ -150,8 +150,8 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 SET client_min_messages TO ERROR;
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 1
@@ -163,8 +163,8 @@ SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM array_partitioned_table
 	WHERE array_column > '{BA1000U2AMO4ZGX, BZZXSP27F21T6}';
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 1
@@ -176,8 +176,8 @@ SELECT count(*) FROM array_partitioned_table
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM composite_partitioned_table
 	WHERE composite_column < '(b,5,c)'::composite_type;
-                   QUERY PLAN                    
--------------------------------------------------
+                   QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 1

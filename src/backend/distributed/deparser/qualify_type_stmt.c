@@ -70,8 +70,9 @@ TypeOidGetNamespaceOid(Oid typeOid)
 
 
 void
-QualifyRenameTypeStmt(RenameStmt *stmt)
+QualifyRenameTypeStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	List *names = (List *) stmt->object;
 
 	Assert(stmt->renameType == OBJECT_TYPE);
@@ -88,8 +89,9 @@ QualifyRenameTypeStmt(RenameStmt *stmt)
 
 
 void
-QualifyRenameTypeAttributeStmt(RenameStmt *stmt)
+QualifyRenameTypeAttributeStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
@@ -103,8 +105,9 @@ QualifyRenameTypeAttributeStmt(RenameStmt *stmt)
 
 
 void
-QualifyAlterEnumStmt(AlterEnumStmt *stmt)
+QualifyAlterEnumStmt(Node *node)
 {
+	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	List *names = stmt->typeName;
 
 	if (list_length(names) == 1)
@@ -119,8 +122,9 @@ QualifyAlterEnumStmt(AlterEnumStmt *stmt)
 
 
 void
-QualifyAlterTypeStmt(AlterTableStmt *stmt)
+QualifyAlterTypeStmt(Node *node)
 {
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(stmt->relkind == OBJECT_TYPE);
 
 	if (stmt->relation->schemaname == NULL)
@@ -133,8 +137,10 @@ QualifyAlterTypeStmt(AlterTableStmt *stmt)
 
 
 void
-QualifyCompositeTypeStmt(CompositeTypeStmt *stmt)
+QualifyCompositeTypeStmt(Node *node)
 {
+	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
+
 	if (stmt->typevar->schemaname == NULL)
 	{
 		Oid creationSchema = RangeVarGetCreationNamespace(stmt->typevar);
@@ -144,8 +150,10 @@ QualifyCompositeTypeStmt(CompositeTypeStmt *stmt)
 
 
 void
-QualifyCreateEnumStmt(CreateEnumStmt *stmt)
+QualifyCreateEnumStmt(Node *node)
 {
+	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
+
 	if (list_length(stmt->typeName) == 1)
 	{
 		char *objname = NULL;
@@ -157,8 +165,9 @@ QualifyCreateEnumStmt(CreateEnumStmt *stmt)
 
 
 void
-QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
+QualifyAlterTypeSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	List *names = (List *) stmt->object;
@@ -173,8 +182,9 @@ QualifyAlterTypeSchemaStmt(AlterObjectSchemaStmt *stmt)
 
 
 void
-QualifyAlterTypeOwnerStmt(AlterOwnerStmt *stmt)
+QualifyAlterTypeOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
 
 	List *names = (List *) stmt->object;

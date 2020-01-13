@@ -3,9 +3,9 @@ CREATE SCHEMA row_types;
 SET search_path TO row_types;
 CREATE TABLE test (x int, y int);
 SELECT create_distributed_table('test','x');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE OR REPLACE FUNCTION table_returner(INT) RETURNS TABLE(name text, id INT)
@@ -15,9 +15,9 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('table_returner(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE OR REPLACE FUNCTION record_returner(INOUT id int, OUT name text)
@@ -29,9 +29,9 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('record_returner(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE OR REPLACE FUNCTION identity_returner(x anyelement)
@@ -42,16 +42,16 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('identity_returner(anyelement)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test VALUES (1,2), (1,3), (2,2), (2,3);
 -- multi-shard queries support row types
 SELECT (x,y) FROM test ORDER BY x, y;
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
  (2,2)
@@ -59,8 +59,8 @@ SELECT (x,y) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT (x,y) FROM test GROUP BY x, y ORDER BY x, y;
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
  (2,2)
@@ -68,8 +68,8 @@ SELECT (x,y) FROM test GROUP BY x, y ORDER BY x, y;
 (4 rows)
 
 SELECT ARRAY[NULL,(x,(y,x)),NULL,(y,(x,y))] FROM test ORDER BY x, y;
-                    array                    
----------------------------------------------
+                    array
+---------------------------------------------------------------------
  {NULL,"(1,\"(2,1)\")",NULL,"(2,\"(1,2)\")"}
  {NULL,"(1,\"(3,1)\")",NULL,"(3,\"(1,3)\")"}
  {NULL,"(2,\"(2,2)\")",NULL,"(2,\"(2,2)\")"}
@@ -77,8 +77,8 @@ SELECT ARRAY[NULL,(x,(y,x)),NULL,(y,(x,y))] FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT ARRAY[[(x,(y,x))],[(x,(x,y))]] FROM test ORDER BY x, y;
-                 array                 
----------------------------------------
+                 array
+---------------------------------------------------------------------
  {{"(1,\"(2,1)\")"},{"(1,\"(1,2)\")"}}
  {{"(1,\"(3,1)\")"},{"(1,\"(1,3)\")"}}
  {{"(2,\"(2,2)\")"},{"(2,\"(2,2)\")"}}
@@ -86,8 +86,8 @@ SELECT ARRAY[[(x,(y,x))],[(x,(x,y))]] FROM test ORDER BY x, y;
 (4 rows)
 
 select distinct (x,y) AS foo, x, y FROM test ORDER BY x, y;
-  foo  | x | y 
--------+---+---
+  foo  | x | y
+---------------------------------------------------------------------
  (1,2) | 1 | 2
  (1,3) | 1 | 3
  (2,2) | 2 | 2
@@ -95,8 +95,8 @@ select distinct (x,y) AS foo, x, y FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT table_returner(x) FROM test ORDER BY x, y;
- table_returner 
-----------------
+ table_returner
+---------------------------------------------------------------------
  (1,1)
  (1,1)
  (2,2)
@@ -104,8 +104,8 @@ SELECT table_returner(x) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT record_returner(x) FROM test ORDER BY x, y;
- record_returner 
------------------
+ record_returner
+---------------------------------------------------------------------
  (2,returned)
  (2,returned)
  (3,returned)
@@ -113,17 +113,17 @@ SELECT record_returner(x) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT NULLIF((x, y), (y, x)) FROM test ORDER BY x, y;
- nullif 
---------
+ nullif
+---------------------------------------------------------------------
  (1,2)
  (1,3)
- 
+
  (2,3)
 (4 rows)
 
 SELECT LEAST((x, y), (y, x)) FROM test ORDER BY x, y;
- least 
--------
+ least
+---------------------------------------------------------------------
  (1,2)
  (1,3)
  (2,2)
@@ -131,8 +131,8 @@ SELECT LEAST((x, y), (y, x)) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT GREATEST((x, y), (y, x)) FROM test ORDER BY x, y;
- greatest 
-----------
+ greatest
+---------------------------------------------------------------------
  (2,1)
  (3,1)
  (2,2)
@@ -140,8 +140,8 @@ SELECT GREATEST((x, y), (y, x)) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT COALESCE(NULL, (x, y), (y, x)) FROM test ORDER BY x, y;
- coalesce 
-----------
+ coalesce
+---------------------------------------------------------------------
  (1,2)
  (1,3)
  (2,2)
@@ -149,8 +149,8 @@ SELECT COALESCE(NULL, (x, y), (y, x)) FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT CASE x WHEN 2 THEN (x, y) ELSE (y, x) END FROM test ORDER BY x, y;
-  row  
--------
+  row
+---------------------------------------------------------------------
  (2,1)
  (3,1)
  (2,2)
@@ -158,10 +158,10 @@ SELECT CASE x WHEN 2 THEN (x, y) ELSE (y, x) END FROM test ORDER BY x, y;
 (4 rows)
 
 SELECT CASE x WHEN 2 THEN (x, y) END FROM test ORDER BY x, y;
- case  
--------
- 
- 
+ case
+---------------------------------------------------------------------
+
+
  (2,2)
  (2,3)
 (4 rows)
@@ -180,94 +180,94 @@ SELECT array_agg((x, y)) FROM test;
 ERROR:  input of anonymous composite types is not implemented
 -- router queries support row types
 SELECT (x,y) FROM test WHERE x = 1 ORDER BY x, y;
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 SELECT (x,y) AS foo FROM test WHERE x = 1 ORDER BY x, y;
-  foo  
--------
+  foo
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 SELECT ARRAY[NULL,(x,(y,x)),NULL,(y,(x,y))] FROM test WHERE x = 1 ORDER BY x, y;
-                    array                    
----------------------------------------------
+                    array
+---------------------------------------------------------------------
  {NULL,"(1,\"(2,1)\")",NULL,"(2,\"(1,2)\")"}
  {NULL,"(1,\"(3,1)\")",NULL,"(3,\"(1,3)\")"}
 (2 rows)
 
 SELECT ARRAY[[(x,(y,x))],[(x,(x,y))]] FROM test WHERE x = 1 ORDER BY x, y;
-                 array                 
----------------------------------------
+                 array
+---------------------------------------------------------------------
  {{"(1,\"(2,1)\")"},{"(1,\"(1,2)\")"}}
  {{"(1,\"(3,1)\")"},{"(1,\"(1,3)\")"}}
 (2 rows)
 
 select distinct (x,y) AS foo, x, y FROM test WHERE x = 1 ORDER BY x, y;
-  foo  | x | y 
--------+---+---
+  foo  | x | y
+---------------------------------------------------------------------
  (1,2) | 1 | 2
  (1,3) | 1 | 3
 (2 rows)
 
 SELECT table_returner(x) FROM test WHERE x = 1 ORDER BY x, y;
- table_returner 
-----------------
+ table_returner
+---------------------------------------------------------------------
  (1,1)
  (1,1)
 (2 rows)
 
 SELECT record_returner(x) FROM test WHERE x = 1 ORDER BY x, y;
- record_returner 
------------------
+ record_returner
+---------------------------------------------------------------------
  (2,returned)
  (2,returned)
 (2 rows)
 
 SELECT NULLIF((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
- nullif 
---------
+ nullif
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 SELECT LEAST((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
- least 
--------
+ least
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 SELECT GREATEST((x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
- greatest 
-----------
+ greatest
+---------------------------------------------------------------------
  (2,1)
  (3,1)
 (2 rows)
 
 SELECT COALESCE(NULL, (x, y), (y, x)) FROM test WHERE x = 1 ORDER BY x, y;
- coalesce 
-----------
+ coalesce
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 SELECT CASE x WHEN 2 THEN (x, y) ELSE (y, x) END FROM test WHERE x = 1 ORDER BY x, y;
-  row  
--------
+  row
+---------------------------------------------------------------------
  (2,1)
  (3,1)
 (2 rows)
 
 SELECT CASE x WHEN 2 THEN (x, y) END FROM test WHERE x = 1 ORDER BY x, y;
- case 
-------
- 
- 
+ case
+---------------------------------------------------------------------
+
+
 (2 rows)
 
 -- varying shape unsupported
@@ -284,15 +284,15 @@ SELECT array_agg((x, y)) FROM test WHERE x = 1;
 ERROR:  input of anonymous composite types is not implemented
 -- nested row expressions
 SELECT (x,(x,y)) AS foo FROM test WHERE x = 1 ORDER BY x, y;
-     foo     
--------------
+     foo
+---------------------------------------------------------------------
  (1,"(1,2)")
  (1,"(1,3)")
 (2 rows)
 
 SELECT (x,record_returner(x)) FROM test WHERE x = 1 ORDER BY x, y;
-        row         
---------------------
+        row
+---------------------------------------------------------------------
  (1,"(2,returned)")
  (1,"(2,returned)")
 (2 rows)
@@ -303,43 +303,43 @@ ERROR:  input of anonymous composite types is not implemented
 -- try prepared statements
 PREPARE rec(int) AS SELECT (x,y*$1) FROM test WHERE x = $1  ORDER BY x, y;
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)
 
 EXECUTE rec(1);
-  row  
--------
+  row
+---------------------------------------------------------------------
  (1,2)
  (1,3)
 (2 rows)

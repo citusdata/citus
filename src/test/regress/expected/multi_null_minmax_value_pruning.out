@@ -12,14 +12,14 @@ RESET citus.task_executor_type;
 SET citus.log_multi_join_order to true;
 SET citus.enable_repartition_joins to ON;
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290000;
- shardminvalue | shardmaxvalue 
----------------+---------------
+ shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
  1             | 5986
 (1 row)
 
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
- shardminvalue | shardmaxvalue 
----------------+---------------
+ shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
  8997          | 14947
 (1 row)
 
@@ -33,8 +33,8 @@ DEBUG:  Router planner does not support append-partitioned tables.
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -46,14 +46,14 @@ DEBUG:  Router planner does not support append-partitioned tables.
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                   QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 2
          Tasks Shown: All
          ->  Task
-               Node: host=localhost port=57638 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
@@ -61,7 +61,7 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                            ->  Hash
                                  ->  Seq Scan on orders_290002 orders
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
@@ -82,8 +82,8 @@ DEBUG:  Router planner does not support append-partitioned tables.
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -121,8 +121,8 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
@@ -147,8 +147,8 @@ DEBUG:  Router planner does not support append-partitioned tables.
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 2
 (2 rows)
@@ -186,8 +186,8 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
@@ -214,8 +214,8 @@ LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 DEBUG:  Plan is router executable
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -253,8 +253,8 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 12
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 12
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                            QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4

@@ -46,8 +46,8 @@ typedef struct ObjectAddressCollector
 
 /* forward declarations for functions to interact with the ObjectAddressCollector */
 static void InitObjectAddressCollector(ObjectAddressCollector *collector);
-static void CollectObjectAddress(ObjectAddressCollector *collector, const
-								 ObjectAddress *address);
+static void CollectObjectAddress(ObjectAddressCollector *collector,
+								 const ObjectAddress *address);
 static bool IsObjectAddressCollected(const ObjectAddress *findAddress,
 									 ObjectAddressCollector *collector);
 static void MarkObjectVisited(ObjectAddressCollector *collector,

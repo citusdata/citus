@@ -3,62 +3,62 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-update-node-1 s2-begin s2-insert s1-commit s2-abort
 create_distributed_table
 
-               
-step s1-begin: 
+
+step s1-begin:
 	BEGIN;
 
-step s1-update-node-1: 
+step s1-update-node-1:
     SELECT 1 FROM master_update_node(
         (select nodeid from pg_dist_node where nodeport = 57637),
         'localhost',
         57638);
 
-?column?       
+?column?
 
-1              
-step s2-begin: 
+1
+step s2-begin:
 	BEGIN;
 
-step s2-insert: 
+step s2-insert:
     INSERT INTO update_node(id, f1)
          SELECT id, md5(id::text)
            FROM generate_series(1, 10) as t(id);
  <waiting ...>
-step s1-commit: 
+step s1-commit:
 	COMMIT;
 
 step s2-insert: <... completed>
 error in steps s1-commit s2-insert: ERROR:  relation "public.update_node_102008" does not exist
-step s2-abort: 
+step s2-abort:
 	ABORT;
 
-nodeid         nodename       nodeport       
+nodeid         nodename       nodeport
 
 
 starting permutation: s2-begin s2-insert s1-update-node-1 s2-commit
 create_distributed_table
 
-               
-step s2-begin: 
+
+step s2-begin:
 	BEGIN;
 
-step s2-insert: 
+step s2-insert:
     INSERT INTO update_node(id, f1)
          SELECT id, md5(id::text)
            FROM generate_series(1, 10) as t(id);
 
-step s1-update-node-1: 
+step s1-update-node-1:
     SELECT 1 FROM master_update_node(
         (select nodeid from pg_dist_node where nodeport = 57637),
         'localhost',
         57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 step s1-update-node-1: <... completed>
-?column?       
+?column?
 
-1              
-nodeid         nodename       nodeport       
+1
+nodeid         nodename       nodeport
 

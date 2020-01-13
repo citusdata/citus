@@ -441,6 +441,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			plannerRestrictionContext->relationRestrictionContext);
 	copyOfPlannerRestrictionContext->joinRestrictionContext =
 		plannerRestrictionContext->joinRestrictionContext;
+	copyOfPlannerRestrictionContext->fastPathRestrictionContext =
+		plannerRestrictionContext->fastPathRestrictionContext;
+
 	relationRestrictionList =
 		copyOfPlannerRestrictionContext->relationRestrictionContext->
 		relationRestrictionList;
@@ -532,7 +535,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	}
 
 	/* get the placements for insert target shard and its intersection with select */
-	List *insertShardPlacementList = FinalizedShardPlacementList(shardId);
+	List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 	List *intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 															selectPlacementList);
 

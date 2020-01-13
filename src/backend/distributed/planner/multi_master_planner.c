@@ -50,7 +50,7 @@ static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
 static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
-static bool HasDistinctAggregate(Query *masterQuery);
+static bool HasDistinctOrOrderByAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
 static bool QueryContainsAggregateWithHLL(Query *query);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
@@ -361,7 +361,7 @@ FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
 
 /*
  * BuildAggregatePlan creates and returns an aggregate plan. This aggregate plan
- * builds aggreation and grouping operators (if any) that are to be executed on
+ * builds aggregation and grouping operators (if any) that are to be executed on
  * the master node.
  */
 static Agg *
@@ -405,7 +405,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	{
 		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
 		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
-		bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
+		bool hasUnhashableAggregate = HasDistinctOrOrderByAggregate(masterQuery);
 
 		if (!groupingIsHashable && !groupingIsSortable)
 		{
@@ -421,7 +421,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 		 * If the master query contains hll aggregate functions and the client set
 		 * hll.force_groupagg to on, then we choose to use group aggregation.
 		 */
-		if (!enable_hashagg || !groupingIsHashable || hasDistinctAggregate ||
+		if (!enable_hashagg || !groupingIsHashable || hasUnhashableAggregate ||
 			UseGroupAggregateWithHLL(masterQuery))
 		{
 			char *messageHint = NULL;
@@ -465,7 +465,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
  * aggregate in its target list or in having clause.
  */
 static bool
-HasDistinctAggregate(Query *masterQuery)
+HasDistinctOrOrderByAggregate(Query *masterQuery)
 {
 	ListCell *allColumnCell = NULL;
 
@@ -481,7 +481,7 @@ HasDistinctAggregate(Query *masterQuery)
 		if (IsA(columnNode, Aggref))
 		{
 			Aggref *aggref = (Aggref *) columnNode;
-			if (aggref->aggdistinct != NIL)
+			if (aggref->aggdistinct != NIL || aggref->aggorder != NIL)
 			{
 				return true;
 			}
@@ -595,9 +595,9 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	 * Otherwise create sort+unique plan.
 	 */
 	bool distinctClausesHashable = grouping_is_hashable(distinctClauseList);
-	bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
+	bool hasUnhashableAggregate = HasDistinctOrOrderByAggregate(masterQuery);
 
-	if (enable_hashagg && distinctClausesHashable && !hasDistinctAggregate)
+	if (enable_hashagg && distinctClausesHashable && !hasUnhashableAggregate)
 	{
 		distinctPlan = (Plan *) makeAggNode(distinctClauseList, NIL, AGG_HASHED,
 											targetList, subPlan);

@@ -4,31 +4,31 @@ CREATE SCHEMA with_modifying;
 SET search_path TO with_modifying, public;
 CREATE TABLE with_modifying.modify_table (id int, val int);
 SELECT create_distributed_table('modify_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE with_modifying.users_table (LIKE public.users_table INCLUDING ALL);
 SELECT create_distributed_table('with_modifying.users_table', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO with_modifying.users_table SELECT * FROM public.users_table;
 CREATE TABLE with_modifying.summary_table (id int, counter int);
 SELECT create_distributed_table('summary_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE with_modifying.anchor_table (id int);
 SELECT create_reference_table('anchor_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- basic insert query in CTE
@@ -41,11 +41,11 @@ FROM
 	basic_insert
 ORDER BY
 	user_id;
- user_id | time | value_1 | value_2 | value_3 | value_4 
----------+------+---------+---------+---------+---------
-       1 |      |         |         |         |        
-       2 |      |         |         |         |        
-       3 |      |         |         |         |        
+ user_id | time | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       1 |      |         |         |         |
+       2 |      |         |         |         |
+       3 |      |         |         |         |
 (3 rows)
 
 -- single-shard UPDATE in CTE
@@ -60,17 +60,17 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
-       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |      41 |        
-       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |      41 |        
-       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |      41 |        
-       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |      41 |        
-       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |      41 |        
-       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |      41 |        
-       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |      41 |        
-       1 |                                 |         |         |      41 |        
-       1 |                                 |         |         |      41 |        
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |      41 |
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |      41 |
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |      41 |
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |      41 |
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |      41 |
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |      41 |
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |      41 |
+       1 |                                 |         |         |      41 |
+       1 |                                 |         |         |      41 |
 (9 rows)
 
 -- multi-shard UPDATE in CTE
@@ -85,18 +85,18 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
-       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |      42 |        
-       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |      42 |        
-       2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |      42 |        
-       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |      42 |        
-       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |      42 |        
-       4 | Wed Nov 22 23:59:46.493416 2017 |       3 |       1 |      42 |        
-       4 | Thu Nov 23 01:55:21.824618 2017 |       3 |       1 |      42 |        
-       4 | Thu Nov 23 06:50:08.101207 2017 |       2 |       1 |      42 |        
-       4 | Thu Nov 23 07:09:37.382372 2017 |       4 |       1 |      42 |        
-       4 | Thu Nov 23 08:38:45.877401 2017 |       4 |       1 |      42 |        
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |      42 |
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |      42 |
+       2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |      42 |
+       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |      42 |
+       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |      42 |
+       4 | Wed Nov 22 23:59:46.493416 2017 |       3 |       1 |      42 |
+       4 | Thu Nov 23 01:55:21.824618 2017 |       3 |       1 |      42 |
+       4 | Thu Nov 23 06:50:08.101207 2017 |       2 |       1 |      42 |
+       4 | Thu Nov 23 07:09:37.382372 2017 |       4 |       1 |      42 |
+       4 | Thu Nov 23 08:38:45.877401 2017 |       4 |       1 |      42 |
 (10 rows)
 
 -- single-shard DELETE in CTE
@@ -111,18 +111,18 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
-       6 | Wed Nov 22 20:15:53.317797 2017 |       1 |       1 |      42 |        
-       6 | Wed Nov 22 23:01:24.82289 2017  |       2 |       4 |       1 |        
-       6 | Thu Nov 23 00:07:11.068353 2017 |       1 |       1 |      42 |        
-       6 | Thu Nov 23 00:09:44.19812 2017  |       5 |       2 |       0 |        
-       6 | Thu Nov 23 01:13:50.526322 2017 |       2 |       4 |       1 |        
-       6 | Thu Nov 23 01:14:55.769581 2017 |       0 |       0 |       5 |        
-       6 | Thu Nov 23 10:22:11.02918 2017  |       5 |       0 |       5 |        
-       6 | Thu Nov 23 11:08:04.244582 2017 |       2 |       3 |       2 |        
-       6 | Thu Nov 23 13:51:16.92838 2017  |       0 |       4 |       2 |        
-       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |        
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       6 | Wed Nov 22 20:15:53.317797 2017 |       1 |       1 |      42 |
+       6 | Wed Nov 22 23:01:24.82289 2017  |       2 |       4 |       1 |
+       6 | Thu Nov 23 00:07:11.068353 2017 |       1 |       1 |      42 |
+       6 | Thu Nov 23 00:09:44.19812 2017  |       5 |       2 |       0 |
+       6 | Thu Nov 23 01:13:50.526322 2017 |       2 |       4 |       1 |
+       6 | Thu Nov 23 01:14:55.769581 2017 |       0 |       0 |       5 |
+       6 | Thu Nov 23 10:22:11.02918 2017  |       5 |       0 |       5 |
+       6 | Thu Nov 23 11:08:04.244582 2017 |       2 |       3 |       2 |
+       6 | Thu Nov 23 13:51:16.92838 2017  |       0 |       4 |       2 |
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |
 (10 rows)
 
 -- multi-shard DELETE in CTE
@@ -137,17 +137,17 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
-       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |      41 |        
-       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |      41 |        
-       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |      41 |        
-       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |      41 |        
-       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |      41 |        
-       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |      41 |        
-       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |      41 |        
-       1 |                                 |         |         |      41 |        
-       1 |                                 |         |         |      41 |        
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |      41 |
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |      41 |
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |      41 |
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |      41 |
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |      41 |
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |      41 |
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |      41 |
+       1 |                                 |         |         |      41 |
+       1 |                                 |         |         |      41 |
 (9 rows)
 
 -- INSERT...SELECT query in CTE
@@ -162,18 +162,18 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
- user_id |              time               | value_1 | value_2 | value_3 | value_4 
----------+---------------------------------+---------+---------+---------+---------
-       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |      42 |        
-       3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |        
-       3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |        
-       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |      42 |        
-       3 | Thu Nov 23 03:23:24.702501 2017 |       1 |       2 |       5 |        
-       3 | Thu Nov 23 03:52:32.008895 2017 |       4 |       2 |       0 |        
-       3 | Thu Nov 23 04:01:08.04806 2017  |       5 |       5 |       3 |        
-       3 | Thu Nov 23 05:01:44.885505 2017 |       3 |       5 |       4 |        
-       3 | Thu Nov 23 06:20:05.854857 2017 |       1 |       4 |       2 |        
-       3 | Thu Nov 23 09:57:41.540228 2017 |       2 |       2 |       3 |        
+ user_id |              time               | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |      42 |
+       3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |
+       3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |
+       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |      42 |
+       3 | Thu Nov 23 03:23:24.702501 2017 |       1 |       2 |       5 |
+       3 | Thu Nov 23 03:52:32.008895 2017 |       4 |       2 |       0 |
+       3 | Thu Nov 23 04:01:08.04806 2017  |       5 |       5 |       3 |
+       3 | Thu Nov 23 05:01:44.885505 2017 |       3 |       5 |       4 |
+       3 | Thu Nov 23 06:20:05.854857 2017 |       1 |       4 |       2 |
+       3 | Thu Nov 23 09:57:41.540228 2017 |       2 |       2 |       3 |
 (10 rows)
 
 -- CTEs prior to INSERT...SELECT via the coordinator should work
@@ -232,8 +232,8 @@ WITH raw_data AS (
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
 SELECT * FROM summary_table ORDER BY id;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   2 |      20
   3 |      38
   4 |      24
@@ -241,8 +241,8 @@ SELECT * FROM summary_table ORDER BY id;
 (4 rows)
 
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -252,8 +252,8 @@ WITH raw_data AS (
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       1
   2 |       1
   2 |      20
@@ -264,8 +264,8 @@ SELECT * FROM summary_table ORDER BY id, counter;
 (7 rows)
 
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -273,8 +273,8 @@ WITH insert_reference AS (
 	INSERT INTO anchor_table VALUES (1), (2) RETURNING *
 )
 SELECT id FROM insert_reference ORDER BY id;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
   2
 (2 rows)
@@ -298,14 +298,14 @@ SELECT id, SUM(counter) FROM (
 GROUP BY
 	id;
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       1
   2 |      21
   3 |      39
@@ -321,14 +321,14 @@ raw_data AS (
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       1
   1 |       1
   2 |      21
@@ -343,8 +343,8 @@ WITH summary_data AS (
 )
 INSERT INTO summary_table SELECT id, SUM(counter) AS counter FROM summary_data GROUP BY id;
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       2
   2 |      21
   3 |      39
@@ -353,16 +353,16 @@ SELECT * FROM summary_table ORDER BY id, counter;
 (5 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   1 |   2
   2 |   4
   3 |   6
 (3 rows)
 
 SELECT * FROM anchor_table ORDER BY id;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
   2
 (2 rows)
@@ -379,42 +379,42 @@ INSERT INTO modify_table VALUES (21, 1), (22, 2), (23, 3);
 -- read ids from the same table
 WITH distinct_ids AS (
   SELECT DISTINCT id FROM modify_table
-), 
+),
 update_data AS (
-  UPDATE modify_table SET val = 100 WHERE id > 10 AND 
+  UPDATE modify_table SET val = 100 WHERE id > 10 AND
   	id IN (SELECT * FROM distinct_ids) RETURNING *
 )
 SELECT count(*) FROM update_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
 -- read ids from a different table
 WITH distinct_ids AS (
   SELECT DISTINCT id FROM summary_table
-), 
+),
 update_data AS (
   UPDATE modify_table SET val = 100 WHERE id > 10 AND
   	id IN (SELECT * FROM distinct_ids) RETURNING *
 )
 SELECT count(*) FROM update_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- test update with generate series
-UPDATE modify_table SET val = 200 WHERE id > 10 AND 
+UPDATE modify_table SET val = 200 WHERE id > 10 AND
 	id IN (SELECT 2*s FROM generate_series(1,20) s);
 -- test update with generate series in CTE
 WITH update_data AS (
-	UPDATE modify_table SET val = 300 WHERE id > 10 AND 
+	UPDATE modify_table SET val = 300 WHERE id > 10 AND
 	id IN (SELECT 3*s FROM generate_series(1,20) s) RETURNING *
 )
 SELECT COUNT(*) FROM update_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -422,8 +422,8 @@ WITH delete_rows AS (
 	DELETE FROM modify_table WHERE id > 10 RETURNING *
 )
 SELECT * FROM delete_rows ORDER BY id, val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
  21 | 300
  22 | 200
  23 | 100
@@ -433,8 +433,8 @@ WITH delete_rows AS (
 	DELETE FROM summary_table WHERE id > 10 RETURNING *
 )
 SELECT * FROM delete_rows ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
  11 |       1
  12 |       1
  13 |       1
@@ -450,15 +450,15 @@ WITH insert_reference AS (
 	INSERT INTO anchor_table VALUES (3), (4) RETURNING *
 )
 SELECT id FROM insert_reference ORDER BY id;
- id 
-----
+ id
+---------------------------------------------------------------------
   3
   4
 (2 rows)
 
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       1
   1 |       2
   2 |       1
@@ -470,13 +470,13 @@ SELECT * FROM summary_table ORDER BY id, counter;
 (8 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM anchor_table ORDER BY id;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
   2
   3
@@ -485,8 +485,8 @@ SELECT * FROM anchor_table ORDER BY id;
 
 ROLLBACK;
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       2
   2 |      21
   3 |      39
@@ -495,16 +495,16 @@ SELECT * FROM summary_table ORDER BY id, counter;
 (5 rows)
 
 SELECT * FROM modify_table ORDER BY id, val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   1 |   2
   2 |   4
   3 |   6
 (3 rows)
 
 SELECT * FROM anchor_table ORDER BY id;
- id 
-----
+ id
+---------------------------------------------------------------------
   1
   2
 (2 rows)
@@ -514,8 +514,8 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM modify_table WHERE id = 1) RETURNING *
 )
 SELECT * FROM deleted_rows;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   1 |   2
 (1 row)
 
@@ -523,8 +523,8 @@ WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM modify_table WHERE val = 4) RETURNING *
 )
 SELECT * FROM deleted_rows;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   2 |   4
 (1 row)
 
@@ -535,16 +535,16 @@ deleted_rows AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM select_rows) RETURNING *
 )
 SELECT * FROM deleted_rows;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
 (0 rows)
 
 WITH deleted_rows AS (
 	DELETE FROM modify_table WHERE val IN (SELECT val FROM modify_table WHERE id = 3) RETURNING *
 )
 SELECT * FROM deleted_rows;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   3 |   6
 (1 row)
 
@@ -555,8 +555,8 @@ deleted_rows AS (
 	DELETE FROM modify_table WHERE val IN (SELECT val FROM select_rows) RETURNING *
 )
 SELECT * FROM deleted_rows;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
 (0 rows)
 
 WITH deleted_rows AS (
@@ -596,8 +596,8 @@ raw_data AS (
 	DELETE FROM modify_table WHERE id = 1 AND val IN (SELECT val FROM select_data) RETURNING *
 )
 SELECT COUNT(*) FROM raw_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -609,8 +609,8 @@ raw_data AS (
 	DELETE FROM modify_table WHERE id IN (SELECT id FROM select_data WHERE val > 5) RETURNING id, val
 )
 SELECT * FROM raw_data ORDER BY val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   1 |   2
   1 |   6
 (2 rows)
@@ -622,14 +622,14 @@ raw_data AS (
 	UPDATE modify_table SET val = 0 WHERE id IN (SELECT id FROM select_data WHERE val < 5) RETURNING id, val
 )
 SELECT * FROM raw_data ORDER BY val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   2 |   0
 (1 row)
 
 SELECT * FROM modify_table ORDER BY id, val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
   2 |   0
   3 |   5
 (2 rows)
@@ -639,14 +639,14 @@ WITH select_data AS (
 	SELECT * FROM modify_table
 ),
 raw_data AS (
-	UPDATE modify_table SET val = 0 WHERE 
-		id IN (SELECT id FROM select_data) AND 
+	UPDATE modify_table SET val = 0 WHERE
+		id IN (SELECT id FROM select_data) AND
 		val IN (SELECT counter FROM summary_table)
 	RETURNING id, val
 )
 SELECT * FROM raw_data ORDER BY val;
- id | val 
-----+-----
+ id | val
+---------------------------------------------------------------------
 (0 rows)
 
 -- Test with replication factor 2
@@ -654,29 +654,29 @@ SET citus.shard_replication_factor to 2;
 DROP TABLE modify_table;
 CREATE TABLE with_modifying.modify_table (id int, val int);
 SELECT create_distributed_table('modify_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO with_modifying.modify_table SELECT user_id, value_1 FROM public.users_table;
 DROP TABLE summary_table;
 CREATE TABLE with_modifying.summary_table (id int, counter int);
 SELECT create_distributed_table('summary_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
    107
 (1 row)
 
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
 (0 rows)
 
 WITH raw_data AS (
@@ -684,14 +684,14 @@ WITH raw_data AS (
 )
 INSERT INTO summary_table SELECT id, COUNT(*) AS counter FROM raw_data GROUP BY id;
 SELECT COUNT(*) FROM modify_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT * FROM summary_table ORDER BY id, counter;
- id | counter 
-----+---------
+ id | counter
+---------------------------------------------------------------------
   1 |       8
   2 |      19
   3 |      18
@@ -705,17 +705,17 @@ SELECT * FROM summary_table ORDER BY id, counter;
 BEGIN;
 	INSERT INTO modify_table (id) VALUES (10000);
 	WITH test_cte AS (SELECT count(*) FROM modify_table) SELECT * FROM test_cte;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 ROLLBACK;
 -- similarly, make sure that the intermediate result uses a seperate connection
- WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)), 
+ WITH first_query AS (INSERT INTO modify_table (id) VALUES (10001)),
  	second_query AS (SELECT * FROM modify_table) SELECT count(*) FROM second_query;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 

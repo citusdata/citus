@@ -35,9 +35,9 @@ insert into gen1 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 insert into gen2 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 select create_distributed_table('gen1', 'id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select create_distributed_table('gen2', 'val2');
@@ -46,8 +46,8 @@ DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) STORED.
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 select * from gen1 order by 1,2,3;
- id | val1 | val2 
-----+------+------
+ id | val1 | val2
+---------------------------------------------------------------------
   1 |    4 |    6
   2 |    4 |    6
   3 |    6 |    8
@@ -59,8 +59,8 @@ select * from gen1 order by 1,2,3;
 (8 rows)
 
 select * from gen2 order by 1,2,3;
- id | val1 | val2 
-----+------+------
+ id | val1 | val2
+---------------------------------------------------------------------
   1 |    4 |    6
   2 |    4 |    6
   3 |    6 |    8
@@ -79,9 +79,9 @@ vacuum (index_cleanup 1) gen1;
 -- COPY FROM
 create table cptest (id int, val int);
 select create_distributed_table('cptest', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 copy cptest from STDIN with csv where val < 4;
@@ -95,21 +95,19 @@ ERROR:  Citus does not support COPY FROM with WHERE
 invalid command \.
 select sum(id), sum(val) from cptest;
 ERROR:  syntax error at or near "1"
-LINE 1: 1,6
-        ^
 -- CTE materialized/not materialized
 CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
 CREATE TABLE single_hash_repartition_second (id int primary key, sum int, avg float);
 SELECT create_distributed_table('single_hash_repartition_first', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('single_hash_repartition_second', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO single_hash_repartition_first
@@ -131,8 +129,8 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -150,8 +148,8 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -170,10 +168,10 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
-             coordinator_plan             
-------------------------------------------
+             coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan 7_1
+   ->  Distributed Subplan XXX_1
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
 (4 rows)
@@ -193,8 +191,8 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -214,11 +212,11 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.sum = 45;
 $Q$);
-                coordinator_plan                
-------------------------------------------------
+                coordinator_plan
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 10_1
+         ->  Distributed Subplan XXX_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)
@@ -235,11 +233,11 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.sum = 45;
 $Q$);
-                coordinator_plan                
-------------------------------------------------
+                coordinator_plan
+---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 12_1
+         ->  Distributed Subplan XXX_1
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
 (5 rows)
@@ -270,23 +268,23 @@ ERROR:  insert or update on table "collection_users" violates foreign key constr
 DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list".
 SELECT create_distributed_table('collections_list', 'key');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('collection_users', 'key');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- should still fail because of fkey
 INSERT INTO collection_users VALUES (1, 1000, 1);
 ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
 DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');
 INSERT INTO collection_users VALUES (5, 1, 2);
@@ -295,9 +293,9 @@ CREATE TABLE test (x int, y int);
 INSERT INTO test (x,y) SELECT i,i*3 from generate_series(1, 100) i;
 SELECT create_distributed_table('test', 'x');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- single shard queries with CHAIN
@@ -305,8 +303,8 @@ BEGIN;
 UPDATE test SET y = 15 WHERE x = 1;
 COMMIT AND CHAIN;
 SELECT * FROM test WHERE x = 1;
- x | y  
----+----
+ x | y
+---------------------------------------------------------------------
  1 | 15
 (1 row)
 
@@ -315,8 +313,8 @@ BEGIN;
 UPDATE test SET y = 20 WHERE x = 1;
 ROLLBACK AND CHAIN;
 SELECT * FROM test WHERE x = 1;
- x | y  
----+----
+ x | y
+---------------------------------------------------------------------
  1 | 15
 (1 row)
 
@@ -326,8 +324,8 @@ BEGIN;
 UPDATE test SET y = 25;
 COMMIT AND CHAIN;
 SELECT DISTINCT y FROM test;
- y  
-----
+ y
+---------------------------------------------------------------------
  25
 (1 row)
 
@@ -336,8 +334,8 @@ BEGIN;
 UPDATE test SET y = 30;
 ROLLBACK AND CHAIN;
 SELECT DISTINCT y FROM test;
- y  
-----
+ y
+---------------------------------------------------------------------
  25
 (1 row)
 
@@ -349,8 +347,8 @@ UPDATE test SET y = 35;
 ERROR:  cannot execute UPDATE in a read-only transaction
 COMMIT;
 SELECT DISTINCT y FROM test;
- y  
-----
+ y
+---------------------------------------------------------------------
  25
 (1 row)
 
@@ -360,8 +358,8 @@ UPDATE test SET y = 40;
 ERROR:  cannot execute UPDATE in a read-only transaction
 COMMIT;
 SELECT DISTINCT y FROM test;
- y  
-----
+ y
+---------------------------------------------------------------------
  25
 (1 row)
 
@@ -382,9 +380,9 @@ select create_distributed_table('col_test', 'val');
 ERROR:  Hash distributed partition columns may not use a non deterministic collation
 select create_distributed_table('col_test', 'id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 insert into col_test values
@@ -392,8 +390,8 @@ insert into col_test values
 select count(*)
 from col_test
 where val = 'asdf';
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 

@@ -51,9 +51,9 @@ CREATE TABLE events_hash (
 	name text
 );
 SELECT create_distributed_table('events_hash', 'name', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
@@ -61,15 +61,15 @@ UPDATE pg_dist_placement SET shardstate = 0 WHERE shardid BETWEEN 540000 AND 540
   AND groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port);
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
-      load_shard_id_array      
--------------------------------
+      load_shard_id_array
+---------------------------------------------------------------------
  {540000,540001,540002,540003}
 (1 row)
 
 -- should see array with first shard range
 SELECT load_shard_interval_array(540000, 0);
- load_shard_interval_array 
----------------------------
+ load_shard_interval_array
+---------------------------------------------------------------------
  {-2147483648,-1073741825}
 (1 row)
 
@@ -80,15 +80,15 @@ CREATE TABLE events_range (
 	name text
 );
 SELECT master_create_distributed_table('events_range', 'name', 'range');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- create empty shard
 SELECT master_create_empty_shard('events_range');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                     540004
 (1 row)
 
@@ -97,46 +97,46 @@ UPDATE pg_dist_shard SET
 	shardmaxvalue = 'Zebra'
 WHERE shardid = 540004;
 SELECT load_shard_interval_array(540004, ''::text);
- load_shard_interval_array 
----------------------------
+ load_shard_interval_array
+---------------------------------------------------------------------
  {Aardvark,Zebra}
 (1 row)
 
 -- should see error for non-existent shard
 SELECT load_shard_interval_array(540005, 0);
-ERROR:  could not find valid entry for shard 540005
+ERROR:  could not find valid entry for shard xxxxx
 -- should see two placements
 SELECT load_shard_placement_array(540001, false);
-    load_shard_placement_array     
------------------------------------
- {localhost:57637,localhost:57638}
+    load_shard_placement_array
+---------------------------------------------------------------------
+ {localhost:xxxxx,localhost:xxxxx}
 (1 row)
 
--- only one of which is finalized
+-- only one of which is active
 SELECT load_shard_placement_array(540001, true);
- load_shard_placement_array 
-----------------------------
- {localhost:57637}
+ load_shard_placement_array
+---------------------------------------------------------------------
+ {localhost:xxxxx}
 (1 row)
 
 -- should see error for non-existent shard
 SELECT load_shard_placement_array(540001, false);
-    load_shard_placement_array     
------------------------------------
- {localhost:57637,localhost:57638}
+    load_shard_placement_array
+---------------------------------------------------------------------
+ {localhost:xxxxx,localhost:xxxxx}
 (1 row)
 
 -- should see column id of 'name'
 SELECT partition_column_id('events_hash');
- partition_column_id 
----------------------
+ partition_column_id
+---------------------------------------------------------------------
                    2
 (1 row)
 
 -- should see hash partition type and fail for non-distributed tables
 SELECT partition_type('events_hash');
- partition_type 
-----------------
+ partition_type
+---------------------------------------------------------------------
  h
 (1 row)
 
@@ -144,27 +144,27 @@ SELECT partition_type('pg_type');
 ERROR:  relation pg_type is not distributed
 -- should see true for events_hash, false for others
 SELECT is_distributed_table('events_hash');
- is_distributed_table 
-----------------------
+ is_distributed_table
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT is_distributed_table('pg_type');
- is_distributed_table 
-----------------------
+ is_distributed_table
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT is_distributed_table('pg_dist_shard');
- is_distributed_table 
-----------------------
+ is_distributed_table
+---------------------------------------------------------------------
  f
 (1 row)
 
 -- test underlying column name-id translation
 SELECT column_name_to_column_id('events_hash', 'name');
- column_name_to_column_id 
---------------------------
+ column_name_to_column_id
+---------------------------------------------------------------------
                         2
 (1 row)
 
@@ -181,8 +181,8 @@ DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_range'::regclass;
 -- verify that an eager load shows them missing
 SELECT load_shard_id_array('events_hash');
- load_shard_id_array 
----------------------
+ load_shard_id_array
+---------------------------------------------------------------------
  {}
 (1 row)
 
@@ -198,8 +198,8 @@ VALUES
 	('customers'::regclass, 'h', column_name_to_column('customers'::regclass, 'id'));
 SELECT partmethod, column_to_column_name(logicalrelid, partkey) FROM pg_dist_partition
 	WHERE logicalrelid = 'customers'::regclass;
- partmethod | column_to_column_name 
-------------+-----------------------
+ partmethod | column_to_column_name
+---------------------------------------------------------------------
  h          | id
 (1 row)
 
@@ -209,9 +209,9 @@ ERROR:  not a valid column
 SELECT column_to_column_name('customers','');
 ERROR:  not a valid column
 SELECT column_to_column_name('pg_dist_node'::regclass, NULL);
- column_to_column_name 
------------------------
- 
+ column_to_column_name
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT column_to_column_name('pg_dist_node'::regclass,'{FROMEXPR :fromlist ({RANGETBLREF :rtindex 1 }) :quals <>}');
@@ -226,8 +226,8 @@ SELECT create_monolithic_shard_row('customers') AS new_shard_id
 \gset
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 WHERE shardid = :new_shard_id;
- shardstorage | shardminvalue | shardmaxvalue 
---------------+---------------+---------------
+ shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
  t            | -2147483648   | 2147483647
 (1 row)
 
@@ -236,14 +236,14 @@ WHERE shardid = :new_shard_id;
 BEGIN;
 -- pick up a shard lock and look for it in pg_locks
 SELECT acquire_shared_shard_lock(5);
- acquire_shared_shard_lock 
----------------------------
- 
+ acquire_shared_shard_lock
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT objid, mode FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
- objid |   mode    
--------+-----------
+ objid |   mode
+---------------------------------------------------------------------
      5 | ShareLock
 (1 row)
 
@@ -251,8 +251,8 @@ SELECT objid, mode FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
 COMMIT;
 -- lock should be gone now
 SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -260,55 +260,55 @@ SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
 SET citus.shard_count TO 4;
 CREATE TABLE get_shardid_test_table1(column1 int, column2 int);
 SELECT create_distributed_table('get_shardid_test_table1', 'column1');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \COPY get_shardid_test_table1 FROM STDIN with delimiter '|';
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 1);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540006
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 2);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540009
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 3);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540007
 (1 row)
 
 -- verify result of the get_shard_id_for_distribution_column
 \c - - - :worker_1_port
 SELECT * FROM get_shardid_test_table1_540006;
- column1 | column2 
----------+---------
+ column1 | column2
+---------------------------------------------------------------------
        1 |       1
 (1 row)
 
 SELECT * FROM get_shardid_test_table1_540009;
- column1 | column2 
----------+---------
+ column1 | column2
+---------------------------------------------------------------------
        2 |       2
 (1 row)
 
 SELECT * FROM get_shardid_test_table1_540007;
- column1 | column2 
----------+---------
+ column1 | column2
+---------------------------------------------------------------------
        3 |       3
 (1 row)
 
 \c - - - :master_port
 -- test non-existing value
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540007
 (1 row)
 
@@ -316,35 +316,35 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
 SET citus.shard_count TO 4;
 CREATE TABLE get_shardid_test_table2(column1 text[], column2 int);
 SELECT create_distributed_table('get_shardid_test_table2', 'column1');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \COPY get_shardid_test_table2 FROM STDIN with delimiter '|';
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}');
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540013
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}');
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540011
 (1 row)
 
 -- verify result of the get_shard_id_for_distribution_column
 \c - - - :worker_1_port
 SELECT * FROM get_shardid_test_table2_540013;
- column1 | column2 
----------+---------
+ column1 | column2
+---------------------------------------------------------------------
  {a,b,c} |       1
 (1 row)
 
 SELECT * FROM get_shardid_test_table2_540011;
- column1 | column2 
----------+---------
+ column1 | column2
+---------------------------------------------------------------------
  {d,e,f} |       2
 (1 row)
 
@@ -364,9 +364,9 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
 ERROR:  relation is not distributed
 -- test append distributed table
 SELECT create_distributed_table('get_shardid_test_table3', 'column1', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
@@ -374,73 +374,73 @@ ERROR:  finding shard id of given distribution value is only supported for hash 
 -- test reference table;
 CREATE TABLE get_shardid_test_table4(column1 int, column2 int);
 SELECT create_reference_table('get_shardid_test_table4');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test NULL distribution column value for reference table
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4');
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540014
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', NULL);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540014
 (1 row)
 
 -- test different data types for reference table
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 1);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540014
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a');
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540014
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}');
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540014
 (1 row)
 
 -- test range distributed table
 CREATE TABLE get_shardid_test_table5(column1 int, column2 int);
 SELECT create_distributed_table('get_shardid_test_table5', 'column1', 'range');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- create worker shards
 SELECT master_create_empty_shard('get_shardid_test_table5');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                     540015
 (1 row)
 
 SELECT master_create_empty_shard('get_shardid_test_table5');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                     540016
 (1 row)
 
 SELECT master_create_empty_shard('get_shardid_test_table5');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                     540017
 (1 row)
 
 SELECT master_create_empty_shard('get_shardid_test_table5');
- master_create_empty_shard 
----------------------------
+ master_create_empty_shard
+---------------------------------------------------------------------
                     540018
 (1 row)
 
@@ -450,55 +450,55 @@ UPDATE pg_dist_shard SET shardminvalue = 1001, shardmaxvalue = 2000 WHERE shardi
 UPDATE pg_dist_shard SET shardminvalue = 2001, shardmaxvalue = 3000 WHERE shardid = 540017;
 UPDATE pg_dist_shard SET shardminvalue = 3001, shardmaxvalue = 4000 WHERE shardid = 540018;
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 5);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540015
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 1111);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540016
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 2689);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540017
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 3248);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                540018
 (1 row)
 
 -- test non-existing value for range distributed tables
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 4001);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                     0
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', -999);
- get_shard_id_for_distribution_column 
---------------------------------------
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
                                     0
 (1 row)
 
 SET citus.shard_count TO 2;
 CREATE TABLE events_table_count (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
 SELECT create_distributed_table('events_table_count', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE users_table_count (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
 SELECT create_distributed_table('users_table_count', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT relation_count_in_query($$-- we can support arbitrary subqueries within UNIONs
@@ -572,8 +572,8 @@ GROUP BY
   types
 ORDER BY
   types;$$);
- relation_count_in_query 
--------------------------
+ relation_count_in_query
+---------------------------------------------------------------------
                        6
 (1 row)
 

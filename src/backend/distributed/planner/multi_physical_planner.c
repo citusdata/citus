@@ -65,6 +65,7 @@
 #include "optimizer/var.h"
 #endif
 #include "optimizer/restrictinfo.h"
+#include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
@@ -198,8 +199,6 @@ static List * MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList);
 static StringInfo CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 									   char *partitionColumnName);
 static char * ColumnName(Var *column, List *rangeTableList);
-static StringInfo SplitPointArrayString(ArrayType *splitPointObject,
-										Oid columnType, int32 columnTypeMod);
 static List * MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList,
 							uint32 taskIdIndex);
 static StringInfo ColumnNameArrayString(uint32 columnCount, uint64 generatingJobId);
@@ -3954,7 +3953,7 @@ DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId)
 
 	/* convert the array object to its string representation */
 	FmgrInfo *arrayOutFunction = (FmgrInfo *) palloc0(sizeof(FmgrInfo));
-	fmgr_info(ARRAY_OUT_FUNC_ID, arrayOutFunction);
+	fmgr_info(F_ARRAY_OUT, arrayOutFunction);
 
 	Datum arrayStringDatum = FunctionCall1(arrayOutFunction, arrayObjectDatum);
 	char *arrayString = DatumGetCString(arrayStringDatum);
@@ -4223,7 +4222,18 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	}
 	else
 	{
-		partitionColumnName = ColumnName(partitionColumn, rangeTableList);
+		TargetEntry *targetEntry = tlist_member((Expr *) partitionColumn,
+												filterQuery->targetList);
+		if (targetEntry != NULL)
+		{
+			/* targetEntry->resname may be NULL */
+			partitionColumnName = targetEntry->resname;
+		}
+
+		if (partitionColumnName == NULL)
+		{
+			partitionColumnName = ColumnName(partitionColumn, rangeTableList);
+		}
 	}
 
 	foreach(filterTaskCell, filterTaskList)
@@ -4277,9 +4287,9 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 	}
 
 	ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
-	StringInfo splitPointString = SplitPointArrayString(splitPointObject,
-														partitionColumnType,
-														partitionColumnTypeMod);
+	StringInfo splitPointString = ArrayObjectToString(splitPointObject,
+													  partitionColumnType,
+													  partitionColumnTypeMod);
 
 	char *partitionCommand = NULL;
 	if (partitionType == RANGE_PARTITION_TYPE)
@@ -4407,14 +4417,12 @@ ColumnName(Var *column, List *rangeTableList)
 
 
 /*
- * SplitPointArrayString takes the array representation of the given split point
- * object, and converts this array (and array's typed elements) to their string
- * representations.
+ * ArrayObjectToString converts an SQL object to its string representation.
  */
-static StringInfo
-SplitPointArrayString(ArrayType *splitPointObject, Oid columnType, int32 columnTypeMod)
+StringInfo
+ArrayObjectToString(ArrayType *arrayObject, Oid columnType, int32 columnTypeMod)
 {
-	Datum splitPointDatum = PointerGetDatum(splitPointObject);
+	Datum arrayDatum = PointerGetDatum(arrayObject);
 	Oid outputFunctionId = InvalidOid;
 	bool typeVariableLength = false;
 
@@ -4430,17 +4438,17 @@ SplitPointArrayString(ArrayType *splitPointObject, Oid columnType, int32 columnT
 	getTypeOutputInfo(arrayOutType, &outputFunctionId, &typeVariableLength);
 	fmgr_info(outputFunctionId, arrayOutFunction);
 
-	char *arrayOutputText = OutputFunctionCall(arrayOutFunction, splitPointDatum);
+	char *arrayOutputText = OutputFunctionCall(arrayOutFunction, arrayDatum);
 	char *arrayOutputEscapedText = quote_literal_cstr(arrayOutputText);
 
 	/* add an explicit cast to array's string representation */
 	char *arrayOutTypeName = format_type_with_typemod(arrayOutType, columnTypeMod);
 
-	StringInfo splitPointArrayString = makeStringInfo();
-	appendStringInfo(splitPointArrayString, "%s::%s",
+	StringInfo arrayString = makeStringInfo();
+	appendStringInfo(arrayString, "%s::%s",
 					 arrayOutputEscapedText, arrayOutTypeName);
 
-	return splitPointArrayString;
+	return arrayString;
 }
 
 
@@ -5277,7 +5285,7 @@ ActiveShardPlacementLists(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		uint64 anchorShardId = task->anchorShardId;
 
-		List *shardPlacementList = FinalizedShardPlacementList(anchorShardId);
+		List *shardPlacementList = ActiveShardPlacementList(anchorShardId);
 
 		/* filter out shard placements that reside in inactive nodes */
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);

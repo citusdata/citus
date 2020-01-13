@@ -35,6 +35,13 @@ typedef enum CoordinatedTransactionState
 	/* no coordinated transaction in progress, but connections established */
 	COORD_TRANS_IDLE,
 
+	/*
+	 * Coordinated transaction was initiated by coordinator, but the worker also
+	 * needs to start a coordinated transaction to be able to send commands to
+	 * other workers.
+	 */
+	COORD_TRANS_STARTED_ON_WORKER,
+
 	/* coordinated transaction in progress */
 	COORD_TRANS_STARTED,
 

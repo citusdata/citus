@@ -52,7 +52,7 @@ static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableS
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
 /*
- * ProcessDropTableStmt processes DROP TABLE commands for partitioned tables.
+ * PreprocessDropTableStmt processes DROP TABLE commands for partitioned tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
  * and DETACH partitions from their parents. Otherwise, we process DROP command
  * multiple times in MX workers. For shards, we send DROP commands with IF EXISTS
@@ -61,9 +61,10 @@ static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *comma
  * Postgres catalogs via performDeletion function, thus we need to be cautious
  * about not processing same DROP command twice.
  */
-void
-ProcessDropTableStmt(DropStmt *dropTableStatement)
+List *
+PreprocessDropTableStmt(Node *node, const char *queryString)
 {
+	DropStmt *dropTableStatement = castNode(DropStmt, node);
 	ListCell *dropTableCell = NULL;
 
 	Assert(dropTableStatement->removeType == OBJECT_TABLE);
@@ -114,11 +115,13 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
 			SendCommandToWorkersWithMetadata(detachPartitionCommand);
 		}
 	}
+
+	return NIL;
 }
 
 
 /*
- * ProcessCreateTableStmtPartitionOf takes CreateStmt object as a parameter but
+ * PostprocessCreateTableStmtPartitionOf takes CreateStmt object as a parameter but
  * it only processes CREATE TABLE ... PARTITION OF statements and it checks if
  * user creates the table as a partition of a distributed table. In that case,
  * it distributes partition as well. Since the table itself is a partition,
@@ -128,8 +131,9 @@ ProcessDropTableStmt(DropStmt *dropTableStatement)
  * This function does nothing if the provided CreateStmt is not a CREATE TABLE ...
  * PARTITION OF command.
  */
-void
-ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
+List *
+PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
+									  char *queryString)
 {
 	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
 	{
@@ -162,11 +166,13 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 								   viaDeprecatedAPI);
 		}
 	}
+
+	return NIL;
 }
 
 
 /*
- * ProcessAlterTableStmtAttachPartition takes AlterTableStmt object as parameter
+ * PostprocessAlterTableStmtAttachPartition takes AlterTableStmt object as parameter
  * but it only processes into ALTER TABLE ... ATTACH PARTITION commands and
  * distributes the partition if necessary. There are four cases to consider;
  *
@@ -191,8 +197,9 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
  * This function does nothing if the provided CreateStmt is not an ALTER TABLE ...
  * ATTACH PARTITION OF command.
  */
-void
-ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
+List *
+PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
+										 const char *queryString)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
@@ -239,11 +246,13 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 			}
 		}
 	}
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterTableStmt determines whether a given ALTER TABLE statement involves
+ * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
  * the master node table and creates a DDLJob to encapsulate information needed
@@ -251,8 +260,9 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand)
+PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 {
+	AlterTableStmt *alterTableStatement = castNode(AlterTableStmt, node);
 	Oid rightRelationId = InvalidOid;
 	ListCell *commandCell = NULL;
 	bool executeSequentially = false;
@@ -449,6 +459,24 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 
 /*
+ * PreprocessAlterTableStmt issues a warning.
+ * ALTER TABLE ALL IN TABLESPACE statements have their node type as
+ * AlterTableMoveAllStmt. At the moment we do not support this functionality in
+ * the distributed environment. We warn out here.
+ */
+List *
+PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
+{
+	ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
+							 "commands to worker nodes"),
+					  errhint("Connect to worker nodes directly to manually "
+							  "move all tables.")));
+
+	return NIL;
+}
+
+
+/*
  * WorkerProcessAlterTableStmt checks and processes the alter table statement to be
  * worked on the distributed table of the worker node. Currently, it only processes
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
@@ -587,14 +615,14 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 
 
 /*
- * PostProcessAlterTableStmt runs after the ALTER TABLE command has already run on the
+ * PostprocessAlterTableStmt runs after the ALTER TABLE command has already run on the
  * master, so we are checking constraints over the table with constraints already defined
  * (to make the constraint check process same for ALTER TABLE and CREATE TABLE). If
  * constraints do not fulfill the rules we defined, they will be removed and the table
  * will return back to the state before the ALTER TABLE command.
  */
 void
-PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
+PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
@@ -607,7 +635,7 @@ PostProcessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-		EnsureDependenciesExistsOnAllNodes(&tableAddress);
+		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
 	foreach(commandCell, commandList)
@@ -1295,7 +1323,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
-		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);
+		task->taskPlacementList = ActiveShardPlacementList(leftShardId);
 		task->relationShardList = list_make2(leftRelationShard, rightRelationShard);
 
 		taskList = lappend(taskList, task);

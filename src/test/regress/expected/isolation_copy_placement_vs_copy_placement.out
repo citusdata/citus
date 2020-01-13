@@ -1,50 +1,50 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-load-cache s2-load-cache s2-set-placement-inactive s2-begin s2-repair-placement s1-repair-placement s2-commit
-step s1-load-cache: 
+step s1-load-cache:
 	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 
-step s2-load-cache: 
+step s2-load-cache:
 	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 
-step s2-set-placement-inactive: 
+step s2-set-placement-inactive:
 	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard_for_test_table) AND nodeport = 57638;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-repair-placement: 
+step s2-repair-placement:
 	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
 
 master_copy_shard_placement
 
-               
-step s1-repair-placement: 
+
+step s1-repair-placement:
 	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 step s1-repair-placement: <... completed>
 error in steps s2-commit s1-repair-placement: ERROR:  target placement must be in inactive state
 
 starting permutation: s2-set-placement-inactive s2-begin s2-repair-placement s1-repair-placement s2-commit
-step s2-set-placement-inactive: 
+step s2-set-placement-inactive:
 	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard_for_test_table) AND nodeport = 57638;
 
-step s2-begin: 
+step s2-begin:
 	BEGIN;
 
-step s2-repair-placement: 
+step s2-repair-placement:
 	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
 
 master_copy_shard_placement
 
-               
-step s1-repair-placement: 
+
+step s1-repair-placement:
 	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
 	COMMIT;
 
 step s1-repair-placement: <... completed>

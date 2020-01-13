@@ -83,10 +83,10 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 	 * if the type actually exists instead of adding the IF EXISTS keyword to the
 	 * statement.
 	 */
-	const ObjectAddress *address = GetObjectAddressFromParseTree(parseTree, true);
-	if (ObjectExists(address))
+	ObjectAddress address = GetObjectAddressFromParseTree(parseTree, true);
+	if (ObjectExists(&address))
 	{
-		const char *localSqlStatement = CreateStmtByObjectAddress(address);
+		const char *localSqlStatement = CreateStmtByObjectAddress(&address);
 
 		if (strcmp(sqlStatement, localSqlStatement) == 0)
 		{
@@ -106,9 +106,9 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(false);
 		}
 
-		char *newName = GenerateBackupNameForCollision(address);
+		char *newName = GenerateBackupNameForCollision(&address);
 
-		RenameStmt *renameStmt = CreateRenameStatement(address, newName);
+		RenameStmt *renameStmt = CreateRenameStatement(&address, newName);
 		const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
 		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt,
 							PROCESS_UTILITY_TOPLEVEL,
@@ -258,31 +258,7 @@ CreateRenameProcStmt(const ObjectAddress *address, char *newName)
 {
 	RenameStmt *stmt = makeNode(RenameStmt);
 
-	switch (get_func_prokind(address->objectId))
-	{
-		case PROKIND_AGGREGATE:
-		{
-			stmt->renameType = OBJECT_AGGREGATE;
-			break;
-		}
-
-		case PROKIND_PROCEDURE:
-		{
-			stmt->renameType = OBJECT_PROCEDURE;
-			break;
-		}
-
-		case PROKIND_FUNCTION:
-		{
-			stmt->renameType = OBJECT_FUNCTION;
-			break;
-		}
-
-		default:
-			elog(ERROR, "Unexpected prokind");
-			return NULL;
-	}
-
+	stmt->renameType = OBJECT_ROUTINE;
 	stmt->object = (Node *) ObjectWithArgsFromOid(address->objectId);
 	stmt->newname = newName;
 

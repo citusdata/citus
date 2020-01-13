@@ -5,6 +5,7 @@ SET citus.next_shard_id TO 850000;
 -- router planner, so we're explicitly disabling it in this file.
 -- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 -- ===================================================================
 -- test end-to-end query functionality

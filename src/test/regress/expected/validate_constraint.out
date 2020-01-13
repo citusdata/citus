@@ -55,23 +55,23 @@ CREATE VIEW constraint_validations AS
     AND contype = 'c';
 CREATE TABLE referenced_table (id int UNIQUE, test_column int);
 SELECT create_reference_table('referenced_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE referencing_table (id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE constrained_table (id int, constrained_column int);
 SELECT create_distributed_table('constrained_table', 'constrained_column');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- The two constraint types that are allowed to be NOT VALID
@@ -111,16 +111,16 @@ ALTER TABLE constrained_table
 SELECT *
 FROM constraint_validations
 ORDER BY 1, 2;
-       Constraint       | Validated? 
-------------------------+------------
+       Constraint       | Validated?
+---------------------------------------------------------------------
  validatable_constraint | t
 (1 row)
 
 SELECT *
 FROM constraint_validations_in_workers
 ORDER BY 1, 2;
-              name              | validated 
---------------------------------+-----------
+              name              | validated
+---------------------------------------------------------------------
  validatable_constraint_8000009 | t
  validatable_constraint_8000010 | t
  validatable_constraint_8000011 | t

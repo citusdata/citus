@@ -57,6 +57,8 @@ static uint32 FileBufferSizeInBytes = 0; /* file buffer size to init later */
 
 
 /* Local functions forward declarations */
+typedef uint32 (*PartitionIdFunction)(Datum, Oid, const void *);
+
 static ShardInterval ** SyntheticShardIntervalArrayForShardMinValues(
 	Datum *shardMinValues,
 	int shardCount);
@@ -69,8 +71,7 @@ static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite
 static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
 									const char *columnName, Oid columnType,
-									uint32 (*PartitionIdFunction)(Datum, Oid, const
-																  void *),
+									PartitionIdFunction partitionIdFunction,
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
@@ -79,10 +80,10 @@ static CopyOutState InitRowOutputState(void);
 static void ClearRowOutputState(CopyOutState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
-static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation, const
-							   void *context);
-static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation, const
-							  void *context);
+static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation,
+							   const void *context);
+static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation,
+							  const void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(char *filename, struct stat filestat);
 
@@ -854,7 +855,7 @@ FileOutputStreamFlush(FileOutputStream *file)
 static void
 FilterAndPartitionTable(const char *filterQuery,
 						const char *partitionColumnName, Oid partitionColumnType,
-						uint32 (*PartitionIdFunction)(Datum, Oid, const void *),
+						PartitionIdFunction partitionIdFunction,
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
@@ -941,7 +942,7 @@ FilterAndPartitionTable(const char *filterQuery,
 			 */
 			if (!partitionKeyNull)
 			{
-				partitionId = (*PartitionIdFunction)(partitionKey,
+				partitionId = (*partitionIdFunction)(partitionKey,
 													 partitionColumnCollation,
 													 partitionIdContext);
 				if (partitionId == INVALID_SHARD_INDEX)

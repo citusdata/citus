@@ -27,8 +27,9 @@ static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
  * AlterRoleStmt for application on a remote server.
  */
 char *
-DeparseAlterRoleStmt(AlterRoleStmt *stmt)
+DeparseAlterRoleStmt(Node *node)
 {
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
 

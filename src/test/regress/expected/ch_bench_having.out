@@ -7,9 +7,9 @@ CREATE TABLE stock (
   s_order_cnt int NOT NULL
 );
 SELECT create_distributed_table('stock','s_w_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 explain (costs false, summary false, timing false)
@@ -19,8 +19,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                          QUERY PLAN
+---------------------------------------------------------------------
  Sort
    Sort Key: s_i_id
    InitPlan 1 (returns $0)
@@ -29,28 +29,28 @@ order by s_i_id;
          Group Key: s_i_id
          Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan 1_1
+               ->  Distributed Subplan XXX_1
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
-               ->  Distributed Subplan 1_2
+               ->  Distributed Subplan XXX_2
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: stock.s_i_id
                            InitPlan 1 (returns $0)
@@ -65,8 +65,8 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                       QUERY PLAN
+---------------------------------------------------------------------
  Sort
    Sort Key: s_i_id
    InitPlan 1 (returns $0)
@@ -75,19 +75,19 @@ order by s_i_id;
          Group Key: s_i_id
          Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan 4_1
+               ->  Distributed Subplan XXX_1
                      ->  Aggregate
                            ->  Custom Scan (Citus Adaptive)
                                  Task Count: 4
                                  Tasks Shown: One of 4
                                  ->  Task
-                                       Node: host=localhost port=57637 dbname=regression
+                                       Node: host=localhost port=xxxxx dbname=regression
                                        ->  Aggregate
                                              ->  Seq Scan on stock_1640000 stock
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: stock.s_i_id
                            ->  Seq Scan on stock_1640000 stock
@@ -98,27 +98,27 @@ select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock);
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                    QUERY PLAN
+---------------------------------------------------------------------
  HashAggregate
    Group Key: s_i_id
    Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
    InitPlan 1 (returns $0)
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan 6_1
+         ->  Distributed Subplan XXX_1
                ->  Aggregate
                      ->  Custom Scan (Citus Adaptive)
                            Task Count: 4
                            Tasks Shown: One of 4
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  Aggregate
                                        ->  Seq Scan on stock_1640000 stock
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Group Key: stock.s_i_id
                      ->  Seq Scan on stock_1640000 stock
@@ -129,8 +129,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
+                                           QUERY PLAN
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
@@ -142,7 +142,7 @@ order by s_i_id;
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
                            Group Key: s.s_i_id
                            ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
@@ -152,8 +152,8 @@ explain select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true);
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                        QUERY PLAN
+---------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
    Group Key: remote_scan.s_i_id
    Filter: $0
@@ -163,7 +163,7 @@ having   (select true);
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
                      Group Key: s.s_i_id
                      ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
@@ -175,8 +175,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
 (0 rows)
 
 INSERT INTO stock SELECT c, c, c FROM generate_series(1, 5) as c;
@@ -186,8 +186,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       3 |          3
       4 |          4
       5 |          5
@@ -198,8 +198,8 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       3 |          3
       4 |          4
       5 |          5
@@ -211,8 +211,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -226,8 +226,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
 (0 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -235,8 +235,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -249,8 +249,8 @@ from     stock s
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
 (0 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -258,8 +258,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -309,9 +309,9 @@ insert into stock VALUES
 (32, 1, 1, 1, 1, 1, '', '','','','','','','','','','');
 SELECT create_distributed_table('stock','s_w_id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -327,8 +327,8 @@ having   sum(s_order_cnt) >
         and s_nationkey = n_nationkey
         and n_name = 'GERMANY')
 order by ordercount desc;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
      33 |          1
       1 |          1
 (2 rows)
@@ -348,8 +348,8 @@ having   sum(s_order_cnt) >
         and s_nationkey = n_nationkey
         and n_name = 'GERMANY')
 order by ordercount desc;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |     100001
 (1 row)
 

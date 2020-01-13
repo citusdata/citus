@@ -156,7 +156,8 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static uint64 GetAnchorShardId(List *relationShardList);
 static List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const **partitionValueConst,
-												  bool *isMultiShardQuery);
+												  bool *isMultiShardQuery,
+												  Const *distributionKeyValue);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
@@ -188,6 +189,9 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 		CreateSingleTaskRouterPlan(distributedPlan, originalQuery, query,
 								   plannerRestrictionContext);
 	}
+
+	distributedPlan->fastPathRouterPlan =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	return distributedPlan;
 }
@@ -552,6 +556,8 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	ListCell *rangeTableCell = NULL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
+	bool fastPathRouterQuery =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
 	if (!IsDistributedTable(distributedTableId))
@@ -575,8 +581,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	 * rows based on the ctid column. This is a bad idea because ctid of
 	 * the rows could be changed before the modification part of
 	 * the query is executed.
+	 *
+	 * We can exclude fast path queries since they cannot have intermediate
+	 * results by definition.
 	 */
-	if (ContainsReadIntermediateResultFunction((Node *) originalQuery))
+	if (!fastPathRouterQuery &&
+		ContainsReadIntermediateResultFunction((Node *) originalQuery))
 	{
 		bool hasTidColumn = FindNodeCheck((Node *) originalQuery->jointree, IsTidColumn);
 		if (hasTidColumn)
@@ -649,8 +659,15 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	/* extract range table entries */
-	ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
+	/*
+	 * Extract range table entries for queries that are not fast path. We can skip fast
+	 * path queries because their definition is a single RTE entry, which is a relation,
+	 * so the following check doesn't apply for fast-path queries.
+	 */
+	if (!fastPathRouterQuery)
+	{
+		ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
+	}
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -1617,8 +1634,9 @@ ExtractFirstDistributedTableId(Query *query)
 	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
 	Oid distributedTableId = InvalidOid;
+	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
-	Assert(IsModifyCommand(query) || FastPathRouterQuery(query));
+	Assert(IsModifyCommand(query) || FastPathRouterQuery(query, &distKey));
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -2014,6 +2032,8 @@ PlanRouterQuery(Query *originalQuery,
 	bool shardsPresent = false;
 	uint64 shardId = INVALID_SHARD_ID;
 	CmdType commandType = originalQuery->commandType;
+	bool fastPathRouterQuery =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	*placementList = NIL;
 
@@ -2022,11 +2042,15 @@ PlanRouterQuery(Query *originalQuery,
 	 * not been called. Thus, restriction information is not avaliable and we do the
 	 * shard pruning based on the distribution column in the quals of the query.
 	 */
-	if (FastPathRouterQuery(originalQuery))
+	if (fastPathRouterQuery)
 	{
+		Const *distributionKeyValue =
+			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
+
 		List *shardIntervalList =
 			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
-												&isMultiShardQuery);
+												&isMultiShardQuery, distributionKeyValue);
+
 
 		/*
 		 * This could only happen when there is a parameter on the distribution key.
@@ -2247,21 +2271,34 @@ GetAnchorShardId(List *prunedShardIntervalListList)
  */
 static List *
 TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
-									bool *isMultiShardQuery)
+									bool *isMultiShardQuery, Const *distributionKeyValue)
 {
-	Const *queryPartitionValueConst = NULL;
-
 	Oid relationId = ExtractFirstDistributedTableId(query);
+
+	if (distributionKeyValue)
+	{
+		DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
+		ShardInterval *shardInterval =
+			FindShardInterval(distributionKeyValue->constvalue, cache);
+
+		if (partitionValueConst != NULL)
+		{
+			/* set the outgoing partition column value if requested */
+			*partitionValueConst = distributionKeyValue;
+		}
+		return list_make1(shardInterval);
+	}
+
 	Node *quals = query->jointree->quals;
-
 	int relationIndex = 1;
-
+	Const *queryPartitionValueConst = NULL;
 	List *prunedShardIntervalList =
 		PruneShards(relationId, relationIndex, make_ands_implicit((Expr *) quals),
 					&queryPartitionValueConst);
 
 	/* we're only expecting single shard from a single table */
-	Assert(FastPathRouterQuery(query));
+	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+	Assert(FastPathRouterQuery(query, &distKey));
 
 	if (list_length(prunedShardIntervalList) > 1)
 	{
@@ -2427,7 +2464,7 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 		uint64 shardId = shardInterval->shardId;
 
 		/* retrieve all active shard placements for this shard */
-		List *newPlacementList = FinalizedShardPlacementList(shardId);
+		List *newPlacementList = ActiveShardPlacementList(shardId);
 
 		if (firstShard)
 		{

@@ -1,10 +1,10 @@
 Parsed test spec with 3 sessions
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -19,62 +19,62 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-public-schema: 
+1
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-print-distributed-objects: 
+
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -89,37 +89,37 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -134,68 +134,68 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-public-schema: 
+1
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-commit: 
+
+step s2-commit:
  COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -210,37 +210,37 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -255,45 +255,45 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s2-public-schema: 
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
@@ -302,21 +302,21 @@ step s2-create-table:
 
 create_distributed_table
 
-               
-step s1-add-worker: 
+
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
 step s1-add-worker: <... completed>
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -331,37 +331,37 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -376,63 +376,63 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-create-schema: 
+1
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-print-distributed-objects: 
+
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -448,37 +448,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -493,69 +493,69 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-create-schema: 
+1
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-commit: 
+
+step s2-commit:
  COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -571,37 +571,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -616,46 +616,46 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s2-create-schema: 
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
@@ -664,21 +664,21 @@ step s2-create-table:
 
 create_distributed_table
 
-               
-step s1-add-worker: 
+
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
 step s1-add-worker: <... completed>
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -694,37 +694,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -739,88 +739,88 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s2-create-schema: 
+
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s3-begin: 
+step s3-begin:
  BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-create-table: 
+1
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s3-use-schema: 
+step s3-use-schema:
     SET search_path TO myschema;
 
-step s3-create-table: 
+step s3-create-table:
  CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-commit: 
+
+step s2-commit:
  COMMIT;
 
 step s3-create-table: <... completed>
 create_distributed_table
 
-               
-step s3-commit: 
+
+step s3-commit:
  COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -836,37 +836,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -881,55 +881,55 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-add-worker: 
+
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-create-schema: 
+1
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s3-begin: 
+step s3-begin:
  BEGIN;
 
-step s3-use-schema: 
+step s3-use-schema:
     SET search_path TO myschema;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
@@ -938,24 +938,24 @@ step s2-create-table:
 
 create_distributed_table
 
-               
-step s3-create-table: 
+
+step s3-create-table:
  CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
 step s3-create-table: <... completed>
 create_distributed_table
 
-               
-step s3-commit: 
+
+step s3-commit:
  COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -971,37 +971,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1016,89 +1016,89 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s3-begin: 
+step s3-begin:
  BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-create-schema: 
+1
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s3-create-schema2: 
+step s3-create-schema2:
     CREATE SCHEMA myschema2;
     SET search_path TO myschema2;
 
-step s2-create-table: 
+step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s3-create-table: 
+step s3-create-table:
  CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.shard_replication_factor TO 1;
  SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-table: <... completed>
 create_distributed_table
 
-               
+
 step s3-create-table: <... completed>
 create_distributed_table
 
-               
-step s2-commit: 
+
+step s2-commit:
  COMMIT;
 
-step s3-commit: 
+step s3-commit:
  COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1115,37 +1115,37 @@ pg_identify_object_as_address
 
 (schema,{myschema},{})
 (schema,{myschema2},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-type s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1160,55 +1160,55 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-public-schema: 
+1
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-create-type: 
+step s2-create-type:
  CREATE TYPE tt1 AS (a int, b int);
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-create-type: <... completed>
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1224,37 +1224,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (type,{public.tt1},{})
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-create-type s1-add-worker s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1269,54 +1269,54 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-public-schema: 
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-create-type: 
+step s2-create-type:
  CREATE TYPE tt1 AS (a int, b int);
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1332,37 +1332,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (type,{public.tt1},{})
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-type s2-create-table-with-type s1-add-worker s2-commit s1-commit s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1377,49 +1377,49 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-begin: 
+step s2-begin:
  BEGIN;
 
-step s2-create-schema: 
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-create-type: 
+step s2-create-type:
  CREATE TYPE tt1 AS (a int, b int);
 
-step s2-create-table-with-type: 
+step s2-create-table-with-type:
  CREATE TABLE t1 (a int, b tt1);
     -- session needs to have replication factor set to 1, can't do in setup
  SET citus.replication_model TO 'streaming';
@@ -1428,21 +1428,21 @@ step s2-create-table-with-type:
 
 create_distributed_table
 
-               
-step s1-add-worker: 
+
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
 step s1-add-worker: <... completed>
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s2-print-distributed-objects: 
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1459,37 +1459,37 @@ pg_identify_object_as_address
 
 (schema,{myschema},{})
 (type,{myschema.tt1},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1504,71 +1504,71 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s2-public-schema: 
+1
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-distribute-function: 
+step s2-distribute-function:
     CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
     SELECT create_distributed_function('add(INT,INT)', '$1');
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 step s2-distribute-function: <... completed>
 create_distributed_function
 
-               
-step s2-begin: 
+
+step s2-begin:
  BEGIN;
 
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
-step s3-wait-for-metadata-sync: 
+step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
 
-               
-step s2-print-distributed-objects: 
+
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1584,37 +1584,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1629,76 +1629,76 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s2-public-schema: 
+step s2-public-schema:
     SET search_path TO public;
 
-step s2-distribute-function: 
+step s2-distribute-function:
     CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
     SELECT create_distributed_function('add(INT,INT)', '$1');
 
 create_distributed_function
 
-               
-step s2-begin: 
+
+step s2-begin:
  BEGIN;
 
-step s2-commit: 
+step s2-commit:
  COMMIT;
 
-step s3-wait-for-metadata-sync: 
+step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
 
-               
-step s1-add-worker: 
+
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s3-wait-for-metadata-sync: 
+step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
 
-               
-step s2-print-distributed-objects: 
+
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1714,37 +1714,37 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
 master_remove_node
 
-               
-               
+
+
 
 starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
-?column?       
+?column?
 
-1              
-step s1-print-distributed-objects: 
+1
+step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -1759,77 +1759,77 @@ step s1-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
     SELECT master_remove_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
+1
 pg_identify_object_as_address
 
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 master_remove_node
 
-               
-step s2-begin: 
+
+step s2-begin:
  BEGIN;
 
-step s2-create-schema: 
+step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
-step s2-distribute-function: 
+step s2-distribute-function:
     CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
     SELECT create_distributed_function('add(INT,INT)', '$1');
 
 create_distributed_function
 
-               
-step s2-commit: 
+
+step s2-commit:
  COMMIT;
 
-step s3-wait-for-metadata-sync: 
+step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
 
-               
-step s1-begin: 
+
+step s1-begin:
     BEGIN;
 
-step s1-add-worker: 
+step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
-?column?       
+?column?
 
-1              
-step s1-commit: 
+1
+step s1-commit:
     COMMIT;
 
-step s3-wait-for-metadata-sync: 
+step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
 
-               
-step s2-print-distributed-objects: 
+
+step s2-print-distributed-objects:
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1846,28 +1846,28 @@ pg_identify_object_as_address
 
 (function,"{myschema,add}","{integer,integer}")
 (schema,{myschema},{})
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-count          
+count
 
-0              
+0
 run_command_on_workers
 
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-count          
+count
 
-1              
+1
 run_command_on_workers
 
 (localhost,57637,t,1)
 (localhost,57638,t,1)
 master_remove_node
 
-               
-               
+
+

@@ -195,6 +195,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_NODE_FIELD(subPlanList);
 	WRITE_NODE_FIELD(usedSubPlanNodeList);
+	WRITE_BOOL_FIELD(fastPathRouterPlan);
 
 	WRITE_NODE_FIELD(planningError);
 }
@@ -405,7 +406,7 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_UINT64_FIELD(placementId);
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
-	WRITE_ENUM_FIELD(shardState, RelayFileState);
+	WRITE_ENUM_FIELD(shardState, ShardState);
 	WRITE_INT_FIELD(groupId);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
@@ -426,7 +427,7 @@ OutGroupShardPlacement(OUTFUNC_ARGS)
 	WRITE_UINT64_FIELD(placementId);
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
-	WRITE_ENUM_FIELD(shardState, RelayFileState);
+	WRITE_ENUM_FIELD(shardState, ShardState);
 	WRITE_INT_FIELD(groupId);
 }
 

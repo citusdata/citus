@@ -9,8 +9,8 @@ CREATE TABLE simple_table (
 	id bigint
 );
 SELECT master_get_table_ddl_events('simple_table');
-                          master_get_table_ddl_events                          
--------------------------------------------------------------------------------
+                          master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.simple_table (first_name text, last_name text, id bigint)
  ALTER TABLE public.simple_table OWNER TO postgres
 (2 rows)
@@ -21,8 +21,8 @@ CREATE TABLE not_null_table (
 	id bigint not null
 );
 SELECT master_get_table_ddl_events('not_null_table');
-                    master_get_table_ddl_events                     
---------------------------------------------------------------------
+                    master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.not_null_table (city text, id bigint NOT NULL)
  ALTER TABLE public.not_null_table OWNER TO postgres
 (2 rows)
@@ -34,8 +34,8 @@ CREATE TABLE column_constraint_table (
 	age int CONSTRAINT non_negative_age CHECK (age >= 0)
 );
 SELECT master_get_table_ddl_events('column_constraint_table');
-                                                       master_get_table_ddl_events                                                        
-------------------------------------------------------------------------------------------------------------------------------------------
+                                                       master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK (age >= 0))
  ALTER TABLE public.column_constraint_table OWNER TO postgres
 (2 rows)
@@ -48,8 +48,8 @@ CREATE TABLE table_constraint_table (
 	CONSTRAINT bids_ordered CHECK (min_bid > max_bid)
 );
 SELECT master_get_table_ddl_events('table_constraint_table');
-                                                                      master_get_table_ddl_events                                                                       
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                      master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK (min_bid > max_bid))
  ALTER TABLE public.table_constraint_table OWNER TO postgres
 (2 rows)
@@ -60,8 +60,8 @@ CREATE TABLE default_value_table (
 	price decimal default 0.00
 );
 SELECT master_get_table_ddl_events('default_value_table');
-                           master_get_table_ddl_events                           
----------------------------------------------------------------------------------
+                           master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00)
  ALTER TABLE public.default_value_table OWNER TO postgres
 (2 rows)
@@ -73,8 +73,8 @@ CREATE TABLE pkey_table (
 	id bigint PRIMARY KEY
 );
 SELECT master_get_table_ddl_events('pkey_table');
-                             master_get_table_ddl_events                              
---------------------------------------------------------------------------------------
+                             master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL)
  ALTER TABLE public.pkey_table OWNER TO postgres
  ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)
@@ -86,8 +86,8 @@ CREATE TABLE unique_table (
 	username text UNIQUE not null
 );
 SELECT master_get_table_ddl_events('unique_table');
-                                master_get_table_ddl_events                                 
---------------------------------------------------------------------------------------------
+                                master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL)
  ALTER TABLE public.unique_table OWNER TO postgres
  ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)
@@ -101,11 +101,11 @@ CREATE TABLE clustered_table (
 CREATE INDEX clustered_time_idx ON clustered_table (received_at);
 CLUSTER clustered_table USING clustered_time_idx;
 SELECT master_get_table_ddl_events('clustered_table');
-                                        master_get_table_ddl_events                                         
-------------------------------------------------------------------------------------------------------------
+                                        master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)
  ALTER TABLE public.clustered_table OWNER TO postgres
- CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at) TABLESPACE pg_default
+ CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at)
  ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx
 (4 rows)
 
@@ -123,8 +123,8 @@ ALTER TABLE fiddly_table
 	ALTER traceroute SET STORAGE EXTERNAL,
 	ALTER ip_addr SET STATISTICS 500;
 SELECT master_get_table_ddl_events('fiddly_table');
-                                                                                                           master_get_table_ddl_events                                                                                                            
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                           master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL)
  ALTER TABLE ONLY public.fiddly_table ALTER COLUMN hostname SET STORAGE PLAIN, ALTER COLUMN os SET STORAGE MAIN, ALTER COLUMN ip_addr SET STORAGE EXTENDED, ALTER COLUMN ip_addr SET STATISTICS 500, ALTER COLUMN traceroute SET STORAGE EXTERNAL
  ALTER TABLE public.fiddly_table OWNER TO postgres
@@ -137,9 +137,9 @@ CREATE FOREIGN TABLE foreign_table (
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT create_distributed_table('foreign_table', 'id');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER FOREIGN TABLE foreign_table rename to renamed_foreign_table;
@@ -150,8 +150,8 @@ select table_name, column_name, data_type
 from information_schema.columns
 where table_schema='public' and table_name like 'renamed_foreign_table_%' and column_name <> 'id'
 order by table_name;
-          table_name          | column_name | data_type 
-------------------------------+-------------+-----------
+          table_name          | column_name | data_type
+---------------------------------------------------------------------
  renamed_foreign_table_610000 | rename_name | character
  renamed_foreign_table_610001 | rename_name | character
  renamed_foreign_table_610002 | rename_name | character
@@ -161,8 +161,8 @@ order by table_name;
 \c - - - :master_port
 SELECT master_get_table_ddl_events('renamed_foreign_table');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-                                                                                   master_get_table_ddl_events                                                                                    
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                   master_get_table_ddl_events
+---------------------------------------------------------------------
  CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
  CREATE FOREIGN TABLE public.renamed_foreign_table (id bigint NOT NULL, rename_name character(8) DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')
  ALTER TABLE public.renamed_foreign_table OWNER TO postgres
@@ -180,8 +180,8 @@ select table_name, column_name, data_type
 from information_schema.columns
 where table_schema='public' and table_name like 'renamed_foreign_table_%' and column_name <> 'id'
 order by table_name;
- table_name | column_name | data_type 
-------------+-------------+-----------
+ table_name | column_name | data_type
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port

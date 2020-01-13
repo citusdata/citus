@@ -30,7 +30,6 @@
 
 
 /* Definitions local to the physical planner */
-#define ARRAY_OUT_FUNC_ID 751
 #define NON_PRUNABLE_JOIN -1
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
@@ -181,7 +180,17 @@ typedef struct Task
 	TaskType taskType;
 	uint64 jobId;
 	uint32 taskId;
+
+	/*
+	 * If queryString != NULL, then we have a single query for all placements.
+	 * Otherwise, length of perPlacementQueryStrings is equal to length of
+	 * taskPlacementList and can assign a different query for each placement.
+	 * We need this flexibility when a query should return node specific values.
+	 * For example, on which node did we succeed storing some result files?
+	 */
 	char *queryString;
+	List *perPlacementQueryStrings;
+
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
 	List *dependentTaskList;     /* only applies to compute tasks */
@@ -311,6 +320,12 @@ typedef struct DistributedPlan
 	List *usedSubPlanNodeList;
 
 	/*
+	 * When the query is very simple such that we don't need to call
+	 * standard_planner(). See FastPathRouterQuery() for the definition.
+	 */
+	bool fastPathRouterPlan;
+
+	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
 	 * or if prepared statement parameters prevented successful planning.
@@ -379,6 +394,8 @@ extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
 extern RowModifyLevel RowModifyLevelForQuery(Query *query);
+extern StringInfo ArrayObjectToString(ArrayType *arrayObject,
+									  Oid columnType, int32 columnTypeMod);
 
 
 /* function declarations for Task and Task list operations */

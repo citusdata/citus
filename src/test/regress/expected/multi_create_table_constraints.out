@@ -12,9 +12,9 @@ SELECT create_distributed_table('uniq_cns_append_tables', 'partition_col', 'appe
 WARNING:  table "uniq_cns_append_tables" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE excl_cns_append_tables
@@ -27,9 +27,9 @@ SELECT create_distributed_table('excl_cns_append_tables', 'partition_col', 'appe
 WARNING:  table "excl_cns_append_tables" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test that Citus cannot distribute unique constraints that do not include
@@ -59,7 +59,7 @@ CREATE TABLE ex_on_non_part_col
 SELECT create_distributed_table('ex_on_non_part_col', 'partition_col', 'hash');
 ERROR:  cannot create constraint on "ex_on_non_part_col"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
--- now show that Citus can distribute unique and EXCLUDE constraints that 
+-- now show that Citus can distribute unique and EXCLUDE constraints that
 -- include the partition column for hash-partitioned tables.
 -- However, EXCLUDE constraints must include the partition column with
 -- an equality operator.
@@ -70,9 +70,9 @@ CREATE TABLE pk_on_part_col
 	other_col integer
 );
 SELECT create_distributed_table('pk_on_part_col', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE uq_part_col
@@ -81,9 +81,9 @@ CREATE TABLE uq_part_col
 	other_col integer
 );
 SELECT create_distributed_table('uq_part_col', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE uq_two_columns
@@ -93,16 +93,16 @@ CREATE TABLE uq_two_columns
 	UNIQUE (partition_col, other_col)
 );
 SELECT create_distributed_table('uq_two_columns', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
 ERROR:  duplicate key value violates unique constraint "uq_two_columns_partition_col_other_col_key_365008"
 DETAIL:  Key (partition_col, other_col)=(1, 1) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_on_part_col
 (
 	partition_col integer,
@@ -110,16 +110,16 @@ CREATE TABLE ex_on_part_col
 	EXCLUDE (partition_col WITH =)
 );
 SELECT create_distributed_table('ex_on_part_col', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_on_part_col (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_part_col (partition_col, other_col) VALUES (1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_partition_col_excl_365012"
 DETAIL:  Key (partition_col)=(1) conflicts with existing key (partition_col)=(1).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_on_two_columns
 (
 	partition_col integer,
@@ -127,16 +127,16 @@ CREATE TABLE ex_on_two_columns
 	EXCLUDE (partition_col WITH =, other_col WITH =)
 );
 SELECT create_distributed_table('ex_on_two_columns', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_partition_col_other_col_excl_365016"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_on_two_columns_prt
 (
 	partition_col integer,
@@ -144,9 +144,9 @@ CREATE TABLE ex_on_two_columns_prt
 	EXCLUDE (partition_col WITH =, other_col WITH =) WHERE (other_col > 100)
 );
 SELECT create_distributed_table('ex_on_two_columns_prt', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,1);
@@ -155,7 +155,7 @@ INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
 INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_prt_partition_col_other_col_excl_365020"
 DETAIL:  Key (partition_col, other_col)=(1, 101) conflicts with existing key (partition_col, other_col)=(1, 101).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_wrong_operator
 (
 	partition_col tsrange,
@@ -172,18 +172,18 @@ CREATE TABLE ex_overlaps
 	EXCLUDE USING gist (other_col WITH &&, partition_col WITH =)
 );
 SELECT create_distributed_table('ex_overlaps', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-01 00:00:00, 2016-02-01 00:00:00]');
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
 ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_other_col_partition_col_excl_365027"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
-CONTEXT:  while executing command on localhost:57638
--- now show that Citus can distribute unique and EXCLUDE constraints that 
--- include the partition column, for hash-partitioned tables. 
+CONTEXT:  while executing command on localhost:xxxxx
+-- now show that Citus can distribute unique and EXCLUDE constraints that
+-- include the partition column, for hash-partitioned tables.
 -- However, EXCLUDE constraints must include the partition column with
 -- an equality operator.
 -- These tests are for NAMED constraints.
@@ -193,9 +193,9 @@ CREATE TABLE pk_on_part_col_named
 	other_col integer
 );
 SELECT create_distributed_table('pk_on_part_col_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE uq_part_col_named
@@ -204,9 +204,9 @@ CREATE TABLE uq_part_col_named
 	other_col integer
 );
 SELECT create_distributed_table('uq_part_col_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE uq_two_columns_named
@@ -216,16 +216,16 @@ CREATE TABLE uq_two_columns_named
 	CONSTRAINT uq_two_columns_named_uniq UNIQUE (partition_col, other_col)
 );
 SELECT create_distributed_table('uq_two_columns_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
 ERROR:  duplicate key value violates unique constraint "uq_two_columns_named_uniq_365036"
 DETAIL:  Key (partition_col, other_col)=(1, 1) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_on_part_col_named
 (
 	partition_col integer,
@@ -233,16 +233,16 @@ CREATE TABLE ex_on_part_col_named
 	CONSTRAINT ex_on_part_col_named_exclude EXCLUDE (partition_col WITH =)
 );
 SELECT create_distributed_table('ex_on_part_col_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_named_exclude_365040"
 DETAIL:  Key (partition_col)=(1) conflicts with existing key (partition_col)=(1).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_on_two_columns_named
 (
 	partition_col integer,
@@ -250,16 +250,16 @@ CREATE TABLE ex_on_two_columns_named
 	CONSTRAINT ex_on_two_columns_named_exclude EXCLUDE (partition_col WITH =, other_col WITH =)
 );
 SELECT create_distributed_table('ex_on_two_columns_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_named_exclude_365044"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_multiple_excludes
 (
 	partition_col integer,
@@ -269,20 +269,20 @@ CREATE TABLE ex_multiple_excludes
 	CONSTRAINT ex_multiple_excludes_excl2 EXCLUDE (partition_col WITH =, other_other_col WITH =)
 );
 SELECT create_distributed_table('ex_multiple_excludes', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,1,1);
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl1_365048"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,2,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl2_365048"
 DETAIL:  Key (partition_col, other_other_col)=(1, 1) conflicts with existing key (partition_col, other_other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 CREATE TABLE ex_wrong_operator_named
 (
 	partition_col tsrange,
@@ -299,16 +299,16 @@ CREATE TABLE ex_overlaps_named
 	CONSTRAINT ex_overlaps_operator_named_exclude EXCLUDE USING gist (other_col WITH &&, partition_col WITH =)
 );
 SELECT create_distributed_table('ex_overlaps_named', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-01 00:00:00, 2016-02-01 00:00:00]');
 INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
 ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_operator_named_exclude_365055"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:xxxxx
 -- now show that Citus allows unique constraints on range-partitioned tables.
 CREATE TABLE uq_range_tables
 (
@@ -316,9 +316,9 @@ CREATE TABLE uq_range_tables
 	other_col integer
 );
 SELECT create_distributed_table('uq_range_tables', 'partition_col', 'range');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- show that CHECK constraints are distributed.
@@ -329,22 +329,22 @@ CREATE TABLE check_example
 	other_other_col integer CHECK (abs(other_other_col) >= 100)
 );
 SELECT create_distributed_table('check_example', 'partition_col', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'check_example_partition_col_key_365056'::regclass;
-    Column     |  Type   |  Definition   
----------------+---------+---------------
+    Column     |  Type   |  Definition
+---------------------------------------------------------------------
  partition_col | integer | partition_col
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
-             Constraint              |             Definition              
--------------------------------------+-------------------------------------
+             Constraint              |             Definition
+---------------------------------------------------------------------
  check_example_other_col_check       | CHECK (other_col >= 100)
  check_example_other_other_col_check | CHECK (abs(other_other_col) >= 100)
 (2 rows)
@@ -375,22 +375,22 @@ SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE raw_table_1 (user_id int, UNIQUE(user_id));
 SELECT create_distributed_table('raw_table_1', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE raw_table_2 (user_id int REFERENCES raw_table_1(user_id), UNIQUE(user_id));
 SELECT create_distributed_table('raw_table_2', 'user_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- see that the constraint exists
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
-        Constraint        |                      Definition                       
---------------------------+-------------------------------------------------------
+        Constraint        |                      Definition
+---------------------------------------------------------------------
  raw_table_2_user_id_fkey | FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
 (1 row)
 
@@ -404,8 +404,8 @@ DROP TABLE raw_table_1 CASCADE;
 NOTICE:  drop cascades to constraint raw_table_2_user_id_fkey on table raw_table_2
 -- see that the constraint also dropped
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
- Constraint | Definition 
-------------+------------
+ Constraint | Definition
+---------------------------------------------------------------------
 (0 rows)
 
 -- drop the table as well

@@ -101,7 +101,7 @@ SELECT load_shard_interval_array(540005, 0);
 -- should see two placements
 SELECT load_shard_placement_array(540001, false);
 
--- only one of which is finalized
+-- only one of which is active
 SELECT load_shard_placement_array(540001, true);
 
 -- should see error for non-existent shard

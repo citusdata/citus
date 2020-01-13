@@ -2,8 +2,8 @@
 -- Note in PG12 we use CREATE OR REPLACE AGGREGATE, thus the renaming does not occur
 CREATE SCHEMA proc_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA proc_conflict;$$);
-       run_command_on_workers        
--------------------------------------
+       run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE SCHEMA")
  (localhost,57638,t,"CREATE SCHEMA")
 (2 rows)
@@ -31,9 +31,9 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - - - :worker_1_port
@@ -44,8 +44,8 @@ WITH data (val) AS (
     union all select 6
 )
 SELECT existing_agg(val) FROM data;
- existing_agg 
---------------
+ existing_agg
+---------------------------------------------------------------------
            78
 (1 row)
 
@@ -57,8 +57,8 @@ WITH data (val) AS (
     union all select 6
 )
 SELECT existing_agg(val) FROM data;
- existing_agg 
---------------
+ existing_agg
+---------------------------------------------------------------------
            78
 (1 row)
 
@@ -90,9 +90,9 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
- create_distributed_function 
------------------------------
- 
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - - - :worker_1_port
@@ -103,8 +103,8 @@ WITH data (val) AS (
     union all select 6
 )
 SELECT existing_agg(val) FROM data;
- existing_agg 
---------------
+ existing_agg
+---------------------------------------------------------------------
            76
 (1 row)
 
@@ -116,8 +116,8 @@ WITH data (val) AS (
     union all select 6
 )
 SELECT existing_agg(val) FROM data;
- existing_agg 
---------------
+ existing_agg
+---------------------------------------------------------------------
            76
 (1 row)
 
@@ -128,14 +128,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STRICT IMMUTABLE;
 SELECT worker_create_or_replace_object('CREATE AGGREGATE proc_conflict.existing_agg(integer) (STYPE = integer,SFUNC = proc_conflict.existing_func2)');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT worker_create_or_replace_object('CREATE AGGREGATE proc_conflict.existing_agg(integer) (STYPE = integer,SFUNC = proc_conflict.existing_func2)');
- worker_create_or_replace_object 
----------------------------------
+ worker_create_or_replace_object
+---------------------------------------------------------------------
  f
 (1 row)
 

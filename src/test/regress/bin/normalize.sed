@@ -15,8 +15,7 @@ s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
 # Differing names can have differing table column widths
-s/(-+\|)+-+/---/g
-s/.*-------------.*/---------------------------------------------------------------------/g
+s/^-[+-]{2,}$/---------------------------------------------------------------------/g
 
 # In foreign_key_to_reference_table, normalize shard table names, etc in
 # the generated plan
@@ -45,9 +44,6 @@ s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345
 # normalize pkey constraints in multi_insert_select.sql
 s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
 
-# normalize failed task ids
-s/ERROR:  failed to execute task [0-9]+/ERROR:  failed to execute task X/g
-
 # ignore could not consume warnings
 /WARNING:  could not consume data from worker node/d
 
@@ -65,6 +61,9 @@ s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 /^LINE [0-9]+:.*$/d
 /^ *\^$/d
 
+# Remove trailing whitespace
+s/ *$//g
+
 # pg12 changes
 s/Partitioned table "/Table "/g
 s/\) TABLESPACE pg_default$/\)/g
@@ -76,3 +75,16 @@ s/_id_other_column_ref_fkey/_id_fkey/g
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
+
+# toast tables
+s/pg_toast_[0-9]+/pg_toast_xxxxx/g
+
+# Plan numbers are not very stable, so we normalize those
+# subplan numbers are quite stable so we keep those
+s/DEBUG:  Plan [0-9]+/DEBUG:  Plan XXX/g
+s/generating subplan [0-9]+\_/generating subplan XXX\_/g
+s/read_intermediate_result\('[0-9]+_/read_intermediate_result('XXX_/g
+s/Subplan [0-9]+\_/Subplan XXX\_/g
+
+# Plan numbers in insert select
+s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('insert_select_XXX_/g

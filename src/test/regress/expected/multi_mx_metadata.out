@@ -2,8 +2,8 @@
 -- Temporarily disable automatic 2PC recovery
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
+ pg_reload_conf
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -32,103 +32,103 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('distributed_mx_table', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Verify that we've logged commit records
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- Confirm that the metadata transactions have been committed
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
 -- Verify that the commit records have been removed
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-  Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+  Column  |  Type  |                                Modifiers
+---------------------------------------------------------------------
  key      | text   | not null
- value    | jsonb  | 
+ value    | jsonb  |
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
 (3 rows)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
- Column | Type | Definition 
---------+------+------------
+ Column | Type | Definition
+---------------------------------------------------------------------
  key    | text | key
 (1 row)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_value_idx'::regclass;
- Column | Type | Definition 
---------+------+------------
+ Column | Type | Definition
+---------------------------------------------------------------------
  value  | text | value
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
- repmodel 
-----------
+ repmodel
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
 \c - - - :worker_2_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-  Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+  Column  |  Type  |                                Modifiers
+---------------------------------------------------------------------
  key      | text   | not null
- value    | jsonb  | 
+ value    | jsonb  |
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
 (3 rows)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_pkey'::regclass;
- Column | Type | Definition 
---------+------+------------
+ Column | Type | Definition
+---------------------------------------------------------------------
  key    | text | key
 (1 row)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'distributed_mx_table_value_idx'::regclass;
- Column | Type | Definition 
---------+------+------------
+ Column | Type | Definition
+---------------------------------------------------------------------
  value  | text | value
 (1 row)
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
- repmodel 
-----------
+ repmodel
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -142,17 +142,17 @@ CREATE TABLE should_not_exist (
     value jsonb
 );
 SELECT create_distributed_table('should_not_exist', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ABORT;
 -- Verify that the table does not exist on the worker
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_not_exist';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -166,9 +166,9 @@ CREATE TABLE should_not_exist (
     value jsonb
 );
 SELECT create_distributed_table('should_not_exist', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 PREPARE TRANSACTION 'this_should_fail';
@@ -184,9 +184,9 @@ CREATE TABLE objects_for_xacts (
     name text NOT NULL
 );
 SELECT create_distributed_table('objects_for_xacts', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 COMMIT;
@@ -194,22 +194,22 @@ COMMIT;
 \c - - - :worker_1_port
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
- repmodel 
-----------
+ repmodel
+---------------------------------------------------------------------
  s
 (1 row)
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
--- now show that we can rollback on creating mx table, but shards remain.... 
+-- now show that we can rollback on creating mx table, but shards remain....
 BEGIN;
 CREATE SCHEMA IF NOT EXISTS citus_mx_schema_for_xacts;
 NOTICE:  schema "citus_mx_schema_for_xacts" already exists, skipping
@@ -221,31 +221,31 @@ CREATE TABLE objects_for_xacts2 (
     name text NOT NULL
 );
 SELECT create_distributed_table('objects_for_xacts2', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ROLLBACK;
 -- show that the table not exists on the coordinator
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 \c - - - :worker_1_port
 -- the distributed table not exists on the worker node
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -255,8 +255,8 @@ ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              0
 (1 row)
 
@@ -277,28 +277,28 @@ SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_po
 INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_commit');
 INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_be_forgotten');
 SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
+ recover_prepared_transactions
+---------------------------------------------------------------------
                              3
 (1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- Confirm that transactions were correctly rolled forward
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -307,47 +307,47 @@ CREATE USER no_access_mx;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
-      run_command_on_workers       
------------------------------------
+      run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,"CREATE ROLE")
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
 
 SET ROLE no_access_mx;
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
 SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
- master_drop_sequences 
------------------------
- 
+ master_drop_sequences
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_drop_sequences(ARRAY['']);
@@ -355,9 +355,9 @@ ERROR:  invalid name syntax
 SELECT master_drop_sequences(ARRAY['public.']);
 ERROR:  invalid name syntax
 SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
- master_drop_sequences 
------------------------
- 
+ master_drop_sequences
+---------------------------------------------------------------------
+
 (1 row)
 
 -- make sure that we can drop unrelated tables/sequences
@@ -365,18 +365,18 @@ CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
 -- doesn't error out but it has no effect, so no need to error out
 SELECT master_drop_sequences(NULL);
- master_drop_sequences 
------------------------
- 
+ master_drop_sequences
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - postgres - :master_port
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-  Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+  Column  |  Type  |                                Modifiers
+---------------------------------------------------------------------
  key      | text   | not null
- value    | jsonb  | 
+ value    | jsonb  |
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
 (3 rows)
 
@@ -391,22 +391,22 @@ BEGIN
     END IF;
 END;
 $$LANGUAGE plpgsql;
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$ 
+SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
- raise_failed_aclcheck 
------------------------
- 
+ raise_failed_aclcheck
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
@@ -421,10 +421,10 @@ DROP TABLE unrelated_table;
 \c - postgres - :worker_1_port
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
-  Column  |  Type  |                                Modifiers                                
-----------+--------+-------------------------------------------------------------------------
+  Column  |  Type  |                                Modifiers
+---------------------------------------------------------------------
  key      | text   | not null
- value    | jsonb  | 
+ value    | jsonb  |
  some_val | bigint | not null default nextval('distributed_mx_table_some_val_seq'::regclass)
 (3 rows)
 
@@ -432,8 +432,8 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 \c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
+ pg_reload_conf
+---------------------------------------------------------------------
  t
 (1 row)
 

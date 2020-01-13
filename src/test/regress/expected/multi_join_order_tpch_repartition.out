@@ -21,8 +21,8 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                                QUERY PLAN                                
---------------------------------------------------------------------------
+                                QUERY PLAN
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -52,8 +52,8 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ]
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                                           QUERY PLAN
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -95,8 +95,8 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ][ reference join "nation" ]
-                                                                                 QUERY PLAN                                                                                 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 QUERY PLAN
+---------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -136,8 +136,8 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ]
-                                QUERY PLAN                                
---------------------------------------------------------------------------
+                                QUERY PLAN
+---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
@@ -155,8 +155,8 @@ WHERE
 GROUP BY
       l_partkey;
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single range partition join "part_append" ][ single range partition join "customer_append" ]
-                                QUERY PLAN                                
---------------------------------------------------------------------------
+                                QUERY PLAN
+---------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
    Group Key: remote_scan.l_partkey
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)

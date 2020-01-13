@@ -105,7 +105,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 * sessions creating shards.
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistsOnAllNodes(&tableAddress);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);
@@ -277,7 +277,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *shardQualifiedName = quote_qualified_identifier(shardSchemaName,
 														  shardTableName);
 
-	List *shardPlacementList = FinalizedShardPlacementList(shardId);
+	List *shardPlacementList = ActiveShardPlacementList(shardId);
 	if (shardPlacementList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not find any shard placements for shardId "
@@ -397,7 +397,7 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 		int shardIndex = -1; /* not used in this code path */
-		const RelayFileState shardState = FILE_FINALIZED;
+		const ShardState shardState = SHARD_STATE_ACTIVE;
 		const uint64 shardSize = 0;
 		MultiConnection *connection =
 			GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort,
@@ -453,7 +453,7 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 		int workerNodeIndex = (workerStartIndex + attemptNumber) % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 		uint32 nodeGroupId = workerNode->groupId;
-		const RelayFileState shardState = FILE_FINALIZED;
+		const ShardState shardState = SHARD_STATE_ACTIVE;
 		const uint64 shardSize = 0;
 
 		uint64 shardPlacementId = InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID,
@@ -778,7 +778,7 @@ UpdateShardStatistics(int64 shardId)
 
 	char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 
-	List *shardPlacementList = FinalizedShardPlacementList(shardId);
+	List *shardPlacementList = ActiveShardPlacementList(shardId);
 
 	/* get shard's statistics from a shard placement */
 	foreach(shardPlacementCell, shardPlacementList)
@@ -819,7 +819,7 @@ UpdateShardStatistics(int64 shardId)
 		int32 groupId = placement->groupId;
 
 		DeleteShardPlacementRow(placementId);
-		InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, shardSize,
+		InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, shardSize,
 								groupId);
 	}
 

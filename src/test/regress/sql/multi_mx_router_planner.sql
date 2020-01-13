@@ -569,7 +569,7 @@ CREATE TEMP TABLE temp_articles_hash_mx as
 	WHERE author_id = 1
 	ORDER BY id;
 
--- router plannable queries may include filter for aggragates
+-- router plannable queries may include filter for aggregates
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash_mx
 	WHERE author_id = 1;

@@ -1,6 +1,6 @@
----
+---------------------------------------------------------------------
 --- materialized_view
----
+---------------------------------------------------------------------
 -- This file contains test cases for materialized view support.
 -- materialized views work
 -- insert into... select works with views
@@ -9,23 +9,23 @@ SET search_path TO materialized_view, public;
 CREATE VIEW air_shipped_lineitems AS SELECT * FROM lineitem_hash_part WHERE l_shipmode = 'AIR';
 CREATE TABLE temp_lineitem(LIKE lineitem_hash_part);
 SELECT create_distributed_table('temp_lineitem', 'l_orderkey', 'hash', 'lineitem_hash_part');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
 SELECT count(*) FROM temp_lineitem;
- count 
--------
+ count
+---------------------------------------------------------------------
   1706
 (1 row)
 
 -- following is a where false query, should not be inserting anything
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
 SELECT count(*) FROM temp_lineitem;
- count 
--------
+ count
+---------------------------------------------------------------------
   1706
 (1 row)
 
@@ -33,8 +33,8 @@ SELECT count(*) FROM temp_lineitem;
 CREATE MATERIALIZED VIEW mode_counts
 AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
 SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  AIR        |  1706
 (1 row)
 
@@ -44,16 +44,16 @@ ERROR:  relation mode_counts is not distributed
 -- new data is not immediately reflected in the view
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
 SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  AIR        |  1706
 (1 row)
 
 -- refresh updates the materialised view with new data
 REFRESH MATERIALIZED VIEW mode_counts;
 SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  AIR        |  3412
 (1 row)
 
@@ -66,8 +66,8 @@ FROM lineitem_hash_part, orders_hash_part, (SELECT SUM(l_extendedprice) AS price
 WHERE lineitem_hash_part.l_orderkey=orders_hash_part.o_orderkey AND lineitem_hash_part.l_orderkey=3;
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
@@ -79,8 +79,8 @@ FROM lineitem_hash_part, orders_hash_part, (SELECT SUM(l_extendedprice) AS price
 WHERE lineitem_hash_part.l_orderkey=orders_hash_part.o_orderkey;
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -93,8 +93,8 @@ FROM lineitem_hash_part, orders_hash_part, total_price
 WHERE lineitem_hash_part.l_orderkey=orders_hash_part.o_orderkey;
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -110,8 +110,8 @@ FROM orders_hash_part JOIN (
     ON total_quantity.l_orderkey=orders_hash_part.o_orderkey;
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
@@ -123,8 +123,8 @@ FROM lineitem_hash_part, orders_reference, (SELECT SUM(o_totalprice) AS price_su
 WHERE lineitem_hash_part.l_orderkey=orders_reference.o_orderkey;
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -138,22 +138,22 @@ FROM lineitem_local_to_hash_part, orders_local_to_hash_part, (SELECT SUM(l_exten
 WHERE lineitem_local_to_hash_part.l_orderkey=orders_local_to_hash_part.o_orderkey;
 SELECT create_distributed_table('lineitem_local_to_hash_part', 'l_orderkey');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('orders_local_to_hash_part', 'o_orderkey');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -167,8 +167,8 @@ FROM lineitem_hash_part, orders_hash_part, (SELECT SUM(l_extendedprice) AS price
 WHERE lineitem_hash_part.l_orderkey=orders_hash_part.o_orderkey;
 REFRESH MATERIALIZED VIEW materialized_view WITH DATA;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
  12000
 (1 row)
 
@@ -192,8 +192,8 @@ GROUP BY orders_hash_part.o_orderdate;
 CREATE UNIQUE INDEX materialized_view_index ON materialized_view (o_orderdate);
 REFRESH MATERIALIZED VIEW CONCURRENTLY materialized_view;
 SELECT count(*) FROM materialized_view;
- count 
--------
+ count
+---------------------------------------------------------------------
   1699
 (1 row)
 
@@ -205,15 +205,15 @@ NOTICE:  drop cascades to view air_shipped_lineitems
 CREATE TABLE large (id int, tenant_id int);
 CREATE TABLE small (id int, tenant_id int);
 SELECT create_distributed_table('large','tenant_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('small','tenant_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy small FROM STDIN DELIMITER ','
@@ -226,8 +226,8 @@ ERROR:  cannot change materialized view "small_view"
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large ORDER BY 1, 2;
- id | tenant_id 
-----+-----------
+ id | tenant_id
+---------------------------------------------------------------------
   1 |         2
   2 |         3
   5 |         4
@@ -238,8 +238,8 @@ SELECT * FROM large ORDER BY 1, 2;
 UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=2 and large.tenant_id=2;
 ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large ORDER BY 1, 2;
- id | tenant_id 
-----+-----------
+ id | tenant_id
+---------------------------------------------------------------------
   1 |         2
   2 |         3
   5 |         4
@@ -249,8 +249,8 @@ SELECT * FROM large ORDER BY 1, 2;
 -- delete statement on large with subquery, this should succeed
 DELETE FROM large WHERE tenant_id in (SELECT tenant_id FROM small_view);
 SELECT * FROM large ORDER BY 1, 2;
- id | tenant_id 
-----+-----------
+ id | tenant_id
+---------------------------------------------------------------------
   6 |         5
 (1 row)
 
@@ -267,15 +267,15 @@ CREATE TABLE large_partitioned_p1 PARTITION OF large_partitioned FOR VALUES FROM
 CREATE TABLE large_partitioned_p2 PARTITION OF large_partitioned FOR VALUES FROM (10) TO (20);
 CREATE TABLE large_partitioned_p3 PARTITION OF large_partitioned FOR VALUES FROM (20) TO (100);
 SELECT create_distributed_table('large_partitioned','tenant_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('small','tenant_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \copy small FROM STDIN DELIMITER ','
@@ -290,8 +290,8 @@ ERROR:  cannot change materialized view "small_view"
 UPDATE large_partitioned SET id=20 FROM small_view WHERE small_view.id=large_partitioned.id;
 ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large_partitioned ORDER BY 1, 2;
- id | tenant_id 
-----+-----------
+ id | tenant_id
+---------------------------------------------------------------------
   1 |         2
   2 |         3
   5 |         4
@@ -304,8 +304,8 @@ SELECT * FROM large_partitioned ORDER BY 1, 2;
 -- delete statement on large_partitioned
 DELETE FROM large_partitioned WHERE id in (SELECT id FROM small_view);
 SELECT * FROM large_partitioned ORDER BY 1, 2;
- id | tenant_id 
-----+-----------
+ id | tenant_id
+---------------------------------------------------------------------
   2 |         3
   5 |         4
  26 |        32
@@ -321,14 +321,14 @@ WITH all_small_view_ids AS (SELECT id FROM small_view)
 DELETE FROM large_partitioned WHERE id in (SELECT * FROM all_small_view_ids);
 -- make sure that materialized view in a CTE/subquery can be joined with a distributed table
 WITH cte AS (SELECT *, random() FROM small_view) SELECT count(*) FROM cte JOIN small USING(id);
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
 SELECT count(*) FROM (SELECT *, random() FROM small_view) as subquery JOIN small USING(id);
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 

@@ -322,7 +322,7 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	ShardPlacement *placement = SearchShardPlacementInList(placementList, targetNodeName,
 														   targetNodePort,
 														   missingOk);
-	UpdateShardPlacementState(placement->placementId, FILE_FINALIZED);
+	UpdateShardPlacementState(placement->placementId, SHARD_STATE_ACTIVE);
 }
 
 
@@ -382,17 +382,17 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
 																 sourceNodeName,
 																 sourceNodePort,
 																 missingSourceOk);
-	if (sourcePlacement->shardState != FILE_FINALIZED)
+	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("source placement must be in finalized state")));
+						errmsg("source placement must be in active state")));
 	}
 
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 targetNodeName,
 																 targetNodePort,
 																 missingTargetOk);
-	if (targetPlacement->shardState != FILE_INACTIVE)
+	if (targetPlacement->shardState != SHARD_STATE_INACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("target placement must be in inactive state")));

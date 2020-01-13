@@ -140,6 +140,12 @@ static const struct config_enum_entry use_secondary_nodes_options[] = {
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry coordinator_aggregation_options[] = {
+	{ "disabled", COORDINATOR_AGGREGATION_DISABLED, false },
+	{ "row-gather", COORDINATOR_AGGREGATION_ROW_GATHER, false },
+	{ NULL, 0, false }
+};
+
 static const struct config_enum_entry shard_commit_protocol_options[] = {
 	{ "1pc", COMMIT_PROTOCOL_1PC, false },
 	{ "2pc", COMMIT_PROTOCOL_2PC, false },
@@ -1002,6 +1008,19 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&CountDistinctErrorRate,
 		0.0, 0.0, 1.0,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.coordinator_aggregation_strategy",
+		gettext_noop("Sets the strategy for when an aggregate cannot be pushed down. "
+					 "'row-gather' will pull up intermediate rows to the coordinator, "
+					 "while 'disabled' will error if coordinator aggregation is necessary"),
+		NULL,
+		&CoordinatorAggregationStrategy,
+		COORDINATOR_AGGREGATION_ROW_GATHER,
+		coordinator_aggregation_options,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

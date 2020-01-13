@@ -4,18 +4,18 @@ CREATE TABLE tt1(id int, value_1 int);
 INSERT INTO tt1 VALUES(1,2),(2,3),(3,4);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE tt2(id int, value_1 int);
 INSERT INTO tt2 VALUES(3,3),(4,4),(5,5);
 SELECT create_distributed_table('tt2','id');
 NOTICE:  Copying data from local table...
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Test with prepared statements (parameter used by SET)

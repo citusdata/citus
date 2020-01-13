@@ -6,6 +6,7 @@
 SET citus.next_shard_id TO 240000;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 CREATE TABLE lineitem_hash (
 	l_orderkey bigint not null,

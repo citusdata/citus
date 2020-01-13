@@ -114,23 +114,23 @@ load_shard_interval_array(PG_FUNCTION_ARGS)
  * load_shard_placement_array loads a shard interval using the provided ID
  * and returns an array of strings containing the node name and port for each
  * placement of the specified shard interval. If the second argument is true,
- * only finalized placements are returned; otherwise, all are. If no such shard
+ * only active placements are returned; otherwise, all are. If no such shard
  * interval can be found, this function raises an error instead.
  */
 Datum
 load_shard_placement_array(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
-	bool onlyFinalized = PG_GETARG_BOOL(1);
+	bool onlyActive = PG_GETARG_BOOL(1);
 	List *placementList = NIL;
 	ListCell *placementCell = NULL;
 	int placementIndex = 0;
 	Oid placementTypeId = TEXTOID;
 	StringInfo placementInfo = makeStringInfo();
 
-	if (onlyFinalized)
+	if (onlyActive)
 	{
-		placementList = FinalizedShardPlacementList(shardId);
+		placementList = ActiveShardPlacementList(shardId);
 	}
 	else
 	{

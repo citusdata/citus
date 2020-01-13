@@ -3,105 +3,105 @@ Parsed test spec with 2 sessions
 starting permutation: s1-initialize s1-begin s1-insert s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-7              
+7
 
 starting permutation: s1-initialize s1-begin s1-insert s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-9              
+9
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-9              
+9
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-11             
+11
 
 starting permutation: s1-initialize s1-begin s1-insert s2-insert-select s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-11             
+11
 
 starting permutation: s1-initialize s1-begin s1-insert s2-update s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-update: UPDATE insert_hash SET data = 'l' WHERE id = 4;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 
 starting permutation: s1-initialize s1-begin s1-insert s2-delete s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-delete: DELETE FROM insert_hash WHERE id = 4;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-5              
+5
 
 starting permutation: s1-initialize s1-begin s1-insert s2-truncate s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -109,14 +109,14 @@ step s2-truncate: TRUNCATE insert_hash; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-0              
+0
 
 starting permutation: s1-initialize s1-begin s1-insert s2-drop s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -129,7 +129,7 @@ ERROR:  relation "insert_hash" does not exist
 starting permutation: s1-initialize s1-begin s1-insert s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -137,9 +137,9 @@ step s2-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id); <wa
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -149,7 +149,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-insert s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
 step s1-begin: BEGIN;
@@ -158,9 +158,9 @@ step s2-ddl-drop-index: DROP INDEX insert_hash_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -170,7 +170,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -178,9 +178,9 @@ step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY insert_hash_ind
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -190,7 +190,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -198,9 +198,9 @@ step s2-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0; <w
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -210,7 +210,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-insert s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -219,9 +219,9 @@ step s2-ddl-drop-column: ALTER TABLE insert_hash DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -231,7 +231,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
@@ -239,9 +239,9 @@ step s2-ddl-rename-column: ALTER TABLE insert_hash RENAME data TO new_column; <w
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -251,38 +251,38 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert s2-table-size s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-table-size: SELECT citus_total_relation_size('insert_hash');
 citus_total_relation_size
 
-57344          
+57344
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 
 starting permutation: s1-initialize s1-begin s1-insert s2-master-modify-multiple-shards s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s2-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-1              
+1
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-insert s2-distribute-table s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-drop: DROP TABLE insert_hash;
 step s1-create-non-distributed-table: CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -293,58 +293,58 @@ step s1-commit: COMMIT;
 step s2-distribute-table: <... completed>
 create_distributed_table
 
-               
-step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
 
-11             
+step s1-select-count: SELECT COUNT(*) FROM insert_hash;
+count
+
+11
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-11             
+11
 
 starting permutation: s1-initialize s1-begin s1-update s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE insert_hash SET data = 'l' WHERE id = 4;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 
 starting permutation: s1-initialize s1-begin s1-delete s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM insert_hash WHERE id = 4;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-5              
+5
 
 starting permutation: s1-initialize s1-begin s1-truncate s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE insert_hash;
@@ -352,14 +352,14 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-1              
+1
 
 starting permutation: s1-initialize s1-begin s1-drop s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE insert_hash;
@@ -373,7 +373,7 @@ ERROR:  relation "insert_hash" does not exist
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-insert s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
@@ -381,9 +381,9 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -393,7 +393,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-insert s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
 step s1-begin: BEGIN;
@@ -402,9 +402,9 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -414,7 +414,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-insert s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
@@ -422,9 +422,9 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -434,7 +434,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-insert s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -443,9 +443,9 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -455,7 +455,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-insert s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE insert_hash RENAME data TO new_column;
@@ -463,9 +463,9 @@ step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -475,38 +475,38 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-table-size s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('insert_hash');
 citus_total_relation_size
 
-57344          
+57344
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-6              
+6
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-1              
+1
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-distribute-table s2-insert s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-drop: DROP TABLE insert_hash;
 step s1-create-non-distributed-table: CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -514,61 +514,61 @@ step s1-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('insert_hash', 'id');
 create_distributed_table
 
-               
+
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-11             
+11
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-insert-select s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-13             
+13
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-update s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-update: UPDATE insert_hash SET data = 'l' WHERE id = 4;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-delete s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-delete: DELETE FROM insert_hash WHERE id = 4;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-7              
+7
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-truncate s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -576,14 +576,14 @@ step s2-truncate: TRUNCATE insert_hash; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-0              
+0
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-drop s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -596,7 +596,7 @@ ERROR:  relation "insert_hash" does not exist
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -604,9 +604,9 @@ step s2-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id); <wa
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -616,7 +616,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-insert-multi-row s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
 step s1-begin: BEGIN;
@@ -625,9 +625,9 @@ step s2-ddl-drop-index: DROP INDEX insert_hash_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -637,7 +637,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -645,9 +645,9 @@ step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY insert_hash_ind
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -657,7 +657,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -665,9 +665,9 @@ step s2-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0; <w
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -677,7 +677,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-insert-multi-row s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -686,9 +686,9 @@ step s2-ddl-drop-column: ALTER TABLE insert_hash DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -698,7 +698,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
@@ -706,9 +706,9 @@ step s2-ddl-rename-column: ALTER TABLE insert_hash RENAME data TO new_column; <w
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -718,38 +718,38 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-table-size s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-table-size: SELECT citus_total_relation_size('insert_hash');
 citus_total_relation_size
 
-57344          
+57344
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 
 starting permutation: s1-initialize s1-begin s1-insert-multi-row s2-master-modify-multiple-shards s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s2-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-3              
+3
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-insert-multi-row s2-distribute-table s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-drop: DROP TABLE insert_hash;
 step s1-create-non-distributed-table: CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -760,58 +760,58 @@ step s1-commit: COMMIT;
 step s2-distribute-table: <... completed>
 create_distributed_table
 
-               
-step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
 
-13             
+step s1-select-count: SELECT COUNT(*) FROM insert_hash;
+count
+
+13
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-13             
+13
 
 starting permutation: s1-initialize s1-begin s1-update s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE insert_hash SET data = 'l' WHERE id = 4;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 
 starting permutation: s1-initialize s1-begin s1-delete s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM insert_hash WHERE id = 4;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-7              
+7
 
 starting permutation: s1-initialize s1-begin s1-truncate s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE insert_hash;
@@ -819,14 +819,14 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-3              
+3
 
 starting permutation: s1-initialize s1-begin s1-drop s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE insert_hash;
@@ -840,7 +840,7 @@ ERROR:  relation "insert_hash" does not exist
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-insert-multi-row s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
@@ -848,9 +848,9 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -860,7 +860,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-insert-multi-row s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX insert_hash_index ON insert_hash(id);
 step s1-begin: BEGIN;
@@ -869,9 +869,9 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%''');
 run_command_on_workers
 
@@ -881,7 +881,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-insert-multi-row s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
@@ -889,9 +889,9 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -901,7 +901,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-insert-multi-row s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -910,9 +910,9 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -922,7 +922,7 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-insert-multi-row s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE insert_hash RENAME data TO new_column;
@@ -930,9 +930,9 @@ step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -942,38 +942,38 @@ run_command_on_workers
 starting permutation: s1-initialize s1-begin s1-table-size s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('insert_hash');
 citus_total_relation_size
 
-57344          
+57344
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-8              
+8
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: DELETE FROM insert_hash;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-3              
+3
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-distribute-table s2-insert-multi-row s1-commit s1-select-count
 create_distributed_table
 
-               
+
 step s1-drop: DROP TABLE insert_hash;
 step s1-create-non-distributed-table: CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -981,11 +981,11 @@ step s1-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('insert_hash', 'id');
 create_distributed_table
 
-               
+
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
-count          
+count
 
-13             
+13

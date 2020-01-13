@@ -22,6 +22,33 @@
 #include "utils/palloc.h"
 
 
+/*
+ * DistributedResultFragment represents a fragment of a distributed result.
+ */
+typedef struct DistributedResultFragment
+{
+	/* result's id, which can be used by read_intermediate_results(), ... */
+	char *resultId;
+
+	/* location of the result */
+	int nodeId;
+
+	/* number of rows in the result file */
+	int rowCount;
+
+	/*
+	 * The fragment contains the rows which match the partitioning method
+	 * and partitioning ranges of targetShardId. The shape of each row matches
+	 * the schema of the relation to which targetShardId belongs to.
+	 */
+	uint64 targetShardId;
+
+	/* what is the index of targetShardId in its relation's sorted shard list? */
+	int targetShardIndex;
+} DistributedResultFragment;
+
+
+/* intermediate_results.c */
 extern DestReceiver * CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 												   List *initialNodeList, bool
 												   writeLocalFile);
@@ -32,5 +59,13 @@ extern int64 IntermediateResultSize(char *resultId);
 extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
 
+/* distributed_intermediate_results.c */
+extern List ** RedistributeTaskListResults(char *resultIdPrefix,
+										   List *selectTaskList,
+										   DistTableCacheEntry *targetRelation,
+										   bool binaryFormat);
+extern List * PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+									   DistTableCacheEntry *distributionScheme,
+									   bool binaryFormat);
 
 #endif /* INTERMEDIATE_RESULTS_H */

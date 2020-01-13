@@ -18,6 +18,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
@@ -1065,16 +1066,15 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		{
 			uint64 shardId = shardEntry->key.shardId;
 			uint64 placementId = placementEntry->key.placementId;
-			GroupShardPlacement *shardPlacement =
-				LoadGroupShardPlacement(shardId, placementId);
+			ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
 
 			/*
-			 * We only set shard state if its current state is FILE_FINALIZED, which
-			 * prevents overwriting shard state if it is already set at somewhere else.
+			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
+			 * prevents overwriting shard state if it was already set somewhere else.
 			 */
-			if (shardPlacement->shardState == FILE_FINALIZED)
+			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
 			{
-				UpdateShardPlacementState(placementEntry->key.placementId, FILE_INACTIVE);
+				MarkShardPlacementInactive(shardPlacement);
 			}
 		}
 	}

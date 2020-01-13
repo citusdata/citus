@@ -24,8 +24,8 @@ GROUP BY
 ORDER BY
 	revenue DESC,
 	o_orderdate;
- l_orderkey |   revenue   | o_orderdate | o_shippriority 
-------------+-------------+-------------+----------------
+ l_orderkey |   revenue   | o_orderdate | o_shippriority
+---------------------------------------------------------------------
        1637 | 268170.6408 | 02-08-1995  |              0
        9696 | 252014.5497 | 02-20-1995  |              0
       10916 | 242749.1996 | 03-11-1995  |              0

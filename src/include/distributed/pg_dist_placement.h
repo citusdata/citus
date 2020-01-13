@@ -25,7 +25,7 @@ typedef struct FormData_pg_dist_placement
 {
 	int64 placementid;          /* global placementId on remote node */
 	int64 shardid;              /* global shardId on remote node */
-	int32 shardstate;           /* shard state on remote node; see RelayFileState */
+	int32 shardstate;           /* shard state on remote node; see ShardState */
 	int64 shardlength;          /* shard length on remote node; stored as bigint */
 	int32 groupid;              /* the group the shard is placed on */
 } FormData_pg_dist_placement;

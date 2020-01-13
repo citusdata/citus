@@ -6,22 +6,22 @@ SET citus.next_shard_id TO 1601000;
 CREATE TABLE mci_1.test (test_id integer NOT NULL, data int);
 CREATE TABLE mci_2.test (test_id integer NOT NULL, data int);
 SELECT create_distributed_table('mci_1.test', 'test_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('mci_2.test', 'test_id', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO mci_1.test VALUES (1,2), (3,4);
 -- move shards into other append-distributed table
 SELECT run_command_on_placements('mci_1.test', 'ALTER TABLE %s SET SCHEMA mci_2');
-         run_command_on_placements         
--------------------------------------------
+         run_command_on_placements
+---------------------------------------------------------------------
  (localhost,57637,1601000,t,"ALTER TABLE")
  (localhost,57638,1601000,t,"ALTER TABLE")
  (localhost,57637,1601001,t,"ALTER TABLE")
@@ -36,8 +36,8 @@ UPDATE pg_dist_shard
 SET logicalrelid = 'mci_2.test'::regclass, shardminvalue = NULL, shardmaxvalue = NULL
 WHERE logicalrelid = 'mci_1.test'::regclass;
 SELECT * FROM mci_2.test ORDER BY test_id;
- test_id | data 
----------+------
+ test_id | data
+---------------------------------------------------------------------
        1 |    2
        3 |    4
 (2 rows)

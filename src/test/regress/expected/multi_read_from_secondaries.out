@@ -8,15 +8,15 @@ ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
 \c "dbname=regression options='-c\ citus.use_secondary_nodes=never'"
 SELECT create_distributed_table('dest_table', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('source_table', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO dest_table (a, b) VALUES (1, 1);
@@ -24,8 +24,8 @@ INSERT INTO dest_table (a, b) VALUES (2, 1);
 INSERT INTO source_table (a, b) VALUES (10, 10);
 -- simluate actually having secondary nodes
 SELECT nodeid, groupid, nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node;
- nodeid | groupid | nodename  | nodeport | noderack | isactive | noderole | nodecluster 
---------+---------+-----------+----------+----------+----------+----------+-------------
+ nodeid | groupid | nodename  | nodeport | noderack | isactive | noderole | nodecluster
+---------------------------------------------------------------------
       1 |       1 | localhost |    57637 | default  | t        | primary  | default
       2 |       2 | localhost |    57638 | default  | t        | primary  | default
 (2 rows)
@@ -38,15 +38,15 @@ ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
 -- router selects are allowed
 SELECT a FROM dest_table WHERE a = 1 ORDER BY 1;
- a 
----
+ a
+---------------------------------------------------------------------
  1
 (1 row)
 
 -- real-time selects are also allowed
 SELECT a FROM dest_table ORDER BY 1;
- a 
----
+ a
+---------------------------------------------------------------------
  1
  2
 (2 rows)
@@ -58,20 +58,20 @@ SELECT
 FROM
     (
 	     WITH cte AS (
-	    SELECT 
-	    	DISTINCT dest_table.a 
-	     FROM 
-	     	dest_table, source_table 
-	     WHERE 
-	     	source_table.a = dest_table.a AND 
+	    SELECT
+	    	DISTINCT dest_table.a
+	     FROM
+	     	dest_table, source_table
+	     WHERE
+	     	source_table.a = dest_table.a AND
 	     dest_table.b IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC LIMIT 5
      ) as foo ORDER BY 1;
-DEBUG:  generating subplan 4_1 for CTE cte: SELECT DISTINCT dest_table.a FROM public.dest_table, public.source_table WHERE ((source_table.a OPERATOR(pg_catalog.=) dest_table.a) AND (dest_table.b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 4_2 for subquery SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('4_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte ORDER BY a DESC LIMIT 5
-DEBUG:  Plan 4 query after replacing subqueries and CTEs: SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('4_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo ORDER BY a
- a 
----
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT DISTINCT dest_table.a FROM public.dest_table, public.source_table WHERE ((source_table.a OPERATOR(pg_catalog.=) dest_table.a) AND (dest_table.b OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) cte ORDER BY a DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo ORDER BY a
+ a
+---------------------------------------------------------------------
 (0 rows)
 
 SET client_min_messages TO DEFAULT;

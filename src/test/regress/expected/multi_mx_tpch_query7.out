@@ -43,8 +43,8 @@ ORDER BY
 	supp_nation,
 	cust_nation,
 	l_year;
-        supp_nation        |        cust_nation        | l_year |  revenue  
----------------------------+---------------------------+--------+-----------
+        supp_nation        |        cust_nation        | l_year |  revenue
+---------------------------------------------------------------------
  GERMANY                   | FRANCE                    |   1995 | 2399.2948
 (1 row)
 
@@ -90,8 +90,8 @@ ORDER BY
 	supp_nation,
 	cust_nation,
 	l_year;
-        supp_nation        |        cust_nation        | l_year |  revenue  
----------------------------+---------------------------+--------+-----------
+        supp_nation        |        cust_nation        | l_year |  revenue
+---------------------------------------------------------------------
  GERMANY                   | FRANCE                    |   1995 | 2399.2948
 (1 row)
 
@@ -137,8 +137,8 @@ ORDER BY
 	supp_nation,
 	cust_nation,
 	l_year;
-        supp_nation        |        cust_nation        | l_year |  revenue  
----------------------------+---------------------------+--------+-----------
+        supp_nation        |        cust_nation        | l_year |  revenue
+---------------------------------------------------------------------
  GERMANY                   | FRANCE                    |   1995 | 2399.2948
 (1 row)
 

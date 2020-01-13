@@ -26,18 +26,15 @@
 #define INVALID_PLACEMENT_ID 0
 
 /*
- * RelayFileState represents last known states of shards on a given node. We
- * currently only have shards in finalized or cached state; and set this state
- * after shards are sucessfully staged or cached.
+ * ShardState represents last known states of shards on a given node.
  */
 typedef enum
 {
-	FILE_INVALID_FIRST = 0,
-	FILE_FINALIZED = 1,
-	FILE_CACHED = 2,
-	FILE_INACTIVE = 3,
-	FILE_TO_DELETE = 4
-} RelayFileState;
+	SHARD_STATE_INVALID_FIRST = 0,
+	SHARD_STATE_ACTIVE = 1,
+	SHARD_STATE_INACTIVE = 3,
+	SHARD_STATE_TO_DELETE = 4,
+} ShardState;
 
 
 /* Function declarations to extend names in DDL commands */

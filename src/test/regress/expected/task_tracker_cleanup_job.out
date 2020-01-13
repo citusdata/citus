@@ -7,26 +7,26 @@ SET citus.next_shard_id TO 1060000;
 \set RunningTaskId 801108
 -- Test worker_cleanup_job_schema_cache
 SELECT * FROM task_tracker_assign_task(2, 2, '');
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'pg_merge_job_0002';
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT worker_cleanup_job_schema_cache();
- worker_cleanup_job_schema_cache 
----------------------------------
- 
+ worker_cleanup_job_schema_cache
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'pg_merge_job_0002';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -35,60 +35,60 @@ SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = 'pg_merge_job_0002'
 SELECT task_tracker_assign_task(:JobId, :CompletedTaskId,
 				'COPY (SELECT * FROM lineitem) TO '
 				'''base/pgsql_job_cache/job_401010/task_801107''');
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_assign_task(:JobId, :RunningTaskId,
 				'SELECT pg_sleep(100)');
- task_tracker_assign_task 
---------------------------
- 
+ task_tracker_assign_task
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT pg_sleep(2.0);
- pg_sleep 
-----------
- 
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :CompletedTaskId);
- task_tracker_task_status 
---------------------------
+ task_tracker_task_status
+---------------------------------------------------------------------
                         6
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :RunningTaskId);
- task_tracker_task_status 
---------------------------
+ task_tracker_task_status
+---------------------------------------------------------------------
                         3
 (1 row)
 
 SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010/task_801107');
- isdir 
--------
+ isdir
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010');
- isdir 
--------
+ isdir
+---------------------------------------------------------------------
  t
 (1 row)
 
 -- We now clean up all tasks for this job id. As a result, shared hash entries,
 -- files, and connections associated with these tasks should all be cleaned up.
 SELECT task_tracker_cleanup_job(:JobId);
- task_tracker_cleanup_job 
---------------------------
- 
+ task_tracker_cleanup_job
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT pg_sleep(1.0);
- pg_sleep 
-----------
- 
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT task_tracker_task_status(:JobId, :CompletedTaskId);
@@ -103,8 +103,8 @@ SELECT isdir FROM pg_stat_file('base/pgsql_job_cache/job_401010');
 ERROR:  could not stat file "base/pgsql_job_cache/job_401010": No such file or directory
 -- Also clean up worker_cleanup_job_schema_cache job
 SELECT task_tracker_cleanup_job(2);
- task_tracker_cleanup_job 
---------------------------
- 
+ task_tracker_cleanup_job
+---------------------------------------------------------------------
+
 (1 row)
 

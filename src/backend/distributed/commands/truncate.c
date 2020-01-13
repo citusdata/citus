@@ -42,12 +42,12 @@ static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE loc
 
 
 /*
- * ProcessTruncateStatement handles few things that should be
+ * PostprocessTruncateStatement handles few things that should be
  * done before standard process utility is called for truncate
  * command.
  */
 void
-ProcessTruncateStatement(TruncateStmt *truncateStatement)
+PostprocessTruncateStatement(TruncateStmt *truncateStatement)
 {
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);

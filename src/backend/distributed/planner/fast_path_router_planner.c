@@ -58,8 +58,10 @@
 bool EnableFastPathRouterPlanner = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
-static bool ConjunctionContainsColumnFilter(Node *node, Var *column);
-static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn);
+static bool ConjunctionContainsColumnFilter(Node *node, Var *column,
+											Const **distributionKeyValue);
+static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
+										Const **distributionKeyValue);
 
 
 /*
@@ -122,7 +124,9 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	SeqScan *seqScanNode = makeNode(SeqScan);
 	Plan *plan = &seqScanNode->plan;
 
-	AssertArg(FastPathRouterQuery(parse));
+	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+
+	AssertArg(FastPathRouterQuery(parse, &distKey));
 
 	/* there is only a single relation rte */
 	seqScanNode->scanrelid = 1;
@@ -162,11 +166,12 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  *      and it should be ANDed with any other filters. Also, the distribution
  *      key should only exists once in the WHERE clause. So basically,
  *          SELECT ... FROM dist_table WHERE dist_key = X
+ *      If the filter is a const, distributionKeyValue is set
  *   - All INSERT statements (including multi-row INSERTs) as long as the commands
  *     don't have any sublinks/CTEs etc
  */
 bool
-FastPathRouterQuery(Query *query)
+FastPathRouterQuery(Query *query, Const **distributionKeyValue)
 {
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
@@ -254,7 +259,7 @@ FastPathRouterQuery(Query *query)
 	 *	This is to simplify both of the individual checks and omit various edge cases
 	 *	that might arise with multiple distribution keys in the quals.
 	 */
-	if (ConjunctionContainsColumnFilter(quals, distributionKey) &&
+	if (ConjunctionContainsColumnFilter(quals, distributionKey, distributionKeyValue) &&
 		!ColumnAppearsMultipleTimes(quals, distributionKey))
 	{
 		return true;
@@ -298,9 +303,11 @@ ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey)
  * ConjunctionContainsColumnFilter returns true if the query contains an exact
  * match (equal) expression on the provided column. The function returns true only
  * if the match expression has an AND relation with the rest of the expression tree.
+ *
+ * If the conjuction contains column filter which is const, distributionKeyValue is set.
  */
 static bool
-ConjunctionContainsColumnFilter(Node *node, Var *column)
+ConjunctionContainsColumnFilter(Node *node, Var *column, Const **distributionKeyValue)
 {
 	if (node == NULL)
 	{
@@ -311,7 +318,7 @@ ConjunctionContainsColumnFilter(Node *node, Var *column)
 	{
 		OpExpr *opExpr = (OpExpr *) node;
 		bool distKeyInSimpleOpExpression =
-			DistKeyInSimpleOpExpression((Expr *) opExpr, column);
+			DistKeyInSimpleOpExpression((Expr *) opExpr, column, distributionKeyValue);
 
 		if (!distKeyInSimpleOpExpression)
 		{
@@ -342,7 +349,8 @@ ConjunctionContainsColumnFilter(Node *node, Var *column)
 		{
 			Node *argumentNode = (Node *) lfirst(argumentCell);
 
-			if (ConjunctionContainsColumnFilter(argumentNode, column))
+			if (ConjunctionContainsColumnFilter(argumentNode, column,
+												distributionKeyValue))
 			{
 				return true;
 			}
@@ -357,9 +365,11 @@ ConjunctionContainsColumnFilter(Node *node, Var *column)
  * DistKeyInSimpleOpExpression checks whether given expression is a simple operator
  * expression with either (dist_key = param) or (dist_key = const). Note that the
  * operands could be in the reverse order as well.
+ *
+ * When a const is found, distributionKeyValue is set.
  */
 static bool
-DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn)
+DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Const **distributionKeyValue)
 {
 	Node *leftOperand = NULL;
 	Node *rightOperand = NULL;
@@ -420,6 +430,14 @@ DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn)
 
 	/* at this point we should have the columnInExpr */
 	Assert(columnInExpr);
+	bool distColumnExists = equal(distColumn, columnInExpr);
+	if (distColumnExists && constantClause != NULL &&
+		distColumn->vartype == constantClause->consttype &&
+		*distributionKeyValue == NULL)
+	{
+		/* if the vartypes do not match, let shard pruning handle it later */
+		*distributionKeyValue = copyObject(constantClause);
+	}
 
-	return equal(distColumn, columnInExpr);
+	return distColumnExists;
 }

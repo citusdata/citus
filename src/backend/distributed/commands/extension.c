@@ -115,16 +115,21 @@ ExtractNewExtensionVersion(Node *parseTree)
 
 
 /*
- * PlanCreateExtensionStmt is called during the creation of an extension.
- * It is executed before the statement is applied locally.
+ * PostprocessCreateExtensionStmt is called after the creation of an extension.
  * We decide if the extension needs to be replicated to the worker, and
  * if that is the case return a list of DDLJob's that describe how and
  * where the extension needs to be created.
+ *
+ * As we now have access to ObjectAddress of the extension that is just
+ * created, we can mark it as distributed to make sure that its
+ * dependencies exist on all nodes.
  */
 List *
-PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *queryString)
+PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 {
-	if (!ShouldPropagateExtensionCommand((Node *) createExtensionStmt))
+	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
+
+	if (!ShouldPropagateExtensionCommand(node))
 	{
 		return NIL;
 	}
@@ -161,9 +166,9 @@ PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *qu
 	 * Here we append "schema" field to the "options" list (if not specified)
 	 * to satisfy the schema consistency between worker nodes and the coordinator.
 	 */
-	AddSchemaFieldIfMissing(createExtensionStmt);
+	AddSchemaFieldIfMissing(stmt);
 
-	const char *createExtensionStmtSql = DeparseTreeNode((Node *) createExtensionStmt);
+	const char *createExtensionStmtSql = DeparseTreeNode(node);
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
@@ -172,6 +177,12 @@ PlanCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const char *qu
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) createExtensionStmtSql,
 								ENABLE_DDL_PROPAGATION);
+
+	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
+
+	EnsureDependenciesExistOnAllNodes(&extensionAddress);
+
+	MarkObjectDistributed(&extensionAddress);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
 }
@@ -214,42 +225,7 @@ AddSchemaFieldIfMissing(CreateExtensionStmt *createExtensionStmt)
 
 
 /*
- * ProcessCreateExtensionStmt is executed after the extension has been
- * created locally and before we create it on the worker nodes.
- * As we now have access to ObjectAddress of the extension that is just
- * created, we can mark it as distributed to make sure that its
- * dependencies exist on all nodes.
- */
-void
-ProcessCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const
-						   char *queryString)
-{
-	if (!ShouldPropagateExtensionCommand((Node *) createExtensionStmt))
-	{
-		return;
-	}
-
-
-	/*
-	 * If the extension command is a part of a bigger multi-statement transaction,
-	 * do not propagate it
-	 */
-	if (IsMultiStatementTransaction())
-	{
-		return;
-	}
-
-	const ObjectAddress *extensionAddress = GetObjectAddressFromParseTree(
-		(Node *) createExtensionStmt, false);
-
-	EnsureDependenciesExistsOnAllNodes(extensionAddress);
-
-	MarkObjectDistributed(extensionAddress);
-}
-
-
-/*
- * PlanDropExtensionStmt is called to drop extension(s) in coordinator and
+ * PreprocessDropExtensionStmt is called to drop extension(s) in coordinator and
  * in worker nodes if distributed before.
  * We first ensure that we keep only the distributed ones before propagating
  * the statement to worker nodes.
@@ -257,19 +233,18 @@ ProcessCreateExtensionStmt(CreateExtensionStmt *createExtensionStmt, const
  * be made to the workers.
  */
 List *
-PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
+PreprocessDropExtensionStmt(Node *node, const char *queryString)
 {
-	List *allDroppedExtensions = dropStmt->objects;
-
-
+	DropStmt *stmt = castNode(DropStmt, node);
 	ListCell *addressCell = NULL;
 
-	if (!ShouldPropagateExtensionCommand((Node *) dropStmt))
+	if (!ShouldPropagateExtensionCommand(node))
 	{
 		return NIL;
 	}
 
 	/* get distributed extensions to be dropped in worker nodes as well */
+	List *allDroppedExtensions = stmt->objects;
 	List *distributedExtensions = FilterDistributedExtensions(allDroppedExtensions);
 
 	if (list_length(distributedExtensions) <= 0)
@@ -311,13 +286,13 @@ PlanDropExtensionStmt(DropStmt *dropStmt, const char *queryString)
 	 * Temporary swap the lists of objects to delete with the distributed
 	 * objects and deparse to an sql statement for the workers.
 	 * Then switch back to allDroppedExtensions to drop all specified
-	 * extensions in coordinator after PlanDropExtensionStmt completes
+	 * extensions in coordinator after PreprocessDropExtensionStmt completes
 	 * its execution.
 	 */
-	dropStmt->objects = distributedExtensions;
-	const char *deparsedStmt = DeparseTreeNode((Node *) dropStmt);
+	stmt->objects = distributedExtensions;
+	const char *deparsedStmt = DeparseTreeNode((Node *) stmt);
 
-	dropStmt->objects = allDroppedExtensions;
+	stmt->objects = allDroppedExtensions;
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
@@ -348,8 +323,6 @@ FilterDistributedExtensions(List *extensionObjectList)
 	{
 		char *extensionName = strVal(lfirst(objectCell));
 
-		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-
 		Oid extensionOid = get_extension_oid(extensionName, missingOk);
 
 		if (!OidIsValid(extensionOid))
@@ -357,9 +330,10 @@ FilterDistributedExtensions(List *extensionObjectList)
 			continue;
 		}
 
-		ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
+		ObjectAddress address = { 0 };
+		ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
-		if (!IsObjectDistributed(address))
+		if (!IsObjectDistributed(&address))
 		{
 			continue;
 		}
@@ -408,13 +382,12 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 
 
 /*
- * PlanAlterExtensionSchemaStmt is invoked for alter extension set schema statements.
+ * PreprocessAlterExtensionSchemaStmt is invoked for alter extension set schema statements.
  */
 List *
-PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
-							 char *queryString)
+PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
-	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
+	if (!ShouldPropagateExtensionCommand(node))
 	{
 		return NIL;
 	}
@@ -437,7 +410,7 @@ PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
 	 */
 	EnsureSequentialModeForExtensionDDL();
 
-	const char *alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
+	const char *alterExtensionStmtSql = DeparseTreeNode(node);
 
 	/*
 	 * To prevent recursive propagation in mx architecture, we disable ddl
@@ -452,34 +425,34 @@ PlanAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
 
 
 /*
- * ProcessAlterExtensionSchemaStmt is executed after the change has been applied
+ * PostprocessAlterExtensionSchemaStmt is executed after the change has been applied
  * locally, we can now use the new dependencies (schema) of the extension to ensure
  * all its dependencies exist on the workers before we apply the commands remotely.
  */
-void
-ProcessAlterExtensionSchemaStmt(AlterObjectSchemaStmt *alterExtensionStmt, const
-								char *queryString)
+List *
+PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
-	const ObjectAddress *extensionAddress = GetObjectAddressFromParseTree(
-		(Node *) alterExtensionStmt, false);
+	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
 
-	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
+	if (!ShouldPropagateExtensionCommand(node))
 	{
-		return;
+		return NIL;
 	}
 
 	/* dependencies (schema) have changed let's ensure they exist */
-	EnsureDependenciesExistsOnAllNodes(extensionAddress);
+	EnsureDependenciesExistOnAllNodes(&extensionAddress);
+
+	return NIL;
 }
 
 
 /*
- * PlanAlterExtensionUpdateStmt is invoked for alter extension update statements.
+ * PreprocessAlterExtensionUpdateStmt is invoked for alter extension update statements.
  */
 List *
-PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
-							 char *queryString)
+PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 {
+	AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, node);
 	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
 	{
 		return NIL;
@@ -515,6 +488,21 @@ PlanAlterExtensionUpdateStmt(AlterExtensionStmt *alterExtensionStmt, const
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PreprocessAlterExtensionContentsStmt issues a notice. It does not propagate.
+ */
+List *
+PreprocessAlterExtensionContentsStmt(Node *node, const char *queryString)
+{
+	ereport(NOTICE, (errmsg(
+						 "Citus does not propagate adding/dropping member objects"),
+					 errhint(
+						 "You can add/drop the member objects on the workers as well.")));
+
+	return NIL;
 }
 
 
@@ -753,13 +741,13 @@ RecreateExtensionStmt(Oid extensionOid)
  * AlterExtensionSchemaStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
-ObjectAddress *
-AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchemaStmt,
-									  bool missing_ok)
+ObjectAddress
+AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
-	Assert(alterExtensionSchemaStmt->objectType == OBJECT_EXTENSION);
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_EXTENSION);
 
-	const char *extensionName = strVal(alterExtensionSchemaStmt->object);
+	const char *extensionName = strVal(stmt->object);
 
 	Oid extensionOid = get_extension_oid(extensionName, missing_ok);
 
@@ -770,10 +758,10 @@ AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchem
 							   extensionName)));
 	}
 
-	ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*extensionAddress, ExtensionRelationId, extensionOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
-	return extensionAddress;
+	return address;
 }
 
 
@@ -781,11 +769,11 @@ AlterExtensionSchemaStmtObjectAddress(AlterObjectSchemaStmt *alterExtensionSchem
  * AlterExtensionUpdateStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
-ObjectAddress *
-AlterExtensionUpdateStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt,
-									  bool missing_ok)
+ObjectAddress
+AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 {
-	const char *extensionName = alterExtensionStmt->extname;
+	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
+	const char *extensionName = stmt->extname;
 
 	Oid extensionOid = get_extension_oid(extensionName, missing_ok);
 
@@ -796,8 +784,8 @@ AlterExtensionUpdateStmtObjectAddress(AlterExtensionStmt *alterExtensionStmt,
 							   extensionName)));
 	}
 
-	ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*extensionAddress, ExtensionRelationId, extensionOid);
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
-	return extensionAddress;
+	return address;
 }

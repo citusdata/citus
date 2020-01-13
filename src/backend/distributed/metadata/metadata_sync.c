@@ -394,7 +394,7 @@ MetadataCreateCommands(void)
 		 * visible to all sessions creating shards.
 		 */
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-		EnsureDependenciesExistsOnAllNodes(&tableAddress);
+		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
@@ -731,7 +731,7 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
-		List *shardPlacementList = FinalizedShardPlacementList(shardId);
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
 		ListCell *shardPlacementCell = NULL;
 
 		foreach(shardPlacementCell, shardPlacementList)

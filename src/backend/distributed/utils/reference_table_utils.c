@@ -269,7 +269,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	uint64 shardId = shardInterval->shardId;
 
 	bool missingOk = false;
-	ShardPlacement *sourceShardPlacement = FinalizedShardPlacement(shardId, missingOk);
+	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
 	char *srcNodeName = sourceShardPlacement->nodeName;
 	uint32 srcNodePort = sourceShardPlacement->nodePort;
 	bool includeData = true;
@@ -284,13 +284,12 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
 	/*
-	 * Although this function is used for reference tables and reference table shard
-	 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
-	 * a non-reference table to reference table, unhealty placements may exist. In
-	 * this case, we repair the shard placement and update its state in
-	 * pg_dist_placement table.
+	 * Although this function is used for reference tables, and reference table shard
+	 * placements always have shardState = SHARD_STATE_ACTIVE, in case of an upgrade
+	 * of a non-reference table to reference table, unhealty placements may exist.
+	 * In this case, repair the shard placement and update its state in pg_dist_placement.
 	 */
-	if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
+	if (targetPlacement == NULL || targetPlacement->shardState != SHARD_STATE_ACTIVE)
 	{
 		uint64 placementId = 0;
 		int32 groupId = 0;
@@ -307,13 +306,14 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 			groupId = GroupForNode(nodeName, nodePort);
 
 			placementId = GetNextPlacementId();
-			InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0, groupId);
+			InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
+									groupId);
 		}
 		else
 		{
 			groupId = targetPlacement->groupId;
 			placementId = targetPlacement->placementId;
-			UpdateShardPlacementState(placementId, FILE_FINALIZED);
+			UpdateShardPlacementState(placementId, SHARD_STATE_ACTIVE);
 		}
 
 		/*
@@ -326,7 +326,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 		if (ShouldSyncTableMetadata(shardInterval->relationId))
 		{
 			char *placementCommand = PlacementUpsertCommand(shardId, placementId,
-															FILE_FINALIZED, 0,
+															SHARD_STATE_ACTIVE, 0,
 															groupId);
 
 			SendCommandToWorkersWithMetadata(placementCommand);

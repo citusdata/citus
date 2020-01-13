@@ -262,23 +262,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
---
--- Procedure for creating shards for range partitioned distributed table.
---
-CREATE OR REPLACE PROCEDURE create_range_partitioned_shards(rel regclass, minvalues text[], maxvalues text[])
-AS $$
-DECLARE
-  new_shardid bigint;
-  idx int;
-BEGIN
-  FOR idx IN SELECT * FROM generate_series(1, array_length(minvalues, 1))
-  LOOP
-    SELECT master_create_empty_shard(rel::text) INTO new_shardid;
-    UPDATE pg_dist_shard SET shardminvalue=minvalues[idx], shardmaxvalue=maxvalues[idx] WHERE shardid=new_shardid;
-  END LOOP;
-END;
-$$ LANGUAGE plpgsql;
-
 \set VERBOSITY terse
 
 -- hash partitioning, 32 shards
@@ -319,7 +302,7 @@ DROP TABLE t;
 -- range partitioning, int partition column
 CREATE TABLE t(key int, value int);
 SELECT create_distributed_table('t', 'key', 'range');
-CALL create_range_partitioned_shards('t', '{0,25,50,76}',
+CALL public.create_range_partitioned_shards('t', '{0,25,50,76}',
                                           '{24,49,75,200}');
 CALL test_partition_query_results('t', 'SELECT x, x * x * x FROM generate_series(1, 105) x');
 DROP TABLE t;
@@ -327,7 +310,7 @@ DROP TABLE t;
 -- not covering ranges, should ERROR
 CREATE TABLE t(key int, value int);
 SELECT create_distributed_table('t', 'key', 'range');
-CALL create_range_partitioned_shards('t', '{0,25,50,100}',
+CALL public.create_range_partitioned_shards('t', '{0,25,50,100}',
                                           '{24,49,75,200}');
 CALL test_partition_query_results('t', 'SELECT x, x * x * x FROM generate_series(1, 105) x');
 DROP TABLE t;
@@ -335,7 +318,7 @@ DROP TABLE t;
 -- overlapping ranges, we allow this in range partitioned distributed tables, should be fine
 CREATE TABLE t(key int, value int);
 SELECT create_distributed_table('t', 'key', 'range');
-CALL create_range_partitioned_shards('t', '{0,25,50,76}',
+CALL public.create_range_partitioned_shards('t', '{0,25,50,76}',
                                           '{50,49,90,200}');
 CALL test_partition_query_results('t', 'SELECT x, x * x * x FROM generate_series(1, 105) x');
 DROP TABLE t;
@@ -345,7 +328,7 @@ CREATE TYPE composite_key_type AS (f1 int, f2 text);
 SET citus.shard_count TO 8;
 CREATE TABLE t(key composite_key_type, value int);
 SELECT create_distributed_table('t', 'key', 'range');
-CALL create_range_partitioned_shards('t', '{"(0,a)","(25,a)","(50,a)","(75,a)"}',
+CALL public.create_range_partitioned_shards('t', '{"(0,a)","(25,a)","(50,a)","(75,a)"}',
                                           '{"(24,z)","(49,z)","(74,z)","(100,z)"}');
 CALL test_partition_query_results('t', 'SELECT (x, ''f2_'' || x::text)::composite_key_type, x * x * x FROM generate_series(1, 100) x');
 DROP TABLE t;
@@ -354,7 +337,7 @@ DROP TYPE composite_key_type;
 -- unsorted ranges
 CREATE TABLE t(key int, value int);
 SELECT create_distributed_table('t', 'key', 'range');
-CALL create_range_partitioned_shards('t', '{50,25,76,0}',
+CALL public.create_range_partitioned_shards('t', '{50,25,76,0}',
                                           '{75,49,200,24}');
 CALL test_partition_query_results('t', 'SELECT x, x * x * x FROM generate_series(1, 105) x');
 DROP TABLE t;

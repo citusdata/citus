@@ -3,6 +3,7 @@
 -- ===================================================================
 CREATE SCHEMA not_supported;
 SET search_path TO not_supported, public;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 SET client_min_messages TO DEBUG1;
 

@@ -12,26 +12,26 @@ SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 CREATE TABLE squares(a int, b int);
 SELECT create_reference_table('squares');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 -- should be executed locally
 SELECT count(*) FROM squares;
 LOG:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
 -- create a second reference table
 CREATE TABLE numbers(a int);
 SELECT create_reference_table('numbers');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO numbers VALUES (20), (21);
@@ -39,21 +39,21 @@ LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.nu
 -- INSERT ... SELECT between reference tables
 BEGIN;
 EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                          QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57636 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on squares_8000000 citus_table_alias  (cost=0.00..41.88 rows=2550 width=8)
                ->  Seq Scan on numbers_8000001 numbers  (cost=0.00..41.88 rows=2550 width=8)
 (7 rows)
 
 INSERT INTO squares SELECT a, a*a FROM numbers;
 SELECT * FROM squares WHERE a >= 20 ORDER BY a;
- a  |  b  
-----+-----
+ a  |  b
+---------------------------------------------------------------------
  20 | 400
  21 | 441
 (2 rows)
@@ -61,13 +61,13 @@ SELECT * FROM squares WHERE a >= 20 ORDER BY a;
 ROLLBACK;
 BEGIN;
 EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                          QUERY PLAN
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=57636 dbname=regression
+         Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on numbers_8000001 citus_table_alias  (cost=0.00..38.25 rows=753 width=4)
                ->  Seq Scan on squares_8000000 squares  (cost=0.00..38.25 rows=753 width=4)
                      Filter: (a < 3)
@@ -75,8 +75,8 @@ EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 
 INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
- a  
-----
+ a
+---------------------------------------------------------------------
   1
   2
  20
@@ -86,8 +86,8 @@ SELECT * FROM numbers ORDER BY a;
 ROLLBACK;
 -- Make sure we hide shard tables ...
 SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
- citus_table_is_visible 
-------------------------
+ citus_table_is_visible
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -95,8 +95,8 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
 EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
+                                  QUERY PLAN
+---------------------------------------------------------------------
  Merge Join  (cost=359.57..860.00 rows=32512 width=8)
    Merge Cond: (local_table.a = numbers_8000001.a)
    ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
@@ -108,8 +108,8 @@ EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 (8 rows)
 
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
- a  | a  
-----+----
+ a  | a
+---------------------------------------------------------------------
  20 | 20
 (1 row)
 
@@ -118,8 +118,8 @@ SELECT lt.a, sq.a, sq.b
 FROM local_table lt
 JOIN squares sq ON sq.a > lt.a and sq.b > 90
 ORDER BY 1,2,3;
- a | a  |  b  
----+----+-----
+ a | a  |  b
+---------------------------------------------------------------------
  2 | 10 | 100
  4 | 10 | 100
  7 | 10 | 100
@@ -158,15 +158,15 @@ ERROR:  cannot join local tables and reference tables in a transaction block, ud
 CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1"
 PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
 SELECT sum(a) FROM local_table;
- sum 
------
+ sum
+---------------------------------------------------------------------
   33
 (1 row)
 
 SELECT sum(a) FROM numbers;
 LOG:  executing the command locally: SELECT sum(a) AS sum FROM replicate_ref_to_coordinator.numbers_8000001 numbers
- sum 
------
+ sum
+---------------------------------------------------------------------
   41
 (1 row)
 
@@ -181,9 +181,9 @@ CONTEXT:  SQL function "test_reference_local_join_proc" statement 1
 CREATE SCHEMA s1;
 CREATE TABLE s1.ref(a int);
 SELECT create_reference_table('s1.ref');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 BEGIN;
@@ -238,16 +238,16 @@ ERROR:  relation local_table is not distributed
 WITH t AS (SELECT *, random() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
- a | a 
----+---
+ a | a
+---------------------------------------------------------------------
 (0 rows)
 
 -- shouldn't plan locally even if distributed table is in CTE or subquery
 CREATE TABLE dist(a int);
 SELECT create_distributed_table('dist', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO dist VALUES (20),(30);
@@ -274,8 +274,8 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
-       coordinator_plan       
-------------------------------
+       coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
 (2 rows)
@@ -285,10 +285,10 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
 $Q$);
-                coordinator_plan                
-------------------------------------------------
+                coordinator_plan
+---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan 24_1
+   ->  Distributed Subplan XXX_1
          ->  Seq Scan on local_table
                Filter: ((a >= 1) AND (a <= 10))
    Task Count: 1
@@ -306,8 +306,8 @@ SELECT public.plan_is_distributed($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 $Q$);
- plan_is_distributed 
----------------------
+ plan_is_distributed
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -328,8 +328,8 @@ SELECT public.plan_is_distributed($Q$
 EXPLAIN (COSTS FALSE)
 SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
 $Q$);
- plan_is_distributed 
----------------------
+ plan_is_distributed
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -337,8 +337,8 @@ SELECT public.plan_is_distributed($Q$
 EXPLAIN (COSTS FALSE)
 SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
 $Q$);
- plan_is_distributed 
----------------------
+ plan_is_distributed
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -351,7 +351,5 @@ DROP SCHEMA replicate_ref_to_coordinator CASCADE;
 -- Make sure the shard was dropped
 SELECT 'numbers_8000001'::regclass::oid;
 ERROR:  relation "numbers_8000001" does not exist
-LINE 1: SELECT 'numbers_8000001'::regclass::oid;
-               ^
 SET search_path TO DEFAULT;
 RESET client_min_messages;

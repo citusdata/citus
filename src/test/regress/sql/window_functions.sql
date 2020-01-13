@@ -150,7 +150,7 @@ ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
--- ORDER BY in the window function is an aggragate
+-- ORDER BY in the window function is an aggregate
 SELECT
 	user_id, rank() OVER my_win as rnk, avg(value_2) as avg_val_2
 FROM

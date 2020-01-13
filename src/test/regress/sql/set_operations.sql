@@ -1,5 +1,6 @@
 CREATE SCHEMA recursive_union;
 SET search_path TO recursive_union, public;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 CREATE TABLE recursive_union.test (x int, y int);
 SELECT create_distributed_table('test', 'x');

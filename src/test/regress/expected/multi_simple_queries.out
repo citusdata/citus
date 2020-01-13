@@ -1,8 +1,9 @@
 SET citus.next_shard_id TO 850000;
 -- many of the tests in this file is intended for testing non-fast-path
--- router planner, so we're explicitly disabling it in this file. 
--- We've bunch of other tests that triggers fast-path-router 
+-- router planner, so we're explicitly disabling it in this file.
+-- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- ===================================================================
 -- test end-to-end query functionality
 -- ===================================================================
@@ -17,27 +18,27 @@ CREATE TABLE authors ( name text, id bigint );
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard (LIKE articles);
 SELECT master_create_distributed_table('articles', 'author_id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_distributed_table('articles_single_shard', 'author_id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
+ master_create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('articles', 2, 1);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_worker_shards('articles_single_shard', 1, 1);
- master_create_worker_shards 
------------------------------
- 
+ master_create_worker_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- create a bunch of test data
@@ -100,15 +101,15 @@ DELETE FROM articles WHERE author_id = 1 AND author_id = 2;
 -- single-shard tests
 -- test simple select for a single row
 SELECT * FROM articles WHERE author_id = 10 AND id = 50;
- id | author_id |   title   | word_count 
-----+-----------+-----------+------------
+ id | author_id |   title   | word_count
+---------------------------------------------------------------------
  50 |        10 | anjanette |      19519
 (1 row)
 
 -- get all titles by a single author
 SELECT title FROM articles WHERE author_id = 10;
-   title    
-------------
+   title
+---------------------------------------------------------------------
  aggrandize
  absentness
  andelee
@@ -120,8 +121,8 @@ SELECT title FROM articles WHERE author_id = 10;
 SELECT title, word_count FROM articles
 	WHERE author_id = 10
 	ORDER BY word_count DESC NULLS LAST;
-   title    | word_count 
-------------+------------
+   title    | word_count
+---------------------------------------------------------------------
  anjanette  |      19519
  aggrandize |      17277
  attemper   |      14976
@@ -134,8 +135,8 @@ SELECT title, id FROM articles
 	WHERE author_id = 5
 	ORDER BY id
 	LIMIT 2;
-  title  | id 
----------+----
+  title  | id
+---------------------------------------------------------------------
  aruru   |  5
  adversa | 15
 (2 rows)
@@ -144,8 +145,8 @@ SELECT title, id FROM articles
 SELECT title, author_id FROM articles
 	WHERE author_id = 7 OR author_id = 8
 	ORDER BY author_id ASC, id;
-    title    | author_id 
--------------+-----------
+    title    | author_id
+---------------------------------------------------------------------
  aseptic     |         7
  auriga      |         7
  arsenous    |         7
@@ -164,8 +165,8 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 40000
 	ORDER BY sum(word_count) DESC;
- author_id | corpus_size 
------------+-------------
+ author_id | corpus_size
+---------------------------------------------------------------------
          2 |       61782
         10 |       59955
          8 |       55410
@@ -175,8 +176,8 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 SELECT * FROM articles WHERE author_id = 10 UNION
 SELECT * FROM articles WHERE author_id = 2
 ORDER BY 1,2,3;
- id | author_id |   title    | word_count 
-----+-----------+------------+------------
+ id | author_id |   title    | word_count
+---------------------------------------------------------------------
   2 |         2 | abducing   |      13642
  10 |        10 | aggrandize |      17277
  12 |         2 | archiblast |      18185
@@ -192,8 +193,8 @@ ORDER BY 1,2,3;
 -- queries using CTEs are supported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
 SELECT title FROM articles ORDER BY 1 LIMIT 5;
-   title   
------------
+   title
+---------------------------------------------------------------------
  abducing
  abeyance
  abhorring
@@ -203,8 +204,8 @@ SELECT title FROM articles ORDER BY 1 LIMIT 5;
 
 -- queries which involve functions in FROM clause are recursively planned
 SELECT * FROM articles, position('om' in 'Thomas') ORDER BY 2 DESC, 1 DESC, 3 DESC LIMIT 5;
- id | author_id |   title    | word_count | position 
-----+-----------+------------+------------+----------
+ id | author_id |   title    | word_count | position
+---------------------------------------------------------------------
  50 |        10 | anjanette  |      19519 |        3
  40 |        10 | attemper   |      14976 |        3
  30 |        10 | andelee    |       6363 |        3
@@ -214,16 +215,16 @@ SELECT * FROM articles, position('om' in 'Thomas') ORDER BY 2 DESC, 1 DESC, 3 DE
 
 -- subqueries are supported in WHERE clause in Citus even if the relations are not distributed
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
- id | author_id | title | word_count 
-----+-----------+-------+------------
+ id | author_id | title | word_count
+---------------------------------------------------------------------
 (0 rows)
 
 -- subqueries are supported in FROM clause
 SELECT articles.id,test.word_count
 FROM articles, (SELECT id, word_count FROM articles) AS test WHERE test.id = articles.id
 ORDER BY articles.id;
- id | word_count 
-----+------------
+ id | word_count
+---------------------------------------------------------------------
   1 |       9572
   2 |      13642
   3 |      10480
@@ -305,8 +306,8 @@ HINT:  If you want to discard the results of a SELECT, use PERFORM instead.
 CONTEXT:  PL/pgSQL function inline_code_block line 3 at SQL statement
 -- test cross-shard queries
 SELECT COUNT(*) FROM articles;
- count 
--------
+ count
+---------------------------------------------------------------------
     50
 (1 row)
 
@@ -329,8 +330,8 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	HAVING sum(word_count) > 25000
 	ORDER BY sum(word_count) DESC
 	LIMIT 5;
- author_id | corpus_size 
------------+-------------
+ author_id | corpus_size
+---------------------------------------------------------------------
          4 |       66325
          2 |       61782
         10 |       59955
@@ -342,8 +343,8 @@ SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000
 	ORDER BY author_id;
- author_id 
------------
+ author_id
+---------------------------------------------------------------------
          2
          4
          6
@@ -355,8 +356,8 @@ SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000 AND author_id < 5
 	ORDER BY author_id;
- author_id 
------------
+ author_id
+---------------------------------------------------------------------
          2
          4
 (2 rows)
@@ -365,8 +366,8 @@ SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000 OR author_id < 5
 	ORDER BY author_id;
- author_id 
------------
+ author_id
+---------------------------------------------------------------------
          1
          2
          3
@@ -380,19 +381,19 @@ SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING author_id <= 2 OR author_id = 8
 	ORDER BY author_id;
- author_id 
------------
+ author_id
+---------------------------------------------------------------------
          1
          2
          8
 (3 rows)
 
-SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders 
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders
 	GROUP BY o_orderstatus
 	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
 	ORDER BY o_orderstatus;
- o_orderstatus | count |         avg         
----------------+-------+---------------------
+ o_orderstatus | count |         avg
+---------------------------------------------------------------------
  O             |  1461 | 143326.447029431896
  P             |    75 | 164847.914533333333
 (2 rows)
@@ -402,8 +403,8 @@ SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	GROUP BY o_orderstatus
 	HAVING sum(l_linenumber) > 1000
 	ORDER BY o_orderstatus;
- o_orderstatus | sum  |        avg         
----------------+------+--------------------
+ o_orderstatus | sum  |        avg
+---------------------------------------------------------------------
  F             | 8559 | 3.0126715945089757
  O             | 8904 | 3.0040485829959514
 (2 rows)
@@ -419,8 +420,8 @@ SELECT *
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -434,8 +435,8 @@ SELECT *
 	WHERE author_id = 1 OR author_id = 17;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -448,8 +449,8 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 18;
 DEBUG:  Router planner cannot handle multi-shard select queries
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -464,8 +465,8 @@ SELECT id as article_id, word_count * id as random_value
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- article_id | random_value 
-------------+--------------
+ article_id | random_value
+---------------------------------------------------------------------
           1 |         9572
          11 |        14817
          21 |       123690
@@ -482,8 +483,8 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 10
- first_author | second_word_count 
---------------+-------------------
+ first_author | second_word_count
+---------------------------------------------------------------------
            10 |             17277
            10 |              1820
            10 |              6363
@@ -498,8 +499,8 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 10
- first_author | second_word_count 
---------------+-------------------
+ first_author | second_word_count
+---------------------------------------------------------------------
            10 |             19519
            10 |             19519
            10 |             19519
@@ -513,8 +514,8 @@ SELECT *
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |  title   | word_count 
-----+-----------+----------+------------
+ id | author_id |  title   | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous |       9572
  11 |         1 | alamo    |       1347
 (2 rows)
@@ -530,8 +531,8 @@ SELECT id
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id 
-----
+ id
+---------------------------------------------------------------------
   1
  11
  21
@@ -550,8 +551,8 @@ SELECT avg(word_count)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-        avg         
---------------------
+        avg
+---------------------------------------------------------------------
  12356.400000000000
 (1 row)
 
@@ -566,7 +567,7 @@ ERROR:  unsupported aggregate function invalid
 DROP AGGREGATE invalid(int);
 SET client_min_messages to 'DEBUG2';
 -- max, min, sum, count is somehow implemented
--- differently in distributed planning 
+-- differently in distributed planning
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
@@ -574,8 +575,8 @@ SELECT max(word_count) as max, min(word_count) as min,
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-  max  | min  |  sum  | cnt 
--------+------+-------+-----
+  max  | min  |  sum  | cnt
+---------------------------------------------------------------------
  18185 | 2728 | 61782 |   5
 (1 row)
 
@@ -626,8 +627,8 @@ SELECT count(*) FROM (
                   xmax IS NOT NULL
 ) x;
 DEBUG:  Router planner cannot handle multi-shard select queries
- count 
--------
+ count
+---------------------------------------------------------------------
     50
 (1 row)
 
@@ -636,24 +637,24 @@ SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id | title | word_count 
-----+-----------+-------+------------
+ id | author_id | title | word_count
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id | title | word_count 
-----+-----------+-------+------------
+ id | author_id | title | word_count
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -665,8 +666,8 @@ SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY 
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -681,8 +682,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id | title | word_count 
-----+-----------+-------+------------
+ id | author_id | title | word_count
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
@@ -690,8 +691,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id | title | word_count 
-----+-----------+-------+------------
+ id | author_id | title | word_count
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
@@ -699,8 +700,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890
@@ -713,8 +714,8 @@ DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
+ id | author_id |    title     | word_count
+---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
  11 |         1 | alamo        |       1347
  21 |         1 | arcading     |       5890

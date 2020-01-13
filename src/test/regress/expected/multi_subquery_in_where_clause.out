@@ -24,8 +24,8 @@ GROUP BY user_id
 HAVING count(*) > 2
 ORDER BY user_id
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        5
        6
@@ -52,8 +52,8 @@ GROUP BY user_id
 HAVING count(*) > 1
 ORDER BY user_id
 LIMIT 5;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        5
        6
@@ -94,8 +94,8 @@ GROUP BY
 ORDER BY
   1 DESC
 LIMIT 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        4
        3
        2
@@ -117,8 +117,8 @@ WHERE
               e1.user_id = e2.user_id
             )
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        2
        2
        2
@@ -156,8 +156,8 @@ WHERE
             GROUP BY 1
 HAVING count(*) > 2
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -173,8 +173,8 @@ FROM
   users_table
 WHERE
   user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2) GROUP BY 1 ORDER BY 2 DESC LIMIT 5;
- user_id | count 
----------+-------
+ user_id | count
+---------------------------------------------------------------------
        5 |    26
        4 |    23
        2 |    18
@@ -200,8 +200,8 @@ GROUP BY
 	user_id
 ORDER BY
 	user_id;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        2
        3
@@ -273,8 +273,8 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
- user_id | value_2 
----------+---------
+ user_id | value_2
+---------------------------------------------------------------------
        2 |       2
        2 |       2
        2 |       4
@@ -363,8 +363,8 @@ WHERE
 GROUP BY user_id
 HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        2
        3
 (2 rows)
@@ -396,8 +396,8 @@ FROM (
   GROUP BY user_id
 ) q
 ORDER BY 2 DESC, 1;
- user_id | array_length 
----------+--------------
+ user_id | array_length
+---------------------------------------------------------------------
        5 |          364
 (1 row)
 
@@ -572,8 +572,8 @@ WHERE
           (SELECT 1)
 ORDER BY 1 ASC
 LIMIT 2;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
        1
 (2 rows)
@@ -589,8 +589,8 @@ WHERE
           (SELECT random()) AND user_id < 0
 ORDER BY 1 ASC
 LIMIT 2;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
 (0 rows)
 
 -- OFFSET is not supported in the subquey
@@ -640,8 +640,8 @@ WHERE  user_id
              ) as f_outer
 		WHERE f_inner.user_id = f_outer.user_id
           ) ORDER BY 1 LIMIT 3;
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        1
 (1 row)
 
@@ -652,11 +652,11 @@ FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
     AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6) ORDER BY 1 DESC LIMIT 3;
-DEBUG:  generating subplan 26_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 5) AND (value_1 OPERATOR(pg_catalog.<=) 6))
-DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 1) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 2)))) AND (user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 3) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 4)))) AND (value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) ORDER BY user_id DESC LIMIT 3
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_1 OPERATOR(pg_catalog.>=) 5) AND (value_1 OPERATOR(pg_catalog.<=) 6))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM public.users_table WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 1) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 2)))) AND (user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table_1.user_id FROM public.users_table users_table_1 WHERE ((users_table_1.value_1 OPERATOR(pg_catalog.>=) 3) AND (users_table_1.value_1 OPERATOR(pg_catalog.<=) 4)))) AND (value_2 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))) ORDER BY user_id DESC LIMIT 3
 DEBUG:  push down of limit count: 3
- user_id 
----------
+ user_id
+---------------------------------------------------------------------
        6
        6
        6

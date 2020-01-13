@@ -38,7 +38,8 @@ AssertObjectTypeIsFunctional(ObjectType type)
 {
 	Assert(type == OBJECT_AGGREGATE ||
 		   type == OBJECT_FUNCTION ||
-		   type == OBJECT_PROCEDURE);
+		   type == OBJECT_PROCEDURE ||
+		   type == OBJECT_ROUTINE);
 }
 
 
@@ -51,8 +52,9 @@ AssertObjectTypeIsFunctional(ObjectType type)
  * (e.g. ALTER FUNCTION .. RENAME .. queries are RenameStmt )
  */
 void
-QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
+QualifyAlterFunctionStmt(Node *node)
 {
+	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objtype);
 
 	QualifyFunction(stmt->func, stmt->objtype);
@@ -65,8 +67,9 @@ QualifyAlterFunctionStmt(AlterFunctionStmt *stmt)
  * statement in place and makes the function name fully qualified.
  */
 void
-QualifyRenameFunctionStmt(RenameStmt *stmt)
+QualifyRenameFunctionStmt(Node *node)
 {
+	RenameStmt *stmt = castNode(RenameStmt, node);
 	AssertObjectTypeIsFunctional(stmt->renameType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->renameType);
@@ -79,8 +82,9 @@ QualifyRenameFunctionStmt(RenameStmt *stmt)
  * statement in place and makes the function name fully qualified.
  */
 void
-QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
+QualifyAlterFunctionSchemaStmt(Node *node)
 {
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
@@ -93,8 +97,9 @@ QualifyAlterFunctionSchemaStmt(AlterObjectSchemaStmt *stmt)
  * statement in place and makes the function name fully qualified.
  */
 void
-QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
+QualifyAlterFunctionOwnerStmt(Node *node)
 {
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);
@@ -107,8 +112,9 @@ QualifyAlterFunctionOwnerStmt(AlterOwnerStmt *stmt)
  * statement in place and makes the function name fully qualified.
  */
 void
-QualifyAlterFunctionDependsStmt(AlterObjectDependsStmt *stmt)
+QualifyAlterFunctionDependsStmt(Node *node)
 {
+	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
 
 	QualifyFunction(castNode(ObjectWithArgs, stmt->object), stmt->objectType);

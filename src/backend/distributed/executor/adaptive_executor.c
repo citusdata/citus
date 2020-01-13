@@ -137,6 +137,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
@@ -3126,8 +3127,20 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-	char *queryString = task->queryString;
 	int querySent = 0;
+
+	char *queryString = NULL;
+	if (task->queryString != NULL)
+	{
+		queryString = task->queryString;
+	}
+	else
+	{
+		Assert(list_length(task->taskPlacementList) == list_length(
+				   task->perPlacementQueryStrings));
+		queryString = list_nth(task->perPlacementQueryStrings,
+							   placementExecution->placementExecutionIndex);
+	}
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
@@ -3490,12 +3503,12 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 			ShardPlacement *shardPlacement = placementExecution->shardPlacement;
 
 			/*
-			 * We only set shard state if its current state is FILE_FINALIZED, which
-			 * prevents overwriting shard state if it is already set at somewhere else.
+			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
+			 * prevents overwriting shard state if it was already set somewhere else.
 			 */
-			if (shardPlacement->shardState == FILE_FINALIZED)
+			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
 			{
-				UpdateShardPlacementState(shardPlacement->placementId, FILE_INACTIVE);
+				MarkShardPlacementInactive(shardPlacement);
 			}
 		}
 
