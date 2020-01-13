@@ -484,7 +484,7 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(table_name regclass, distribution_value "any") PARALLEL SAFE;
+INFO:  Propagating deparsed query: ALTER FUNCTION pg_catalog.get_shard_id_for_distribution_column(pg_catalog.regclass, pg_catalog."any") PARALLEL SAFE;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -608,7 +608,7 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
 SELECT deparse_and_run_on_workers($cmd$
 DROP FUNCTION "CiTUS.TEEN2"."TeeNFunCT10N.1!?!"(),"CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text);
 $cmd$);
-INFO:  Propagating deparsed query: DROP FUNCTION "CiTUS.TEEN2"."TeeNFunCT10N.1!?!"(), "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text);
+INFO:  Propagating deparsed query: DROP FUNCTION "CiTUS.TEEN2"."TeeNFunCT10N.1!?!"(), "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(pg_catalog.text);
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -629,7 +629,7 @@ SELECT create_distributed_function('func_default_param(INT)');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_default_param RENAME TO func_with_default_param;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_default_param(param integer) RENAME TO func_with_default_param;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_default_param(integer) RENAME TO func_with_default_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -650,7 +650,7 @@ SELECT create_distributed_function('func_out_param(INT)');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_out_param RENAME TO func_in_and_out_param;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_out_param(param integer, OUT result text) RENAME TO func_in_and_out_param;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_out_param(integer) RENAME TO func_in_and_out_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -674,7 +674,7 @@ SELECT create_distributed_function('square(NUMERIC)');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION square SET search_path TO DEFAULT;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.square(INOUT a numeric) SET search_path TO DEFAULT;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.square(numeric) SET search_path TO DEFAULT;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -705,7 +705,7 @@ SELECT create_distributed_function('sum_avg(NUMERIC[])');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION sum_avg COST 10000;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.sum_avg(VARIADIC list numeric[], OUT total numeric, OUT average numeric) COST 10000.000000;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.sum_avg(numeric[]) COST 10000.000000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -727,7 +727,7 @@ SELECT create_distributed_function('func_custom_param(intpair)');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_custom_param RENAME TO func_with_custom_param;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_custom_param(param function_tests.intpair, OUT total integer) RENAME TO func_with_custom_param;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_custom_param(function_tests.intpair) RENAME TO func_with_custom_param;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
@@ -749,7 +749,7 @@ SELECT create_distributed_function('func_returns_table(INT)');
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_returns_table ROWS 100;
 $cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_returns_table(count integer) ROWS  100.000000;
+INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_returns_table(integer) ROWS 100.000000;
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------

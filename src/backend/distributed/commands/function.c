@@ -592,7 +592,6 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 {
 	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcOid));
 	StringInfo alterCommand = makeStringInfo();
-	char *kindString = "FUNCTION";
 	Oid procOwner = InvalidOid;
 
 
@@ -601,15 +600,6 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
 
 		procOwner = procform->proowner;
-
-		if (procform->prokind == PROKIND_PROCEDURE)
-		{
-			kindString = "PROCEDURE";
-		}
-		else if (procform->prokind == PROKIND_AGGREGATE)
-		{
-			kindString = "AGGREGATE";
-		}
 
 		ReleaseSysCache(proctup);
 	}
@@ -625,8 +615,7 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	char *functionSignature = format_procedure_qualified(funcOid);
 	char *functionOwner = GetUserNameFromId(procOwner, false);
 
-	appendStringInfo(alterCommand, "ALTER %s %s OWNER TO %s;",
-					 kindString,
+	appendStringInfo(alterCommand, "ALTER ROUTINE %s OWNER TO %s;",
 					 functionSignature,
 					 quote_identifier(functionOwner));
 
