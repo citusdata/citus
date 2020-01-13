@@ -651,7 +651,10 @@ IsValidLocalReferenceTableJoinPlan(PlannedStmt *plan)
 			return false;
 		}
 
-		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
+		/* check if the relation in range table entry is a know shard relation */
+		Oid ownerRelationOid = GetRelationOidOwningShardOid(rangeTableEntry->relid, onlySearchPath);
+		
+		if (OidIsValid(ownerRelationOid))
 		{
 			/*
 			 * We don't allow joining non-reference distributed tables, so we

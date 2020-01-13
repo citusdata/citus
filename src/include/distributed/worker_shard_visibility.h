@@ -17,7 +17,7 @@ extern bool OverrideTableVisibility;
 
 
 extern void ReplaceTableVisibleFunction(Node *inputNode);
-extern bool RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath);
+extern Oid GetRelationOidOwningShardOid(Oid shardRelationId, bool onlySearchPath);
 
 
 #endif /* WORKER_SHARD_VISIBILITY_H */

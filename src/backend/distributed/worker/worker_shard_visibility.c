@@ -30,9 +30,9 @@ PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
 
 
 /*
- * relation_is_a_known_shard a wrapper around RelationIsAKnownShard(), so
- * see the details there. The function also treats the indexes on shards
- * as if they were shards.
+ * relation_is_a_known_shard a wrapper around GetRelationOidOwningShardOid(),
+ * so see the details there. The function also treats the indexes on shards as 
+ * if they were shards.
  */
 Datum
 relation_is_a_known_shard(PG_FUNCTION_ARGS)
@@ -42,7 +42,10 @@ relation_is_a_known_shard(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	PG_RETURN_BOOL(RelationIsAKnownShard(relationId, onlySearchPath));
+	/* return if the relation in range table entry is a know shard relation */
+	Oid ownerRelationOid = GetRelationOidOwningShardOid(relationId, onlySearchPath);
+	
+	PG_RETURN_BOOL(OidIsValid(ownerRelationOid));
 }
 
 
@@ -68,14 +71,17 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 	{
 		PG_RETURN_NULL();
 	}
-
-	if (RelationIsAKnownShard(relationId, onlySearchPath))
+	
+	/* check if the relation in range table entry is a know shard relation */
+	Oid ownerRelationOid = GetRelationOidOwningShardOid(relationId, onlySearchPath);
+	
+	if (OidIsValid(ownerRelationOid))
 	{
 		/*
 		 * If the input relation is an index we simply replace the
 		 * relationId with the corresponding relation to hide indexes
-		 * as well. See RelationIsAKnownShard() for the details and give
-		 * more meaningful debug message here.
+		 * as well. See GetRelationOidOwningShardOid() for the details
+		 * and give more meaningful debug message here.
 		 */
 		relKind = get_rel_relkind(relationId);
 		if (relKind == RELKIND_INDEX)
@@ -97,15 +103,17 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 
 
 /*
- * RelationIsAKnownShard gets a relationId, check whether it's a shard of
- * any distributed table. If onlySearchPath is true, then it searches
- * the current search path.
+ * RelationOwningShardRelationOid gets a relationId, returns OID 
+ * of the relation owning the shard if it's a valid shard of it.
+ * In case of failure, It returns InvalidOid if missingOk is true,
+ * otherwise may error out in subsequent function calls.
+ * If onlySearchPath is true, then it searches the current search path.
  *
  * We can only do that in MX since both the metadata and tables are only
  * present there.
  */
-bool
-RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
+Oid
+GetRelationOidOwningShardOid(Oid shardRelationId, bool onlySearchPath)
 {
 	bool missingOk = true;
 	char relKind = '\0';
@@ -113,7 +121,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	if (!OidIsValid(shardRelationId))
 	{
 		/* we cannot continue without a valid Oid */
-		return false;
+		return InvalidOid;
 	}
 
 	int localGroupId = GetLocalGroupId();
@@ -129,21 +137,21 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 			 * or non-mx worker nodes, unless the coordinator is
 			 * in pg_dist_node.
 			 */
-			return false;
+			return InvalidOid;
 		}
 	}
 
 	Relation relation = try_relation_open(shardRelationId, AccessShareLock);
 	if (relation == NULL)
 	{
-		return false;
+		return InvalidOid;
 	}
 	relation_close(relation, NoLock);
 
 	/* we're not interested in the relations that are not in the search path */
 	if (!RelationIsVisible(shardRelationId) && onlySearchPath)
 	{
-		return false;
+		return InvalidOid;
 	}
 
 	/*
@@ -167,7 +175,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 		 * The format of the table name does not align with
 		 * our shard name definition.
 		 */
-		return false;
+		return InvalidOid;
 	}
 
 	/* try to get the relation id */
@@ -175,13 +183,13 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	if (!OidIsValid(relationId))
 	{
 		/* there is no such relation */
-		return false;
+		return InvalidOid;
 	}
 
 	/* verify that their namespaces are the same */
 	if (get_rel_namespace(shardRelationId) != get_rel_namespace(relationId))
 	{
-		return false;
+		return InvalidOid;
 	}
 
 	/*
@@ -194,10 +202,10 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	if (strncmp(shardRelationName, generatedRelationName, NAMEDATALEN) == 0)
 	{
 		/* we found the distributed table that the input shard belongs to */
-		return true;
+		return relationId;
 	}
 
-	return false;
+	return InvalidOid;
 }
 
 
