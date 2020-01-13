@@ -17,6 +17,7 @@
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -33,10 +34,13 @@
 #include "nodes/parsenodes.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 /* Local functions forward declarations for unsupported command checks */
+static Oid GetReferencedTableOidByFKeyConstraintName(Oid referencingRelationOid, const
+													 char *constraintName);
 static void AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
@@ -543,81 +547,184 @@ AlterTableUpdateAddFKeyConstraints(AlterTableStmt *alterTableStatement)
 		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
-		if (alterTableType != AT_AddConstraint)
+		if (alterTableType == AT_AddConstraint)
 		{
-			continue;
-		}
+			Constraint *constraint = (Constraint *) command->def;
 
-		/* found an ADD CONSTRAINT subcommand */
+			if (constraint->contype != CONSTR_FOREIGN)
+			{
+				continue;
+			}
 
-		Constraint *constraint = (Constraint *) command->def;
+			/* found an ADD CONSTRAINT (foreign key) subcommand */
 
-		if (constraint->contype != CONSTR_FOREIGN)
-		{
-			continue;
-		}
+			/* check for skip_validation field */
 
-		/* found an ADD CONSTRAINT (foreign key) subcommand */
+			if (!referencingIsLocalTable)
+			{
+				/*
+				 * Foreign constraint validations will be done in workers if referencing
+				 * table is not a distributed table.
+				 * If we do not set this flag, PostgreSQL tries to do additional checking when we drop
+				 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+				 * connections to workers to verify foreign constraints while original
+				 * transaction is in process, which causes deadlock.
+				 *
+				 * Note that if referencing table is a local table, we should perform needed
+				 * checks in coordinator as the command will be executed only in the coordinator.
+				 */
+				constraint->skip_validation = true;
+			}
 
-		/* check for skip_validation field */
+			/* TODO: should I take lock here */
+			Oid referencedRelationOid = RangeVarGetRelid(constraint->pktable, NoLock,
+														 alterTableStatement->missing_ok);
 
-		if (!referencingIsLocalTable)
-		{
+			if (!OidIsValid(referencedRelationOid))
+			{
+				continue;
+			}
+
+			bool referencedIsLocalTable = !IsDistributedTable(referencedRelationOid);
+			bool referencedIsReferenceTable = !referencedIsLocalTable &&
+											  (PartitionMethod(referencedRelationOid) ==
+											   DISTRIBUTE_BY_NONE);
+
+			ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(
+				referencingRelationOid,
+				referencedRelationOid,
+				constraint);
+
 			/*
-			 * Foreign constraint validations will be done in workers if referencing
-			 * table is not a distributed table.
-			 * If we do not set this flag, PostgreSQL tries to do additional checking when we drop
-			 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
-			 * connections to workers to verify foreign constraints while original
-			 * transaction is in process, which causes deadlock.
-			 *
-			 * Note that if referencing table is a local table, we should perform needed
-			 * checks in coordinator as the command will be executed only in the coordinator.
+			 * Replace reference table's name if we are to define foreign key constraint
+			 * between a local table and a reference table
 			 */
-			constraint->skip_validation = true;
+
+			/* reference table references to a local table */
+			if (referencingIsReferenceTable && referencedIsLocalTable)
+			{
+				/* rewrite referencing table name */
+				Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
+					referencingRelationOid);
+				alterTableStatement->relation->relname = get_rel_name(
+					referenceTableShardOid);
+			}
+			/* local table references to a reference table */
+			else if (referencingIsLocalTable && referencedIsReferenceTable)
+			{
+				/* rewrite referenced table name */
+				Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
+					referencedRelationOid);
+				constraint->pktable->relname = get_rel_name(referenceTableShardOid);
+			}
 		}
-
-		/* TODO: should I take lock here */
-		Oid referencedRelationOid = RangeVarGetRelid(constraint->pktable, NoLock,
-													 alterTableStatement->missing_ok);
-
-		if (!OidIsValid(referencedRelationOid))
+		else if (alterTableType == AT_DropConstraint)
 		{
-			continue;
-		}
+			/* simply continue if referencing table is not a reference table */
+			if (!referencingIsReferenceTable)
+			{
+				continue;
+			}
 
-		bool referencedIsLocalTable = !IsDistributedTable(referencedRelationOid);
-		bool referencedIsReferenceTable = !referencedIsLocalTable &&
-										  (PartitionMethod(referencedRelationOid) ==
-										   DISTRIBUTE_BY_NONE);
+			/*
+			 * Find referenced table OID by traversing the constraints defined for
+			 * reference table's only shard
+			 */
 
-		ErrorIfUnsupportedAlterAddFKeyBetweenReferecenceAndLocalTable(
-			referencingRelationOid,
-			referencedRelationOid,
-			constraint);
-
-		/*
-		 * Replace reference table's name if we are to define foreign key constraint
-		 * between a local table and a reference table
-		 */
-
-		/* reference table references to a local table */
-		if (referencingIsReferenceTable && referencedIsLocalTable)
-		{
-			/* rewrite referencing table name */
 			Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
 				referencingRelationOid);
-			alterTableStatement->relation->relname = get_rel_name(referenceTableShardOid);
-		}
-		/* local table references to a reference table */
-		else if (referencingIsLocalTable && referencedIsReferenceTable)
-		{
+
+			const char *constraintName = command->name;
+
+			Oid referencedRelationOid = GetReferencedTableOidByFKeyConstraintName(
+				referenceTableShardOid, constraintName);
+
+			if (!OidIsValid(referencedRelationOid) || IsDistributedTable(
+					referencedRelationOid))
+			{
+				/*
+				 * Constraint with constraintName does not belong to a fkey constraint of
+				 * referencing relation or the referencing relation is not a local table.
+				 * Do not replace reference table's name, PostgreSQL will already error out
+				 */
+				continue;
+			}
+
+			/*
+			 * Now we have a foreign key constraint to be droped via and ALTER TABLE DROP
+			 * CONSTRAINT command, which is previously defined from a reference table to
+			 * a coordinator local table
+			 */
+
+			/* we pass constraint to be NULL to perform ALTER TABLE DROP constraint checks */
+			Constraint *constraint = NULL;
+
+			ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(
+				referencingRelationOid,
+				referencedRelationOid,
+				constraint);
+
 			/* rewrite referenced table name */
-			Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(
-				referencedRelationOid);
-			constraint->pktable->relname = get_rel_name(referenceTableShardOid);
+			alterTableStatement->relation->relname = get_rel_name(
+				referenceTableShardOid);
 		}
 	}
+}
+
+
+/*
+ * GetReferencedTableOidByFKeyConstraintName returns OID of the referenced table that is referenced by
+ * table with referencingRelationOid in terms of foreign key constraint with constraintName.
+ *
+ * If there does not exist such a foreign key constraint, returns InvalidOid
+ */
+static Oid
+GetReferencedTableOidByFKeyConstraintName(Oid referencingRelationOid, const
+										  char *constraintName)
+{
+	Oid referencedTableOid = InvalidOid;
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				referencingRelationOid);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													true, NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		const char *foundConstraintName = constraintForm->conname.data;
+		char foundConstraintType = constraintForm->contype;
+
+		if (foundConstraintType == CONSTRAINT_FOREIGN && strncasecmp(foundConstraintName,
+																	 constraintName,
+																	 NAMEDATALEN) == 0)
+		{
+			/*
+			 * Found the foreign key constraint with name "constraintName",
+			 * set referenced table's OID
+			 */
+			referencedTableOid = constraintForm->confrelid;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return referencedTableOid;
 }
 
 
