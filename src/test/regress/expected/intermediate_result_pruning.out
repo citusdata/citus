@@ -4,6 +4,8 @@ SET citus.log_intermediate_results TO TRUE;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1480000;
 SET citus.shard_replication_factor = 1;
+SET citus.enable_local_execution_planning TO 1;
+SET citus.enable_local_execution TO 1;
 CREATE TABLE table_1 (key int, value text);
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table

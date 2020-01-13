@@ -448,6 +448,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_local_execution_planning",
+		gettext_noop("Enables queries on shards that are local to the current node "
+					 "to be planned and executed locally."),
+		NULL,
+		&EnableLocalExecutionPlanning,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
 		gettext_noop("Enables single hash repartitioning between hash "
 					 "distributed tables"),
