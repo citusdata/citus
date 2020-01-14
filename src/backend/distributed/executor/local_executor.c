@@ -104,9 +104,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
-static bool TaskAccessesLocalNode(Task *task);
 static void LogLocalCommand(const char *command);
-
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -433,7 +431,7 @@ ShouldExecuteTasksLocally(List *taskList)
  * TaskAccessesLocalNode returns true if any placements of the task reside on the
  * node that we're executing the query.
  */
-static bool
+bool
 TaskAccessesLocalNode(Task *task)
 {
 	ListCell *placementCell = NULL;
@@ -561,7 +559,16 @@ TaskQueryString(Task *task)
 															  task->query));
 	StringInfo queryString = makeStringInfo();
 
-	pg_get_query_def(task->query, queryString);
+	if (task->query->commandType == CMD_INSERT)
+	{
+		deparse_shard_query(task->query, task->distributedTableId, task->anchorShardId,
+							queryString);
+	}
+	else
+	{
+		pg_get_query_def(task->query, queryString);
+	}
+
 
 	task->queryStringLazy = queryString->data;
 	MemoryContextSwitchTo(previousContext);
