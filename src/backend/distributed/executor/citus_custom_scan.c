@@ -224,9 +224,20 @@ CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int efl
 	 * We must not change the distributed plan since it may be reused across multiple
 	 * executions of a prepared statement. Instead we create a deep copy that we only
 	 * use for the current execution.
+	 *
+	 * We also exclude localPlannedStatements from the copyObject call for performance
+	 * reasons, as they are immutable, so no need to have a deep copy.
 	 */
+	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
+	List *localPlannedStatements = originalDistributedPlan->workerJob->localPlannedStatements;
+	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+
 	DistributedPlan *distributedPlan = copyObject(scanState->distributedPlan);
 	scanState->distributedPlan = distributedPlan;
+
+	/* set back the immutable field */
+	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
 
 	Job *workerJob = distributedPlan->workerJob;
 	Query *jobQuery = workerJob->jobQuery;
