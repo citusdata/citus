@@ -318,56 +318,6 @@ ORDER BY
 LIMIT
         5;
 
--- Ensure that copy from worker node of table with serial column fails
-CREATE TABLE customer_worker_copy_append_seq (id integer, seq serial);
-SELECT master_create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
-
--- Connect to the first worker node
-\c - - - 57637
-
--- Test copy from the worker node
-COPY customer_worker_copy_append_seq FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-
--- Connect back to the master node
-\c - - - 57636
-
--- Create customer table for the worker copy with constraint and index
-CREATE TABLE customer_worker_copy_append (
-        c_custkey integer ,
-        c_name varchar(25) not null,
-        c_address varchar(40),
-        c_nationkey integer,
-        c_phone char(15),
-        c_acctbal decimal(15,2),
-        c_mktsegment char(10),
-        c_comment varchar(117),
-                primary key (c_custkey));
-
-CREATE INDEX ON customer_worker_copy_append (c_name);
-
-SELECT master_create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
-
--- Connect to the first worker node
-\c - - - 57637
-
--- Test copy from the worker node
-COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-
--- Make sure we don't use 2PC when connecting to master, even if requested
-BEGIN;
-SET LOCAL citus.multi_shard_commit_protocol TO '2pc';
-COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-COMMIT;
-
--- Test if there is no relation to copy data with the worker copy
-COPY lineitem_copy_none FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-
--- Connect back to the master node
-\c - - - 57636
-
--- Test the content of the table
-SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM customer_worker_copy_append;
-
 -- Test schema support on append partitioned tables
 CREATE SCHEMA append;
 CREATE TABLE append.customer_copy (
@@ -384,14 +334,7 @@ SELECT master_create_distributed_table('append.customer_copy', 'c_custkey', 'app
 
 -- Test copy from the master node
 COPY append.customer_copy FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|');
-
--- Test copy from the worker node
-\c - - - 57637
-
-COPY append.customer_copy FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-
--- Connect back to the master node
-\c - - - 57636
+COPY append.customer_copy FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|');
 
 -- Test the content of the table
 SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM append.customer_copy;
