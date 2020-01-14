@@ -247,6 +247,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
 	COPY_STRING_FIELD(queryStringLazy);
+	COPY_SCALAR_FIELD(distributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);
 	COPY_NODE_FIELD(dependentTaskList);

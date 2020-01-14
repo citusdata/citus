@@ -28,5 +28,6 @@ void SetTaskQueryAndPlacementList(Task *task, Query *query, List *placementList)
 extern char * TaskQueryString(Task *task);
 extern void DisableLocalExecution(void);
 extern bool AnyTaskAccessesRemoteNode(List *taskList);
+extern bool TaskAccessesLocalNode(Task *task);
 
 #endif /* LOCAL_EXECUTION_H */
