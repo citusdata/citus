@@ -461,7 +461,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 		 */
 		if (groupId == COORDINATOR_GROUP_ID)
 		{
-			ErrorIfCoordinatorHasLocalTableReferencingReferenceTable(referenceTableId);
+			ErrorIfCoordinatorHasLocalTableHavingFKeyWithReferenceTable(referenceTableId);
 		}
 
 		appendStringInfo(deletePlacementCommand,

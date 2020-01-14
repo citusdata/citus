@@ -501,18 +501,18 @@ ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencin
 
 
 /*
- * ErrorIfCoordinatorHasLocalTableReferencingReferenceTable errors out if we
+ * ErrorIfCoordinatorHasLocalTableHavingFKeyWithReferenceTable errors out if we
  * if coordinator has reference table replica for given referance table and if
  * it is involved in a foreign key constraint with a coordinator local table.
  */
 void
-ErrorIfCoordinatorHasLocalTableReferencingReferenceTable(Oid referenceTableOid)
+ErrorIfCoordinatorHasLocalTableHavingFKeyWithReferenceTable(Oid referenceTableOid)
 {
 	Oid localTableOid = GetCoordinatorLocalTableHavingFKeyWithReferenceTable(
 		referenceTableOid);
 
 	/*
-	 * There is a local table involved in a foreign key constraint
+	 * There is a coordinator local table involved in a foreign key constraint
 	 * with reference table with referenceTableOid
 	 */
 	if (OidIsValid(localTableOid))
@@ -522,10 +522,10 @@ ErrorIfCoordinatorHasLocalTableReferencingReferenceTable(Oid referenceTableOid)
 
 		ereport(ERROR, (errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 						errmsg(
-							"cannot remove reference table placements from coordinator"),
+							"cannot remove reference table placement from coordinator"),
 						errdetail(
 							"Local table \"%s\" is involved in a foreign key constraint with "
-							"refence table \"%s\", which has replica(s) in coordinator",
+							"refence table \"%s\", which has replica in coordinator",
 							localTableName, referenceTableName),
 						errhint(
 							"DROP foreign key constraint between them or drop referenced "
