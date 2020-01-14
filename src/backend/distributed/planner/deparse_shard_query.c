@@ -141,21 +141,33 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		valuesRTE->values_lists = task->rowValuesLists;
 	}
 
-	/*
-	 * For INSERT queries, we only have one relation to update, so we can
-	 * use deparse_shard_query(). For UPDATE and DELETE queries, we may have
-	 * subqueries and joins, so we use relation shard list to update shard
-	 * names and call pg_get_query_def() directly.
-	 */
-	if (query->commandType == CMD_INSERT)
+	if (task->query != NULL)
 	{
+		/*
+		 * Don't generate a query string if task->query is set. It means we do
+		 * lazy generation for this task. We do have to update relations to
+		 * shard names though, since local execution depends on this.
+		 */
+		List *relationShardList = task->relationShardList;
+		UpdateRelationToShardNames((Node *) query, relationShardList);
+	}
+	else if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * For INSERT queries, we only have one relation to update, so we can
+		 * use deparse_shard_query().
+		 */
 		deparse_shard_query(query, distributedTableId, task->anchorShardId, queryString);
 	}
 	else
 	{
+		/*
+		 * For UPDATE and DELETE queries, we may have subqueries and joins, so
+		 * we use relation shard list to update shard names and call
+		 * pg_get_query_def() directly.
+		 */
 		List *relationShardList = task->relationShardList;
 		UpdateRelationToShardNames((Node *) query, relationShardList);
-
 		pg_get_query_def(query, queryString);
 	}
 
@@ -167,8 +179,14 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 	if (task->query != NULL)
 	{
 		task->query = query;
+
+		/* invalidate the cached query string, because the query changed */
+		task->queryStringLazy = NULL;
 	}
-	task->queryStringLazy = queryString->data;
+	else
+	{
+		task->queryStringLazy = queryString->data;
+	}
 }
 
 

@@ -550,11 +550,15 @@ TaskQueryString(Task *task)
 
 
 	/*
-	 * Switch to the memory context of the task before generating the query
+	 * Switch to the memory context of task->query before generating the query
 	 * string. This way the query string is not freed in between multiple
-	 * executions of a prepared statement.
+	 * executions of a prepared statement. Except when UpdateTaskQueryString is
+	 * used to set task->query, in that case it is freed but it will be set to
+	 * NULL on the next execution of the query because UpdateTaskQueryString
+	 * does that.
 	 */
-	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+															  task->query));
 	StringInfo queryString = makeStringInfo();
 
 	pg_get_query_def(task->query, queryString);
