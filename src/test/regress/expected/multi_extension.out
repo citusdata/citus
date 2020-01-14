@@ -143,6 +143,8 @@ SELECT * FROM print_extension_changes();
                  | function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
                  | function citus_blocking_pids(integer)
                  | function citus_create_restore_point(text)
+                 | function citus_disk_available()
+                 | function citus_disk_size()
                  | function citus_dist_stat_activity()
                  | function citus_drop_trigger()
                  | function citus_executor_name(integer)
@@ -319,7 +321,7 @@ SELECT * FROM print_extension_changes();
                  | view citus_stat_statements
                  | view citus_worker_stat_activity
                  | view pg_dist_shard_placement
-(188 rows)
+(190 rows)
 
 -- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';

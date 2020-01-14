@@ -60,6 +60,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/repair_shards.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
@@ -924,6 +925,63 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.check_available_space_before_move",
+		gettext_noop("When enabled will check free disk space before a shard move"),
+		gettext_noop(
+			"Free disk space will be checked when this setting is enabled before each shard move."
+			"See citus.delete_old_shards_sleep_time and citus.delete_old_shards_max_tries"),
+		&CheckAvailableSpace,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.delete_old_shards_max_tries",
+		gettext_noop(
+			"Sets how many times deleting old shards will be retried before moving a shard"),
+		gettext_noop(
+			"When shard deletion is deferred, old shards will be there using some storage."
+			"When moving a shard, citus will try to delete the old shards to create "
+			"some more free space so that there is enough space for the shard move."
+			"This setting determines how many times the deletion operation will be tried."
+			"In between the tries, there will be delete_old_shards_sleep_time second sleeps."),
+		&WaitForDeferShardsMaxTries,
+		5, 0, INT_MAX,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.delete_old_shards_sleep_time",
+		gettext_noop(
+			"Sets sleep time between old shard delete operations prior to shard move"),
+		gettext_noop(
+			"When shard deletion is deferred, old shards will be there using some storage."
+			"When moving a shard, citus will try to delete the old shards to create "
+			"some more free space so that there is enough space for the shard move."
+			"This setting determines the duration of sleep (in second) between the deletion operations."),
+		&WaitForDeferShardRetryTimeInSec,
+		30, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_S,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.desired_percent_disk_available_after_move",
+		gettext_noop(
+			"Sets how many percentage of free disk space should be after a shard move"),
+		gettext_noop(
+			"This setting controls how much free space should be available after a shard move."
+			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"an error."),
+		&DesiredPercentFreeAfterMove,
+		5.0, 0.0, 100.0,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.defer_shard_delete_interval",
 		gettext_noop("Sets the time to wait between background deletion for shards."),
@@ -938,6 +996,33 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.force_disk_available",
+		gettext_noop("Set the amount of disk space that is available in bytes"),
+		gettext_noop("Available disk is normally read from the worker. This setting"
+					 "changes that and its value will always interpreted as the"
+					 "size available on the worker. If it's -1 the actual size"
+					 "of the worker will be used. "),
+		&ForceDiskAvailable,
+		-1, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.force_disk_size",
+		gettext_noop("Set the disk size in bytes"),
+		gettext_noop("Disk size is normally read from the worker. This setting"
+					 "changes that and its value will always interpreted as the"
+					 "size available on the worker. If it's -1 the actual size"
+					 "of the worker will be used. "),
+		&ForceDiskSize,
+		-1, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 
 	DefineCustomBoolVariable(
 		"citus.select_opens_transaction_block",

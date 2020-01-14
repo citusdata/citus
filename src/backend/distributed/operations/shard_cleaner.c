@@ -23,10 +23,6 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_defer_delete_shards);
 
-
-static int DropMarkedShards(bool waitForCleanupLock);
-
-
 /*
  * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
  * are still haning around in the system. These shards are orphaned by previous actions
@@ -46,7 +42,12 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	bool waitForCleanupLock = true;
-	int droppedShardCount = DropMarkedShards(waitForCleanupLock);
+	int droppedShardCount = 0;
+	bool droppedAll = DropMarkedShards(waitForCleanupLock, &droppedShardCount);
+	if (!droppedAll)
+	{
+		ereport(WARNING, (errmsg("not all shards could be dropped")));
+	}
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -55,6 +56,9 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 /*
  * TryDropMarkedShards is a wrapper around DropMarkedShards that catches
  * any errors to make it safe to use in the maintenance daemon.
+ *
+ * If dropping any of the shards failed this function returns -1, otherwise it
+ * returns the number of dropped shards.
  */
 int
 TryDropMarkedShards(bool waitForCleanupLock)
@@ -64,7 +68,7 @@ TryDropMarkedShards(bool waitForCleanupLock)
 
 	PG_TRY();
 	{
-		droppedShardCount = DropMarkedShards(waitForCleanupLock);
+		DropMarkedShards(waitForCleanupLock, &droppedShardCount);
 	}
 	PG_CATCH();
 	{
@@ -75,6 +79,7 @@ TryDropMarkedShards(bool waitForCleanupLock)
 		/* rethrow as WARNING */
 		edata->elevel = WARNING;
 		ThrowErrorData(edata);
+		return -1;
 	}
 	PG_END_TRY();
 
@@ -95,17 +100,23 @@ TryDropMarkedShards(bool waitForCleanupLock)
  * This is to ensure that this function is not being run concurrently.
  * Otherwise really bad race conditions are possible, such as removing all
  * placements of a shard. waitForCleanupLock indicates if this function should
- * wait for this lock or returns with a warning.
+ * wait for this lock or error out.
+ *
+ * The function returns true if all shards were successfuly dropped and fills
+ * removedShardCount with the number of shards that were dropped.
  */
-static int
-DropMarkedShards(bool waitForCleanupLock)
+bool
+DropMarkedShards(bool waitForCleanupLock, int *removedShardCount)
 {
-	int removedShardCount = 0;
+	if (removedShardCount != NULL)
+	{
+		*removedShardCount = 0;
+	}
 	ListCell *shardPlacementCell = NULL;
 
 	if (!IsCoordinator())
 	{
-		return removedShardCount;
+		return false;
 	}
 
 	if (waitForCleanupLock)
@@ -115,7 +126,7 @@ DropMarkedShards(bool waitForCleanupLock)
 	else if (!TryLockPlacementCleanup())
 	{
 		ereport(WARNING, (errmsg("could not acquire lock to cleanup placements")));
-		return 0;
+		return false;
 	}
 
 	List *shardPlacementList = AllShardPlacementsWithShardPlacementState(
@@ -155,8 +166,11 @@ DropMarkedShards(bool waitForCleanupLock)
 
 		DeleteShardPlacementRow(placement->placementId);
 
-		removedShardCount++;
+		if (removedShardCount != NULL)
+		{
+			(*removedShardCount)++;
+		}
 	}
 
-	return removedShardCount;
+	return true;
 }

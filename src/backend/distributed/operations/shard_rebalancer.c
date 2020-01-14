@@ -40,6 +40,7 @@
 #include "distributed/pg_dist_rebalance_strategy.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
@@ -444,51 +445,19 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	uint64 shardId = PG_GETARG_INT64(0);
 	bool missingOk = false;
 	ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
-	char *workerNodeName = shardPlacement->nodeName;
-	uint32 workerNodePort = shardPlacement->nodePort;
-	uint32 connectionFlag = 0;
-	PGresult *result = NULL;
-	bool raiseErrors = true;
-
-	/* we skip child tables of a partitioned table if this boolean variable is true */
-	bool optimizePartitionCalculations = true;
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
-	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(colocatedShardList,
-																	  TOTAL_RELATION_SIZE,
-																	  optimizePartitionCalculations);
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
-	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
-													workerNodePort);
-	int queryResult = ExecuteOptionalRemoteCommand(connection, tableSizeQuery->data,
-												   &result);
+	uint64 colocationSize = ColocationSize(colocatedShardList,
+										   shardPlacement->nodeName,
+										   shardPlacement->nodePort);
 
-	if (queryResult != RESPONSE_OKAY)
-	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot get the size because of a connection error")));
-	}
-
-	List *sizeList = ReadFirstColumnAsText(result);
-	if (list_length(sizeList) != 1)
-	{
-		ereport(ERROR, (errmsg(
-							"received wrong number of rows from worker, expected 1 received %d",
-							list_length(sizeList))));
-	}
-
-	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
-	char *tableSizeString = tableSizeStringInfo->data;
-	uint64 tableSize = SafeStringToUint64(tableSizeString);
-
-	PQclear(result);
-	ClearResults(connection, raiseErrors);
-	if (tableSize <= 0)
+	if (colocationSize <= 0)
 	{
 		PG_RETURN_FLOAT4(1);
 	}
 
-	PG_RETURN_FLOAT4(tableSize);
+	PG_RETURN_FLOAT4(colocationSize);
 }
 
 

@@ -11,6 +11,8 @@
 #ifndef REMOTE_COMMAND_H
 #define REMOTE_COMMAND_H
 
+#include "postgres.h"
+
 #include "distributed/connection_management.h"
 
 /* errors which ExecuteRemoteCommand might return */
@@ -44,6 +46,10 @@ extern void ExecuteCriticalRemoteCommandList(MultiConnection *connection,
 											 List *commandList);
 extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
+extern void ExecuteCriticalRemoteCommandWithResult(MultiConnection *connection,
+												   const char *command,
+												   PGresult **result);
+extern int64 ExecuteRemoteInt64Command(MultiConnection *connection, const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										PGresult **result);

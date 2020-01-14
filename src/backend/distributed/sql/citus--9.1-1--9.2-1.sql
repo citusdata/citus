@@ -83,3 +83,17 @@ CREATE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger
 
 #include "udfs/citus_prepare_pg_upgrade/9.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/9.2-1.sql"
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_disk_available()
+    RETURNS bigint
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT VOLATILE;
+COMMENT ON FUNCTION pg_catalog.citus_disk_available()
+  IS 'a function that checks the amount of disk space that is available in bytes';
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_disk_size()
+    RETURNS bigint
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT VOLATILE;
+COMMENT ON FUNCTION pg_catalog.citus_disk_size()
+  IS 'a function that checks the size of the disk in bytes';
