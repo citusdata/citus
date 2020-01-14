@@ -1,6 +1,7 @@
 -- Test queries on a distributed table with shards on the coordinator
 CREATE SCHEMA coordinator_shouldhaveshards;
 SET search_path TO coordinator_shouldhaveshards;
+SET citus.next_shard_id TO 1503000;
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
@@ -38,9 +39,9 @@ SET citus.log_local_commands TO ON;
 INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
 -- router queries execute locally
 INSERT INTO test VALUES (1, 1);
-LOG:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1360018 (x, y) VALUES (1, 1)
+NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1503000 (x, y) VALUES (1, 1)
 SELECT y FROM test WHERE x = 1;
-LOG:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1360018 test WHERE (x OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
@@ -62,15 +63,15 @@ WITH a AS (SELECT * FROM test) SELECT count(*) FROM test;
 -- multi-shard queries in transaction blocks execute locally
 BEGIN;
 SELECT y FROM test WHERE x = 1;
-LOG:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1360018 test WHERE (x OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
 (1 row)
 
 SELECT count(*) FROM test;
-LOG:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1360018 test WHERE true
-LOG:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1360021 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503000 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503003 test WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -79,15 +80,15 @@ LOG:  executing the command locally: SELECT count(*) AS count FROM coordinator_s
 END;
 BEGIN;
 SELECT y FROM test WHERE x = 1;
-LOG:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1360018 test WHERE (x OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
 (1 row)
 
 SELECT count(*) FROM test;
-LOG:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1360018 test WHERE true
-LOG:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1360021 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503000 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503003 test WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -99,7 +100,7 @@ ALTER TABLE test ADD COLUMN z int;
 -- DDL after local execution
 BEGIN;
 SELECT y FROM test WHERE x = 1;
-LOG:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1360018 test WHERE (x OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
