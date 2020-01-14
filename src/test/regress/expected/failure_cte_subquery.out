@@ -6,6 +6,7 @@ SET citus.next_shard_id TO 16000000;
 -- CTE inlining should not happen because
 -- the tests rely on intermediate results
 SET citus.enable_cte_inlining TO false;
+SET citus.enable_local_execution_planning TO OFF;
 SELECT pg_backend_pid() as pid \gset
 CREATE TABLE users_table (user_id int, user_name text);
 CREATE TABLE events_table(user_id int, event_id int, event_type int);
@@ -56,6 +57,43 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
+-- Verify that the query is executed locally, and we do not push the results to worker
+SET citus.enable_local_execution_planning TO ON;
+SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS (
+		SELECT user_id FROM events_table
+	)
+	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+)
+SELECT
+	count(*)
+FROM
+	cte,
+	  (SELECT
+    	DISTINCT users_table.user_id
+     FROM
+     	users_table, events_table
+     WHERE
+     	users_table.user_id = events_table.user_id AND
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo
+	  WHERE foo.user_id = cte.user_id;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET citus.enable_local_execution_planning TO OFF;
 -- kill at the second copy (pull)
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.events_table_16000002").kill()');
  mitmproxy
