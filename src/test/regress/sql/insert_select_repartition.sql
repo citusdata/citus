@@ -217,5 +217,17 @@ INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 END;
 SELECT * FROM target_table ORDER BY a;
 
+--
+-- repartitioned INSERT/SELECT with RETURNING
+--
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG2;
+WITH c AS (
+    INSERT INTO target_table
+    SELECT mapped_key, c FROM source_table
+    RETURNING *)
+SELECT * FROM c ORDER by a;
+RESET client_min_messages;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

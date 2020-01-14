@@ -75,7 +75,7 @@ static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 												List **redistributedResults,
 												bool useBinaryFormat);
 static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
-static bool IsRedistributablePlan(Plan *selectPlan, bool hasReturning);
+static bool IsRedistributablePlan(Plan *selectPlan);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
@@ -180,7 +180,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
 
-		if (IsRedistributablePlan(selectPlan->planTree, hasReturning) &&
+		if (IsRedistributablePlan(selectPlan->planTree) &&
 			IsSupportedRedistributionTarget(targetRelationId))
 		{
 			ereport(DEBUG1, (errmsg("performing repartitioned INSERT ... SELECT")));
@@ -1017,13 +1017,8 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
  * IsRedistributablePlan returns true if the given plan is a redistrituable plan.
  */
 static bool
-IsRedistributablePlan(Plan *selectPlan, bool hasReturning)
+IsRedistributablePlan(Plan *selectPlan)
 {
-	if (hasReturning)
-	{
-		return false;
-	}
-
 	/* don't redistribute if query is not distributed or requires merge on coordinator */
 	if (!IsCitusCustomScan(selectPlan))
 	{

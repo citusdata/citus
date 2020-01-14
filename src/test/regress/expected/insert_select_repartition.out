@@ -478,5 +478,35 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (12 rows)
 
+--
+-- repartitioned INSERT/SELECT with RETURNING
+--
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG2;
+WITH c AS (
+    INSERT INTO target_table
+    SELECT mapped_key, c FROM source_table
+    RETURNING *)
+SELECT * FROM c ORDER by a;
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  generating subplan XXX_1 for CTE c: INSERT INTO insert_select_repartition.target_table (a, b) SELECT mapped_key, c FROM insert_select_repartition.source_table RETURNING target_table.a, target_table.b
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer[])) c ORDER BY a
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'mapped_key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213604 AS citus_table_alias (a, b) SELECT mapped_key, auto_coerced_by_citus_1 FROM read_intermediate_results('{repartitioned_results_from_4213602_to_0,repartitioned_results_from_4213603_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(mapped_key integer, auto_coerced_by_citus_1 integer[]) RETURNING citus_table_alias.a, citus_table_alias.b
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213605 AS citus_table_alias (a, b) SELECT mapped_key, auto_coerced_by_citus_1 FROM read_intermediate_results('{repartitioned_results_from_4213601_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(mapped_key integer, auto_coerced_by_citus_1 integer[]) RETURNING citus_table_alias.a, citus_table_alias.b
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+RESET client_min_messages;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
