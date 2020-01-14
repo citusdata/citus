@@ -269,8 +269,8 @@ SELECT * FROM target_table ORDER BY a;
 (4 rows)
 
 --
--- worker queries have more columns than necessary. ExpandWorkerTargetEntry() might
--- add additional columns to the target list.
+-- worker queries can have more columns than necessary. ExpandWorkerTargetEntry()
+-- might add additional columns to the target list.
 --
 TRUNCATE target_table;
 \set VERBOSITY TERSE
@@ -304,6 +304,107 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {-1}
 (4 rows)
 
-DROP TABLE source_table, target_table;
+--
+-- repartitioned INSERT/SELECT followed by other DML in stame transaction
+--
+-- case 1. followed by DELETE
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+DELETE FROM target_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+-- case 2. followed by UPDATE
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+UPDATE target_table SET b=array_append(b, a);
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |     b
+---------------------------------------------------------------------
+ -4 | {3,-4}
+ -3 | {-3}
+ -2 | {4,6,-2}
+ -1 | {1,2,3,-1}
+(4 rows)
+
+-- case 3. followed by multi-row INSERT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -7 | {999}
+ -6 | {11,12}
+ -5 | {10,11}
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(7 rows)
+
+-- case 4. followed by distributed INSERT/SELECT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+INSERT INTO target_table SELECT * FROM target_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -4 | {3}
+ -3 | {}
+ -3 | {}
+ -2 | {4,6}
+ -2 | {4,6}
+ -1 | {1,2,3}
+ -1 | {1,2,3}
+(8 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

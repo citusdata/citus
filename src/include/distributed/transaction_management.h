@@ -35,13 +35,6 @@ typedef enum CoordinatedTransactionState
 	/* no coordinated transaction in progress, but connections established */
 	COORD_TRANS_IDLE,
 
-	/*
-	 * Coordinated transaction was initiated by coordinator, but the worker also
-	 * needs to start a coordinated transaction to be able to send commands to
-	 * other workers.
-	 */
-	COORD_TRANS_STARTED_ON_WORKER,
-
 	/* coordinated transaction in progress */
 	COORD_TRANS_STARTED,
 
@@ -117,6 +110,7 @@ extern void UseCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void CoordinatedTransactionUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
+extern void EnsureDistributedTransactionId(void);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
@@ -124,6 +118,7 @@ extern void InitializeTransactionManagement(void);
 /* other functions */
 extern List * ActiveSubXacts(void);
 extern List * ActiveSubXactContexts(void);
+extern StringInfo BeginAndSetDistributedTransactionIdCommand(void);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */

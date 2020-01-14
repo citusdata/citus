@@ -117,8 +117,7 @@ static bool MaybeExecutingUDF(void);
 void
 UseCoordinatedTransaction(void)
 {
-	if (CurrentCoordinatedTransactionState == COORD_TRANS_STARTED ||
-		CurrentCoordinatedTransactionState == COORD_TRANS_STARTED_ON_WORKER)
+	if (CurrentCoordinatedTransactionState == COORD_TRANS_STARTED)
 	{
 		return;
 	}
@@ -130,21 +129,23 @@ UseCoordinatedTransaction(void)
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+	AssignDistributedTransactionId();
+}
 
-	/*
-	 * This might be part of bigger distributed transaction originating from
-	 * another node, in which case transaction id has already been assigned
-	 * by a assign_distributed_transaction_id() call.
-	 */
+
+/*
+ * EnsureDistributedTransactionId makes sure that the current transaction
+ * has a distributed transaction id. It is either assigned by a previous
+ * call of assign_distributed_transaction_id(), or by starting a coordinated
+ * transaction.
+ */
+void
+EnsureDistributedTransactionId(void)
+{
 	DistributedTransactionId *transactionId = GetCurrentDistributedTransactionId();
 	if (transactionId->transactionNumber == 0)
 	{
-		CurrentCoordinatedTransactionState = COORD_TRANS_STARTED_ON_WORKER;
-		AssignDistributedTransactionId();
-	}
-	else
-	{
-		CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+		UseCoordinatedTransaction();
 	}
 }
 

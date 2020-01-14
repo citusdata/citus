@@ -267,17 +267,11 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-			TransactionProperties xactProperties = {
-				.errorOnAnyFailure = true,
-				.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED,
-				.requires2PC = false
-			};
-			int64 rowsInserted = ExecuteTaskListExtended(ROW_MODIFY_COMMUTATIVE, taskList,
-														 tupleDescriptor,
-														 scanState->tuplestorestate,
-														 hasReturning,
-														 MaxAdaptiveExecutorPoolSize,
-														 &xactProperties);
+			uint64 rowsInserted = ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE,
+																taskList,
+																tupleDescriptor,
+																scanState->tuplestorestate,
+																hasReturning);
 
 			executorState->es_processed = rowsInserted;
 		}
@@ -981,6 +975,7 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 
 		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 										   queryString->data);
+		modifyTask->dependentTaskList = NIL;
 		modifyTask->anchorShardId = shardId;
 		modifyTask->taskPlacementList = insertShardPlacementList;
 		modifyTask->relationShardList = list_make1(relationShard);
@@ -1043,7 +1038,7 @@ IsRedistributablePlan(Plan *selectPlan, bool hasReturning)
 	/*
 	 * Don't use redistribution if only one task. This is to keep the existing
 	 * behaviour for CTEs that the last step is a read_intermediate_result()
-	 * call. It doesn't hurt much in other case too.
+	 * call. It doesn't hurt much in other cases too.
 	 */
 	if (list_length(distSelectTaskList) <= 1)
 	{

@@ -124,8 +124,8 @@ RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
 
 --
--- worker queries have more columns than necessary. ExpandWorkerTargetEntry() might
--- add additional columns to the target list.
+-- worker queries can have more columns than necessary. ExpandWorkerTargetEntry()
+-- might add additional columns to the target list.
 --
 TRUNCATE target_table;
 \set VERBOSITY TERSE
@@ -144,7 +144,45 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
 
-DROP TABLE source_table, target_table;
+--
+-- repartitioned INSERT/SELECT followed by other DML in stame transaction
+--
+
+-- case 1. followed by DELETE
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+DELETE FROM target_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 2. followed by UPDATE
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+UPDATE target_table SET b=array_append(b, a);
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 3. followed by multi-row INSERT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 4. followed by distributed INSERT/SELECT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+INSERT INTO target_table SELECT * FROM target_table;
+END;
+SELECT * FROM target_table ORDER BY a;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
