@@ -13,6 +13,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/master_protocol.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "nodes/nodeFuncs.h"
@@ -124,8 +125,7 @@ GetRelationOidOwningShardOid(Oid shardRelationId, bool onlySearchPath)
 		return InvalidOid;
 	}
 
-	int localGroupId = GetLocalGroupId();
-	if (localGroupId == 0)
+	if (IsCoordinator())
 	{
 		bool coordinatorIsKnown = false;
 		PrimaryNodeForGroup(0, &coordinatorIsKnown);

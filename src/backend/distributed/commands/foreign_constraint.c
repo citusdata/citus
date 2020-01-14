@@ -571,6 +571,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, AccessShareLock);
+
 	return foreignKeyToReferenceTableIncludesGivenColumn;
 }
 
@@ -717,6 +718,7 @@ TableReferenced(Oid relationId)
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -731,6 +733,8 @@ TableReferenced(Oid relationId)
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
+
+	/* clean up scan and close system catalog */
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, NoLock);

@@ -772,7 +772,7 @@ ShardStorageType(Oid relationId)
 bool
 IsCoordinator(void)
 {
-	return (GetLocalGroupId() == 0);
+	return (GetLocalGroupId() == COORDINATOR_GROUP_ID);
 }
 
 
