@@ -55,6 +55,7 @@
 #include "utils/syscache.h"
 #include "utils/regproc.h"
 
+#define DISABLE_LOCAL_CHECK_FUNCTION_BODIES "SET LOCAL check_function_bodies TO off;"
 #define argumentStartsWith(arg, prefix) \
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
@@ -224,7 +225,10 @@ CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
 	char *ddlCommand = GetFunctionDDLCommand(functionAddress->objectId, true);
 	char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(functionAddress->objectId);
 
-	return list_make2(ddlCommand, alterFunctionOwnerSQL);
+	return list_make3(
+		DISABLE_LOCAL_CHECK_FUNCTION_BODIES,
+		ddlCommand,
+		alterFunctionOwnerSQL);
 }
 
 
