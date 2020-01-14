@@ -1510,16 +1510,33 @@ CleanUpSessions(DistributedExecution *execution)
 			connection->connectionState == MULTI_CONNECTION_LOST)
 		{
 			/*
-			 * We want the MultiConnection go away and not used in
-			 * the subsequent executions.
+			 * We want the MultiConnection to go away and not be used in
+			 * subsequent executions.
 			 *
 			 * We cannot get MULTI_CONNECTION_LOST via the ConnectionStateMachine,
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
 			 *
+			 * However, we prefer to keep the MultiConnection around until
+			 * the end of FinishDistributedExecution() to simplify the code.
+			 * Thus, we prefer ShutdownConnection() over CloseConnection().
 			 */
 
-			CloseConnection(connection);
+			ShutdownConnection(connection);
+
+			/* remove connection from wait event set */
+			execution->connectionSetChanged = true;
+
+			/*
+			 * Reset the transaction state machine since CloseConnection()
+			 * relies on it and even if we're not inside a distributed transaction
+			 * we set the transaction state (e.g., REMOTE_TRANS_SENT_COMMAND).
+			 */
+			if (!connection->remoteTransaction.beginSent)
+			{
+				connection->remoteTransaction.transactionState =
+					REMOTE_TRANS_NOT_STARTED;
+			}
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{
