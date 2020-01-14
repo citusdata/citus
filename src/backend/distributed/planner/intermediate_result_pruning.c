@@ -248,6 +248,22 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 		}
 	}
 
+	/* don't include the current worker if the result will be written to local file */
+	if (entry->writeLocalFile)
+	{
+		WorkerNode *workerNode = NULL;
+		int32 localGroupId = GetLocalGroupId();
+
+		foreach_ptr(workerNode, workerNodeList)
+		{
+			if (workerNode->groupId == localGroupId)
+			{
+				workerNodeList = list_delete(workerNodeList, workerNode);
+				break;
+			}
+		}
+	}
+
 	return workerNodeList;
 }
 
