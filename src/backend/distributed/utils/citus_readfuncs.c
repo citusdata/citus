@@ -406,6 +406,7 @@ ReadLocalPlannedStatement(READFUNC_ARGS)
 	READ_LOCALS(LocalPlannedStatement);
 
 	READ_UINT64_FIELD(shardId);
+	READ_UINT_FIELD(localGroupId);
 	READ_NODE_FIELD(localPlan);
 
 	READ_DONE();

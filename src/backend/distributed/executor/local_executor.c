@@ -105,7 +105,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
-static void LogLocalCommand(const char *command);
+static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -123,6 +123,7 @@ uint64
 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 {
 	EState *executorState = ScanStateGetExecutorState(scanState);
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	ParamListInfo paramListInfo = copyParamList(executorState->es_param_list_info);
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
@@ -142,32 +143,62 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
+		char *shardQueryString = NULL;
 
-		const char *shardQueryString = TaskQueryString(task);
-		Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes, numParams);
-
-		/*
-		 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
-		 * intermediate results in the query. That'd trigger ExecuteLocalTaskPlan()
-		 * go through the distributed executor, which we do not want since the
-		 * query is already known to be local.
-		 */
-		int cursorOptions = 0;
+		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
 		/*
-		 * Altough the shardQuery is local to this node, we prefer planner()
-		 * over standard_planner(). The primary reason for that is Citus itself
-		 * is not very tolarent standard_planner() calls that doesn't go through
-		 * distributed_planner() because of the way that restriction hooks are
-		 * implemented. So, let planner to call distributed_planner() which
-		 * eventually calls standard_planner().
+		 * If the plan is already cached, don't need to re-plan, just
+		 * acquire necessary locks.
 		 */
-		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+		if (localPlan != NULL)
+		{
+			shardQueryString = task->queryStringLazy
+							   ? task->queryStringLazy
+							   : "<optimized out by local execution>";
 
-		LogLocalCommand(shardQueryString);
+			Query *jobQuery = distributedPlan->workerJob->jobQuery;
+			LOCKMODE lockMode =
+				IsModifyCommand(jobQuery) ? RowExclusiveLock : (jobQuery->hasForUpdate ?
+																RowShareLock :
+																AccessShareLock);
+
+			ListCell *oidCell = NULL;
+			foreach(oidCell, localPlan->relationOids)
+			{
+				LockRelationOid(lfirst_oid(oidCell), lockMode);
+			}
+		}
+		else
+		{
+			shardQueryString = TaskQueryString(task);
+
+			Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes,
+												 numParams);
+
+			/*
+			 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
+			 * intermediate results in the query. That'd trigger ExecuteLocalTaskPlan()
+			 * go through the distributed executor, which we do not want since the
+			 * query is already known to be local.
+			 */
+			int cursorOptions = 0;
+
+			/*
+			 * Altough the shardQuery is local to this node, we prefer planner()
+			 * over standard_planner(). The primary reason for that is Citus itself
+			 * is not very tolarent standard_planner() calls that doesn't go through
+			 * distributed_planner() because of the way that restriction hooks are
+			 * implemented. So, let planner to call distributed_planner() which
+			 * eventually calls standard_planner().
+			 */
+			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+		}
+
+		LogLocalCommand(task);
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, TaskQueryString(task));
+			ExecuteLocalTaskPlan(scanState, localPlan, shardQueryString);
 	}
 
 	return totalRowsProcessed;
@@ -482,7 +513,7 @@ ErrorIfLocalExecutionHappened(void)
  * meaning it is part of distributed execution.
  */
 static void
-LogLocalCommand(const char *command)
+LogLocalCommand(Task *task)
 {
 	if (!(LogRemoteCommands || LogLocalCommands))
 	{
@@ -490,7 +521,7 @@ LogLocalCommand(const char *command)
 	}
 
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(command))));
+							ApplyLogRedaction(TaskQueryString(task)))));
 }
 
 

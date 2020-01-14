@@ -794,18 +794,88 @@ BEGIN
    INSERT INTO event_responses VALUES (p_event_id, p_user_id, p_choice)
    ON CONFLICT (event_id, user_id)
    DO UPDATE SET response = EXCLUDED.response;
+
+   PERFORM count(*) FROM event_responses WHERE event_id = p_event_id;
+
+   PERFORM count(*) FROM event_responses WHERE event_id = p_event_id AND false;
+
+   UPDATE event_responses SET response = p_choice WHERE event_id = p_event_id;
+
 END;
 $fn$;
 
 SELECT create_distributed_function('register_for_event(int,int,invite_resp)', 'p_event_id', 'event_responses');
 
--- call 6 times to make sure it works after the 5th time(postgres binds values after the 5th time)
+-- call 7 times to make sure it works after the 5th time(postgres binds values after the 5th time)
+-- after 6th, the local execution caches the local plans and uses it
+-- execute it both locally and remotely
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+
+\c - - - :worker_2_port
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+
+CALL register_for_event(16, 1, 'yes');
+CALL register_for_event(16, 1, 'yes');
+
+-- values 16, 17 and 19 hits the same
+-- shard, so we're re-using the same cached
+-- plans per statement across different distribution
+--  key values
+CALL register_for_event(17, 1, 'yes');
+CALL register_for_event(19, 1, 'yes');
+CALL register_for_event(17, 1, 'yes');
+CALL register_for_event(19, 1, 'yes');
+
+-- should work fine if the logs are enabled
+\set VERBOSITY terse
+SET citus.log_local_commands TO ON;
+SET client_min_messages TO DEBUG2;
+CALL register_for_event(19, 1, 'yes');
+
+-- should be fine even if no parameters exists in the query
+SELECT count(*) FROM event_responses WHERE event_id = 16;
+SELECT count(*) FROM event_responses WHERE event_id = 16;
+UPDATE event_responses SET response = 'no' WHERE event_id = 16;
+INSERT INTO event_responses VALUES (16, 666, 'maybe')
+ON CONFLICT (event_id, user_id)
+DO UPDATE SET response = EXCLUDED.response RETURNING *;
+
+-- multi row INSERTs hitting the same shard
+INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
+ON CONFLICT (event_id, user_id)
+DO UPDATE SET response = EXCLUDED.response RETURNING *;
+
+-- now, similar tests with some settings changed
+SET citus.enable_local_execution TO false;
+SET citus.enable_fast_path_router_planner TO false;
+CALL register_for_event(19, 1, 'yes');
+
+-- should be fine even if no parameters exists in the query
+SELECT count(*) FROM event_responses WHERE event_id = 16;
+SELECT count(*) FROM event_responses WHERE event_id = 16;
+UPDATE event_responses SET response = 'no' WHERE event_id = 16;
+INSERT INTO event_responses VALUES (16, 666, 'maybe')
+ON CONFLICT (event_id, user_id)
+DO UPDATE SET response = EXCLUDED.response RETURNING *;
+
+-- multi row INSERTs hitting the same shard
+INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
+ON CONFLICT (event_id, user_id)
+DO UPDATE SET response = EXCLUDED.response RETURNING *;
+
+\c - - - :master_port
 
 SET client_min_messages TO ERROR;
 SET search_path TO public;

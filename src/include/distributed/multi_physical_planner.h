@@ -127,6 +127,7 @@ typedef struct LocalPlannedStatement
 	CitusNode type;
 
 	uint64 shardId;
+	uint32 localGroupId;
 	PlannedStmt *localPlan;
 } LocalPlannedStatement;
 
@@ -168,7 +169,6 @@ typedef struct MapMergeJob
 	List *mapTaskList;
 	List *mergeTaskList;
 } MapMergeJob;
-
 
 
 /*

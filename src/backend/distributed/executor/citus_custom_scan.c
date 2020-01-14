@@ -15,10 +15,12 @@
 #include "distributed/backend_data.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -27,6 +29,12 @@
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/planner.h"
+#endif
+#include "optimizer/clauses.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 
@@ -39,13 +47,16 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
-static void CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int
-											  eflags);
+static void CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate,
+													int eflags);
 static void HandleDeferredShardPruningForFastPathQueries(
 	DistributedPlan *distributedPlan);
 static void HandleDeferredShardPruningForInserts(DistributedPlan *distributedPlan);
-
-static void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
+static void CacheLocalPlanForTask(Task *task, DistributedPlan *originalDistributedPlan);
+static DistributedPlan * CopyDistributedPlanWithoutCache(CitusScanState *scanState);
+static void ResetExecutionParameters(EState *executorState);
+static void CitusBeginScanWithoutCoordinatorProcessing(CustomScanState *node,
+													   EState *estate, int eflags);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
@@ -138,16 +149,12 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	if (workerJob &&
 		(workerJob->requiresMasterEvaluation || workerJob->deferredPruning))
 	{
-		CitusGenerateDeferredQueryStrings(node, estate, eflags);
-	}
+		CitusBeginScanWithCoordinatorProcessing(node, estate, eflags);
 
-	if (distributedPlan->modLevel == ROW_MODIFY_READONLY ||
-		distributedPlan->insertSelectQuery != NULL)
-	{
 		return;
 	}
 
-	CitusModifyBeginScan(node, estate, eflags);
+	CitusBeginScanWithoutCoordinatorProcessing(node, estate, eflags);
 }
 
 
@@ -176,32 +183,37 @@ CitusExecScan(CustomScanState *node)
 
 
 /*
- * CitusModifyBeginScan first evaluates expressions in the query and then
- * performs shard pruning in case the partition column in an insert was
- * defined as a function call.
- *
- * The function also checks the validity of the given custom scan node and
- * gets locks on the shards involved in the task list of the distributed plan.
+ * CitusBeginScanWithoutCoordinatorProcessing is intended to work on all executions
+ * that do not require any coordinator processing. The function simply acquires the
+ * necessary locks on the shards involved in the task list of the distributed plan
+ * and does the placement assignements. This implies that the function is a no-op for
+ * SELECT queries as they do not require any locking and placement assignements.
  */
 static void
-CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
+CitusBeginScanWithoutCoordinatorProcessing(CustomScanState *node, EState *estate, int
+										   eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 
-	/*
-	 * If we have not already copied the plan into this context, do it now.
-	 * Note that we could have copied the plan during CitusGenerateDeferredQueryStrings.
-	 */
-	if (GetMemoryChunkContext(distributedPlan) != CurrentMemoryContext)
+	if (distributedPlan->modLevel == ROW_MODIFY_READONLY ||
+		distributedPlan->insertSelectQuery != NULL)
 	{
-		distributedPlan = copyObject(distributedPlan);
-
-		scanState->distributedPlan = distributedPlan;
+		return;
 	}
+
+	/* we'll be modifying the distributed plan by assigning taskList, do it on a copy */
+	distributedPlan = copyObject(distributedPlan);
+	scanState->distributedPlan = distributedPlan;
 
 	Job *workerJob = distributedPlan->workerJob;
 	List *taskList = workerJob->taskList;
+
+	/*
+	 * These more complex jobs should have been evaluated in
+	 * CitusBeginScanWithCoordinatorProcessing.
+	 */
+	Assert(!(workerJob->requiresMasterEvaluation || workerJob->deferredPruning));
 
 	/* prevent concurrent placement changes */
 	AcquireMetadataLocks(taskList);
@@ -212,33 +224,17 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 
 /*
- * CitusGenerateDeferredQueryStrings generates query strings at the start of the execution
+ * CitusBeginScanWithCoordinatorProcessing generates query strings at the start of the execution
  * in two cases: when the query requires master evaluation and/or deferred shard pruning.
+ *
+ * The function is also smart about caching plans if the plan is local to this node.
  */
 static void
-CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int eflags)
+CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-
-	/*
-	 * We must not change the distributed plan since it may be reused across multiple
-	 * executions of a prepared statement. Instead we create a deep copy that we only
-	 * use for the current execution.
-	 *
-	 * We also exclude localPlannedStatements from the copyObject call for performance
-	 * reasons, as they are immutable, so no need to have a deep copy.
-	 */
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
-	List *localPlannedStatements = originalDistributedPlan->workerJob->localPlannedStatements;
-	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
-
-	DistributedPlan *distributedPlan = copyObject(scanState->distributedPlan);
-	scanState->distributedPlan = distributedPlan;
-
-	/* set back the immutable field */
-	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
-	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
-
+	DistributedPlan *distributedPlan = CopyDistributedPlanWithoutCache(scanState);
 	Job *workerJob = distributedPlan->workerJob;
 	Query *jobQuery = workerJob->jobQuery;
 
@@ -246,7 +242,6 @@ CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int efl
 	Assert(workerJob->requiresMasterEvaluation || workerJob->deferredPruning);
 
 	PlanState *planState = &(scanState->customScanState.ss.ps);
-	EState *executorState = planState->state;
 
 	/* citus only evaluates functions for modification queries */
 	bool modifyQueryRequiresMasterEvaluation =
@@ -262,36 +257,32 @@ CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int efl
 		modifyQueryRequiresMasterEvaluation || workerJob->deferredPruning;
 	if (shoudEvaluteFunctionsOrParams)
 	{
-		distributedPlan = (scanState->distributedPlan);
-		scanState->distributedPlan = distributedPlan;
-
-		workerJob = distributedPlan->workerJob;
-		jobQuery = workerJob->jobQuery;
-
+		/* evaluate functions and parameters */
 		ExecuteMasterEvaluableFunctions(jobQuery, planState);
-
-		/*
-		 * We've processed parameters in ExecuteMasterEvaluableFunctions and
-		 * don't need to send their values to workers, since they will be
-		 * represented as constants in the deparsed query. To avoid sending
-		 * parameter values, we set the parameter list to NULL.
-		 */
-		executorState->es_param_list_info = NULL;
 	}
 
 	/*
 	 * After evaluating the function/parameters, we're done unless shard pruning
 	 * is also deferred.
 	 */
-	if (!workerJob->deferredPruning)
+	if (workerJob->requiresMasterEvaluation && !workerJob->deferredPruning)
 	{
 		RebuildQueryStrings(workerJob->jobQuery, workerJob->taskList);
+
+		/* we'll use generated strings, no need to have the parameters anymore */
+		EState *executorState = planState->state;
+		ResetExecutionParameters(executorState);
 
 		return;
 	}
 
-	/* at this point, we're about to do the shard pruning */
-	Assert(workerJob->deferredPruning);
+	/*
+	 * At this point, we're about to do the shard pruning for fast-path queries.
+	 * Given that pruning is deferred always for INSERTs, we get here
+	 * !EnableFastPathRouterPlanner  as well.
+	 */
+	Assert(workerJob->deferredPruning &&
+		   (distributedPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner));
 	if (jobQuery->commandType == CMD_INSERT)
 	{
 		HandleDeferredShardPruningForInserts(distributedPlan);
@@ -300,6 +291,191 @@ CitusGenerateDeferredQueryStrings(CustomScanState *node, EState *estate, int efl
 	{
 		HandleDeferredShardPruningForFastPathQueries(distributedPlan);
 	}
+
+	if (jobQuery->commandType != CMD_SELECT)
+	{
+		/* prevent concurrent placement changes */
+		AcquireMetadataLocks(workerJob->taskList);
+
+		/* modify tasks are always assigned using first-replica policy */
+		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
+	}
+
+	if (list_length(distributedPlan->workerJob->taskList) != 1)
+	{
+		/*
+		 * We might have zero shard queries or multi-row INSERTs at this point,
+		 * we only want to cache single task queries.
+		 */
+		return;
+	}
+
+	/*
+	 * As long as the task accesses local node and the query doesn't have
+	 * any volatile functions, we cache the local Postgres plan on the
+	 * shard for re-use.
+	 */
+	Task *task = linitial(distributedPlan->workerJob->taskList);
+	if (EnableLocalExecution && TaskAccessesLocalNode(task) &&
+		!contain_volatile_functions(
+			(Node *) originalDistributedPlan->workerJob->jobQuery))
+	{
+		CacheLocalPlanForTask(task, originalDistributedPlan);
+	}
+	else
+	{
+		/*
+		 * If we're not going to use a cached plan, we'll use the query string that is
+		 * already generated where the parameters are replaced, so we should not have
+		 * the parameters anymore.
+		 */
+		EState *executorState = planState->state;
+		ResetExecutionParameters(executorState);
+	}
+}
+
+
+/*
+ * CopyDistributedPlanWithoutCache is a helper function which copies the
+ * distributedPlan into the current memory context.
+ *
+ * We must not change the distributed plan since it may be reused across multiple
+ * executions of a prepared statement. Instead we create a deep copy that we only
+ * use for the current execution.
+ *
+ * We also exclude localPlannedStatements from the copyObject call for performance
+ * reasons, as they are immutable, so no need to have a deep copy.
+ */
+static DistributedPlan *
+CopyDistributedPlanWithoutCache(CitusScanState *scanState)
+{
+	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
+	List *localPlannedStatements =
+		originalDistributedPlan->workerJob->localPlannedStatements;
+	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+
+	DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
+	scanState->distributedPlan = distributedPlan;
+
+	/* set back the immutable field */
+	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+
+	return distributedPlan;
+}
+
+
+/*
+ * ResetExecutionParameters set the parameter list to NULL. See the function
+ * for details.
+ */
+static void
+ResetExecutionParameters(EState *executorState)
+{
+	/*
+	 * We've processed parameters in ExecuteMasterEvaluableFunctions and
+	 * don't need to send their values to workers, since they will be
+	 * represented as constants in the deparsed query. To avoid sending
+	 * parameter values, we set the parameter list to NULL.
+	 */
+	executorState->es_param_list_info = NULL;
+}
+
+
+/*
+ * CacheLocalPlanForTask caches a plan that is local to this node in the
+ * originalDistributedPlan.
+ *
+ * The basic idea is to be able to skip planning on the shards when possible.
+ */
+static void
+CacheLocalPlanForTask(Task *task, DistributedPlan *originalDistributedPlan)
+{
+	PlannedStmt *localPlan = GetCachedLocalPlan(task, originalDistributedPlan);
+	if (localPlan != NULL)
+	{
+		/* we already have a local plan */
+		return;
+	}
+
+	if (list_length(task->relationShardList) == 0)
+	{
+		/* zero shard plan, no need to cache */
+		return;
+	}
+
+	/*
+	 * All memory allocations should happen in the plan's context
+	 * since we'll cache the local plan there.
+	 */
+	MemoryContext oldContext =
+		MemoryContextSwitchTo(GetMemoryChunkContext(originalDistributedPlan));
+
+	/*
+	 * We prefer to use jobQuery (over task->query) because we don't want any
+	 * functions/params have been evaluated in the cached plan.
+	 */
+	Query *shardQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+
+	UpdateRelationsToLocalShardTables((Node *) shardQuery, task->relationShardList);
+
+	LOCKMODE lockMode =
+		IsModifyCommand(shardQuery) ? RowExclusiveLock : (shardQuery->hasForUpdate ?
+														  RowShareLock : AccessShareLock);
+
+	/* fast path queries can only have a single RTE by definition */
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(shardQuery->rtable);
+
+	/*
+	 * If the shard has been created in this transction, we wouldn't see the relationId
+	 * for it, so do not cache.
+	 */
+	if (rangeTableEntry->relid == InvalidOid)
+	{
+		pfree(shardQuery);
+		return;
+	}
+
+	LockRelationOid(rangeTableEntry->relid, lockMode);
+
+	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
+	localPlan = planner(shardQuery, 0, NULL);
+	localPlannedStatement->localPlan = localPlan;
+	localPlannedStatement->shardId = task->anchorShardId;
+	localPlannedStatement->localGroupId = GetLocalGroupId();
+
+	originalDistributedPlan->workerJob->localPlannedStatements =
+		lappend(originalDistributedPlan->workerJob->localPlannedStatements,
+				localPlannedStatement);
+
+	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * GetCachedLocalPlan is a helper function which return the cached
+ * plan in the distributedPlan for the given task if exists.
+ *
+ * Otherwise, the function returns NULL.
+ */
+PlannedStmt *
+GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
+{
+	ListCell *cachedLocalPlanCell = NULL;
+	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
+	foreach(cachedLocalPlanCell, cachedPlanList)
+	{
+		LocalPlannedStatement *localPlannedStatement = lfirst(cachedLocalPlanCell);
+
+		if (localPlannedStatement->shardId == task->anchorShardId &&
+			localPlannedStatement->localGroupId == GetLocalGroupId())
+		{
+			/* already have a cached plan, no need to continue */
+			return localPlannedStatement->localPlan;
+		}
+	}
+
+	return NULL;
 }
 
 

@@ -492,6 +492,7 @@ OutLocalPlannedStatement(OUTFUNC_ARGS)
 	WRITE_NODE_TYPE("LocalPlannedStatement");
 
 	WRITE_UINT64_FIELD(shardId);
+	WRITE_UINT_FIELD(localGroupId);
 	WRITE_NODE_FIELD(localPlan);
 }
 
