@@ -40,6 +40,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
+static Oid GetCoordinatorLocalTableHavingFKeyWithReferenceTable(Oid referenceTableOid);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -496,6 +497,108 @@ ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencin
 								"to pg_dist_node as well.")));
 		}
 	}
+}
+
+
+/*
+ * ErrorIfCoordinatorHasLocalTableReferencingReferenceTable errors out if we
+ * if coordinator has reference table replica for given referance table and if
+ * it is involved in a foreign key constraint with a coordinator local table.
+ */
+void
+ErrorIfCoordinatorHasLocalTableReferencingReferenceTable(Oid referenceTableOid)
+{
+	Oid localTableOid = GetCoordinatorLocalTableHavingFKeyWithReferenceTable(
+		referenceTableOid);
+
+	/*
+	 * There is a local table involved in a foreign key constraint
+	 * with reference table with referenceTableOid
+	 */
+	if (OidIsValid(localTableOid))
+	{
+		const char *localTableName = get_rel_name(localTableOid);
+		const char *referenceTableName = get_rel_name(referenceTableOid);
+
+		ereport(ERROR, (errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						errmsg(
+							"cannot remove reference table placements from coordinator"),
+						errdetail(
+							"Local table \"%s\" is involved in a foreign key constraint with "
+							"refence table \"%s\", which has replica(s) in coordinator",
+							localTableName, referenceTableName),
+						errhint(
+							"DROP foreign key constraint between them or drop referenced "
+							"table with DROP ... CASCADE.")));
+	}
+}
+
+
+/*
+ * GetCoordinatorLocalTableHavingFKeyWithReferenceTable returns OID of the
+ * local table that is involved in a foreign key constraint with the reference
+ * table with referenceTableOid.
+ * It does that by scanning pg_constraint for foreign key constraints.
+ *
+ * If there does not exist such a foreign key constraint, returns InvalidOid.
+ * If there exists more than one such a foreign key constraint, we return the
+ * first local table we ecounter while scanning pg_constraint
+ */
+static Oid
+GetCoordinatorLocalTableHavingFKeyWithReferenceTable(Oid referenceTableOid)
+{
+	Oid referenceTableShardOid = GetOnlyShardOidOfReferenceTable(referenceTableOid);
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													InvalidOid,
+													false, NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->confrelid == referenceTableShardOid)
+		{
+			Oid referencingTableId = constraintForm->conrelid;
+
+			if (!IsDistributedTable(referencingTableId))
+			{
+				return referencingTableId;
+			}
+		}
+		else if (constraintForm->conrelid == referenceTableShardOid)
+		{
+			Oid referencedTableId = constraintForm->confrelid;
+
+			if (!IsDistributedTable(referencedTableId))
+			{
+				return referencedTableId;
+			}
+		}
+
+		/*
+		 * If this is not such a relation from/to the given relation, we should
+		 * simply skip.
+		 */
+		heapTuple = systable_getnext(scanDescriptor);
+		continue;
+	}
+
+	/* clean up scan and close system catalog */
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return InvalidOid;
 }
 
 
