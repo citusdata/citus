@@ -80,7 +80,6 @@ SELECT shard_of_distribution_column_is_local(11);
 SELECT shard_of_distribution_column_is_local(12);
 
 --- enable logging to see which tasks are executed locally
-SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 
 -- first, make sure that local execution works fine

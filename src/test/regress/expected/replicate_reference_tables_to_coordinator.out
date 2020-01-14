@@ -8,7 +8,6 @@ SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 8000000;
 SET citus.next_placement_id TO 8000000;
 --- enable logging to see which tasks are executed locally
-SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 CREATE TABLE squares(a int, b int);
 SELECT create_reference_table('squares');
@@ -20,7 +19,7 @@ SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 -- should be executed locally
 SELECT count(*) FROM squares;
-LOG:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares
  count
 ---------------------------------------------------------------------
     10
@@ -35,7 +34,7 @@ SELECT create_reference_table('numbers');
 (1 row)
 
 INSERT INTO numbers VALUES (20), (21);
-LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (20), (21)
+NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (20), (21)
 -- INSERT ... SELECT between reference tables
 BEGIN;
 EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
@@ -151,7 +150,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT test_reference_local_join_plpgsql_func();
-LOG:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
+NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
 CONTEXT:  SQL statement "INSERT INTO numbers VALUES (4)"
 PL/pgSQL function test_reference_local_join_plpgsql_func() line 4 at SQL statement
 ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
@@ -164,7 +163,7 @@ SELECT sum(a) FROM local_table;
 (1 row)
 
 SELECT sum(a) FROM numbers;
-LOG:  executing the command locally: SELECT sum(a) AS sum FROM replicate_ref_to_coordinator.numbers_8000001 numbers
+NOTICE:  executing the command locally: SELECT sum(a) AS sum FROM replicate_ref_to_coordinator.numbers_8000001 numbers
  sum
 ---------------------------------------------------------------------
   41
@@ -300,7 +299,7 @@ DROP VIEW numbers_v, local_table_v;
 -- be planned locally.
 --
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
-LOG:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
+NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
 REFRESH MATERIALIZED VIEW numbers_v;
 SELECT public.plan_is_distributed($Q$
 EXPLAIN (COSTS FALSE)

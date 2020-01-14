@@ -489,8 +489,8 @@ LogLocalCommand(const char *command)
 		return;
 	}
 
-	ereport(LOG, (errmsg("executing the command locally: %s",
-						 ApplyLogRedaction(command))));
+	ereport(NOTICE, (errmsg("executing the command locally: %s",
+							ApplyLogRedaction(command))));
 }
 
 
