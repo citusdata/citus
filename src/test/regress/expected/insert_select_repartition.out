@@ -518,8 +518,43 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (4 rows)
 
+DROP TABLE source_table, target_table;
 --
 -- The case where select query has a GROUP BY ...
 --
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_count TO 3;
+CREATE TABLE target_table(a int, b int);
+SELECT create_distributed_table('target_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO source_table SELECT floor(i/4), i*i FROM generate_series(1, 20) i;
+SET client_min_messages TO DEBUG1;
+INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 0 |   9
+ 1 |  49
+ 2 | 121
+ 3 | 225
+ 4 | 361
+ 5 | 400
+(6 rows)
+
+DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

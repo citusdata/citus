@@ -316,19 +316,21 @@ CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;
-	INSERT INTO
-		target_table
-	SELECT
-		col_2,
-		col_1
-	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
+	WITH r AS (
+		INSERT INTO
+			target_table
+		SELECT
+			col_2,
+			col_1
+		FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *)
+	SELECT * FROM r ORDER BY col_1;
  col_1 | col_2
 ---------------------------------------------------------------------
+     1 |     1
+     2 |     1
      3 |     1
      4 |     1
-     1 |     1
      5 |     1
-     2 |     1
 (5 rows)
 
 ROLLBACK;

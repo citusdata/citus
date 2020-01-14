@@ -243,9 +243,29 @@ SELECT mapped_key, c FROM t NATURAL JOIN source_table;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
 
+DROP TABLE source_table, target_table;
+
 --
 -- The case where select query has a GROUP BY ...
 --
+
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+
+SET citus.shard_count TO 3;
+CREATE TABLE target_table(a int, b int);
+SELECT create_distributed_table('target_table', 'a');
+
+INSERT INTO source_table SELECT floor(i/4), i*i FROM generate_series(1, 20) i;
+
+SET client_min_messages TO DEBUG1;
+INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a;
+
+DROP TABLE source_table, target_table;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
