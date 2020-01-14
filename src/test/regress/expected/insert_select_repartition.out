@@ -305,7 +305,7 @@ SELECT * FROM target_table ORDER BY a;
 (4 rows)
 
 --
--- repartitioned INSERT/SELECT followed by other DML in stame transaction
+-- repartitioned INSERT/SELECT followed/preceded by other DML in same transaction
 --
 -- case 1. followed by DELETE
 TRUNCATE target_table;
@@ -405,6 +405,78 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
  -1 | {1,2,3}
 (8 rows)
+
+-- case 5. preceded by DELETE
+TRUNCATE target_table;
+BEGIN;
+DELETE FROM target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+-- case 6. preceded by UPDATE
+TRUNCATE target_table;
+BEGIN;
+UPDATE target_table SET b=array_append(b, a);
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(4 rows)
+
+-- case 7. preceded by multi-row INSERT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -7 | {999}
+ -6 | {11,12}
+ -5 | {10,11}
+ -4 | {3}
+ -3 | {}
+ -2 | {4,6}
+ -1 | {1,2,3}
+(7 rows)
+
+-- case 8. preceded by distributed INSERT/SELECT
+TRUNCATE target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+BEGIN;
+INSERT INTO target_table SELECT * FROM target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+ a  |    b
+---------------------------------------------------------------------
+ -4 | {3}
+ -4 | {3}
+ -4 | {3}
+ -3 | {}
+ -3 | {}
+ -3 | {}
+ -2 | {4,6}
+ -2 | {4,6}
+ -2 | {4,6}
+ -1 | {1,2,3}
+ -1 | {1,2,3}
+ -1 | {1,2,3}
+(12 rows)
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

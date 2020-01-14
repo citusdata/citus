@@ -145,7 +145,7 @@ RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
 
 --
--- repartitioned INSERT/SELECT followed by other DML in stame transaction
+-- repartitioned INSERT/SELECT followed/preceded by other DML in same transaction
 --
 
 -- case 1. followed by DELETE
@@ -181,6 +181,39 @@ BEGIN;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 SELECT * FROM target_table ORDER BY a;
 INSERT INTO target_table SELECT * FROM target_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 5. preceded by DELETE
+TRUNCATE target_table;
+BEGIN;
+DELETE FROM target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 6. preceded by UPDATE
+TRUNCATE target_table;
+BEGIN;
+UPDATE target_table SET b=array_append(b, a);
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 7. preceded by multi-row INSERT
+TRUNCATE target_table;
+BEGIN;
+INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+END;
+SELECT * FROM target_table ORDER BY a;
+
+-- case 8. preceded by distributed INSERT/SELECT
+TRUNCATE target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+BEGIN;
+INSERT INTO target_table SELECT * FROM target_table;
+INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 END;
 SELECT * FROM target_table ORDER BY a;
 
