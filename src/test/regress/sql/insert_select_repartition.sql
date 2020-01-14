@@ -271,6 +271,33 @@ SELECT * FROM target_table ORDER BY a;
 
 EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 
+--
+-- Prepared INSERT/SELECT
+--
+TRUNCATE target_table;
+PREPARE insert_plan(int, int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN $1 AND $2 GROUP BY a;
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0, 2);
+EXECUTE insert_plan(0, 2);
+EXECUTE insert_plan(0, 2);
+EXECUTE insert_plan(0, 2);
+EXECUTE insert_plan(0, 2);
+EXECUTE insert_plan(0, 2);
+
+EXECUTE insert_plan(2, 4);
+EXECUTE insert_plan(2, 4);
+EXECUTE insert_plan(2, 4);
+EXECUTE insert_plan(2, 4);
+EXECUTE insert_plan(2, 4);
+EXECUTE insert_plan(2, 4);
+RESET client_min_messages;
+
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+
 
 DROP TABLE source_table, target_table;
 

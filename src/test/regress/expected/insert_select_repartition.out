@@ -573,6 +573,62 @@ EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
                      ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..32.60 rows=2260 width=8)
 (10 rows)
 
+--
+-- Prepared INSERT/SELECT
+--
+TRUNCATE target_table;
+PREPARE insert_plan(int, int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN $1 AND $2 GROUP BY a;
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(0, 2);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan(2, 4);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  performing repartitioned INSERT ... SELECT
+RESET client_min_messages;
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+ a | count | distinct_values
+---------------------------------------------------------------------
+ 0 |     6 |               1
+ 1 |     6 |               1
+ 2 |    12 |               1
+ 3 |     6 |               1
+ 4 |     6 |               1
+(5 rows)
+
 DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
