@@ -32,6 +32,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
@@ -139,15 +140,29 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
 	Query *query = BuildSelectForInsertSelect(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
+	Oid targetRelationId = insertRte->relid;
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
 	if (es->analyze)
 	{
 		/* avoiding double execution here is tricky, error out for now */
 		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
 							   "... SELECT commands via the coordinator")));
+	}
+
+	PlannedStmt *selectPlan = pg_plan_query(query, cursorOptions, params);
+	if (IsRedistributablePlan(selectPlan->planTree) &&
+		IsSupportedRedistributionTarget(targetRelationId))
+	{
+		ExplainPropertyText("INSERT/SELECT method", "repartition", es);
+	}
+	else
+	{
+		ExplainPropertyText("INSERT/SELECT method", "pull to coordinator", es);
 	}
 
 	ExplainOpenGroup("Select Query", "Select Query", false, es);

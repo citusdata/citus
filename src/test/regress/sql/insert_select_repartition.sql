@@ -265,6 +265,13 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
 
+--
+-- EXPLAIN output should specify repartitioned INSERT/SELECT
+--
+
+EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+
+
 DROP TABLE source_table, target_table;
 
 SET client_min_messages TO WARNING;

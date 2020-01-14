@@ -69,13 +69,11 @@ static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
 static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 								   Oid targetRelationId);
-static bool IsSupportedRedistributionTarget(Oid targetRelationId);
 static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 												DistTableCacheEntry *targetRelation,
 												List **redistributedResults,
 												bool useBinaryFormat);
 static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
-static bool IsRedistributablePlan(Plan *selectPlan);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
@@ -873,7 +871,7 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
  * IsSupportedRedistributionTarget determines whether re-partitioning into the
  * given target relation is supported.
  */
-static bool
+bool
 IsSupportedRedistributionTarget(Oid targetRelationId)
 {
 	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(targetRelationId);
@@ -966,7 +964,7 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 		ereport(DEBUG2, (errmsg("distributed statement: %s", queryString->data)));
 
 		LockShardDistributionMetadata(shardId, ShareLock);
-		List *insertShardPlacementList = FinalizedShardPlacementList(shardId);
+		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
 		relationShard->relationId = targetShardInterval->relationId;
@@ -1015,7 +1013,7 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 /*
  * IsRedistributablePlan returns true if the given plan is a redistrituable plan.
  */
-static bool
+bool
 IsRedistributablePlan(Plan *selectPlan)
 {
 	/* don't redistribute if query is not distributed or requires merge on coordinator */

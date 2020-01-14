@@ -275,9 +275,9 @@ SET citus.log_remote_commands TO true; SET client_min_messages TO DEBUG;
    CREATE TABLE results AS SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
-LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213601 source_table WHERE true GROUP BY a
-LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213602 source_table WHERE true GROUP BY a
-LOG:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213603 source_table WHERE true GROUP BY a
+NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213601 source_table WHERE true GROUP BY a
+NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213602 source_table WHERE true GROUP BY a
+NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213603 source_table WHERE true GROUP BY a
 RESET citus.log_remote_commands; RESET client_min_messages;
 DROP TABLE results;
 -- now verify that we don't write the extra columns to the intermediate result files and
@@ -554,6 +554,24 @@ SELECT * FROM target_table ORDER BY a;
  4 | 361
  5 | 400
 (6 rows)
+
+--
+-- EXPLAIN output should specify repartitioned INSERT/SELECT
+--
+EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+                                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate  (cost=43.90..45.90 rows=200 width=8)
+                     Group Key: a
+                     ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..32.60 rows=2260 width=8)
+(10 rows)
 
 DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;
