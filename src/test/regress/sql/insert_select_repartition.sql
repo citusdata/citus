@@ -117,7 +117,7 @@ SET citus.shard_count TO 2;
 CREATE TABLE target_table(a int, b int[]);
 SELECT create_distributed_table('target_table', 'a');
 
-SET client_min_messages TO DEBUG2;
+SET client_min_messages TO DEBUG1;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 RESET client_min_messages;
 
@@ -138,7 +138,7 @@ DROP TABLE results;
 
 -- now verify that we don't write the extra columns to the intermediate result files and
 -- insertion to the target works fine.
-SET client_min_messages TO DEBUG2;
+SET client_min_messages TO DEBUG1;
 INSERT INTO target_table SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
 RESET client_min_messages;
 
@@ -221,13 +221,31 @@ SELECT * FROM target_table ORDER BY a;
 -- repartitioned INSERT/SELECT with RETURNING
 --
 TRUNCATE target_table;
-SET client_min_messages TO DEBUG2;
+SET client_min_messages TO DEBUG1;
 WITH c AS (
     INSERT INTO target_table
     SELECT mapped_key, c FROM source_table
     RETURNING *)
 SELECT * FROM c ORDER by a;
 RESET client_min_messages;
+
+--
+-- in combination with CTEs
+--
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG1;
+WITH t AS (
+    SELECT mapped_key, a, c FROM source_table
+    WHERE a > floor(random())
+)
+INSERT INTO target_table
+SELECT mapped_key, c FROM t NATURAL JOIN source_table;
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY a;
+
+--
+-- The case where select query has a GROUP BY ...
+--
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

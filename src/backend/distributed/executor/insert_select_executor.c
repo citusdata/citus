@@ -149,9 +149,8 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 		/*
-		 * If the type of insert column and target table's column type is
-		 * different from each other. Cast insert column't type to target
-		 * table's column
+		 * Cast types of insert target list and select projection list to
+		 * match the column types of the target relation.
 		 */
 		selectQuery->targetList =
 			AddInsertSelectCasts(insertSelectQuery->targetList,
@@ -1045,8 +1044,8 @@ IsRedistributablePlan(Plan *selectPlan)
 
 
 /*
- * WrapForProjection wraps task->queryString to only select given projected
- * columns. It modifies the taskList.
+ * WrapTaskListForProjection wraps task->queryString to only select given
+ * projected columns. It modifies the taskList.
  */
 static void
 WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
