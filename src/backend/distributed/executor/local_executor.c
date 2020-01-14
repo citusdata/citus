@@ -77,6 +77,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
@@ -236,6 +237,48 @@ LocalShardQuery(Task *task, ParamListInfo boundParams,
 
 
 /*
+ * ConvertDistributedTableRTEToShardRTE changes the RTE that references a
+ * distributed table to one that references the local shard.
+ */
+static void
+ConvertDistributedTableRTEToShardRTE(RangeTblEntry *rangeTableEntry, Task *task)
+{
+	Assert(rangeTableEntry->rtekind == RTE_RELATION);
+	RelationShard *foundRelationShard = NULL;
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, task->relationShardList)
+	{
+		if (rangeTableEntry->relid == relationShard->relationId)
+		{
+			/*
+			 * There should be only one matching relationShard for this
+			 * distributed table, otherwise we cannot replace it one to one
+			 */
+			Assert(foundRelationShard == NULL);
+			foundRelationShard = relationShard;
+		}
+	}
+
+	/* Assert(foundRelationShard != NULL) */
+	if (foundRelationShard == NULL)
+	{
+		/*
+		 * If no shard is found we should leave this one as is, it might be a
+		 * local table
+		 */
+
+		return;
+	}
+
+	Oid schemaOid = get_rel_namespace(relationShard->relationId);
+	char *generatedRelationName = get_rel_name(relationShard->relationId);
+	AppendShardIdToName(&generatedRelationName, relationShard->shardId);
+
+	rangeTableEntry->relid = get_relname_relid(generatedRelationName, schemaOid);
+}
+
+
+/*
  * ReplaceShardReferencesWalker update RTE_RELATIONs that are the distributed
  * relations to RTE_RELATIONs that are the local shards. In PG12+ we acquire
  * the required locks on the local shards when we replace them, for PG11 these
@@ -253,15 +296,27 @@ ReplaceShardReferencesWalker(Node *node, Task *task)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
 
-		/*
-		 * We should have converted all RTE_RELATIONs to
-		 * citus_extradata_container function calls
-		 */
-		Assert(rangeTableEntry->rtekind != RTE_RELATION);
 
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
+			/*
+			 * Convert citus_extradata_container to RTE_RELATION of the shard.
+			 */
 			UnsetRangeTblExtraData(rangeTableEntry);
+		}
+		else if (rangeTableEntry->rtekind == RTE_RELATION)
+		{
+			/*
+			 * this branch should only happen for inserts, for all other
+			 * command types we should have called UpdateRelationToShardNames
+			 */
+			Assert(task->query->commandType == CMD_INSERT);
+
+			/*
+			 * For some fastpath queries we don't convert RTE_RELATION to
+			 * citus_extradata_container calls in the planner.
+			 */
+			ConvertDistributedTableRTEToShardRTE(rangeTableEntry, task);
 		}
 
 		/* RTE_FUNCTION can be changed to a RTE_RELATION after UnsetTblExtraData */
