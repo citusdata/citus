@@ -37,6 +37,13 @@ DEBUG:  Plan is router executable
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Should still not be inlined even if NOT MATERIALIZED is passed
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	*, (SELECT 1)
+FROM
+	cte_1;
+ERROR:  syntax error at or near "NOT"
 -- the cte can be inlined because the unsupported
 -- part of the query (subquery in WHERE clause)
 -- doesn't access the cte
@@ -279,6 +286,67 @@ DEBUG:  Plan is router executable
      0
 (1 row)
 
+-- explicitely using NOT MATERIALIZED should result in the same
+WITH a AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+ERROR:  syntax error at or near "NOT"
+-- using MATERIALIZED should cause inlining not to happen
+WITH a AS MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+ERROR:  syntax error at or near "MATERIALIZED"
+-- EXPLAIN should show the difference between materialized an not materialized
+EXPLAIN (COSTS OFF) WITH a AS (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+DEBUG:  CTE a is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value, other_value FROM cte_inline.test_table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) a WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on test_table_1960000 test_table
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Function Scan on read_intermediate_result intermediate_result
+                     Filter: (key = 1)
+(15 rows)
+
+EXPLAIN (COSTS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+ERROR:  syntax error at or near "MATERIALIZED"
 -- citus should not inline the CTE because it is used multiple times
 WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
@@ -299,6 +367,65 @@ DEBUG:  Plan is router executable
      0
 (1 row)
 
+-- NOT MATERIALIZED should cause the query to be inlined twice
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+ERROR:  syntax error at or near "NOT"
+-- EXPLAIN should show the differences between MATERIALIZED and NOT MATERIALIZED
+EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) first_entry JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) second_entry USING (key))
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on test_table_1960000 test_table
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Merge Join
+                     Merge Cond: (intermediate_result.key = intermediate_result_1.key)
+                     ->  Sort
+                           Sort Key: intermediate_result.key
+                           ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Sort
+                           Sort Key: intermediate_result_1.key
+                           ->  Function Scan on read_intermediate_result intermediate_result_1
+(21 rows)
+
+EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+ERROR:  syntax error at or near "NOT"
 -- ctes with volatile functions are not
 -- inlined
 WITH cte_1 AS (SELECT *, random() FROM test_table)
@@ -316,6 +443,13 @@ DEBUG:  Plan is router executable
 ---------------------------------------------------------------------
 (0 rows)
 
+-- even with NOT MATERIALIZED volatile functions should not be inlined
+WITH cte_1 AS NOT MATERIALIZED (SELECT *, random() FROM test_table)
+SELECT
+	*
+FROM
+	cte_1;
+ERROR:  syntax error at or near "NOT"
 -- cte_1 should be able to inlined even if
 -- it is used one level below
 WITH cte_1 AS (SELECT * FROM test_table)
@@ -692,6 +826,11 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM cte_inline.test_table WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT cte_1.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1)))
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+-- NOT MATERIALIZED should not CTEs that are used in a modifying query, because
+-- we de still don't support it
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+	DELETE FROM test_table WHERE key NOT IN (SELECT key FROM cte_1);
+ERROR:  syntax error at or near "NOT"
 -- we don't inline CTEs if they are modifying CTEs
 WITH cte_1 AS (DELETE FROM test_table RETURNING key)
 SELECT * FROM cte_1;
@@ -706,6 +845,10 @@ DEBUG:  Plan is router executable
 ---------------------------------------------------------------------
 (0 rows)
 
+-- NOT MATERIALIZED should not affect modifying CTEs
+WITH cte_1 AS NOT MATERIALIZED (DELETE FROM test_table RETURNING key)
+SELECT * FROM cte_1;
+ERROR:  syntax error at or near "NOT"
 -- cte with column aliases
 SELECT * FROM test_table,
 (WITH cte_1 (x,y) AS (SELECT * FROM test_table),

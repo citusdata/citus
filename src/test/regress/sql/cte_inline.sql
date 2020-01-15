@@ -19,6 +19,13 @@ SELECT
 FROM
 	cte_1;
 
+-- Should still not be inlined even if NOT MATERIALIZED is passed
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	*, (SELECT 1)
+FROM
+	cte_1;
+
 -- the cte can be inlined because the unsupported
 -- part of the query (subquery in WHERE clause)
 -- doesn't access the cte
@@ -152,6 +159,42 @@ FROM
 WHERE
 	key = 1;
 
+-- explicitely using NOT MATERIALIZED should result in the same
+WITH a AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+
+-- using MATERIALIZED should cause inlining not to happen
+WITH a AS MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+
+-- EXPLAIN should show the difference between materialized an not materialized
+EXPLAIN (COSTS OFF) WITH a AS (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+
+EXPLAIN (COSTS OFF) WITH a AS MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	a
+WHERE
+	key = 1;
+
+
 -- citus should not inline the CTE because it is used multiple times
 WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
@@ -162,6 +205,37 @@ FROM
 	cte_1 as second_entry
 		USING (key);
 
+-- NOT MATERIALIZED should cause the query to be inlined twice
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+
+-- EXPLAIN should show the differences between MATERIALIZED and NOT MATERIALIZED
+EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+
+EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+SELECT
+	count(*)
+FROM
+	cte_1 as first_entry
+		JOIN
+	cte_1 as second_entry
+		USING (key);
+
+
+
 -- ctes with volatile functions are not
 -- inlined
 WITH cte_1 AS (SELECT *, random() FROM test_table)
@@ -169,6 +243,14 @@ SELECT
 	*
 FROM
 	cte_1;
+
+-- even with NOT MATERIALIZED volatile functions should not be inlined
+WITH cte_1 AS NOT MATERIALIZED (SELECT *, random() FROM test_table)
+SELECT
+	*
+FROM
+	cte_1;
+
 
 -- cte_1 should be able to inlined even if
 -- it is used one level below
@@ -347,8 +429,17 @@ WITH fist_table_cte AS
 WITH cte_1 AS (SELECT * FROM test_table)
 	DELETE FROM test_table WHERE key NOT IN (SELECT key FROM cte_1);
 
+-- NOT MATERIALIZED should not CTEs that are used in a modifying query, because
+-- we de still don't support it
+WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
+	DELETE FROM test_table WHERE key NOT IN (SELECT key FROM cte_1);
+
 -- we don't inline CTEs if they are modifying CTEs
 WITH cte_1 AS (DELETE FROM test_table RETURNING key)
+SELECT * FROM cte_1;
+
+-- NOT MATERIALIZED should not affect modifying CTEs
+WITH cte_1 AS NOT MATERIALIZED (DELETE FROM test_table RETURNING key)
 SELECT * FROM cte_1;
 
 -- cte with column aliases
