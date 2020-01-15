@@ -191,6 +191,7 @@ test: multi_utilities foreign_key_to_reference_table validate_constraint
 test: multi_modifying_xacts
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 test: multi_transaction_recovery
+test: foreign_key_between_refrence_table_local_table
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
