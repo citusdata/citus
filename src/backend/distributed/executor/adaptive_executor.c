@@ -3491,6 +3491,15 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	TaskExecutionState executionState = shardCommandExecution->executionState;
 	bool failedPlacementExecutionIsOnPendingQueue = false;
 
+	if (placementExecution->executionState == PLACEMENT_EXECUTION_FAILED)
+	{
+		/*
+		 * We may mark placements as failed multiple times, but should only act
+		 * the first time. Nor should we accept success after failure.
+		 */
+		return;
+	}
+
 	/* mark the placement execution as finished */
 	if (succeeded)
 	{
