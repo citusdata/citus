@@ -1139,7 +1139,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	 * We first perform check for foreign constraints. It is important to do this check
 	 * before next check, because other types of constraints are allowed on reference
 	 * tables and we return early for those constraints thanks to next check. Therefore,
-	 * for reference tables, we first check for foreing constraints and if they are OK,
+	 * for reference tables, we first check for foreign constraints and if they are OK,
 	 * we do not error out for other types of constraints.
 	 */
 	ErrorIfUnsupportedForeignConstraintExists(relation, distributionMethod,

@@ -232,7 +232,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char distributionMe
 								errhint(
 									"To define foreign key constraint from a reference table to a "
 									"local table, use ALTER TABLE ADD CONSTRAINT ... command after "
-									"creating the reference table without a foreing key")));
+									"creating the reference table without a foreign key")));
 			}
 
 			/* distributed table to local table */
@@ -394,7 +394,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char distributionMe
 								  errhint(
 									  "To define foreign key constraint from a local table to a "
 									  "reference table properly, use ALTER TABLE ADD CONSTRAINT ... "
-									  "command after creating the reference table without a foreing key")));
+									  "command after creating the reference table without a foreign key")));
 			}
 		}
 
