@@ -93,22 +93,6 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 			continue;
 		}
 
-		bool relationIsReferenceTable = (PartitionMethod(relationId) ==
-										 DISTRIBUTE_BY_NONE);
-
-		if (relationIsReferenceTable && dropTableStatement->behavior != DROP_CASCADE)
-		{
-			/*
-			 * Error out if there is a coordinator local table having a foreign
-			 * key to reference table having referenceTableOid and if drop behaviour
-			 * is not CASCADE.
-			 * Note that below function is actually designed to error out for the
-			 * opposite case, where the reference table having a foreign key to local
-			 * table, but that case will already be handled PostgreSQL
-			 */
-			ErrorIfCoordinatorHasLocalTableHavingFKeyWithReferenceTable(relationId);
-		}
-
 		/* invalidate foreign key cache if the table involved in any foreign key */
 		if ((TableReferenced(relationId) || TableReferencing(relationId)))
 		{
