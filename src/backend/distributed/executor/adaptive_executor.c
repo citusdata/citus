@@ -770,7 +770,7 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 		Task *task = lfirst(taskCell);
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
-			LocalPlacementExecutionHappened = true;
+			TransactionAccessedLocalPlacement = true;
 			break;
 		}
 	}
@@ -891,7 +891,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * The code-paths that rely on this function do not know how execute
 	 * commands locally.
 	 */
-	ErrorIfLocalPlacementExecutionHappened();
+	ErrorIfTransactionAccessedLocalPlacement();
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1018,10 +1018,10 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (LocalPlacementExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
-		 * In case LocalPlacementExecutionHappened, we force the executor to use 2PC.
+		 * In case TransactionAccessedLocalPlacement, we force the executor to use 2PC.
 		 * The primary motivation is that at this point we're definitely expanding
 		 * the nodes participated in the transaction. And, by re-generating the
 		 * remote task lists during local query execution, we might prevent the adaptive

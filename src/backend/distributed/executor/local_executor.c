@@ -98,7 +98,7 @@ bool EnableLocalExecution = true;
 bool EnableLocalExecutionPlanning = true;
 bool LogLocalCommands = false;
 
-bool LocalPlacementExecutionHappened = false;
+bool TransactionAccessedLocalPlacement = false;
 
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
@@ -396,7 +396,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (LocalPlacementExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -448,7 +448,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * execution is happening one task at a time (e.g., similar to sequential
 		 * distributed execution).
 		 */
-		Assert(!LocalPlacementExecutionHappened);
+		Assert(!TransactionAccessedLocalPlacement);
 
 		return false;
 	}
@@ -482,7 +482,7 @@ TaskAccessesLocalNode(Task *task)
 
 
 /*
- * ErrorIfLocalPlacementExecutionHappened() errors out if a local query that accessed
+ * ErrorIfTransactionAccessedLocalPlacement() errors out if a local query that accessed
  * a placement has already been executed in the same transaction.
  *
  * This check is required because Citus currently hasn't implemented local execution
@@ -490,9 +490,9 @@ TaskAccessesLocalNode(Task *task)
  * the command/executor that this function call exists, we should simply remove the check.
  */
 void
-ErrorIfLocalPlacementExecutionHappened(void)
+ErrorIfTransactionAccessedLocalPlacement(void)
 {
-	if (LocalPlacementExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		ereport(ERROR, (errmsg("cannot execute command because a local execution has "
 							   "accessed a placement in the transaction"),
