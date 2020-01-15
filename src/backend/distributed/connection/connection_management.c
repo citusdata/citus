@@ -845,9 +845,9 @@ long
 DeadlineTimestampTzToTimeout(TimestampTz deadline)
 {
 	long secs = 0;
-	int msecs = 0;
-	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &msecs);
-	return secs * 1000 + msecs / 1000;
+	int microsecs = 0;
+	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &microsecs);
+	return secs * 1000 + microsecs / 1000;
 }
 
 
