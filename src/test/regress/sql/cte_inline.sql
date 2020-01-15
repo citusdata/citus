@@ -474,15 +474,28 @@ ORDER BY
 PREPARE inlined_cte_without_params AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table GROUP BY key)
 	SELECT * FROM cte_1;
+PREPARE non_inlined_cte_without_params AS
+    WITH cte_1 AS (SELECT * FROM test_table)
+    SELECT
+        *, (SELECT 1)
+    FROM
+        cte_1;
 PREPARE inlined_cte_has_parameter_on_non_dist_key(int) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE value::int = $1 GROUP BY key)
 	SELECT * FROM cte_1;
 PREPARE inlined_cte_has_parameter_on_dist_key(int) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE key > $1 GROUP BY key)
 	SELECT * FROM cte_1;
+PREPARE non_inlined_cte_has_parameter_on_dist_key(int) AS
+    WITH cte_1 AS (SELECT * FROM test_table where key > $1)
+    SELECT
+        *, (SELECT 1)
+    FROM
+        cte_1;
 PREPARE retry_planning(int) AS
 	 WITH cte_1 AS (SELECT * FROM test_table WHERE key > $1)
 	 SELECT json_object_agg(DISTINCT key, value)  FROM cte_1;
+
 
 EXECUTE inlined_cte_without_params;
 EXECUTE inlined_cte_without_params;
@@ -490,6 +503,13 @@ EXECUTE inlined_cte_without_params;
 EXECUTE inlined_cte_without_params;
 EXECUTE inlined_cte_without_params;
 EXECUTE inlined_cte_without_params;
+
+EXECUTE non_inlined_cte_without_params;
+EXECUTE non_inlined_cte_without_params;
+EXECUTE non_inlined_cte_without_params;
+EXECUTE non_inlined_cte_without_params;
+EXECUTE non_inlined_cte_without_params;
+EXECUTE non_inlined_cte_without_params;
 
 EXECUTE inlined_cte_has_parameter_on_non_dist_key(1);
 EXECUTE inlined_cte_has_parameter_on_non_dist_key(2);
@@ -504,6 +524,13 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(3);
 EXECUTE inlined_cte_has_parameter_on_dist_key(4);
 EXECUTE inlined_cte_has_parameter_on_dist_key(5);
 EXECUTE inlined_cte_has_parameter_on_dist_key(6);
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(1);
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(2);
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(3);
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(4);
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(5);
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(6);
 
 EXECUTE retry_planning(1);
 EXECUTE retry_planning(2);

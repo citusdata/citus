@@ -908,12 +908,24 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 PREPARE inlined_cte_without_params AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table GROUP BY key)
 	SELECT * FROM cte_1;
+PREPARE non_inlined_cte_without_params AS
+    WITH cte_1 AS (SELECT * FROM test_table)
+    SELECT
+        *, (SELECT 1)
+    FROM
+        cte_1;
 PREPARE inlined_cte_has_parameter_on_non_dist_key(int) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE value::int = $1 GROUP BY key)
 	SELECT * FROM cte_1;
 PREPARE inlined_cte_has_parameter_on_dist_key(int) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE key > $1 GROUP BY key)
 	SELECT * FROM cte_1;
+PREPARE non_inlined_cte_has_parameter_on_dist_key(int) AS
+    WITH cte_1 AS (SELECT * FROM test_table where key > $1)
+    SELECT
+        *, (SELECT 1)
+    FROM
+        cte_1;
 PREPARE retry_planning(int) AS
 	 WITH cte_1 AS (SELECT * FROM test_table WHERE key > $1)
 	 SELECT json_object_agg(DISTINCT key, value)  FROM cte_1;
@@ -952,6 +964,44 @@ EXECUTE inlined_cte_without_params;
 
 EXECUTE inlined_cte_without_params;
  count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_without_params;
+ key | value | other_value | ?column?
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1112,6 +1162,86 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count FROM (S
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 1)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(2);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 2)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 3)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(4);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 4)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(5);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 5)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE non_inlined_cte_has_parameter_on_dist_key(6);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 6)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value, (SELECT 1) FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ key | value | other_value | ?column?
 ---------------------------------------------------------------------
 (0 rows)
 
