@@ -745,6 +745,9 @@ CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1, FOREIGN KEY (ref_i
 INSERT INTO referenced_table VALUES (1,1), (2,2), (3,3);
 INSERT INTO referencing_table VALUES (1,1), (2,2), (3,3);
 SELECT create_reference_table('referenced_table');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
 NOTICE:  Copying data from local table...
  create_reference_table
 ---------------------------------------------------------------------
@@ -859,12 +862,18 @@ CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(tes
 CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(test_column2));
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT create_reference_table('referenced_table2');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -985,6 +994,7 @@ CREATE TABLE referenced_table2(test_column int, test_column2 int, PRIMARY KEY(te
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
 BEGIN;
   SELECT create_reference_table('referenced_table');
+WARNING:  should not create foreign key constraint in this way
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1125,6 +1135,12 @@ CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY 
 CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
 CREATE TABLE referencing_table2(id int, ref_id int, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1304,6 +1320,9 @@ BEGIN;
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
 NOTICE:  Copying data from local table...
  create_reference_table
 ---------------------------------------------------------------------
@@ -1321,6 +1340,9 @@ BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1341,6 +1363,9 @@ COMMIT;
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1401,6 +1426,9 @@ ERROR:  table "test_table_1" does not exist
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1426,6 +1454,9 @@ BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1451,6 +1482,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1475,6 +1509,9 @@ CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 BEGIN;
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1499,6 +1536,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1524,6 +1564,9 @@ CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 BEGIN;
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1549,6 +1592,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY, id2 int);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1585,6 +1631,9 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 BEGIN;
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1611,6 +1660,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1636,6 +1688,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1664,6 +1719,9 @@ CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 BEGIN;
   SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1690,6 +1748,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1722,6 +1783,9 @@ DROP TABLE test_table_1, test_table_2;
 CREATE TABLE test_table_1(id int PRIMARY KEY);
 CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 

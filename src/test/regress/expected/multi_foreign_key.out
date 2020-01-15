@@ -860,7 +860,8 @@ NOTICE:  drop cascades to constraint reference_table_second_referencing_column_f
 CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_local_table(id));
 SELECT create_reference_table('reference_table');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Referenced table must be a distributed table or a reference table.
+DETAIL:  Local table having a foreign key constraint to another local table cannot be upgraded to a reference table
+HINT:  To define foreign key constraint from a reference table to a local table, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
 -- test foreign key creation on CREATE TABLE on self referencing reference table
 CREATE TABLE self_referencing_reference_table(
     id int,

@@ -24,6 +24,9 @@ SELECT create_distributed_table('t1', 'a');
 (1 row)
 
 SELECT create_reference_table('r1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 

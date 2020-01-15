@@ -1242,6 +1242,9 @@ BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
 NOTICE:  Copying data from local table...
  create_reference_table
 ---------------------------------------------------------------------
@@ -1266,6 +1269,9 @@ BEGIN;
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
 NOTICE:  Copying data from local table...
  create_reference_table
 ---------------------------------------------------------------------
@@ -1287,6 +1293,9 @@ BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
 	SELECT create_reference_table('test_table_1');
+WARNING:  should not create foreign key constraint in this way
+DETAIL:  Local table referenced by another local table should not be upgraded to a reference table
+HINT:  To define foreign key constraint from a local table to a reference table properly, use ALTER TABLE ADD CONSTRAINT ... command after creating the reference table without a foreign key
  create_reference_table
 ---------------------------------------------------------------------
 
