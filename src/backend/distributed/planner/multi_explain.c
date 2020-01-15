@@ -154,7 +154,12 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 							   "... SELECT commands via the coordinator")));
 	}
 
-	PlannedStmt *selectPlan = pg_plan_query(query, cursorOptions, params);
+	/*
+	 * Make a copy of the query, since pg_plan_query may scribble on it and later
+	 * stages of EXPLAIN require it.
+	 */
+	Query *queryCopy = copyObject(query);
+	PlannedStmt *selectPlan = pg_plan_query(queryCopy, cursorOptions, params);
 	if (IsRedistributablePlan(selectPlan->planTree) &&
 		IsSupportedRedistributionTarget(targetRelationId))
 	{

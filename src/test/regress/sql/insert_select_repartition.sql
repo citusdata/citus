@@ -301,5 +301,65 @@ SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY
 
 DROP TABLE source_table, target_table;
 
+--
+-- Constraint failure and rollback
+--
+
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
+UPDATE source_table SET b = NULL where b IN (9, 4);
+
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE target_table(a int, b int not null);
+SELECT create_distributed_table('target_table', 'a', 'range');
+CALL public.create_range_partitioned_shards('target_table', '{0,3,6,9}','{2,5,8,50}');
+
+INSERT INTO target_table VALUES (11,9), (22,4);
+
+EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table;
+EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table WHERE b IS NOT NULL;
+
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO target_table SELECT * FROM source_table;
+ROLLBACK TO SAVEPOINT s1;
+INSERT INTO target_table SELECT * FROM source_table WHERE b IS NOT NULL;
+END;
+
+SELECT * FROM target_table ORDER BY b;
+
+-- verify that values have been replicated to both replicas
+SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
+
+--
+-- Multiple casts in the SELECT query
+--
+
+TRUNCATE target_table;
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT 1.12, b::bigint FROM source_table WHERE b IS NOT NULL;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a, b;
+
+--
+-- ROLLBACK after out of range error
+--
+
+TRUNCATE target_table;
+
+BEGIN;
+INSERT INTO target_table SELECT a * 10, b FROM source_table WHERE b IS NOT NULL;
+END;
+
+SELECT max(result) FROM run_command_on_placements('target_table', 'select count(*) from %s');
+
+
+
+DROP TABLE source_table, target_table;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
