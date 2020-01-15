@@ -149,7 +149,7 @@ FROM
 WHERE
 	key = 1;
 
--- router queries are affected by the distributed
+-- non router queries are affected by the distributed
 -- cte inlining as well
 WITH a AS (SELECT * FROM test_table)
 SELECT
