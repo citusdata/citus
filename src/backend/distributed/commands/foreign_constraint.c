@@ -115,223 +115,287 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  *   a reference table.
  *
  * Note that checks performed in this functions are only done via PostprocessAlterTableStmt
- * function. Another allowed case is creating foreign key constraint between a reference
- * table and a local table in coordinator. We do not check that case here as we do not have
- * post process steps for it. See ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable and its
- * usage
+ * function. There is another case ,allowed by Citus, but error'ed in this function, creating
+ * foreign key constraint between a reference table and a coordinator local table. The rationale
+ * behind it is to allow defining foreign keys between coordinator local tables and reference
+ * tables only via ALTER TABLE ADD CONSTRAINT ... commands. This function, prevents upgrading
+ * "a local table involved in a foreign key constraint with another local table" to a reference
+ * table.
+ * See also ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable and its usage
  */
 void
-ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
-										  Var *referencingDistKey,
-										  uint32 referencingColocationId)
+ErrorIfUnsupportedForeignConstraintExists(Relation relation, char distributionMethod,
+										  Var *distributionColumn,
+										  uint32 colocationId)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Oid referencingTableId = relation->rd_id;
-	bool referencingNotReplicated = true;
-	bool referencingIsDistributed = IsDistributedTable(referencingTableId);
+	Oid relationOid = relation->rd_id;
+	bool relationIsDistributed = IsDistributedTable(relationOid);
+	bool relationIsReferenceTable = (distributionMethod == DISTRIBUTE_BY_NONE);
+	bool relationNotReplicated = true;
 
-	if (referencingIsDistributed)
+	if (relationIsDistributed)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
-		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
+		relationNotReplicated = SingleReplicatedTable(relationOid);
 	}
 	else
 	{
 		/* Creating single replicated table with foreign constraint */
-		referencingNotReplicated = (ShardReplicationFactor == 1);
+		relationNotReplicated = (ShardReplicationFactor == 1);
 	}
 
 	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
-	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
-				relation->rd_id);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
+				CharGetDatum(CONSTRAINT_FOREIGN));
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
-													ConstraintRelidTypidNameIndexId,
-													true, NULL,
+													InvalidOid,
+													false, NULL,
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		int referencingAttrIndex = -1;
-
-		char referencedDistMethod = 0;
-		Var *referencedDistKey = NULL;
-		int referencedAttrIndex = -1;
-		uint32 referencedColocationId = INVALID_COLOCATION_ID;
-
-		/* not a foreign key constraint, skip to next one */
-		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		if (constraintForm->conrelid == relationOid)
 		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
+			/* alias variables from the referencing table perspective */
+			Oid referencingTableId = relationOid;
+			char referencingDistMethod = distributionMethod;
+			Var *referencingDistKey = distributionColumn;
+			uint32 referencingColocationId = colocationId;
 
-		Oid referencedTableId = constraintForm->confrelid;
-		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
+			bool referencingIsDistributed = relationIsDistributed;
+			bool referencingIsReferenceTable = relationIsReferenceTable;
+			bool referencingNotReplicated = relationNotReplicated;
 
-		bool selfReferencingTable = (referencingTableId == referencedTableId);
+			char referencedDistMethod = 0;
+			Var *referencedDistKey = NULL;
+			uint32 referencedColocationId = INVALID_COLOCATION_ID;
 
-		/* TODO: will remove this block after implementing create table ref_table references local_table */
-		if (!referencedIsDistributed && !selfReferencingTable)
-		{
-			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Referenced table must be a distributed table"
-									  " or a reference table.")));
-		}
+			Oid referencedTableId = constraintForm->confrelid;
+			bool referencedIsDistributed = IsDistributedTable(referencedTableId);
+			int referencedAttrIndex = -1;
 
-		/* set referenced table related variables here if table is referencing itself */
+			bool selfReferencingTable = (referencingTableId == referencedTableId);
 
-		if (!selfReferencingTable)
-		{
-			referencedDistMethod = PartitionMethod(referencedTableId);
-			referencedDistKey = (referencedDistMethod == DISTRIBUTE_BY_NONE) ?
-								NULL :
-								DistPartitionKey(referencedTableId);
-			referencedColocationId = TableColocationId(referencedTableId);
-		}
-		else
-		{
-			referencedDistMethod = referencingDistMethod;
-			referencedDistKey = referencingDistKey;
-			referencedColocationId = referencingColocationId;
-		}
+			/* set referenced table related variables here if table is referencing itself */
 
-		bool referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
-		bool referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
-
-		/*
-		 * We support foreign keys between reference tables. No more checks
-		 * are necessary.
-		 */
-		if (referencingIsReferenceTable && referencedIsReferenceTable)
-		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
-		/*
-		 * Foreign keys from reference tables to distributed tables are not
-		 * supported.
-		 */
-		if (referencingIsReferenceTable && !referencedIsReferenceTable)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint "
-								   "since foreign keys from reference tables "
-								   "to distributed tables are not supported"),
-							errdetail("A reference table can only have reference "
-									  "keys to other reference tables or a local table "
-									  "in coordinator")));
-		}
-
-		/*
-		 * To enforce foreign constraints, tables must be co-located unless a
-		 * reference table is referenced.
-		 */
-		if (referencingColocationId == INVALID_COLOCATION_ID ||
-			(referencingColocationId != referencedColocationId &&
-			 !referencedIsReferenceTable))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint since "
-								   "relations are not colocated or not referencing "
-								   "a reference table"),
-							errdetail(
-								"A distributed table can only have foreign keys "
-								"if it is referencing another colocated hash "
-								"distributed table or a reference table")));
-		}
-
-		ForeignConstraintFindDistKeys(heapTuple,
-									  referencingDistKey,
-									  referencedDistKey,
-									  &referencingAttrIndex,
-									  &referencedAttrIndex);
-		bool referencingColumnsIncludeDistKey = (referencingAttrIndex != -1);
-		bool foreignConstraintOnDistKey =
-			(referencingColumnsIncludeDistKey && referencingAttrIndex ==
-			 referencedAttrIndex);
-
-		/*
-		 * If columns in the foreign key includes the distribution key from the
-		 * referencing side, we do not allow update/delete operations through
-		 * foreign key constraints (e.g. ... ON UPDATE SET NULL)
-		 */
-		if (referencingColumnsIncludeDistKey)
-		{
-			/*
-			 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
-			 * not want to set partition column to NULL or default value.
-			 */
-			if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
-				constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+			if (!selfReferencingTable)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				if (referencedIsDistributed)
+				{
+					referencedDistMethod = PartitionMethod(referencedTableId);
+					referencedDistKey = (referencedDistMethod == DISTRIBUTE_BY_NONE) ?
+										NULL :
+										DistPartitionKey(referencedTableId);
+					referencedColocationId = TableColocationId(referencedTableId);
+				}
+			}
+			else
+			{
+				referencedDistMethod = referencingDistMethod;
+				referencedDistKey = referencingDistKey;
+				referencedColocationId = referencingColocationId;
+			}
+
+			bool referencedIsReferenceTable = (referencedDistMethod ==
+											   DISTRIBUTE_BY_NONE);
+
+			/* foreign key constraint between reference tables */
+			if (referencingIsReferenceTable && referencedIsReferenceTable)
+			{
+				/*
+				 * We support foreign keys between reference tables. No more checks
+				 * are necessary.
+				 */
+				heapTuple = systable_getnext(scanDescriptor);
+				continue;
+			}
+
+			/* foreign key constraint from a reference table to a local table */
+			if (referencingIsReferenceTable && !referencedIsDistributed)
+			{
+				/*
+				 * Upgrading "a local table having a foreign key constraint to another
+				 * local table" to a reference table is not supported.
+				 */
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 								errmsg("cannot create foreign key constraint"),
-								errdetail("SET NULL or SET DEFAULT is not supported"
-										  " in ON DELETE operation when distribution "
-										  "key is included in the foreign key constraint")));
+								errdetail(
+									"Local table having a foreign key constraint to another "
+									"local table cannot be upgraded to a reference table"),
+								errhint(
+									"To define foreign key constraint from a reference table to a "
+									"local table, use ALTER TABLE ADD CONSTRAINT ... command after "
+									"creating the reference table without a foreing key")));
+			}
+
+			/* distributed table to local table */
+			if (!referencingIsReferenceTable && referencingIsDistributed &&
+				!referencedIsDistributed)
+			{
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								errmsg("cannot create foreign key constraint"),
+								errdetail(
+									"Foreign keys from distributed tables to local tables are not supported")));
+			}
+
+
+			if (referencingIsReferenceTable && referencedIsDistributed &&
+				!referencedIsReferenceTable)
+			{
+				/*
+				 * Foreign keys from reference tables to distributed tables are not
+				 * supported.
+				 */
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint "
+									   "since foreign keys from reference tables "
+									   "to distributed tables are not supported"),
+								errdetail("A reference table can only have reference "
+										  "keys to other reference tables or a local table "
+										  "in coordinator")));
 			}
 
 			/*
-			 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
-			 * Because we do not want to set partition column to NULL or default value. Also
-			 * cascading update operation would require re-partitioning. Updating partition
-			 * column value is not allowed anyway even outside of foreign key concept.
+			 * To enforce foreign constraints, tables must be co-located unless a
+			 * reference table is referenced.
 			 */
-			if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
-				constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
-				constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+			if (referencingColocationId == INVALID_COLOCATION_ID ||
+				(referencingColocationId != referencedColocationId &&
+				 !referencedIsReferenceTable))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint since "
+									   "relations are not colocated or not referencing "
+									   "a reference table"),
+								errdetail(
+									"A distributed table can only have foreign keys "
+									"if it is referencing another colocated hash "
+									"distributed table or a reference table")));
+			}
+
+			int referencingAttrIndex = -1;
+
+			ForeignConstraintFindDistKeys(heapTuple,
+										  referencingDistKey,
+										  referencedDistKey,
+										  &referencingAttrIndex,
+										  &referencedAttrIndex);
+			bool referencingColumnsIncludeDistKey = (referencingAttrIndex != -1);
+			bool foreignConstraintOnDistKey =
+				(referencingColumnsIncludeDistKey && referencingAttrIndex ==
+				 referencedAttrIndex);
+
+			/*
+			 * If columns in the foreign key includes the distribution key from the
+			 * referencing side, we do not allow update/delete operations through
+			 * foreign key constraints (e.g. ... ON UPDATE SET NULL)
+			 */
+			if (referencingColumnsIncludeDistKey)
+			{
+				/*
+				 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+				 * not want to set partition column to NULL or default value.
+				 */
+				if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+					constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("SET NULL or SET DEFAULT is not supported"
+											  " in ON DELETE operation when distribution "
+											  "key is included in the foreign key constraint")));
+				}
+
+				/*
+				 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+				 * Because we do not want to set partition column to NULL or default value. Also
+				 * cascading update operation would require re-partitioning. Updating partition
+				 * column value is not allowed anyway even outside of foreign key concept.
+				 */
+				if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+					constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+					constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("SET NULL, SET DEFAULT or CASCADE is not "
+											  "supported in ON UPDATE operation  when "
+											  "distribution key included in the foreign "
+											  "constraint.")));
+				}
+			}
+
+			/*
+			 * if tables are hash-distributed and colocated, we need to make sure that
+			 * the distribution key is included in foreign constraint.
+			 */
+			if (!referencedIsReferenceTable && !foreignConstraintOnDistKey)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("cannot create foreign key constraint"),
-								errdetail("SET NULL, SET DEFAULT or CASCADE is not "
-										  "supported in ON UPDATE operation  when "
-										  "distribution key included in the foreign "
-										  "constraint.")));
+								errdetail("Foreign keys are supported in two cases, "
+										  "either in between two colocated tables including "
+										  "partition column in the same ordinal in the both "
+										  "tables or from distributed to reference tables")));
 			}
-		}
 
-		/*
-		 * if tables are hash-distributed and colocated, we need to make sure that
-		 * the distribution key is included in foreign constraint.
-		 */
-		if (!referencedIsReferenceTable && !foreignConstraintOnDistKey)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Foreign keys are supported in two cases, "
-									  "either in between two colocated tables including "
-									  "partition column in the same ordinal in the both "
-									  "tables or from distributed to reference tables")));
-		}
-
-		/*
-		 * We do not allow to create foreign constraints if shard replication factor is
-		 * greater than 1. Because in our current design, multiple replicas may cause
-		 * locking problems and inconsistent shard contents.
-		 *
-		 * Note that we allow referenced table to be a reference table (e.g., not a
-		 * single replicated table). This is allowed since (a) we are sure that
-		 * placements always be in the same state (b) executors are aware of reference
-		 * tables and handle concurrency related issues accordingly.
-		 */
-		if (!referencingNotReplicated)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Citus Community Edition currently supports "
-									  "foreign key constraints only for "
-									  "\"citus.shard_replication_factor = 1\"."),
-							errhint("Please change \"citus.shard_replication_factor to "
+			/*
+			 * We do not allow to create foreign constraints if shard replication factor is
+			 * greater than 1. Because in our current design, multiple replicas may cause
+			 * locking problems and inconsistent shard contents.
+			 *
+			 * Note that we allow referenced table to be a reference table (e.g., not a
+			 * single replicated table). This is allowed since (a) we are sure that
+			 * placements always be in the same state (b) executors are aware of reference
+			 * tables and handle concurrency related issues accordingly.
+			 */
+			if (!referencingNotReplicated)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("Citus Community Edition currently supports "
+										  "foreign key constraints only for "
+										  "\"citus.shard_replication_factor = 1\"."),
+								errhint(
+									"Please change \"citus.shard_replication_factor to "
 									"1\". To learn more about using foreign keys with "
 									"other replication factors, please contact us at "
 									"https://citusdata.com/about/contact_us.")));
+			}
+		}
+		else if (constraintForm->confrelid == relationOid)
+		{
+			/* alias variables from the referenced table perspective */
+			bool referencedIsReferenceTable = relationIsReferenceTable;
+
+			Oid referencingTableId = constraintForm->conrelid;
+			bool referencingIsDistributed = IsDistributedTable(referencingTableId);
+
+			/* foreign key constraint from a local table to a reference table */
+			if (!referencingIsDistributed && referencedIsReferenceTable)
+			{
+				/*
+				 * Upgrading "a local table referenced by another local table"
+				 * to a reference table is supported, but not encouraged.
+				 */
+				ereport(WARNING, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								  errmsg(
+									  "should not create foreign key constraint in this way"),
+								  errdetail(
+									  "Local table referenced by another local table should not "
+									  "be upgraded to a reference table"),
+								  errhint(
+									  "To define foreign key constraint from a local table to a "
+									  "reference table properly, use ALTER TABLE ADD CONSTRAINT ... "
+									  "command after creating the reference table without a foreing key")));
+			}
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
