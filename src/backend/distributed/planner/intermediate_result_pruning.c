@@ -258,7 +258,7 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 		{
 			if (workerNode->groupId == localGroupId)
 			{
-				workerNodeList = list_delete(workerNodeList, workerNode);
+				workerNodeList = list_delete_ptr(workerNodeList, workerNode);
 				break;
 			}
 		}
