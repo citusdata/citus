@@ -357,7 +357,30 @@ END;
 
 SELECT max(result) FROM run_command_on_placements('target_table', 'select count(*) from %s');
 
+DROP TABLE source_table, target_table;
 
+--
+-- Range partitioned target's ranges doesn't cover the whole range
+--
+
+SET citus.shard_replication_factor TO 2;
+SET citus.replication_model TO 'statement';
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
+
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE target_table(b int not null, a float);
+SELECT create_distributed_table('target_table', 'a', 'range');
+CALL public.create_range_partitioned_shards('target_table', '{0.0,3.5,6.5,9.5}','{2.9,5.9,8.9,50.0}');
+
+INSERT INTO target_table SELECT b, a+0.6 FROM source_table;
+SELECT * FROM target_table ORDER BY a;
+
+-- verify that values have been replicated to both replicas, and that each
+-- replica has received correct number of rows
+SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
 
 DROP TABLE source_table, target_table;
 
