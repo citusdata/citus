@@ -51,6 +51,9 @@ extern char * DeparseAlterTableSchemaStmt(Node *stmt);
 
 extern void QualifyAlterTableSchemaStmt(Node *stmt);
 
+/* forward declarations for deparse_schema_stmts.c */
+extern char * DeparseGrantOnSchemaStmt(Node *stmt);
+
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(Node *stmt);
 extern char * DeparseCreateEnumStmt(Node *stmt);
