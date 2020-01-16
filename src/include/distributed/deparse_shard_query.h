@@ -18,10 +18,13 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "distributed/citus_custom_scan.h"
 
 
 extern void RebuildQueryStrings(Query *originalQuery, List *taskList);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
+extern void SetTaskQuery(Task *task, Query *query);
+extern char * TaskQueryString(Task *task);
 
 
 #endif /* DEPARSE_SHARD_QUERY_H */

@@ -25,7 +25,6 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
 #include "distributed/errormessage.h"
-#include "distributed/local_executor.h"
 #include "distributed/log_utils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/master_metadata_utility.h"
@@ -1897,7 +1896,8 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	 * execution this is not needed, so we wait until the executor determines
 	 * that the query cannot be executed locally.
 	 */
-	SetTaskQueryAndPlacementList(task, query, placementList);
+	task->taskPlacementList = placementList;
+	SetTaskQuery(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
@@ -1974,7 +1974,8 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 							   "and modify a reference table")));
 	}
 
-	SetTaskQueryAndPlacementList(task, query, placementList);
+	task->taskPlacementList = placementList;
+	SetTaskQuery(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;

@@ -17,8 +17,8 @@
 
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
-#include "distributed/local_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"

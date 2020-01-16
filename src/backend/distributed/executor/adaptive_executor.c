@@ -133,6 +133,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"

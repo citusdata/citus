@@ -340,3 +340,78 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	rte->subquery = subquery;
 	rte->alias = copyObject(rte->eref);
 }
+
+
+/*
+ * SetTaskQuery attaches the query to the task so that it can be used during
+ * execution. If local execution can possibly take place it sets task->query.
+ * If not it deparses the query and sets queryStringLazy, to avoid blowing the
+ * size of the task unnecesarily.
+ */
+void
+SetTaskQuery(Task *task, Query *query)
+{
+	Assert(task->taskPlacementList != NULL);
+
+	if (TaskAccessesLocalNode(task))
+	{
+		task->query = query;
+		task->queryStringLazy = NULL;
+		return;
+	}
+
+	task->query = NULL;
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+	StringInfo queryString = makeStringInfo();
+
+	pg_get_query_def(query, queryString);
+
+	task->queryStringLazy = queryString->data;
+	MemoryContextSwitchTo(previousContext);
+}
+
+
+/*
+ * TaskQueryString generates task->queryStringLazy if missing.
+ *
+ * For performance reasons, the queryString is generated lazily. For example
+ * for local queries it is usually not needed to generate it, so this way we
+ * can skip the expensive deparsing+parsing.
+ */
+char *
+TaskQueryString(Task *task)
+{
+	if (task->queryStringLazy != NULL)
+	{
+		return task->queryStringLazy;
+	}
+	Assert(task->query != NULL);
+
+
+	/*
+	 * Switch to the memory context of task->query before generating the query
+	 * string. This way the query string is not freed in between multiple
+	 * executions of a prepared statement. Except when UpdateTaskQueryString is
+	 * used to set task->query, in that case it is freed but it will be set to
+	 * NULL on the next execution of the query because UpdateTaskQueryString
+	 * does that.
+	 */
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+															  task->query));
+	StringInfo queryString = makeStringInfo();
+
+	if (task->query->commandType == CMD_INSERT)
+	{
+		deparse_shard_query(task->query, task->distributedTableId, task->anchorShardId,
+							queryString);
+	}
+	else
+	{
+		pg_get_query_def(task->query, queryString);
+	}
+
+
+	task->queryStringLazy = queryString->data;
+	MemoryContextSwitchTo(previousContext);
+	return queryString->data;
+}
