@@ -56,6 +56,7 @@
 #include "utils/regproc.h"
 
 #define DISABLE_LOCAL_CHECK_FUNCTION_BODIES "SET LOCAL check_function_bodies TO off;"
+#define RESET_CHECK_FUNCTION_BODIES "RESET check_function_bodies;"
 #define argumentStartsWith(arg, prefix) \
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
@@ -225,10 +226,11 @@ CreateFunctionDDLCommandsIdempotent(const ObjectAddress *functionAddress)
 	char *ddlCommand = GetFunctionDDLCommand(functionAddress->objectId, true);
 	char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(functionAddress->objectId);
 
-	return list_make3(
+	return list_make4(
 		DISABLE_LOCAL_CHECK_FUNCTION_BODIES,
 		ddlCommand,
-		alterFunctionOwnerSQL);
+		alterFunctionOwnerSQL,
+		RESET_CHECK_FUNCTION_BODIES);
 }
 
 
