@@ -92,8 +92,6 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
 -- Show that schema changes are included in the metadata snapshot
 CREATE SCHEMA mx_testing_schema;
 ALTER TABLE mx_test_table SET SCHEMA mx_testing_schema;
-WARNING:  not propagating ALTER ... SET SCHEMA commands to worker nodes
-HINT:  Connect to worker nodes directly to manually change schemas of affected objects.
 SELECT unnest(master_metadata_snapshot()) order by 1;
                                                                                                                                                                                                                                                                                                                                                                                                          unnest
 ---------------------------------------------------------------------

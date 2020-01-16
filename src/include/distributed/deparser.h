@@ -46,6 +46,11 @@ extern void QualifyRenameCollationStmt(Node *stmt);
 extern void QualifyAlterCollationSchemaStmt(Node *stmt);
 extern void QualifyAlterCollationOwnerStmt(Node *stmt);
 
+/* forward declarations for deparse_table_stmts.c */
+extern char * DeparseAlterTableSchemaStmt(Node *stmt);
+
+extern void QualifyAlterTableSchemaStmt(Node *stmt);
+
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(Node *stmt);
 extern char * DeparseCreateEnumStmt(Node *stmt);

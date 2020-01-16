@@ -104,38 +104,3 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 
 	return NIL;
 }
-
-
-/*
- * PreprocessAlterTableSchemaStmt determines whether a given ALTER ... SET SCHEMA
- * statement involves a distributed table and issues a warning if so. Because
- * we do not support distributed ALTER ... SET SCHEMA, this function always
- * returns NIL.
- */
-List *
-PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
-{
-	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	if (stmt->relation == NULL)
-	{
-		return NIL;
-	}
-
-	Oid relationId = RangeVarGetRelid(stmt->relation,
-									  AccessExclusiveLock,
-									  stmt->missing_ok);
-
-	/* first check whether a distributed relation is affected */
-	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
-	{
-		return NIL;
-	}
-
-	/* emit a warning if a distributed relation is affected */
-	ereport(WARNING, (errmsg("not propagating ALTER ... SET SCHEMA commands to "
-							 "worker nodes"),
-					  errhint("Connect to worker nodes directly to manually "
-							  "change schemas of affected objects.")));
-
-	return NIL;
-}
