@@ -61,10 +61,10 @@ SELECT create_distributed_function('zoop(int)', '$1');
 (1 row)
 
 -- now add the worker back, this triggers function distribution which should not fail.
-SELECT master_add_node('localhost', :worker_2_port);
- master_add_node
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-              30
+        1
 (1 row)
 
 SELECT public.wait_until_metadata_sync();
@@ -81,9 +81,9 @@ drop cascades to function zoop(integer)
 -- make sure the worker is added at the end irregardless of anything failing to not make
 -- subsequent tests fail as well. All artifacts created during this test should have been
 -- dropped by the drop cascade above.
-SELECT master_add_node('localhost', :worker_2_port);
- master_add_node
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-              30
+        1
 (1 row)
 
