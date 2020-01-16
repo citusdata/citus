@@ -168,7 +168,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = 0;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
+		task->queryForLocalExecution = NULL;
 		task->queryStringLazy = callCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NIL;

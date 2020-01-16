@@ -108,7 +108,8 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		}
 
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
-								task->query == NULL && task->queryStringLazy == NULL
+								task->queryForLocalExecution == NULL &&
+								task->queryStringLazy == NULL
 								? "(null)"
 								: ApplyLogRedaction(TaskQueryString(task)))));
 
@@ -323,7 +324,7 @@ ShouldLazyDeparseQuery(Task *task)
 
 /*
  * SetTaskQuery attaches the query to the task so that it can be used during
- * execution. If local execution can possibly take place it sets task->query.
+ * execution. If local execution can possibly take place it sets task->queryForLocalExecution.
  * If not it deparses the query and sets queryStringLazy, to avoid blowing the
  * size of the task unnecesarily.
  */
@@ -332,12 +333,12 @@ SetTaskQuery(Task *task, Query *query)
 {
 	if (ShouldLazyDeparseQuery(task))
 	{
-		task->query = query;
+		task->queryForLocalExecution = query;
 		task->queryStringLazy = NULL;
 		return;
 	}
 
-	task->query = NULL;
+	task->queryForLocalExecution = NULL;
 	task->queryStringLazy = DeparseTaskQuery(task, query);
 }
 
@@ -390,20 +391,20 @@ TaskQueryString(Task *task)
 	{
 		return task->queryStringLazy;
 	}
-	Assert(task->query != NULL);
+	Assert(task->queryForLocalExecution != NULL);
 
 
 	/*
-	 * Switch to the memory context of task->query before generating the query
+	 * Switch to the memory context of task->queryForLocalExecution before generating the query
 	 * string. This way the query string is not freed in between multiple
 	 * executions of a prepared statement. Except when UpdateTaskQueryString is
-	 * used to set task->query, in that case it is freed but it will be set to
+	 * used to set task->queryForLocalExecution, in that case it is freed but it will be set to
 	 * NULL on the next execution of the query because UpdateTaskQueryString
 	 * does that.
 	 */
 	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
-															  task->query));
-	task->queryStringLazy = DeparseTaskQuery(task, task->query);
+															  task->queryForLocalExecution));
+	task->queryStringLazy = DeparseTaskQuery(task, task->queryForLocalExecution);
 	MemoryContextSwitchTo(previousContext);
 	return task->queryStringLazy;
 }

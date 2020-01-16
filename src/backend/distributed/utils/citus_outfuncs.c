@@ -463,7 +463,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	WRITE_NODE_FIELD(query);
+	WRITE_NODE_FIELD(queryForLocalExecution);
 	WRITE_STRING_FIELD(queryStringLazy);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);

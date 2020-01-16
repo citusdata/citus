@@ -216,7 +216,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
 
-		selectTask->query = NULL;
+		selectTask->queryForLocalExecution = NULL;
 		selectTask->queryStringLazy = NULL;
 		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}

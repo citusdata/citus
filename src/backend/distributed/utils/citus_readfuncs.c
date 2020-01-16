@@ -377,7 +377,7 @@ ReadTask(READFUNC_ARGS)
 	READ_ENUM_FIELD(taskType, TaskType);
 	READ_UINT64_FIELD(jobId);
 	READ_UINT_FIELD(taskId);
-	READ_NODE_FIELD(query);
+	READ_NODE_FIELD(queryForLocalExecution);
 	READ_STRING_FIELD(queryStringLazy);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);

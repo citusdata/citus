@@ -1379,7 +1379,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
+		task->queryForLocalExecution = NULL;
 		task->queryStringLazy = applyCommand->data;
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;

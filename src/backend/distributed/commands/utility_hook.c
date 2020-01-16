@@ -865,7 +865,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->query = NULL;
+		task->queryForLocalExecution = NULL;
 		task->queryStringLazy = applyCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
