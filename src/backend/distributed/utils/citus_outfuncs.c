@@ -463,8 +463,8 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
+	WRITE_NODE_FIELD(query);
 	WRITE_STRING_FIELD(queryStringLazy);
-	WRITE_OID_FIELD(distributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
 	WRITE_NODE_FIELD(dependentTaskList);
@@ -479,7 +479,6 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(relationRowLockList);
 	WRITE_NODE_FIELD(rowValuesLists);
 	WRITE_BOOL_FIELD(partiallyLocalOrRemote);
-	WRITE_NODE_FIELD(query);
 }
 
 

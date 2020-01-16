@@ -198,7 +198,6 @@ typedef struct Task
 	char *queryStringLazy;
 	List *perPlacementQueryStrings;
 
-	Oid distributedTableId;     /* only applies to insert tasks that are locally executed */
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
 	List *dependentTaskList;     /* only applies to compute tasks */

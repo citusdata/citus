@@ -161,15 +161,6 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		query = copyObject(query);
 	}
 
-	if (query->commandType == CMD_INSERT)
-	{
-		/*
-		 * We store this in the task so we can lazily call
-		 * deparse_shard_query when the string is needed
-		 */
-		task->distributedTableId = distributedTableId;
-	}
-
 	SetTaskQuery(task, query);
 
 	if (valuesRTE != NULL)
@@ -362,10 +353,18 @@ DeparseTaskQuery(Task *task, Query *query)
 	if (query->commandType == CMD_INSERT)
 	{
 		/*
-		 * For INSERT queries, we only have one relation to update, so we can
-		 * use deparse_shard_query().
+		 * For INSERT queries we cannot use pg_get_query_def. Mainly because we
+		 * cannot run UpdateRelationToShardNames on an INSERT query. This is
+		 * because the PG deparsing logic fails when trying to insert into a
+		 * RTE_FUNCTION (which is what will happen if you call
+		 * UpdateRelationToShardNames).
 		 */
-		deparse_shard_query(query, task->distributedTableId, task->anchorShardId,
+		Assert(list_length(task->relationShardList) == 1);
+
+		RelationShard *relationShard = linitial(task->relationShardList);
+		Assert(relationShard->shardId == task->anchorShardId);
+
+		deparse_shard_query(query, relationShard->relationId, relationShard->shardId,
 							queryString);
 	}
 	else
