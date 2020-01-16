@@ -301,6 +301,6 @@ INSERT INTO app_analytics_events_mx (app_id, name) VALUES (102, 'Wayz') RETURNIN
 INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNING *;
 
 -- clean up
-SELECT setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
+SELECT 1 FROM setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
 ALTER SEQUENCE app_analytics_events_mx_id_seq
   MINVALUE :min_value MAXVALUE :max_value;
