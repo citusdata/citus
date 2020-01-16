@@ -43,6 +43,10 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  bool replacePrunedQueryWithDummy,
 											  bool *multiShardModifyQuery,
 											  Const **partitionValueConst);
+extern List * RelationShardListForShardIntervalList(List *shardIntervalList,
+													bool *shardsPresent);
+extern List * FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
+								   bool replacePrunedQueryWithDummy);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
@@ -71,6 +75,15 @@ extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 extern bool UpdateOrDeleteQuery(Query *query);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
+extern uint64 GetAnchorShardId(List *relationShardList);
+extern List * TargetShardIntervalForFastPathQuery(Query *query,
+												  Const **partitionValueConst,
+												  bool *isMultiShardQuery,
+												  Const *distributionKeyValue);
+extern void GenerateSingleShardRouterTaskList(Job *job,
+											  List *relationShardList,
+											  List *placementList, uint64 shardId);
+
 /*
  * FastPathPlanner is a subset of router planner, that's why we prefer to
  * keep the external function here.
@@ -78,6 +91,7 @@ extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
 									 boundParams);
-extern bool FastPathRouterQuery(Query *query, Const **distributionKeyValue);
+extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
+
 
 #endif /* MULTI_ROUTER_PLANNER_H */

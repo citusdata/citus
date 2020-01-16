@@ -122,7 +122,7 @@ static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
 static bool UpdateReferenceTablesWithShard(Node *node, void *context);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-												 Const *distributionKeyValue);
+												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 List *rangeTableList, int rteIdCounter);
 
@@ -136,7 +136,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 	int rteIdCounter = 1;
 	bool fastPathRouterQuery = false;
-	Const *distributionKeyValue = NULL;
+	Node *distributionKeyValue = NULL;
 	DistributedPlanningContext planContext = {
 		.query = parse,
 		.cursorOptions = cursorOptions,
@@ -551,12 +551,26 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
  */
 static PlannedStmt *
 PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
-							Const *distributionKeyValue)
+							Node *distributionKeyValue)
 {
+	FastPathRestrictionContext *fastPathContext =
+		planContext->plannerRestrictionContext->fastPathRestrictionContext;
+
 	planContext->plannerRestrictionContext->fastPathRestrictionContext->
 	fastPathRouterQuery = true;
-	planContext->plannerRestrictionContext->fastPathRestrictionContext->
-	distributionKeyValue = distributionKeyValue;
+
+	if (distributionKeyValue == NULL)
+	{
+		/* nothing to record */
+	}
+	else if (IsA(distributionKeyValue, Const))
+	{
+		fastPathContext->distributionKeyValue = (Const *) distributionKeyValue;
+	}
+	else if (IsA(distributionKeyValue, Param))
+	{
+		fastPathContext->distributionKeyHasParam = true;
+	}
 
 	planContext->plan = FastPathPlanner(planContext->originalQuery, planContext->query,
 										planContext->boundParams);

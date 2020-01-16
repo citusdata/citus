@@ -146,8 +146,11 @@ INSERT INTO test_parameterized_sql VALUES(1, 1);
 
 -- all of them should fail
 SELECT * FROM test_parameterized_sql_function(1);
-SELECT test_parameterized_sql_function(1);
 SELECT test_parameterized_sql_function_in_subquery_where(1);
+
+-- postgres behaves slightly differently for the following
+-- query where the target list is empty
+SELECT test_parameterized_sql_function(1);
 
 -- test that sql function calls are treated as multi-statement transactions
 -- and are rolled back properly. Single-row inserts for not-replicated tables

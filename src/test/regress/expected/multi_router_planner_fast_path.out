@@ -1559,10 +1559,9 @@ PREPARE author_articles(int) as
 	FROM articles_hash
 	WHERE author_id = $1;
 EXECUTE author_articles(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1573,10 +1572,9 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1587,10 +1585,9 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1601,10 +1598,9 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1615,10 +1611,9 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1629,11 +1624,9 @@ DETAIL:  distribution column value: 1
 (5 rows)
 
 EXECUTE author_articles(1);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -1709,7 +1702,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT author_articles_max_id(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1718,7 +1711,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1727,7 +1720,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1736,7 +1729,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1745,7 +1738,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1754,8 +1747,7 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT author_articles_max_id(1);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  author_articles_max_id
@@ -1849,7 +1841,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1862,7 +1854,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1875,7 +1867,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1888,7 +1880,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1901,7 +1893,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1914,8 +1906,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 SELECT * FROM author_articles_id_word_count(1);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | word_count
@@ -1936,45 +1927,39 @@ INSERT INTO articles_hash
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 -- one final interesting preperad statement
 -- where one of the filters is on the target list
 PREPARE fast_path_agg_filter(int, int) AS
@@ -1984,61 +1969,54 @@ PREPARE fast_path_agg_filter(int, int) AS
 		articles_hash
 	WHERE author_id = $2;
 EXECUTE fast_path_agg_filter(1,1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE fast_path_agg_filter(2,2);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE fast_path_agg_filter(3,3);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 3
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE fast_path_agg_filter(4,4);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 4
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE fast_path_agg_filter(5,5);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 5
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE fast_path_agg_filter(6,6);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 6
  count
 ---------------------------------------------------------------------
      0

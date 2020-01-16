@@ -322,16 +322,19 @@ INSERT INTO test_parameterized_sql VALUES(1, 1);
 SELECT * FROM test_parameterized_sql_function(1);
 ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
 HINT:  Consider using PL/pgSQL functions instead.
-SELECT test_parameterized_sql_function(1);
-ERROR:  could not create distributed plan
-DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
-HINT:  Consider using PL/pgSQL functions instead.
-CONTEXT:  SQL function "test_parameterized_sql_function" statement 1
 SELECT test_parameterized_sql_function_in_subquery_where(1);
 ERROR:  could not create distributed plan
 DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
 HINT:  Consider using PL/pgSQL functions instead.
 CONTEXT:  SQL function "test_parameterized_sql_function_in_subquery_where" statement 1
+-- postgres behaves slightly differently for the following
+-- query where the target list is empty
+SELECT test_parameterized_sql_function(1);
+ test_parameterized_sql_function
+---------------------------------------------------------------------
+                               1
+(1 row)
+
 -- test that sql function calls are treated as multi-statement transactions
 -- and are rolled back properly. Single-row inserts for not-replicated tables
 -- don't go over 2PC if they are not part of a bigger transaction.

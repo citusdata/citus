@@ -261,7 +261,38 @@ RETURNS void AS $$
 	DECLARE c CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE x = $1;
 $$ LANGUAGE SQL;
 SELECT declares_cursor(5);
+ declares_cursor
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Test DECLARE CURSOR .. WITH HOLD without parameter
+CREATE OR REPLACE FUNCTION declares_cursor_2()
+RETURNS void AS $$
+	DECLARE c2 CURSOR WITH HOLD FOR SELECT * FROM cursor_me;
+$$ LANGUAGE SQL;
+SELECT declares_cursor_2();
+ declares_cursor_2
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Test DECLARE CURSOR .. WITH HOLD with parameter on non-dist key
+CREATE OR REPLACE FUNCTION declares_cursor_3(p int)
+RETURNS void AS $$
+	DECLARE c3 CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE y = $1;
+$$ LANGUAGE SQL;
+SELECT declares_cursor_3(19);
 ERROR:  Cursors for queries on distributed tables with parameters are currently unsupported
+-- Test DECLARE CURSOR .. WITH HOLD with parameter on dist key, but not fast-path planner
+CREATE OR REPLACE FUNCTION declares_cursor_4(p int)
+RETURNS void AS $$
+	DECLARE c4 CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
+$$ LANGUAGE SQL;
+SELECT declares_cursor_4(19);
+ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
+HINT:  Consider using an equality filter on the distributed table's partition column.
+CONTEXT:  SQL function "declares_cursor_4" statement 1
 CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
 RETURNS SETOF int AS $$
 DECLARE

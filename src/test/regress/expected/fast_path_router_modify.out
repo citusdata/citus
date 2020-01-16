@@ -234,50 +234,43 @@ DETAIL:  distribution column value: 1
 PREPARE p1 (int, int, int) AS
 	UPDATE modify_fast_path SET value_1 = value_1 + $1 WHERE key = $2 AND value_1 = $3;
 EXECUTE p1(1,1,1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 EXECUTE p1(2,2,2);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
 EXECUTE p1(3,3,3);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 3
 EXECUTE p1(4,4,4);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 4
 EXECUTE p1(5,5,5);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 5
 EXECUTE p1(6,6,6);
-DEBUG:  Router planner cannot handle multi-shard modify queries
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 6
+EXECUTE p1(7,7,7);
 CREATE FUNCTION modify_fast_path_plpsql(int, int) RETURNS void as $$
 BEGIN
 	DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2;
 END;
 $$ LANGUAGE plpgsql;
 SELECT modify_fast_path_plpsql(1,1);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -286,14 +279,13 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(2,2);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -302,14 +294,13 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(3,3);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 3
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -318,14 +309,13 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(4,4);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 4
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -334,14 +324,13 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(5,5);
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 5
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -350,17 +339,13 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(6,6);
-DEBUG:  Router planner cannot handle multi-shard modify queries
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 6
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -369,22 +354,231 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 (1 row)
 
 SELECT modify_fast_path_plpsql(6,6);
-DEBUG:  Distributed planning for a fast-path router query
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Creating router plan
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 6
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
 (1 row)
 
+-- prepared statements with zero shard
+PREPARE prepared_zero_shard_select(int) AS SELECT count(*) FROM modify_fast_path WHERE key = $1 AND false;
+PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 = 1 WHERE key = $1 AND false;
+SET client_min_messages TO DEBUG2;
+SET citus.log_remote_commands TO ON;
+EXECUTE prepared_zero_shard_select(1);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(2);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(3);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 3) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(4);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 4) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(5);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 5) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(6);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 6) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(7);
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 7) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_update(1);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(2);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(3);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(4);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(5);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(6);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(7);
+-- same test with fast-path disabled
+SET citus.enable_fast_path_router_planner TO FALSE;
+EXECUTE prepared_zero_shard_select(1);
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(2);
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_update(1);
+EXECUTE prepared_zero_shard_update(2);
+DEALLOCATE prepared_zero_shard_select;
+DEALLOCATE prepared_zero_shard_update;
+PREPARE prepared_zero_shard_select(int) AS SELECT count(*) FROM modify_fast_path WHERE key = $1 AND false;
+PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 = 1 WHERE key = $1 AND false;
+EXECUTE prepared_zero_shard_select(1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(3);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(4);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(5);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(6);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_select(7);
+NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE prepared_zero_shard_update(1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(3);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(4);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(5);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(6);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE prepared_zero_shard_update(7);
+-- same test with fast-path disabled
+-- reset back to the original value, in case any new test comes after
+RESET citus.enable_fast_path_router_planner;
 RESET client_min_messages;
+RESET citus.log_remote_commands;
 DROP SCHEMA fast_path_router_modify CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table modify_fast_path
