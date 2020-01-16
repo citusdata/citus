@@ -16,6 +16,7 @@
 
 #include "executor/execdesc.h"
 
+extern bool EnableRepartitionedInsertSelect;
 
 extern TupleTableSlot * CoordinatorInsertSelectExecScan(CustomScanState *node);
 extern bool ExecutingInsertSelect(void);

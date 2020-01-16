@@ -875,6 +875,50 @@ SELECT count(*) FROM target_table;
     10
 (1 row)
 
+--
+-- Disable repartitioned insert/select
+--
+TRUNCATE target_table;
+SET citus.enable_repartitioned_insert_select TO OFF;
+EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on source_table_4213629 source_table
+(8 rows)
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
+SELECT count(*) FROM target_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SET citus.enable_repartitioned_insert_select TO ON;
+EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on source_table_4213629 source_table
+(8 rows)
+
 DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

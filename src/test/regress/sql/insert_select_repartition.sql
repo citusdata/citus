@@ -418,6 +418,24 @@ RESET client_min_messages;
 
 SELECT count(*) FROM target_table;
 
+--
+-- Disable repartitioned insert/select
+--
+
+TRUNCATE target_table;
+SET citus.enable_repartitioned_insert_select TO OFF;
+
+EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+RESET client_min_messages;
+
+SELECT count(*) FROM target_table;
+
+SET citus.enable_repartitioned_insert_select TO ON;
+EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+
 DROP TABLE source_table, target_table;
 
 SET client_min_messages TO WARNING;

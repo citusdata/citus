@@ -48,6 +48,8 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
+/* Config variables managed via guc.c */
+bool EnableRepartitionedInsertSelect = true;
 
 /* depth of current insert/select executor. */
 static int insertSelectExecutorLevel = 0;
@@ -1031,6 +1033,11 @@ PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 bool
 IsRedistributablePlan(Plan *selectPlan)
 {
+	if (!EnableRepartitionedInsertSelect)
+	{
+		return false;
+	}
+
 	/* don't redistribute if query is not distributed or requires merge on coordinator */
 	if (!IsCitusCustomScan(selectPlan))
 	{
