@@ -272,6 +272,19 @@ SELECT * FROM target_table ORDER BY a;
 EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 
 --
+-- Duplicate names in target list
+--
+
+TRUNCATE target_table;
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table
+ SELECT max(b), max(b) FROM source_table GROUP BY a;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a;
+
+--
 -- Prepared INSERT/SELECT
 --
 TRUNCATE target_table;
@@ -381,6 +394,29 @@ SELECT * FROM target_table ORDER BY a;
 -- verify that values have been replicated to both replicas, and that each
 -- replica has received correct number of rows
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
+
+DROP TABLE source_table, target_table;
+
+--
+-- Select column names should be unique
+--
+
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+
+SET citus.shard_count TO 3;
+CREATE TABLE target_table(a int, b int, c int, d int, e int, f int);
+SELECT create_distributed_table('target_table', 'a');
+
+INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
+
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+RESET client_min_messages;
+
+SELECT count(*) FROM target_table;
 
 DROP TABLE source_table, target_table;
 

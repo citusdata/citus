@@ -825,9 +825,10 @@ INSERT INTO test_table
             FROM
               fist_table_cte;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  CTE fist_table_cte is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'key'
 -- the following INSERT..SELECT is even more interesting
 -- the CTE becomes pushdownable
 INSERT INTO test_table

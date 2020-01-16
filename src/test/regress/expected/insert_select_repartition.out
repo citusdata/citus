@@ -29,11 +29,11 @@ DETAIL:  Subquery contains an operator in the same position as the target table'
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name '?column?'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213585 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213583_to_0,repartitioned_results_from_4213584_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213586 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213582_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213581_to_2,repartitioned_results_from_4213582_to_2,repartitioned_results_from_4213584_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213588 AS citus_table_alias (a) SELECT "?column?" FROM read_intermediate_results('{repartitioned_results_from_4213581_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result("?column?" integer)
+DEBUG:  partitioning SELECT query by column index 0 with name 'a'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213585 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_from_4213583_to_0,repartitioned_results_from_4213584_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213586 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_from_4213582_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_from_4213581_to_2,repartitioned_results_from_4213582_to_2,repartitioned_results_from_4213584_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213588 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_from_4213581_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
 RESET client_min_messages;
 SELECT * FROM target_table WHERE a=-1 OR a=-3 OR a=-7 ORDER BY a;
  a
@@ -83,9 +83,9 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 2 with name 'mapped_key'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+DEBUG:  partitioning SELECT query by column index 2 with name 'key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, key insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, key insert_select_repartition.composite_key_type)
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
  f1 | value |  key
@@ -113,9 +113,9 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 2 with name 'mapped_key'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, mapped_key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, mapped_key insert_select_repartition.composite_key_type)
+DEBUG:  partitioning SELECT query by column index 2 with name 'key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, value, key) SELECT f1, value, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, key insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, value, key) SELECT f1, value, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, value integer, key insert_select_repartition.composite_key_type)
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
  f1 | value |  key
@@ -137,9 +137,9 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 1 with name 'key_renamed'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type)
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type)
+DEBUG:  partitioning SELECT query by column index 1 with name 'key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, key) SELECT f1, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0,repartitioned_results_from_4213590_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key insert_select_repartition.composite_key_type)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, key) SELECT f1, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key insert_select_repartition.composite_key_type)
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
  f1 | value |  key
@@ -163,9 +163,9 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 1 with name 'key_renamed'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type) ON CONFLICT(key) DO UPDATE SET f1 = 1
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, key) SELECT f1, key_renamed FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key_renamed insert_select_repartition.composite_key_type) ON CONFLICT(key) DO UPDATE SET f1 = 1
+DEBUG:  partitioning SELECT query by column index 1 with name 'key'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213591 AS citus_table_alias (f1, key) SELECT f1, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_0}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key insert_select_repartition.composite_key_type) ON CONFLICT(key) DO UPDATE SET f1 = 1
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213592 AS citus_table_alias (f1, key) SELECT f1, key FROM read_intermediate_results('{repartitioned_results_from_4213589_to_1,repartitioned_results_from_4213590_to_1}'::text[], 'text'::citus_copy_format) intermediate_result(f1 integer, key insert_select_repartition.composite_key_type) ON CONFLICT(key) DO UPDATE SET f1 = 1
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
  f1 | value |  key
@@ -213,9 +213,9 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213593 AS citus_table_alias (col_1, col_2) SELECT auto_coerced_by_citus_0, auto_coerced_by_citus_1 FROM read_intermediate_results('{repartitioned_results_from_4213597_to_0,repartitioned_results_from_4213600_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer, auto_coerced_by_citus_1 integer) ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213594 AS citus_table_alias (col_1, col_2) SELECT auto_coerced_by_citus_0, auto_coerced_by_citus_1 FROM read_intermediate_results('{repartitioned_results_from_4213599_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer, auto_coerced_by_citus_1 integer) ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2
+DEBUG:  partitioning SELECT query by column index 0 with name 'col_1'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213593 AS citus_table_alias (col_1, col_2) SELECT col_1, col_2 FROM read_intermediate_results('{repartitioned_results_from_4213597_to_0,repartitioned_results_from_4213600_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer) ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213594 AS citus_table_alias (col_1, col_2) SELECT col_1, col_2 FROM read_intermediate_results('{repartitioned_results_from_4213599_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer) ON CONFLICT(col_1) DO UPDATE SET col_2 = excluded.col_2
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY 1;
  col_1 | col_2
@@ -506,7 +506,7 @@ INSERT INTO target_table
 SELECT mapped_key, c FROM t NATURAL JOIN source_table;
 DEBUG:  volatile functions are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  generating subplan XXX_1 for CTE t: SELECT mapped_key, a, c FROM insert_select_repartition.source_table WHERE ((a)::double precision OPERATOR(pg_catalog.>) floor(random()))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT mapped_key, (c)::integer[] AS auto_coerced_by_citus_1 FROM (SELECT t.mapped_key, t.c FROM ((SELECT intermediate_result.mapped_key, intermediate_result.a, intermediate_result.c FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(mapped_key integer, a integer, c double precision[])) t JOIN insert_select_repartition.source_table USING (mapped_key, a, c))) citus_insert_select_subquery
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT mapped_key AS a, (c)::integer[] AS b FROM (SELECT t.mapped_key, t.c FROM ((SELECT intermediate_result.mapped_key, intermediate_result.a, intermediate_result.c FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(mapped_key integer, a integer, c double precision[])) t JOIN insert_select_repartition.source_table USING (mapped_key, a, c))) citus_insert_select_subquery
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
@@ -572,6 +572,32 @@ EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
                      Group Key: a
                      ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..32.60 rows=2260 width=8)
 (10 rows)
+
+--
+-- Duplicate names in target list
+--
+TRUNCATE target_table;
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table
+ SELECT max(b), max(b) FROM source_table GROUP BY a;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'a'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213610 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_from_4213606_to_0,repartitioned_results_from_4213607_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213611 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_from_4213607_to_1,repartitioned_results_from_4213609_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213612 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_from_4213606_to_2,repartitioned_results_from_4213607_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+RESET client_min_messages;
+SELECT * FROM target_table ORDER BY a;
+  a  |  b
+---------------------------------------------------------------------
+   9 |   9
+  49 |  49
+ 121 | 121
+ 225 | 225
+ 361 | 361
+ 400 | 400
+(6 rows)
 
 --
 -- Prepared INSERT/SELECT
@@ -726,8 +752,8 @@ INSERT INTO target_table SELECT 1.12, b::bigint FROM source_table WHERE b IS NOT
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  partitioning SELECT query by column index 0 with name 'auto_coerced_by_citus_0'
-DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213617 AS citus_table_alias (a, b) SELECT auto_coerced_by_citus_0, auto_coerced_by_citus_1 FROM read_intermediate_results('{repartitioned_results_from_4213613_to_0,repartitioned_results_from_4213614_to_0,repartitioned_results_from_4213615_to_0,repartitioned_results_from_4213616_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(auto_coerced_by_citus_0 integer, auto_coerced_by_citus_1 integer)
+DEBUG:  partitioning SELECT query by column index 0 with name 'a'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213617 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_from_4213613_to_0,repartitioned_results_from_4213614_to_0,repartitioned_results_from_4213615_to_0,repartitioned_results_from_4213616_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a, b;
  a |  b
@@ -810,6 +836,44 @@ SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s
  localhost |    57637 | 4213628 | t       | 2
  localhost |    57638 | 4213628 | t       | 2
 (8 rows)
+
+DROP TABLE source_table, target_table;
+--
+-- Select column names should be unique
+--
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+CREATE TABLE source_table(a int, b int);
+SELECT create_distributed_table('source_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_count TO 3;
+CREATE TABLE target_table(a int, b int, c int, d int, e int, f int);
+SELECT create_distributed_table('target_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
+SET client_min_messages TO DEBUG2;
+INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'a'
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213633 AS citus_table_alias (a, b, c, d) SELECT a, b, c, d FROM read_intermediate_results('{repartitioned_results_from_4213629_to_0,repartitioned_results_from_4213630_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer, c integer, d integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213634 AS citus_table_alias (a, b, c, d) SELECT a, b, c, d FROM read_intermediate_results('{repartitioned_results_from_4213630_to_1,repartitioned_results_from_4213631_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer, c integer, d integer)
+DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213635 AS citus_table_alias (a, b, c, d) SELECT a, b, c, d FROM read_intermediate_results('{repartitioned_results_from_4213632_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer, c integer, d integer)
+RESET client_min_messages;
+SELECT count(*) FROM target_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
 
 DROP TABLE source_table, target_table;
 SET client_min_messages TO WARNING;

@@ -77,6 +77,7 @@ static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
 static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 					   int targetTypeMod);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
+static void RelableTargetEntryList(List *selectTargetList, List *insertTargetList);
 
 
 /*
@@ -154,6 +155,14 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			AddInsertSelectCasts(insertSelectQuery->targetList,
 								 selectQuery->targetList,
 								 targetRelationId);
+
+		/*
+		 * Later we might need to call WrapTaskListForProjection(), which requires
+		 * that select target list has unique names, otherwise the outer query
+		 * cannot select columns unambiguously. So we relabel select columns to
+		 * match target columns.
+		 */
+		RelableTargetEntryList(selectQuery->targetList, insertTargetList);
 
 		/*
 		 * Make a copy of the query, since pg_plan_query may scribble on it and we
@@ -753,6 +762,12 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 
 			if (selectEntry->ressortgroupref != 0)
 			{
+				/* make sure that the name doesn't match any insert target list entries */
+				resnameString = makeStringInfo();
+				appendStringInfo(resnameString, "auto_resjunked_by_citus_%d",
+								 targetEntryIndex);
+
+				selectEntry->resname = resnameString->data;
 				selectEntry->resjunk = true;
 				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
 			}
@@ -1075,5 +1090,25 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 						 projectedColumnsString->data,
 						 task->queryString);
 		task->queryString = wrappedQuery->data;
+	}
+}
+
+
+/*
+ * RelableTargetEntryList relabels select target list to have matching names with
+ * insert target list.
+ */
+static void
+RelableTargetEntryList(List *selectTargetList, List *insertTargetList)
+{
+	ListCell *selectTargetCell = NULL;
+	ListCell *insertTargetCell = NULL;
+
+	forboth(selectTargetCell, selectTargetList, insertTargetCell, insertTargetList)
+	{
+		TargetEntry *selectTargetEntry = lfirst(selectTargetCell);
+		TargetEntry *insertTargetEntry = lfirst(insertTargetCell);
+
+		selectTargetEntry->resname = insertTargetEntry->resname;
 	}
 }
