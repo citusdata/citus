@@ -332,7 +332,22 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid distributedTableId = shardInterval->relationId;
+	DistTableCacheEntry *distributedTable = DistributedTableCacheEntry(
+		distributedTableId);
+	uint32 colocationId = distributedTable->colocationId;
+
+	if (colocationId == INVALID_COLOCATION_ID ||
+		distributedTable->partitionMethod != DISTRIBUTE_BY_HASH)
+	{
+		SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+	}
+	else
+	{
+		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(tag, MyDatabaseId, colocationId,
+													   shardInterval->shardIndex);
+	}
 
 	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
 }
