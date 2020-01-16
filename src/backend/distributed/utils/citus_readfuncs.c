@@ -379,7 +379,7 @@ ReadTask(READFUNC_ARGS)
 	READ_UINT_FIELD(taskId);
 	READ_NODE_FIELD(queryForLocalExecution);
 	READ_STRING_FIELD(queryStringLazy);
-	READ_OID_FIELD(distributedTableId);
+	READ_OID_FIELD(anchorDistributedTableId);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);
 	READ_NODE_FIELD(dependentTaskList);
