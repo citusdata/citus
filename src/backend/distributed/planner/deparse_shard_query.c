@@ -162,6 +162,15 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		query = copyObject(query);
 	}
 
+	if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * We store this in the task so we can lazily call
+		 * deparse_shard_query when the string is needed
+		 */
+		task->distributedTableId = distributedTableId;
+	}
+
 	SetTaskQuery(task, query);
 
 	if (valuesRTE != NULL)
@@ -360,12 +369,7 @@ DeparseTaskQuery(Task *task, Query *query)
 		 * RTE_FUNCTION (which is what will happen if you call
 		 * UpdateRelationToShardNames).
 		 */
-		Assert(list_length(task->relationShardList) == 1);
-
-		RelationShard *relationShard = linitial(task->relationShardList);
-		Assert(relationShard->shardId == task->anchorShardId);
-
-		deparse_shard_query(query, relationShard->relationId, relationShard->shardId,
+		deparse_shard_query(query, task->distributedTableId, task->anchorShardId,
 							queryString);
 	}
 	else

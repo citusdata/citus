@@ -465,6 +465,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(taskId);
 	WRITE_NODE_FIELD(queryForLocalExecution);
 	WRITE_STRING_FIELD(queryStringLazy);
+	WRITE_OID_FIELD(distributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
 	WRITE_NODE_FIELD(dependentTaskList);
