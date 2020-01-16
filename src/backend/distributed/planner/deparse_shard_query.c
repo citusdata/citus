@@ -37,6 +37,8 @@
 static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
 								  RangeTblEntry *valuesRTE, Task *task);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
+static bool ShouldLazyDeparseQuery(Task *task);
+static char * DeparseTaskQuery(Task *task, Query *query);
 
 
 /*
@@ -129,7 +131,6 @@ static void
 UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *valuesRTE,
 					  Task *task)
 {
-	StringInfo queryString = makeStringInfo();
 	List *oldValuesLists = NIL;
 
 	if (valuesRTE != NULL)
@@ -141,35 +142,7 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		valuesRTE->values_lists = task->rowValuesLists;
 	}
 
-	bool localExecution = TaskAccessesLocalNode(task);
-
-	if (query->commandType == CMD_INSERT)
-	{
-		/*
-		 * For INSERT queries, we only have one relation to update, so we can
-		 * use deparse_shard_query().
-		 */
-		if (localExecution)
-		{
-			/*
-			 * not all insert queries are copied before calling this
-			 * function, so we do it here
-			 */
-			query = copyObject(query);
-
-			/*
-			 * We store this in the task so we can lazily call
-			 * deparse_shard_query when the string is needed
-			 */
-			task->distributedTableId = distributedTableId;
-		}
-		else
-		{
-			deparse_shard_query(query, distributedTableId, task->anchorShardId,
-								queryString);
-		}
-	}
-	else
+	if (query->commandType != CMD_INSERT)
 	{
 		/*
 		 * For UPDATE and DELETE queries, we may have subqueries and joins, so
@@ -178,27 +151,30 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		 */
 		List *relationShardList = task->relationShardList;
 		UpdateRelationToShardNames((Node *) query, relationShardList);
-		if (!localExecution)
-		{
-			pg_get_query_def(query, queryString);
-		}
 	}
+	else if (ShouldLazyDeparseQuery(task))
+	{
+		/*
+		 * not all insert queries are copied before calling this
+		 * function, so we do it here
+		 */
+		query = copyObject(query);
+	}
+
+	if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * We store this in the task so we can lazily call
+		 * deparse_shard_query when the string is needed
+		 */
+		task->distributedTableId = distributedTableId;
+	}
+
+	SetTaskQuery(task, query);
 
 	if (valuesRTE != NULL)
 	{
 		valuesRTE->values_lists = oldValuesLists;
-	}
-
-	if (localExecution)
-	{
-		task->query = query;
-
-		/* invalidate the cached query string, because the query changed */
-		task->queryStringLazy = NULL;
-	}
-	else
-	{
-		task->queryStringLazy = queryString->data;
 	}
 }
 
@@ -343,6 +319,18 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 
 
 /*
+ * ShouldLazyDeparseQuery returns true if we should lazily deparse the query
+ * when adding it to the task. Right now it simply checks if any shards on the
+ * local node can be used for the task.
+ */
+static bool
+ShouldLazyDeparseQuery(Task *task)
+{
+	return TaskAccessesLocalNode(task);
+}
+
+
+/*
  * SetTaskQuery attaches the query to the task so that it can be used during
  * execution. If local execution can possibly take place it sets task->query.
  * If not it deparses the query and sets queryStringLazy, to avoid blowing the
@@ -351,9 +339,7 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 void
 SetTaskQuery(Task *task, Query *query)
 {
-	Assert(task->taskPlacementList != NULL);
-
-	if (TaskAccessesLocalNode(task))
+	if (ShouldLazyDeparseQuery(task))
 	{
 		task->query = query;
 		task->queryStringLazy = NULL;
@@ -361,13 +347,33 @@ SetTaskQuery(Task *task, Query *query)
 	}
 
 	task->query = NULL;
-	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+	task->queryStringLazy = DeparseTaskQuery(task, query);
+}
+
+
+/*
+ * DeparseTaskQuery is a general way of deparsing a query based on a task.
+ */
+static char *
+DeparseTaskQuery(Task *task, Query *query)
+{
 	StringInfo queryString = makeStringInfo();
 
-	pg_get_query_def(query, queryString);
+	if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * For INSERT queries, we only have one relation to update, so we can
+		 * use deparse_shard_query().
+		 */
+		deparse_shard_query(query, task->distributedTableId, task->anchorShardId,
+							queryString);
+	}
+	else
+	{
+		pg_get_query_def(query, queryString);
+	}
 
-	task->queryStringLazy = queryString->data;
-	MemoryContextSwitchTo(previousContext);
+	return queryString->data;
 }
 
 
@@ -398,20 +404,7 @@ TaskQueryString(Task *task)
 	 */
 	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
 															  task->query));
-	StringInfo queryString = makeStringInfo();
-
-	if (task->query->commandType == CMD_INSERT)
-	{
-		deparse_shard_query(task->query, task->distributedTableId, task->anchorShardId,
-							queryString);
-	}
-	else
-	{
-		pg_get_query_def(task->query, queryString);
-	}
-
-
-	task->queryStringLazy = queryString->data;
+	task->queryStringLazy = DeparseTaskQuery(task, task->query);
 	MemoryContextSwitchTo(previousContext);
-	return queryString->data;
+	return task->queryStringLazy;
 }
