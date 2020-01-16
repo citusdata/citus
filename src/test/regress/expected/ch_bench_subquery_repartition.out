@@ -140,8 +140,10 @@ select s_i_id
     where
         s_i_id in (select i_id from item)
         AND s_i_id not in (select i_im_id from item);
-ERROR:  syntax error at or near "SubPlan"
-CONTEXT:  while executing command on localhost:xxxxx
+ s_i_id
+---------------------------------------------------------------------
+(0 rows)
+
 -- Subquery + repartion is not supported when it contains both an IN and a NOT IN
 -- where both subqueries return unique results
 select  s_i_id
@@ -150,8 +152,7 @@ select  s_i_id
         s_i_id in (select i_id from item)
         AND s_i_id not in (select i_id from item)
         AND s_i_id = ol_i_id;
-ERROR:  syntax error at or near "SubPlan"
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Subquery + repartion is not supported when it contains both an IN and a NOT IN
 -- where the IN subquery returns unique results and the NOT IN returns non unique results
 select  s_i_id
@@ -160,8 +161,7 @@ select  s_i_id
         s_i_id in (select i_id from item)
         AND s_i_id not in (select i_im_id from item)
         AND s_i_id = ol_i_id;
-ERROR:  syntax error at or near "SubPlan"
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Subquery + repartion is not supported when it contains both an IN and a NOT IN
 -- where the IN subquery returns non unique results and the NOT IN returns unique results
 select  s_i_id

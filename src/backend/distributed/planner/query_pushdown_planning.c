@@ -281,21 +281,23 @@ JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context)
 bool
 WhereOrHavingClauseContainsSubquery(Query *query)
 {
-	FromExpr *joinTree = query->jointree;
-
 	if (FindNodeCheck(query->havingQual, IsNodeSubquery))
 	{
 		return true;
 	}
 
-	if (!joinTree)
+	if (!query->jointree)
 	{
 		return false;
 	}
 
-	Node *queryQuals = joinTree->quals;
-
-	return FindNodeCheck(queryQuals, IsNodeSubquery);
+	/*
+	 * We search the whole jointree here, not just the quals. The reason for
+	 * this is that the fromlist can contain other FromExpr nodes again or
+	 * JoinExpr nodes that also have quals. If that's the case we need to check
+	 * those as well if they contain andy subqueries.
+	 */
+	return FindNodeCheck((Node *) query->jointree, IsNodeSubquery);
 }
 
 
