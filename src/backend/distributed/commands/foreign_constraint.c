@@ -474,8 +474,9 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
  */
 void
 ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencingTableOid,
-																  Oid
-																  referencedTableOid,
+																  Oid referencedTableOid,
+																  AlterTableType
+																  alterTableType,
 																  Constraint *constraint)
 {
 	bool referencingIsDistributed = IsDistributedTable(referencingTableOid);
