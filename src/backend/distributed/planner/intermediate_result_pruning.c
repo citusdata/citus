@@ -217,7 +217,8 @@ MakeIntermediateResultHTAB()
 
 /*
  * FindAllWorkerNodesUsingSubplan creates a list of worker nodes that
- * may need to access subplan results.
+ * may need to access subplan results, and decides if these results should be
+ * written to a local file
  */
 List *
 FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
@@ -229,14 +230,17 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 	foreach(nodeIdCell, entry->nodeIdList)
 	{
 		uint32 nodeId = lfirst_int(nodeIdCell);
-		WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
 
-		if (workerNode == NULL)
+		/* if we have a dummy placement, intermediate plan will be written locally */
+		if (nodeId == DUMMY_NODE_ID)
 		{
-			elog(DEBUG4, "Failed Node Lookup with Id %d, write to local file", nodeId);
 			entry->writeLocalFile = true;
 			continue;
 		}
+
+
+		WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
+		Assert(workerNode != NULL);
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 
