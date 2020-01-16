@@ -115,12 +115,7 @@ ORDER BY locktype, objid, classid, mode;
  colocated_shards_metadata | 1400000 |       1 | ShareLock     | t
  colocated_shards_metadata | 1400000 |       2 | ExclusiveLock | t
  colocated_shards_metadata | 1400000 |       3 | ExclusiveLock | t
- shard_metadata            |  999001 |       0 | ExclusiveLock | t
- shard_metadata            |  999001 |       0 | ShareLock     | t
- shard_metadata            |  999002 |       0 | ShareLock     | t
- shard_metadata            |  999003 |       0 | ExclusiveLock | t
- shard_metadata            |  999004 |       0 | ExclusiveLock | t
-(10 rows)
+(5 rows)
 
 END;
 -- lock shard metadata: unsupported lock type

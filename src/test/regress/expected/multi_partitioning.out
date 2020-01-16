@@ -1470,15 +1470,11 @@ SELECT * FROM lockinfo;
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
-(24 rows)
+(20 rows)
 
 COMMIT;
 -- test shard resource locks with TRUNCATE
@@ -1496,15 +1492,11 @@ SELECT * FROM lockinfo;
  partitioning_locks_2009 | colocated_shards_metadata | ShareLock
  partitioning_locks_2009 | colocated_shards_metadata | ShareLock
  partitioning_locks_2009 | colocated_shards_metadata | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
-(16 rows)
+(12 rows)
 
 COMMIT;
 -- test shard resource locks with INSERT/SELECT
@@ -1530,15 +1522,11 @@ SELECT * FROM lockinfo;
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
  partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
- partitioning_locks_2009 | shard_metadata            | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
  partitioning_locks_2010 | colocated_shards_metadata | ShareLock
-(24 rows)
+(20 rows)
 
 COMMIT;
 -- test partition-wise join
