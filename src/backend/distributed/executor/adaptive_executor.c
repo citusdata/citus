@@ -1530,6 +1530,7 @@ CleanUpSessions(DistributedExecution *execution)
 			 * Thus, we prefer ShutdownConnection() over CloseConnection().
 			 */
 			ShutdownConnection(connection);
+			CloseShardPlacementAssociation(connection);
 
 			/*
 			 * Reset the transaction state machine since CloseConnection()

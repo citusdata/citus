@@ -68,8 +68,11 @@ DETAIL:  server closed the connection unexpectedly
 (2 rows)
 
 INSERT INTO select_test VALUES (3, 'even more data');
-WARNING:  could not establish any connections to the node localhost:xxxxx after 5000 ms
 SELECT * FROM select_test WHERE key = 3;
+WARNING:  connection error: localhost:xxxxx
+DETAIL:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
  key |     value
 ---------------------------------------------------------------------
    3 | test data
