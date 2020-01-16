@@ -1506,7 +1506,6 @@ CleanUpSessions(DistributedExecution *execution)
 		UnclaimConnection(connection);
 
 		if (connection->connectionState == MULTI_CONNECTION_CONNECTING ||
-			connection->connectionState == MULTI_CONNECTION_FAILED ||
 			connection->connectionState == MULTI_CONNECTION_LOST)
 		{
 			/*
@@ -1516,16 +1515,21 @@ CleanUpSessions(DistributedExecution *execution)
 			 * We cannot get MULTI_CONNECTION_LOST via the ConnectionStateMachine,
 			 * but we might get it via the connection API and find us here before
 			 * changing any states in the ConnectionStateMachine.
-			 *
-			 * However, we prefer to keep the MultiConnection around until
-			 * the end of FinishDistributedExecution() to simplify the code.
-			 * Thus, we prefer ShutdownConnection() over CloseConnection().
 			 */
 
-			ShutdownConnection(connection);
+			CloseConnection(connection);
 
 			/* remove connection from wait event set */
 			execution->connectionSetChanged = true;
+		}
+		else if (connection->connectionState == MULTI_CONNECTION_FAILED)
+		{
+			/*
+			 * We prefer to keep the MultiConnection around until the end
+			 * of FinishDistributedExecution() to simplify the code.
+			 * Thus, we prefer ShutdownConnection() over CloseConnection().
+			 */
+			ShutdownConnection(connection);
 
 			/*
 			 * Reset the transaction state machine since CloseConnection()
@@ -1537,6 +1541,9 @@ CleanUpSessions(DistributedExecution *execution)
 				connection->remoteTransaction.transactionState =
 					REMOTE_TRANS_NOT_STARTED;
 			}
+
+			/* remove connection from wait event set */
+			execution->connectionSetChanged = true;
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
 		{

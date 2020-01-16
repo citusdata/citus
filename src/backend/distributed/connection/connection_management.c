@@ -361,10 +361,10 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			}
 		}
 
-		/* don't return claimed connections */
-		if (connection->claimedExclusively)
+		/* don't return claimed connections or unconnected connections */
+		if (connection->claimedExclusively ||
+			connection->pgConn == NULL)
 		{
-			/* connection is in use for an ongoing operation */
 			continue;
 		}
 
@@ -1068,6 +1068,11 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 	{
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
 
 		/*
 		 * To avoid leaking connections we warn if connections are
