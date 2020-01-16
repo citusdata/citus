@@ -190,6 +190,10 @@ typedef struct Task
 	 * assign a different query for each placement. We need this flexibility
 	 * when a query should return node specific values. For example, on which
 	 * node did we succeed storing some result files?
+	 *
+	 * queryForLocalExecution is only not null when the planner thinks the
+	 * query could possibly be locally executed. In that case deparsing+parsing
+	 * the query might not be necessary, so we do that lazily.
 	 */
 	Query *queryForLocalExecution;
 
