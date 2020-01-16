@@ -503,29 +503,37 @@ ErrorIfUnsupportedAlterAddDropFKeyBetweenReferecenceAndLocalTable(Oid referencin
 	if ((referencingIsReferenceTable && !referencedIsDistributed) ||
 		(!referencingIsDistributed && referencedIsReferenceTable))
 	{
-		/* constraint is not NULL when the command is ALTER TABLE ADD constraint */
-		if (constraint != NULL)
+		/* ALTER TABLE ADD fkey constraint */
+		if (alterTableType == AT_AddConstraint)
 		{
 			/*
-			 * "ALTER TABLE reference_table ADD CONSTRAINT fkey FOREIGN KEY REFERENCES
-			 * local_table ON DELETE (UPDATE) CASCADE" commands are not supported
+			 * We only support RESTRICT or NO ACTION behaviour for "ALTER TABLE
+			 * reference_table ADD CONSTRAINT fkey FOREIGN KEY REFERENCES
+			 * local_table ON DELETE / UPDATE" commands
 			 */
-			bool onDeleteOrOnUpdateCascade = (constraint->fk_upd_action ==
-											  FKCONSTR_ACTION_CASCADE ||
-											  constraint->fk_del_action ==
-											  FKCONSTR_ACTION_CASCADE);
+			bool onUpdateNoActionOrRestrict = (constraint->fk_upd_action ==
+											   FKCONSTR_ACTION_NOACTION ||
+											   constraint->fk_upd_action ==
+											   FKCONSTR_ACTION_RESTRICT);
+
+			bool onDeleteNoActionOrRestrict = (constraint->fk_del_action ==
+											   FKCONSTR_ACTION_NOACTION ||
+											   constraint->fk_del_action ==
+											   FKCONSTR_ACTION_RESTRICT);
 
 			bool fromReferenceTableToLocalTable = referencingIsReferenceTable &&
 												  !referencedIsDistributed;
 
-			if (fromReferenceTableToLocalTable && onDeleteOrOnUpdateCascade)
+			if (fromReferenceTableToLocalTable && (!onUpdateNoActionOrRestrict ||
+												   !onDeleteNoActionOrRestrict))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg(
 									"cannot create foreign key constraint"),
 								errdetail(
 									"Foreign key constraints from reference tables to coordinator "
-									"local tables cannot enforce ON DELETE / UPDATE CASCADE behaviour")));
+									"local tables can only enforce RESTRICT or NO ACTION behaviour "
+									"ON DELETE / UPDATE")));
 			}
 		}
 
