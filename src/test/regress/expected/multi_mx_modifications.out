@@ -454,10 +454,10 @@ INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNIN
 (1 row)
 
 -- clean up
-SELECT setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
-      setval
+SELECT 1 FROM setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
+ ?column?
 ---------------------------------------------------------------------
- 5066549580791809
+        1
 (1 row)
 
 ALTER SEQUENCE app_analytics_events_mx_id_seq
