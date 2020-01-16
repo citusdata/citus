@@ -311,6 +311,20 @@ RESET client_min_messages;
 
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
 
+--
+-- INSERT/SELECT in CTE
+--
+
+TRUNCATE target_table;
+
+SET client_min_messages TO DEBUG2;
+WITH r AS (
+  INSERT INTO target_table SELECT * FROM source_table RETURNING *
+)
+INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
+RESET client_min_messages;
+
+SELECT * FROM target_table ORDER BY a, b;
 
 DROP TABLE source_table, target_table;
 

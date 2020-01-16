@@ -209,10 +209,14 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			 * We have a separate directory for each transaction, so choosing
 			 * the same result prefix won't cause filename conflicts. Results
 			 * directory name also includes node id and database id, so we don't
-			 * need to include them in the filename. Jobs are executed
-			 * sequentially, so we also don't need to include job id here.
+			 * need to include them in the filename. We include job id here for
+			 * the case "INSERT/SELECTs" are executed recursively.
 			 */
-			char *distResultPrefix = "repartitioned_results";
+			StringInfo distResultPrefixString = makeStringInfo();
+			appendStringInfo(distResultPrefixString,
+							 "repartitioned_results_" UINT64_FORMAT,
+							 distSelectJob->jobId);
+			char *distResultPrefix = distResultPrefixString->data;
 
 			DistTableCacheEntry *targetRelation =
 				DistributedTableCacheEntry(targetRelationId);
@@ -764,12 +768,6 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 
 			if (selectEntry->ressortgroupref != 0)
 			{
-				/* make sure that the name doesn't match any insert target list entries */
-				resnameString = makeStringInfo();
-				appendStringInfo(resnameString, "auto_resjunked_by_citus_%d",
-								 targetEntryIndex);
-
-				selectEntry->resname = resnameString->data;
 				selectEntry->resjunk = true;
 				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
 			}
