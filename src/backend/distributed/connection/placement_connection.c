@@ -1171,16 +1171,36 @@ ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize)
 
 
 /*
- * AnyConnectionAccessedPlacements simply checks the number of entries in
- * ConnectionPlacementHash. This is useful to detect whether we're in a
- * distirbuted transaction and already executed at least one command that
- * accessed to a placement.
+ * AnyConnectionModifiedPlacements checks the entries in ConnectionPlacementHash
+ * and determines if we executed a command that modified a placement. This is
+ * useful to detect whether we're in a distributed transaction and already
+ * executed at least one command that modified a placement.
  */
 bool
-AnyConnectionAccessedPlacements(void)
+AnyConnectionModifiedPlacements(void)
 {
 	/* this is initialized on PG_INIT */
 	Assert(ConnectionPlacementHash != NULL);
 
-	return hash_get_num_entries(ConnectionPlacementHash) > 0;
+	/* initialize sequantial search */
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, ConnectionPlacementHash);
+
+	ConnectionPlacementHashEntry *entry =
+		(ConnectionPlacementHashEntry *) hash_seq_search(&status);
+
+	while (entry != NULL)
+	{
+		/* check if we have opened a connection and modified this placement */
+		if (entry->primaryConnection != NULL &&
+			(entry->primaryConnection->hadDDL || entry->primaryConnection->hadDML))
+		{
+			/* abandon sequential search before completion */
+			hash_seq_term(&status);
+			return true;
+		}
+		entry = (ConnectionPlacementHashEntry *) hash_seq_search(&status);
+	}
+
+	return false;
 }

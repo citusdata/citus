@@ -437,7 +437,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * has happened because that'd break transaction visibility rules and
 		 * many other things.
 		 */
-		return !AnyConnectionAccessedPlacements();
+		return !AnyConnectionModifiedPlacements();
 	}
 
 	if (!singleTask)

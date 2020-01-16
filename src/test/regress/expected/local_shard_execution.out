@@ -697,9 +697,14 @@ NOTICE:  executing the command locally: SELECT local_insert.key, local_insert.va
 WITH distributed_local_mixed AS (SELECT * FROM distributed_table),
 local_insert AS (INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *)
 SELECT * FROM local_insert, distributed_local_mixed ORDER BY 1,2,3,4,5;
+<<<<<<< HEAD
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, worker_column_2 AS value, worker_column_3 AS age, worker_column_4 AS key, worker_column_5 AS value, worker_column_6 AS age FROM (SELECT local_insert.key AS worker_column_1, local_insert.value AS worker_column_2, local_insert.age AS worker_column_3, distributed_local_mixed.key AS worker_column_4, distributed_local_mixed.value AS worker_column_5, distributed_local_mixed.age AS worker_column_6 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert, (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution.distributed_table_1470001 distributed_table) distributed_local_mixed) worker_subquery
 NOTICE:  executing the command locally: SELECT worker_column_1 AS key, worker_column_2 AS value, worker_column_3 AS age, worker_column_4 AS key, worker_column_5 AS value, worker_column_6 AS age FROM (SELECT local_insert.key AS worker_column_1, local_insert.value AS worker_column_2, local_insert.age AS worker_column_3, distributed_local_mixed.key AS worker_column_4, distributed_local_mixed.value AS worker_column_5, distributed_local_mixed.age AS worker_column_6 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert, (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution.distributed_table_1470003 distributed_table) distributed_local_mixed) worker_subquery
+=======
+LOG:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
+LOG:  executing the command locally: SELECT local_insert.key, local_insert.value, local_insert.age, distributed_local_mixed.key, distributed_local_mixed.value, distributed_local_mixed.age FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert, (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) distributed_local_mixed ORDER BY local_insert.key, local_insert.value, local_insert.age, distributed_local_mixed.key, distributed_local_mixed.value
+>>>>>>> 398538655... Prevent local execution only if a placement is modified not just accessed
  key | value | age | key | value | age
 ---------------------------------------------------------------------
    1 | 29    |  21 |   1 | 11    |  21
@@ -733,6 +738,7 @@ WHERE
 	distributed_table.value = all_data.value AND distributed_table.key = 1
 ORDER BY
 	1 DESC;
+LOG:  executing the command locally: SELECT distributed_table.key FROM local_shard_execution.distributed_table_1470001 distributed_table, (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) all_data WHERE ((distributed_table.value OPERATOR(pg_catalog.=) all_data.value) AND (distributed_table.key OPERATOR(pg_catalog.=) 1)) ORDER BY distributed_table.key DESC
  key
 ---------------------------------------------------------------------
    1
@@ -751,6 +757,7 @@ FROM
 WHERE
 	distributed_table.key = all_data.key AND distributed_table.key = 1
 	AND EXISTS (SELECT * FROM all_data);
+LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table, (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) all_data WHERE ((distributed_table.key OPERATOR(pg_catalog.=) all_data.key) AND (distributed_table.key OPERATOR(pg_catalog.=) 1) AND (EXISTS (SELECT all_data_1.key, all_data_1.value, all_data_1.age FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) all_data_1)))
  count
 ---------------------------------------------------------------------
      1
@@ -766,6 +773,7 @@ FROM
 	distributed_table, all_data
 WHERE
 	distributed_table.key = all_data.age AND distributed_table.key = 1;
+LOG:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table, (SELECT intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(age bigint)) all_data WHERE ((distributed_table.key OPERATOR(pg_catalog.=) all_data.age) AND (distributed_table.key OPERATOR(pg_catalog.=) 1))
  count
 ---------------------------------------------------------------------
      0
@@ -1277,8 +1285,10 @@ BEGIN;
 (1 row)
 
     DELETE FROM distributed_table WHERE key = 500;
+LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
     ROLLBACK TO SAVEPOINT my_savepoint;
 	DELETE FROM distributed_table WHERE key = 500;
+LOG:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
 COMMIT;
 -- even if we switch from local execution -> remote execution,
 -- we are able to use local execution after rollback
