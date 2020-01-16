@@ -392,18 +392,17 @@ FROM
 SELECT * FROM subquery_and_ctes
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
-DEBUG:  generating subplan XXX_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_view.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_2) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
-DEBUG:  generating subplan XXX_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_view.users_table_local
-DEBUG:  generating subplan XXX_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_2) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  CTE cte is going to be inlined via distributed planning
+DEBUG:  CTE local_cte is going to be inlined via distributed planning
+DEBUG:  CTE dist_cte is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_view.users_table_local
 DEBUG:  push down of limit count: 3
-DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
-DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT events_table.user_id FROM public.events_table, (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo.value_2) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))
+DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  generating subplan XXX_3 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
-DEBUG:  generating subplan XXX_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cnt, user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, public.users_table WHERE (foo.cnt OPERATOR(pg_catalog.>) users_table.value_2)) subquery_and_ctes ORDER BY "time" DESC, cnt DESC, user_id DESC, value_1 DESC LIMIT 5
+DEBUG:  generating subplan XXX_4 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  generating subplan XXX_5 for subquery SELECT count(*) AS cnt FROM (SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT events_table.user_id FROM public.events_table, (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo_1 WHERE ((events_table.user_id OPERATOR(pg_catalog.=) foo_1.value_2) AND (events_table.user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))))) dist_cte ON ((dist_cte.user_id OPERATOR(pg_catalog.=) local_cte.user_id)))) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id OPERATOR(pg_catalog.=) cte.user_id)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cnt, user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, public.users_table WHERE (foo.cnt OPERATOR(pg_catalog.>) users_table.value_2)) subquery_and_ctes ORDER BY "time" DESC, cnt DESC, user_id DESC, value_1 DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
@@ -437,6 +436,8 @@ SELECT time, event_type, value_2, value_3 FROM
 			events_table
 		WHERE
 			foo.user_id = events_table.value_2;
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 SELECT * FROM subquery_and_ctes_second
 ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
@@ -458,6 +459,7 @@ DEBUG:  push down of limit count: 5
  Thu Nov 23 09:33:16.992454 2017 |          3 |       4 |       1
 (5 rows)
 
+SET citus.enable_cte_inlining TO true;
 CREATE VIEW deep_subquery AS
 SELECT count(*)
 FROM

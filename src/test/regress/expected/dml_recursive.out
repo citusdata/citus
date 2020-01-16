@@ -297,6 +297,7 @@ ERROR:  complex joins are only supported when all distributed tables are co-loca
 INSERT INTO
 	second_distributed_table (tenant_id, dept)
 VALUES ('3', (WITH  vals AS (SELECT 3) select * from vals));
+DEBUG:  CTE vals is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE vals: SELECT 3
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: INSERT INTO recursive_dml_queries.second_distributed_table (tenant_id, dept) VALUES ('3'::text, (SELECT vals."?column?" FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) vals))
 ERROR:  subqueries are not supported within INSERT queries

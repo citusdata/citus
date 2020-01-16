@@ -172,6 +172,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 
     10 |     0
 (10 rows)
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 -- Get the select part from cte and do nothing on conflict
 WITH cte AS(
 	SELECT col_1, col_2 FROM source_table_1
@@ -205,6 +207,7 @@ SELECT * FROM target_table ORDER BY 1;
     10 |     0
 (10 rows)
 
+SET citus.enable_cte_inlining TO true;
 -- Test with multiple CTEs
 WITH cte AS(
 	SELECT col_1, col_2 FROM source_table_1
@@ -214,10 +217,8 @@ WITH cte AS(
 INSERT INTO target_table ((SELECT * FROM cte) UNION (SELECT * FROM cte_2)) ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  generating subplan XXX_1 for CTE cte: SELECT col_1, col_2 FROM on_conflict.source_table_1
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT col_1, col_2 FROM on_conflict.source_table_2
-DEBUG:  generating subplan XXX_3 for subquery SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte UNION SELECT cte_2.col_1, cte_2.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte_2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) citus_insert_select_subquery
+DEBUG:  CTE cte is going to be inlined via distributed planning
+DEBUG:  CTE cte_2 is going to be inlined via distributed planning
 SELECT * FROM target_table ORDER BY 1;
  col_1 | col_2
 ---------------------------------------------------------------------
@@ -233,6 +234,8 @@ SELECT * FROM target_table ORDER BY 1;
     10 |    11
 (10 rows)
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH inserted_table AS (
 	WITH cte AS(
 		SELECT col_1, col_2, col_3 FROM source_table_1
@@ -287,6 +290,7 @@ FROM cte, source_table_1
 WHERE cte.col_1 = source_table_1.col_1 ON CONFLICT DO NOTHING;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
+SET citus.enable_cte_inlining TO true;
 -- Tests with foreign key to reference table
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
@@ -499,6 +503,8 @@ SELECT * FROM target_table ORDER BY 1;
     10 |     0
 (10 rows)
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH cte AS(
 	SELECT col_1, col_2, col_3 FROM source_table_1
 ), cte_2 AS(

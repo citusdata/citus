@@ -559,6 +559,8 @@ INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(5,10) s);
 
 -- explain with recursive planning
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 EXPLAIN (COSTS OFF, VERBOSE true)
 WITH keys AS (
   SELECT DISTINCT l_orderkey FROM lineitem_hash_part
@@ -568,6 +570,8 @@ series AS (
 )
 SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
 ORDER BY s;
+
+SET citus.enable_cte_inlining TO true;
 
 SELECT true AS valid FROM explain_json($$
   WITH result AS (

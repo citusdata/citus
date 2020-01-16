@@ -10,6 +10,10 @@ SET citus.next_shard_id TO 840000;
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
 
+-- prevent PG 11 - PG 12 outputs to diverge
+-- and CTE inlining is not relevant to router plannery anyway
+SET citus.enable_cte_inlining TO false;
+
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,

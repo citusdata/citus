@@ -7,6 +7,8 @@ SET search_path TO subquery_in_where, public;
 SET client_min_messages TO DEBUG1;
 
 --CTEs can be used as a recurring tuple with subqueries in WHERE
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH event_id
      AS (SELECT user_id AS events_user_id,
                 time    AS events_time,
@@ -16,6 +18,7 @@ SELECT Count(*)
 FROM   event_id
 WHERE  events_user_id IN (SELECT user_id
                           FROM   users_table);
+SET citus.enable_cte_inlining TO true;
 
 --Correlated subqueries can not be used in WHERE clause
 WITH event_id

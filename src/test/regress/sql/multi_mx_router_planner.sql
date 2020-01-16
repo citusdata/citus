@@ -6,6 +6,10 @@
 
 -- run all the router queries from the one of the workers
 
+-- prevent PG 11 - PG 12 outputs to diverge
+-- and CTE inlining is not relevant to router plannery anyway
+SET citus.enable_cte_inlining TO false;
+
 \c - - - :worker_1_port
 -- this table is used in a CTE test
 CREATE TABLE authors_hash_mx ( name text, id bigint );
@@ -273,11 +277,13 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
+SET client_min_messages TO INFO;
 WITH single_shard as (SELECT * FROM articles_single_shard_hash_mx)
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash_mx a, single_shard b
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
+SET client_min_messages TO DEBUG;
 
 -- single shard select with limit is router plannable
 SELECT *

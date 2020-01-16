@@ -354,11 +354,25 @@ raw_data AS (
 )
 SELECT * FROM raw_data ORDER BY val;
 
+-- Needed becaues of CTE inlining triggering https://github.com/citusdata/citus/issues/3189
+SET citus.enable_cte_inlining TO FALSE;
 WITH added_data AS (
 	INSERT INTO modify_table VALUES (1, trunc(10 * random())), (1, trunc(random())) RETURNING *
 ),
 select_data AS (
 	SELECT val, now() FROM added_data WHERE id = 1
+),
+raw_data AS (
+	DELETE FROM modify_table WHERE id = 1 AND val IN (SELECT val FROM select_data) RETURNING *
+)
+SELECT COUNT(*) FROM raw_data;
+SET citus.enable_cte_inlining TO TRUE;
+
+WITH added_data AS (
+	INSERT INTO modify_table VALUES (1, trunc(10 * random())), (1, trunc(random())) RETURNING *
+),
+select_data AS (
+	SELECT val, '2011-01-01' FROM added_data WHERE id = 1
 ),
 raw_data AS (
 	DELETE FROM modify_table WHERE id = 1 AND val IN (SELECT val FROM select_data) RETURNING *

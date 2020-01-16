@@ -164,8 +164,9 @@ BEGIN
     RAISE EXCEPTION 'error';
 END;$$;
 select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
+\set VERBOSITY terse
 select mx_call_func_raise(2);
-
+\set VERBOSITY default
 -- Don't push-down when doing INSERT INTO ... SELECT func();
 SET client_min_messages TO ERROR;
 CREATE TABLE test (x int primary key);

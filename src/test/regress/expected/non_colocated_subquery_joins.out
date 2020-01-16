@@ -542,15 +542,17 @@ SELECT count(*) FROM q1, (SELECT
 					users_table, events_table
 				WHERE
 					users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) as bar WHERE bar.user_id = q1.user_id ;$$);
-DEBUG:  generating subplan XXX_1 for CTE q1: SELECT user_id FROM public.users_table
-DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) q1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) q1.user_id)
+DEBUG:  CTE q1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, random() AS random FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.value_2) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT users_table.user_id FROM public.users_table) q1, (SELECT intermediate_result.user_id, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, random double precision)) bar WHERE (bar.user_id OPERATOR(pg_catalog.=) q1.user_id)
  valid
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- subquery joins should work fine when used with CTEs
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 SELECT true AS valid FROM explain_json_2($$
     WITH q1 AS (SELECT user_id FROM users_table)
  SELECT count(*) FROM q1, (SELECT
@@ -566,6 +568,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
  t
 (1 row)
 
+SET citus.enable_cte_inlining TO true;
 -- should work fine within UNIONs
 SELECT true AS valid FROM explain_json_2($$
     (SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND event_type IN (1,2,3,4)) UNION
@@ -811,13 +814,12 @@ SELECT true AS valid FROM explain_json_2($$
     WHERE
         non_colocated_subquery.value_2 != non_colocated_subquery_2.cnt
 $$);
-DEBUG:  generating subplan XXX_1 for CTE non_colocated_subquery: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
+DEBUG:  CTE non_colocated_subquery is going to be inlined via distributed planning
+DEBUG:  CTE non_colocated_subquery_2 is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)
-DEBUG:  generating subplan XXX_2 for CTE non_colocated_subquery_2: SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT events_table_1.event_type FROM public.events_table events_table_1 WHERE (events_table_1.user_id OPERATOR(pg_catalog.<) 4)))
-DEBUG:  generating subplan XXX_1 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT non_colocated_subquery.value_2, non_colocated_subquery_2.cnt FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) non_colocated_subquery, (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) non_colocated_subquery_2 WHERE (non_colocated_subquery.value_2 OPERATOR(pg_catalog.<>) non_colocated_subquery_2.cnt)
+DEBUG:  generating subplan XXX_2 for subquery SELECT event_type FROM public.events_table WHERE (user_id OPERATOR(pg_catalog.<) 4)
+DEBUG:  generating subplan XXX_3 for subquery SELECT count(*) AS cnt FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.event_type FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT non_colocated_subquery.value_2, non_colocated_subquery_2.cnt FROM (SELECT foo.value_2 FROM (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])))) foo, (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) bar WHERE (foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)) non_colocated_subquery, (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) non_colocated_subquery_2 WHERE (non_colocated_subquery.value_2 OPERATOR(pg_catalog.<>) non_colocated_subquery_2.cnt)
  valid
 ---------------------------------------------------------------------
  t

@@ -233,14 +233,12 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.sum = 45;
 $Q$);
-                coordinator_plan
+          coordinator_plan
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(5 rows)
+         Task Count: 4
+(3 rows)
 
 -- Foreign keys to partition tables
 CREATE TABLE collections_list (

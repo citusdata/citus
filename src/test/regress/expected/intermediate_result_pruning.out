@@ -32,6 +32,8 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 -- load some data
 INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
 INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
