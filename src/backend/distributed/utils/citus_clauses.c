@@ -92,6 +92,7 @@ PartiallyEvaluateExpression(Node *expression, PlanState *planState)
 		case T_CoerceViaIO:
 		case T_ArrayCoerceExpr:
 		case T_ScalarArrayOpExpr:
+		case T_RowExpr:
 		case T_RowCompareExpr:
 		case T_RelabelType:
 		case T_CoerceToDomain:

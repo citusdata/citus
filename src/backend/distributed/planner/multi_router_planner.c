@@ -2559,8 +2559,9 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		if (!IsA(insertValues->partitionValueExpr, Const))
 		{
-			/* shard pruning not possible right now */
-			return NIL;
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("failed to evaluate partition key in insert"),
+							errhint("try using constant values for partition column")));
 		}
 
 		Const *partitionValueConst = (Const *) insertValues->partitionValueExpr;
