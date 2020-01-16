@@ -815,6 +815,12 @@ CoordinatedRemoteTransactionsPrepare(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
@@ -837,6 +843,12 @@ CoordinatedRemoteTransactionsPrepare(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
@@ -876,6 +888,12 @@ CoordinatedRemoteTransactionsCommit(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState == REMOTE_TRANS_NOT_STARTED ||
@@ -899,6 +917,12 @@ CoordinatedRemoteTransactionsCommit(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		/* nothing to do if not committing / aborting */
@@ -933,6 +957,12 @@ CoordinatedRemoteTransactionsAbort(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState == REMOTE_TRANS_NOT_STARTED ||
@@ -955,6 +985,12 @@ CoordinatedRemoteTransactionsAbort(void)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState != REMOTE_TRANS_1PC_ABORTING &&
@@ -985,6 +1021,12 @@ CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
@@ -1035,6 +1077,12 @@ CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
@@ -1080,6 +1128,12 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		/* cancel any ongoing queries before issuing rollback */
@@ -1117,6 +1171,12 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed && !transaction->transactionRecovering)
 		{
