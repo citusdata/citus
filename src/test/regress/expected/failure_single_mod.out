@@ -107,10 +107,11 @@ DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 COMMIT;
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT COUNT(*) FROM mod_test WHERE key=2;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 -- some clean up
@@ -120,8 +121,7 @@ WHERE shardid IN (
 ) AND shardstate = 3 RETURNING placementid;
  placementid
 ---------------------------------------------------------------------
-         125
-(1 row)
+(0 rows)
 
 TRUNCATE mod_test;
 -- ==== Clean up, we're done here ====
