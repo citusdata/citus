@@ -15,7 +15,6 @@
 
 /* enabled with GUCs*/
 extern bool EnableLocalExecution;
-extern bool EnableLocalExecutionPlanning;
 extern bool LogLocalCommands;
 
 extern bool TransactionAccessedLocalPlacement;

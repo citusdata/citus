@@ -2302,7 +2302,7 @@ CreateDummyPlacement(void)
 	static uint32 zeroShardQueryRoundRobin = 0;
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
 
-	if (!EnableLocalExecutionPlanning)
+	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
 	{
 		List *workerNodeList = ActiveReadableWorkerNodeList();
 		if (workerNodeList == NIL)

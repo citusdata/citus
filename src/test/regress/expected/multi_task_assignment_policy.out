@@ -320,36 +320,40 @@ INSERT INTO explain_outputs
 SELECT parse_explain_output($cmd$
 EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
 $cmd$, 'task_assignment_test_table_2');
--- There should be one record for local execution since the intermediate results
--- are processed only on coordinator
-SELECT DISTINCT value FROM explain_outputs;
-    value
----------------------------------------------------------------------
- 880009@57636
-(1 row)
-
-TRUNCATE explain_outputs;
--- Disable local execution and make sure it hits two different workers
-SET citus.enable_local_execution_planning TO FALSE;
->>>>>>> 49ab67564... Test case for locally executing a query that used to run on a round-robin worker
-INSERT INTO explain_outputs
-SELECT parse_explain_output($cmd$
-EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
-$cmd$, 'task_assignment_test_table_2');
-INSERT INTO explain_outputs
-SELECT parse_explain_output($cmd$
-EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
-$cmd$, 'task_assignment_test_table_2');
 -- The count should be 2 since the intermediate results are processed on
 -- different workers
-SELECT count(DISTINCT value) FROM explain_outputs;
+SELECT COUNT(DISTINCT value) FROM explain_outputs;
  count
 ---------------------------------------------------------------------
      2
 (1 row)
 
-RESET citus.enable_local_execution_planning;
-RESET citus.task_assignment_policy;
+TRUNCATE explain_outputs;
+<<<<<<< HEAD
+-- Disable local execution and make sure it hits two different workers
+SET citus.enable_local_execution_planning TO FALSE;
+>>>>>>> 49ab67564... Test case for locally executing a query that used to run on a round-robin worker
+=======
+-- Disable round-robin and make sure it is locally executed
+RESET citus.task_assignment_policy
+>>>>>>> 685c377cb... Remove EnableLocalExecutionPlanning GUC
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
+$cmd$, 'task_assignment_test_table_2');
+ERROR:  syntax error at or near "INSERT"
+INSERT INTO explain_outputs
+SELECT parse_explain_output($cmd$
+EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1
+$cmd$, 'task_assignment_test_table_2');
+-- There should be one record for local execution since the intermediate results
+-- are processed only on coordinator
+SELECT DISTINCT value FROM explain_outputs;
+    value
+---------------------------------------------------------------------
+ 880009@57638
+(1 row)
+
 RESET client_min_messages;
 DROP TABLE task_assignment_replicated_hash, task_assignment_nonreplicated_hash,
   task_assignment_reference_table, task_assignment_test_table_2, explain_outputs;

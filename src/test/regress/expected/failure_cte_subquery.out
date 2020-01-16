@@ -3,10 +3,14 @@ SET SEARCH_PATH=cte_failure;
 SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 16000000;
+<<<<<<< HEAD
 -- CTE inlining should not happen because
 -- the tests rely on intermediate results
 SET citus.enable_cte_inlining TO false;
 SET citus.enable_local_execution_planning TO OFF;
+=======
+SET citus.task_assignment_policy TO 'round-robin';
+>>>>>>> 685c377cb... Remove EnableLocalExecutionPlanning GUC
 SELECT pg_backend_pid() as pid \gset
 CREATE TABLE users_table (user_id int, user_name text);
 CREATE TABLE events_table(user_id int, event_id int, event_type int);
@@ -61,7 +65,7 @@ ERROR:  server closed the connection unexpectedly
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
 -- Verify that the query is executed locally, and we do not push the results to worker
-SET citus.enable_local_execution_planning TO ON;
+SET citus.task_assignment_policy TO 'greedy';
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -96,7 +100,7 @@ FROM
      8
 (1 row)
 
-SET citus.enable_local_execution_planning TO OFF;
+SET citus.task_assignment_policy TO 'round-robin';
 -- kill at the second copy (pull)
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.events_table_16000002").kill()');
  mitmproxy
