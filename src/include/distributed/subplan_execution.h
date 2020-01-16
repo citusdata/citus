@@ -28,6 +28,11 @@ extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
  * The nodeIdList contains a set of unique WorkerNode ids that have placements
  * that can be used in non-colocated subquery joins with the intermediate result
  * given in the key.
+ *
+ * writeLocalFile indicates if the intermediate result is accessed during local
+ * execution. Note that there can possibly be an item for the local node in the
+ * NodeIdList. To prevent race conditions, it is necessary to disregard a local
+ * entry in case this flag is set.
  */
 typedef struct IntermediateResultsHashEntry
 {
