@@ -16,6 +16,11 @@ CREATE TABLE users_table (user_id int, user_name text);
 CREATE TABLE events_table(user_id int, event_id int, event_type int);
 SELECT create_distributed_table('users_table', 'user_id');
 SELECT create_distributed_table('events_table', 'user_id');
+
+-- insert some rows
+INSERT INTO users_table VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'D'), (5, 'E');
+INSERT INTO events_table VALUES (1,1,1), (1,2,1), (1,3,1), (2,1, 4), (3, 4,1), (5, 1, 2), (5, 2, 1), (5, 2,2);
+
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 
 -- kill at the first copy (push)
@@ -211,10 +216,6 @@ FROM
 
 -- distributed update tests
 SELECT citus.mitmproxy('conn.allow()');
-
--- insert some rows
-INSERT INTO users_table VALUES (1, 'A'), (2, 'B'), (3, 'C'), (4, 'D'), (5, 'E');
-INSERT INTO events_table VALUES (1,1,1), (1,2,1), (1,3,1), (2,1, 4), (3, 4,1), (5, 1, 2), (5, 2, 1), (5, 2,2);
 
 SELECT * FROM users_table ORDER BY 1, 2;
 -- following will delete and insert the same rows
