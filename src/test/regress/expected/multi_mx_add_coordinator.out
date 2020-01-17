@@ -77,7 +77,7 @@ SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
  count
 ---------------------------------------------------------------------
      0
@@ -87,7 +87,7 @@ SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-LOG:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
  count
 ---------------------------------------------------------------------
      0
@@ -126,7 +126,7 @@ DEBUG:  Plan is router executable
 INSERT INTO ref VALUES (1);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-LOG:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
+NOTICE:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
 -- get it ready for the next executions
 TRUNCATE ref;
 -- test that changes from a metadata node is reflected in the coordinator placement

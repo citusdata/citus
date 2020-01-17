@@ -145,5 +145,37 @@ SELECT * FROM coerce_hash WHERE id = 1.0;
 
 SELECT * FROM coerce_hash WHERE id = 1.0::numeric;
 
+-- same queries with PREPARE
+PREPARE coerce_bigint(bigint) AS SELECT * FROM coerce_hash WHERE id=$1::bigint;
+PREPARE coerce_numeric(bigint) AS SELECT * FROM coerce_hash WHERE id=$1::numeric;
+PREPARE coerce_numeric_2(numeric) AS SELECT * FROM coerce_hash WHERE id=$1;
+
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+EXECUTE coerce_bigint(1);
+
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+EXECUTE coerce_numeric(1);
+
+
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+EXECUTE coerce_numeric_2(1);
+
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;

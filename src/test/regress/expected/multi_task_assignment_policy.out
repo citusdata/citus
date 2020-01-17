@@ -307,6 +307,8 @@ SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
 SET citus.task_assignment_policy TO 'round-robin';
 -- Run the query two times to make sure that it hits two different workers
 -- on consecutive runs
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 INSERT INTO explain_outputs
 SELECT parse_explain_output($cmd$
 EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1

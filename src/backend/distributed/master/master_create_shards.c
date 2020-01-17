@@ -212,14 +212,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		/*
-		 * Grabbing the shard metadata lock isn't technically necessary since
-		 * we already hold an exclusive lock on the partition table, but we'll
-		 * acquire it for the sake of completeness. As we're adding new active
-		 * placements, the mode must be exclusive.
-		 */
-		LockShardDistributionMetadata(shardId, ExclusiveLock);
-
 		InsertShardRow(distributedTableId, shardId, shardStorageType,
 					   minHashTokenText, maxHashTokenText);
 
@@ -377,14 +369,6 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
-
-	/*
-	 * Grabbing the shard metadata lock isn't technically necessary since
-	 * we already hold an exclusive lock on the partition table, but we'll
-	 * acquire it for the sake of completeness. As we're adding new active
-	 * placements, the mode must be exclusive.
-	 */
-	LockShardDistributionMetadata(shardId, ExclusiveLock);
 
 	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
 				   shardMaxValue);

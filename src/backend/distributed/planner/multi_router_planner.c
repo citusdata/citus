@@ -153,11 +153,6 @@ static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
-static uint64 GetAnchorShardId(List *relationShardList);
-static List * TargetShardIntervalForFastPathQuery(Query *query,
-												  Const **partitionValueConst,
-												  bool *isMultiShardQuery,
-												  Const *distributionKeyValue);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
@@ -165,11 +160,11 @@ static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
+static List * RemoveCoordinatorPlacement(List *placementList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
 														List *placementList);
-static List * RemoveCoordinatorPlacement(List *placementList);
 
 
 /*
@@ -247,6 +242,10 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	{
 		distributedPlan->hasReturning = true;
 	}
+
+	distributedPlan->fastPathRouterPlan =
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
+
 
 	return distributedPlan;
 }
@@ -1634,9 +1633,6 @@ ExtractFirstDistributedTableId(Query *query)
 	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
 	Oid distributedTableId = InvalidOid;
-	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
-
-	Assert(IsModifyCommand(query) || FastPathRouterQuery(query, &distKey));
 
 	foreach(rangeTableCell, rangeTableList)
 	{
@@ -1673,13 +1669,34 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	/* check if this query requires master evaluation */
 	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
+	FastPathRestrictionContext *fastPathRestrictionContext =
+		plannerRestrictionContext->fastPathRestrictionContext;
 
-	(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
-									   &placementList, &shardId, &relationShardList,
-									   &prunedShardIntervalListList,
-									   replacePrunedQueryWithDummy,
-									   &isMultiShardModifyQuery,
-									   &partitionKeyValue);
+	/*
+	 * We prefer to defer shard pruning/task generation to the
+	 * execution when the parameter on the distribution key
+	 * cannot be resolved.
+	 */
+	if (fastPathRestrictionContext->fastPathRouterQuery &&
+		fastPathRestrictionContext->distributionKeyHasParam)
+	{
+		Job *job = CreateJob(originalQuery);
+		job->deferredPruning = true;
+
+		ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
+								"query")));
+		return job;
+	}
+	else
+	{
+		(*planningError) = PlanRouterQuery(originalQuery, plannerRestrictionContext,
+										   &placementList, &shardId, &relationShardList,
+										   &prunedShardIntervalListList,
+										   replacePrunedQueryWithDummy,
+										   &isMultiShardModifyQuery,
+										   &partitionKeyValue);
+	}
+
 	if (*planningError)
 	{
 		return NULL;
@@ -1703,6 +1720,39 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		return job;
 	}
 
+	if (isMultiShardModifyQuery)
+	{
+		job->taskList = QueryPushdownSqlTaskList(originalQuery, job->jobId,
+												 plannerRestrictionContext->
+												 relationRestrictionContext,
+												 prunedShardIntervalListList,
+												 MODIFY_TASK,
+												 requiresMasterEvaluation);
+	}
+	else
+	{
+		GenerateSingleShardRouterTaskList(job, relationShardList,
+										  placementList, shardId);
+	}
+
+	job->requiresMasterEvaluation = requiresMasterEvaluation;
+	return job;
+}
+
+
+/*
+ * SingleShardRouterTaskList is a wrapper around other corresponding task
+ * list generation functions specific to single shard selects and modifications.
+ *
+ * The function updates the input job's taskList in-place.
+ */
+void
+GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
+								  List *placementList, uint64 shardId)
+{
+	Query *originalQuery = job->jobQuery;
+
+
 	if (originalQuery->commandType == CMD_SELECT)
 	{
 		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
@@ -1724,15 +1774,6 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 														placementList);
 		}
 	}
-	else if (isMultiShardModifyQuery)
-	{
-		job->taskList = QueryPushdownSqlTaskList(originalQuery, job->jobId,
-												 plannerRestrictionContext->
-												 relationRestrictionContext,
-												 prunedShardIntervalListList,
-												 MODIFY_TASK,
-												 requiresMasterEvaluation);
-	}
 	else if (shardId == INVALID_SHARD_ID)
 	{
 		/* modification that prunes to 0 shards */
@@ -1744,9 +1785,6 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 												  relationShardList, placementList,
 												  shardId);
 	}
-
-	job->requiresMasterEvaluation = requiresMasterEvaluation;
-	return job;
 }
 
 
@@ -2023,14 +2061,9 @@ PlanRouterQuery(Query *originalQuery,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
 				Const **partitionValueConst)
 {
-	static uint32 zeroShardQueryRoundRobin = 0;
-
 	bool isMultiShardQuery = false;
 	DeferredErrorMessage *planningError = NULL;
-	ListCell *prunedShardIntervalListCell = NULL;
-	List *workerList = NIL;
 	bool shardsPresent = false;
-	uint64 shardId = INVALID_SHARD_ID;
 	CmdType commandType = originalQuery->commandType;
 	bool fastPathRouterQuery =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
@@ -2065,7 +2098,7 @@ PlanRouterQuery(Query *originalQuery,
 			return planningError;
 		}
 
-		*prunedShardIntervalListList = list_make1(shardIntervalList);
+		*prunedShardIntervalListList = shardIntervalList;
 
 		if (!isMultiShardQuery)
 		{
@@ -2111,29 +2144,18 @@ PlanRouterQuery(Query *originalQuery,
 		}
 	}
 
-	foreach(prunedShardIntervalListCell, *prunedShardIntervalListList)
+	*relationShardList =
+		RelationShardListForShardIntervalList(*prunedShardIntervalListList,
+											  &shardsPresent);
+
+	if (!shardsPresent && !replacePrunedQueryWithDummy)
 	{
-		List *prunedShardIntervalList = (List *) lfirst(prunedShardIntervalListCell);
-		ListCell *shardIntervalCell = NULL;
-
-		/* no shard is present or all shards are pruned out case will be handled later */
-		if (prunedShardIntervalList == NIL)
-		{
-			continue;
-		}
-
-		shardsPresent = true;
-
-		foreach(shardIntervalCell, prunedShardIntervalList)
-		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-			RelationShard *relationShard = CitusMakeNode(RelationShard);
-
-			relationShard->relationId = shardInterval->relationId;
-			relationShard->shardId = shardInterval->shardId;
-
-			*relationShardList = lappend(*relationShardList, relationShard);
-		}
+		/*
+		 * For INSERT ... SELECT, this query could be still a valid for some other target
+		 * shard intervals. Thus, we should return empty list if there aren't any matching
+		 * workers, so that the caller can decide what to do with this task.
+		 */
+		return NULL;
 	}
 
 	/*
@@ -2149,48 +2171,11 @@ PlanRouterQuery(Query *originalQuery,
 	}
 
 	/* we need anchor shard id for select queries with router planner */
-	shardId = GetAnchorShardId(*prunedShardIntervalListList);
+	uint64 shardId = GetAnchorShardId(*prunedShardIntervalListList);
 
-	/*
-	 * Determine the worker that has all shard placements if a shard placement found.
-	 * If no shard placement exists and replacePrunedQueryWithDummy flag is set, we will
-	 * still run the query but the result will be empty. We create a dummy shard
-	 * placement for the first active worker.
-	 */
-	if (shardsPresent)
-	{
-		workerList = WorkersContainingAllShards(*prunedShardIntervalListList);
-	}
-	else if (replacePrunedQueryWithDummy)
-	{
-		List *workerNodeList = ActiveReadableWorkerNodeList();
-		if (workerNodeList != NIL)
-		{
-			int workerNodeCount = list_length(workerNodeList);
-			int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
-			WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
-															 workerNodeIndex);
-			ShardPlacement *dummyPlacement =
-				(ShardPlacement *) CitusMakeNode(ShardPlacement);
-			dummyPlacement->nodeName = workerNode->workerName;
-			dummyPlacement->nodePort = workerNode->workerPort;
-			dummyPlacement->nodeId = workerNode->nodeId;
-			dummyPlacement->groupId = workerNode->groupId;
-
-			workerList = lappend(workerList, dummyPlacement);
-
-			zeroShardQueryRoundRobin++;
-		}
-	}
-	else
-	{
-		/*
-		 * For INSERT ... SELECT, this query could be still a valid for some other target
-		 * shard intervals. Thus, we should return empty list if there aren't any matching
-		 * workers, so that the caller can decide what to do with this task.
-		 */
-		return NULL;
-	}
+	List *workerList =
+		FindRouterWorkerList(*prunedShardIntervalListList, shardsPresent,
+							 replacePrunedQueryWithDummy);
 
 	if (workerList == NIL)
 	{
@@ -2219,6 +2204,89 @@ PlanRouterQuery(Query *originalQuery,
 }
 
 
+List *
+FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
+					 bool replacePrunedQueryWithDummy)
+{
+	static uint32 zeroShardQueryRoundRobin = 0;
+
+	List *workerList = NIL;
+
+	/*
+	 * Determine the worker that has all shard placements if a shard placement found.
+	 * If no shard placement exists and replacePrunedQueryWithDummy flag is set, we will
+	 * still run the query but the result will be empty. We create a dummy shard
+	 * placement for the first active worker.
+	 */
+	if (shardsPresent)
+	{
+		workerList = WorkersContainingAllShards(shardIntervalList);
+	}
+	else if (replacePrunedQueryWithDummy)
+	{
+		List *workerNodeList = ActiveReadableWorkerNodeList();
+		if (workerNodeList != NIL)
+		{
+			int workerNodeCount = list_length(workerNodeList);
+			int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
+			WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
+															 workerNodeIndex);
+			ShardPlacement *dummyPlacement =
+				(ShardPlacement *) CitusMakeNode(ShardPlacement);
+			dummyPlacement->nodeName = workerNode->workerName;
+			dummyPlacement->nodePort = workerNode->workerPort;
+			dummyPlacement->nodeId = workerNode->nodeId;
+			dummyPlacement->groupId = workerNode->groupId;
+
+			workerList = lappend(workerList, dummyPlacement);
+
+			zeroShardQueryRoundRobin++;
+		}
+	}
+
+	return workerList;
+}
+
+
+/*
+ * RelationShardListForShardIntervalList is a utility function which gets a list of
+ * shardInterval, and returns a list of RelationShard.
+ */
+List *
+RelationShardListForShardIntervalList(List *shardIntervalList, bool *shardsPresent)
+{
+	List *relationShardList = NIL;
+	ListCell *shardIntervalListCell = NULL;
+
+	foreach(shardIntervalListCell, shardIntervalList)
+	{
+		List *prunedShardIntervalList = (List *) lfirst(shardIntervalListCell);
+
+		/* no shard is present or all shards are pruned out case will be handled later */
+		if (prunedShardIntervalList == NIL)
+		{
+			continue;
+		}
+
+		*shardsPresent = true;
+
+		ListCell *shardIntervalCell = NULL;
+		foreach(shardIntervalCell, prunedShardIntervalList)
+		{
+			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+			RelationShard *relationShard = CitusMakeNode(RelationShard);
+
+			relationShard->relationId = shardInterval->relationId;
+			relationShard->shardId = shardInterval->shardId;
+
+			relationShardList = lappend(relationShardList, relationShard);
+		}
+	}
+
+	return relationShardList;
+}
+
+
 /*
  * GetAnchorShardId returns the anchor shard id given relation shard list.
  * The desired anchor shard is found as follows:
@@ -2229,7 +2297,7 @@ PlanRouterQuery(Query *originalQuery,
  * reference tables
  * - Return INVALID_SHARD_ID on empty lists
  */
-static uint64
+uint64
 GetAnchorShardId(List *prunedShardIntervalListList)
 {
 	ListCell *prunedShardIntervalListCell = NULL;
@@ -2264,12 +2332,13 @@ GetAnchorShardId(List *prunedShardIntervalListList)
 /*
  * TargetShardIntervalForFastPathQuery gets a query which is in
  * the form defined by FastPathRouterQuery() and returns exactly
- * one shard interval (see FastPathRouterQuery() for the detail).
+ * one list of a a one shard interval (see FastPathRouterQuery()
+ * for the detail).
  *
  * Also set the outgoing partition column value if requested via
  * partitionValueConst
  */
-static List *
+List *
 TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 									bool *isMultiShardQuery, Const *distributionKeyValue)
 {
@@ -2286,7 +2355,9 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 			/* set the outgoing partition column value if requested */
 			*partitionValueConst = distributionKeyValue;
 		}
-		return list_make1(shardInterval);
+		List *shardIntervalList = list_make1(shardInterval);
+
+		return list_make1(shardIntervalList);
 	}
 
 	Node *quals = query->jointree->quals;
@@ -2297,8 +2368,8 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 					&queryPartitionValueConst);
 
 	/* we're only expecting single shard from a single table */
-	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
-	Assert(FastPathRouterQuery(query, &distKey));
+	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+	Assert(FastPathRouterQuery(query, &distKey) || !EnableFastPathRouterPlanner);
 
 	if (list_length(prunedShardIntervalList) > 1)
 	{
@@ -2311,7 +2382,7 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 		*partitionValueConst = queryPartitionValueConst;
 	}
 
-	return prunedShardIntervalList;
+	return list_make1(prunedShardIntervalList);
 }
 
 
@@ -2559,8 +2630,9 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		if (!IsA(insertValues->partitionValueExpr, Const))
 		{
-			/* shard pruning not possible right now */
-			return NIL;
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("failed to evaluate partition key in insert"),
+							errhint("try using constant values for partition column")));
 		}
 
 		Const *partitionValueConst = (Const *) insertValues->partitionValueExpr;

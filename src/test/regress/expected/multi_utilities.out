@@ -69,6 +69,18 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table');
 ERROR:  cannot delete from hash distributed table with this command
 DETAIL:  Delete statements on hash-partitioned tables are not supported with master_apply_delete_command.
 HINT:  Use the DELETE command instead.
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 999001;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
+CREATE TABLE lockable_table ( name text, id bigint );
+SELECT create_distributed_table('lockable_table', 'id', 'hash', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_count TO 2;
+SET citus.next_shard_id TO 990002;
 -- lock shard metadata: take some share locks and exclusive locks
 BEGIN;
 SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);
@@ -83,17 +95,26 @@ SELECT lock_shard_metadata(7, ARRAY[999001, 999003, 999004]);
 
 (1 row)
 
-SELECT locktype, objid, mode, granted
-FROM pg_locks
-WHERE objid IN (999001, 999002, 999003, 999004)
-ORDER BY objid, mode;
- locktype | objid  |     mode      | granted
+SELECT
+    CASE
+        WHEN l.objsubid = 5 THEN 'shard'
+        WHEN l.objsubid = 4 THEN 'shard_metadata'
+        ELSE 'colocated_shards_metadata'
+    END AS locktype,
+    objid,
+    classid,
+    mode,
+    granted
+FROM pg_locks l
+WHERE l.locktype = 'advisory'
+ORDER BY locktype, objid, classid, mode;
+         locktype          |  objid  | classid |     mode      | granted
 ---------------------------------------------------------------------
- advisory | 999001 | ExclusiveLock | t
- advisory | 999001 | ShareLock     | t
- advisory | 999002 | ShareLock     | t
- advisory | 999003 | ExclusiveLock | t
- advisory | 999004 | ExclusiveLock | t
+ colocated_shards_metadata | 1400000 |       0 | ExclusiveLock | t
+ colocated_shards_metadata | 1400000 |       0 | ShareLock     | t
+ colocated_shards_metadata | 1400000 |       1 | ShareLock     | t
+ colocated_shards_metadata | 1400000 |       2 | ExclusiveLock | t
+ colocated_shards_metadata | 1400000 |       3 | ExclusiveLock | t
 (5 rows)
 
 END;
@@ -102,11 +123,7 @@ SELECT lock_shard_metadata(0, ARRAY[990001, 999002]);
 ERROR:  unsupported lockmode 0
 -- lock shard metadata: invalid shard ID
 SELECT lock_shard_metadata(5, ARRAY[0]);
- lock_shard_metadata
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  could not find valid entry for shard xxxxx
 -- lock shard metadata: lock nothing
 SELECT lock_shard_metadata(5, ARRAY[]::bigint[]);
 ERROR:  no locks specified
@@ -153,6 +170,7 @@ SELECT lock_shard_resources(5, ARRAY[]::bigint[]);
 ERROR:  no locks specified
 -- drop table
 DROP TABLE sharded_table;
+DROP TABLE lockable_table;
 -- VACUUM tests
 -- create a table with a single shard (for convenience)
 SET citus.shard_count TO 1;

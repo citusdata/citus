@@ -10,7 +10,6 @@ SET citus.next_shard_id TO 8000000;
 SET citus.next_placement_id TO 8000000;
 
 --- enable logging to see which tasks are executed locally
-SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 
 CREATE TABLE squares(a int, b int);

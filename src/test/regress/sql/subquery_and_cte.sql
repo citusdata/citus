@@ -3,6 +3,9 @@
 -- ===================================================================
 SET search_path TO subquery_and_ctes;
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
+
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 
 CREATE TABLE dist_table (id int, value int);

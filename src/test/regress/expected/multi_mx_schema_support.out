@@ -451,3 +451,74 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table "CiTuS.TeAeN"."TeeNTabLE.1!?!"
 drop cascades to table mx_ddl_schema_2.table_2
 drop cascades to table mx_ddl_schema_1.table_1
+-- test if ALTER TABLE SET SCHEMA sets the original table in the worker
+SET search_path TO public;
+CREATE SCHEMA mx_old_schema;
+CREATE TABLE mx_old_schema.table_set_schema (id int);
+SELECT create_distributed_table('mx_old_schema.table_set_schema', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA mx_new_schema;
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+ Distributed Schemas
+---------------------------------------------------------------------
+ mx_old_schema
+(1 row)
+
+\c - - - :worker_1_port
+SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
+ Table's Schema
+---------------------------------------------------------------------
+ mx_old_schema
+(1 row)
+
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%'
+    GROUP BY table_schema;
+ Shards' Schema
+---------------------------------------------------------------------
+ mx_old_schema
+(1 row)
+
+\c - - - :master_port
+ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
+SELECT objid::oid::regnamespace as "Distributed Schemas"
+    FROM citus.pg_dist_object
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+ Distributed Schemas
+---------------------------------------------------------------------
+ mx_old_schema
+ mx_new_schema
+(2 rows)
+
+\c - - - :worker_1_port
+SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
+ Table's Schema
+---------------------------------------------------------------------
+ mx_new_schema
+(1 row)
+
+SELECT table_schema AS "Shards' Schema"
+    FROM information_schema.tables
+    WHERE table_name LIKE 'table\_set\_schema\_%'
+    GROUP BY table_schema;
+ Shards' Schema
+---------------------------------------------------------------------
+ mx_new_schema
+(1 row)
+
+\c - - - :master_port
+SELECT * FROM mx_new_schema.table_set_schema;
+ id
+---------------------------------------------------------------------
+(0 rows)
+
+DROP SCHEMA mx_old_schema CASCADE;
+DROP SCHEMA mx_new_schema CASCADE;
+NOTICE:  drop cascades to table mx_new_schema.table_set_schema

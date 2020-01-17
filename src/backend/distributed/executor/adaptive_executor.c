@@ -2294,8 +2294,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* create a session for the connection */
 		WorkerSession *session = FindOrCreateWorkerSession(workerPool, connection);
 
-		/* always poll the connection in the first round */
-		UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
+		/* immediately run the state machine to handle potential failure */
+		ConnectionStateMachine(session);
 	}
 
 	workerPool->lastConnectionOpenTime = GetCurrentTimestamp();
@@ -3490,6 +3490,15 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		placementExecution->shardCommandExecution;
 	TaskExecutionState executionState = shardCommandExecution->executionState;
 	bool failedPlacementExecutionIsOnPendingQueue = false;
+
+	if (placementExecution->executionState == PLACEMENT_EXECUTION_FAILED)
+	{
+		/*
+		 * We may mark placements as failed multiple times, but should only act
+		 * the first time. Nor should we accept success after failure.
+		 */
+		return;
+	}
 
 	/* mark the placement execution as finished */
 	if (succeeded)

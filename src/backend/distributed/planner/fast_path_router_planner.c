@@ -59,9 +59,9 @@ bool EnableFastPathRouterPlanner = true;
 
 static bool ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey);
 static bool ConjunctionContainsColumnFilter(Node *node, Var *column,
-											Const **distributionKeyValue);
+											Node **distributionKeyValue);
 static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
-										Const **distributionKeyValue);
+										Node **distributionKeyValue);
 
 
 /*
@@ -75,21 +75,6 @@ static bool DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn,
 PlannedStmt *
 FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo boundParams)
 {
-	/*
-	 * To support prepared statements for fast-path queries, we resolve the
-	 * external parameters at this point. Note that this is normally done by
-	 * eval_const_expr() in standard planner when the boundParams are avaliable.
-	 * If not avaliable, as does for all other types of queries, Citus goes
-	 * through the logic of increasing the cost of the plan and forcing
-	 * PostgreSQL to pick custom plans.
-	 *
-	 * We're also only interested in resolving the quals since we'd want to
-	 * do shard pruning based on the filter on the distribution column.
-	 */
-	originalQuery->jointree->quals =
-		ResolveExternalParams((Node *) originalQuery->jointree->quals,
-							  copyParamList(boundParams));
-
 	/*
 	 * Citus planner relies on some of the transformations on constant
 	 * evaluation on the parse tree.
@@ -124,7 +109,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	SeqScan *seqScanNode = makeNode(SeqScan);
 	Plan *plan = &seqScanNode->plan;
 
-	Const *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
+	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
 
 	AssertArg(FastPathRouterQuery(parse, &distKey));
 
@@ -171,7 +156,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
  *     don't have any sublinks/CTEs etc
  */
 bool
-FastPathRouterQuery(Query *query, Const **distributionKeyValue)
+FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 {
 	FromExpr *joinTree = query->jointree;
 	Node *quals = NULL;
@@ -307,7 +292,7 @@ ColumnAppearsMultipleTimes(Node *quals, Var *distributionKey)
  * If the conjuction contains column filter which is const, distributionKeyValue is set.
  */
 static bool
-ConjunctionContainsColumnFilter(Node *node, Var *column, Const **distributionKeyValue)
+ConjunctionContainsColumnFilter(Node *node, Var *column, Node **distributionKeyValue)
 {
 	if (node == NULL)
 	{
@@ -369,7 +354,7 @@ ConjunctionContainsColumnFilter(Node *node, Var *column, Const **distributionKey
  * When a const is found, distributionKeyValue is set.
  */
 static bool
-DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Const **distributionKeyValue)
+DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Node **distributionKeyValue)
 {
 	Node *leftOperand = NULL;
 	Node *rightOperand = NULL;
@@ -436,7 +421,11 @@ DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Const **distributionK
 		*distributionKeyValue == NULL)
 	{
 		/* if the vartypes do not match, let shard pruning handle it later */
-		*distributionKeyValue = copyObject(constantClause);
+		*distributionKeyValue = (Node *) copyObject(constantClause);
+	}
+	else if (paramClause != NULL)
+	{
+		*distributionKeyValue = (Node *) copyObject(paramClause);
 	}
 
 	return distColumnExists;

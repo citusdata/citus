@@ -145,6 +145,30 @@ $$ LANGUAGE SQL;
 
 SELECT declares_cursor(5);
 
+-- Test DECLARE CURSOR .. WITH HOLD without parameter
+CREATE OR REPLACE FUNCTION declares_cursor_2()
+RETURNS void AS $$
+	DECLARE c2 CURSOR WITH HOLD FOR SELECT * FROM cursor_me;
+$$ LANGUAGE SQL;
+
+SELECT declares_cursor_2();
+
+-- Test DECLARE CURSOR .. WITH HOLD with parameter on non-dist key
+CREATE OR REPLACE FUNCTION declares_cursor_3(p int)
+RETURNS void AS $$
+	DECLARE c3 CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE y = $1;
+$$ LANGUAGE SQL;
+
+SELECT declares_cursor_3(19);
+
+-- Test DECLARE CURSOR .. WITH HOLD with parameter on dist key, but not fast-path planner
+CREATE OR REPLACE FUNCTION declares_cursor_4(p int)
+RETURNS void AS $$
+	DECLARE c4 CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
+$$ LANGUAGE SQL;
+
+SELECT declares_cursor_4(19);
+
 CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
 RETURNS SETOF int AS $$
 DECLARE

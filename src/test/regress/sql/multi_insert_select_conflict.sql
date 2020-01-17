@@ -103,11 +103,15 @@ WITH inserted_table AS (
 	ON CONFLICT(col_1) DO UPDATE SET col_2 = 0 RETURNING *
 ) SELECT * FROM inserted_table ORDER BY 1;
 
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
+
 -- Get the select part from cte and do nothing on conflict
 WITH cte AS(
 	SELECT col_1, col_2 FROM source_table_1
 )
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT DO NOTHING;
+
 
 -- Get the select part from cte and update on conflict
 WITH cte AS(
@@ -115,6 +119,8 @@ WITH cte AS(
 )
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 SELECT * FROM target_table ORDER BY 1;
+
+SET citus.enable_cte_inlining TO true;
 
 -- Test with multiple CTEs
 WITH cte AS(
@@ -124,6 +130,9 @@ WITH cte AS(
 )
 INSERT INTO target_table ((SELECT * FROM cte) UNION (SELECT * FROM cte_2)) ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 SELECT * FROM target_table ORDER BY 1;
+
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 
 WITH inserted_table AS (
 	WITH cte AS(
@@ -158,6 +167,8 @@ SELECT
 	source_table_1.col_2
 FROM cte, source_table_1
 WHERE cte.col_1 = source_table_1.col_1 ON CONFLICT DO NOTHING;
+
+SET citus.enable_cte_inlining TO true;
 
 -- Tests with foreign key to reference table
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
@@ -287,6 +298,9 @@ FROM (
 ) as foo
 ON CONFLICT(col_1) DO UPDATE SET col_2 = 0;
 SELECT * FROM target_table ORDER BY 1;
+
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 
 WITH cte AS(
 	SELECT col_1, col_2, col_3 FROM source_table_1

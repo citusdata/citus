@@ -72,7 +72,7 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 
 			deparse_shard_query(query, InvalidOid, 0, buffer);
 
-			elog(INFO, "query: %s", ApplyLogRedaction(buffer->data));
+			elog(INFO, "query: %s", buffer->data);
 		}
 	}
 

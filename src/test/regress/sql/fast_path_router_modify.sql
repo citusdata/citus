@@ -99,6 +99,7 @@ EXECUTE p1(3,3,3);
 EXECUTE p1(4,4,4);
 EXECUTE p1(5,5,5);
 EXECUTE p1(6,6,6);
+EXECUTE p1(7,7,7);
 
 CREATE FUNCTION modify_fast_path_plpsql(int, int) RETURNS void as $$
 BEGIN
@@ -114,6 +115,62 @@ SELECT modify_fast_path_plpsql(5,5);
 SELECT modify_fast_path_plpsql(6,6);
 SELECT modify_fast_path_plpsql(6,6);
 
-RESET client_min_messages;
+-- prepared statements with zero shard
+PREPARE prepared_zero_shard_select(int) AS SELECT count(*) FROM modify_fast_path WHERE key = $1 AND false;
+PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 = 1 WHERE key = $1 AND false;
+SET client_min_messages TO DEBUG2;
+SET citus.log_remote_commands TO ON;
+EXECUTE prepared_zero_shard_select(1);
+EXECUTE prepared_zero_shard_select(2);
+EXECUTE prepared_zero_shard_select(3);
+EXECUTE prepared_zero_shard_select(4);
+EXECUTE prepared_zero_shard_select(5);
+EXECUTE prepared_zero_shard_select(6);
+EXECUTE prepared_zero_shard_select(7);
 
+EXECUTE prepared_zero_shard_update(1);
+EXECUTE prepared_zero_shard_update(2);
+EXECUTE prepared_zero_shard_update(3);
+EXECUTE prepared_zero_shard_update(4);
+EXECUTE prepared_zero_shard_update(5);
+EXECUTE prepared_zero_shard_update(6);
+EXECUTE prepared_zero_shard_update(7);
+
+-- same test with fast-path disabled
+SET citus.enable_fast_path_router_planner TO FALSE;
+
+EXECUTE prepared_zero_shard_select(1);
+EXECUTE prepared_zero_shard_select(2);
+
+EXECUTE prepared_zero_shard_update(1);
+EXECUTE prepared_zero_shard_update(2);
+
+DEALLOCATE prepared_zero_shard_select;
+DEALLOCATE prepared_zero_shard_update;
+
+PREPARE prepared_zero_shard_select(int) AS SELECT count(*) FROM modify_fast_path WHERE key = $1 AND false;
+PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 = 1 WHERE key = $1 AND false;
+
+EXECUTE prepared_zero_shard_select(1);
+EXECUTE prepared_zero_shard_select(2);
+EXECUTE prepared_zero_shard_select(3);
+EXECUTE prepared_zero_shard_select(4);
+EXECUTE prepared_zero_shard_select(5);
+EXECUTE prepared_zero_shard_select(6);
+EXECUTE prepared_zero_shard_select(7);
+
+EXECUTE prepared_zero_shard_update(1);
+EXECUTE prepared_zero_shard_update(2);
+EXECUTE prepared_zero_shard_update(3);
+EXECUTE prepared_zero_shard_update(4);
+EXECUTE prepared_zero_shard_update(5);
+EXECUTE prepared_zero_shard_update(6);
+EXECUTE prepared_zero_shard_update(7);
+
+-- same test with fast-path disabled
+-- reset back to the original value, in case any new test comes after
+RESET citus.enable_fast_path_router_planner;
+
+RESET client_min_messages;
+RESET citus.log_remote_commands;
 DROP SCHEMA fast_path_router_modify CASCADE;

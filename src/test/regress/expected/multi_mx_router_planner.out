@@ -2,6 +2,9 @@
 -- test router planner functionality for single shard select queries
 -- ===================================================================
 -- run all the router queries from the one of the workers
+-- prevent PG 11 - PG 12 outputs to diverge
+-- and CTE inlining is not relevant to router plannery anyway
+SET citus.enable_cte_inlining TO false;
 \c - - - :worker_1_port
 -- this table is used in a CTE test
 CREATE TABLE authors_hash_mx ( name text, id bigint );
@@ -226,6 +229,7 @@ DEBUG:  Plan is router executable
 -- queries with CTEs are supported
 WITH first_author AS ( SELECT id FROM articles_hash_mx WHERE author_id = 1)
 SELECT * FROM first_author;
+DEBUG:  CTE first_author is going to be inlined via distributed planning
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
@@ -257,6 +261,8 @@ DETAIL:  distribution column value: 1
 WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  CTE id_author is going to be inlined via distributed planning
+DEBUG:  CTE id_title is going to be inlined via distributed planning
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
@@ -272,6 +278,8 @@ DETAIL:  distribution column value: 1
 WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 3)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  CTE id_author is going to be inlined via distributed planning
+DEBUG:  CTE id_title is going to be inlined via distributed planning
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id | id | title
@@ -282,18 +290,17 @@ DEBUG:  Plan is router executable
 WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  CTE id_author is going to be inlined via distributed planning
+DEBUG:  CTE id_title is going to be inlined via distributed planning
 DEBUG:  cannot run command which targets multiple shards
-DEBUG:  generating subplan XXX_1 for CTE id_author: SELECT id, author_id FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 1)
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
-DEBUG:  generating subplan XXX_2 for CTE id_title: SELECT id, title FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 2)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT intermediate_result.id, intermediate_result.author_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM public.articles_hash_mx WHERE (author_id OPERATOR(pg_catalog.=) 2)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT id_author.id, id_author.author_id, id_title.id, id_title.title FROM (SELECT articles_hash_mx.id, articles_hash_mx.author_id FROM public.articles_hash_mx WHERE (articles_hash_mx.author_id OPERATOR(pg_catalog.=) 1)) id_author, (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title character varying(20))) id_title WHERE (id_author.id OPERATOR(pg_catalog.=) id_title.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
  id | author_id | id | title
 ---------------------------------------------------------------------
 (0 rows)
@@ -610,24 +617,17 @@ DETAIL:  distribution column value: 10
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
+SET client_min_messages TO INFO;
 WITH single_shard as (SELECT * FROM articles_single_shard_hash_mx)
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash_mx a, single_shard b
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
-DEBUG:  Found no worker with all shard placements
-DEBUG:  found no worker with all shard placements
-DEBUG:  generating subplan XXX_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash_mx
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a.author_id AS first_author, b.word_count AS second_word_count FROM public.articles_hash_mx a, (SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer)) b WHERE ((a.author_id OPERATOR(pg_catalog.=) 2) AND (a.author_id OPERATOR(pg_catalog.=) b.author_id)) LIMIT 3
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
  first_author | second_word_count
 ---------------------------------------------------------------------
 (0 rows)
 
+SET client_min_messages TO DEBUG;
 -- single shard select with limit is router plannable
 SELECT *
 	FROM articles_hash_mx

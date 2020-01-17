@@ -920,24 +920,36 @@ TRUNCATE partitioning_locks;
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
 COMMIT;
 
+CREATE VIEW lockinfo AS
+    SELECT
+        logicalrelid,
+        CASE
+            WHEN l.objsubid = 5 THEN 'shard'
+            WHEN l.objsubid = 4 THEN 'shard_metadata'
+            ELSE 'colocated_shards_metadata'
+        END AS locktype,
+        mode
+    FROM
+        pg_locks AS l JOIN (select row_number() over (partition by logicalrelid order by shardminvalue) -1 as shardintervalindex, * from pg_dist_shard) AS s
+    ON
+        (l.objsubid IN (4, 5) AND l.objid = s.shardid )
+        OR (l.objsubid = 8
+            AND l.objid IN (select colocationid from pg_dist_partition AS p where p.logicalrelid = s.logicalrelid)
+            AND l.classid = shardintervalindex
+        )
+    WHERE
+        logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010')
+        AND pid = pg_backend_pid()
+        AND l.locktype = 'advisory'
+    ORDER BY
+        1, 2, 3;
+
 -- test shard resource locks with multi-shard UPDATE
 BEGIN;
 UPDATE partitioning_locks_2009 SET time = '2009-03-01';
 
 -- see the locks on parent table
-SELECT
-    logicalrelid,
-    locktype,
-    mode
-FROM
-    pg_locks AS l JOIN pg_dist_shard AS s
-ON
-    l.objid = s.shardid
-WHERE
-    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
-    pid = pg_backend_pid()
-ORDER BY
-    1, 2, 3;
+SELECT * FROM lockinfo;
 COMMIT;
 
 -- test shard resource locks with TRUNCATE
@@ -945,19 +957,7 @@ BEGIN;
 TRUNCATE partitioning_locks_2009;
 
 -- see the locks on parent table
-SELECT
-    logicalrelid,
-    locktype,
-    mode
-FROM
-    pg_locks AS l JOIN pg_dist_shard AS s
-ON
-    l.objid = s.shardid
-WHERE
-    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
-    pid = pg_backend_pid()
-ORDER BY
-    1, 2, 3;
+SELECT * FROM lockinfo;
 COMMIT;
 
 -- test shard resource locks with INSERT/SELECT
@@ -965,19 +965,7 @@ BEGIN;
 INSERT INTO partitioning_locks_2009 SELECT * FROM partitioning_locks WHERE time >= '2009-01-01' AND time < '2010-01-01';
 
 -- see the locks on parent table
-SELECT
-    logicalrelid,
-    locktype,
-    mode
-FROM
-    pg_locks AS l JOIN pg_dist_shard AS s
-ON
-    l.objid = s.shardid
-WHERE
-    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
-    pid = pg_backend_pid()
-ORDER BY
-    1, 2, 3;
+SELECT * FROM lockinfo;
 COMMIT;
 
 -- test partition-wise join
@@ -1026,6 +1014,7 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 RESET enable_partitionwise_join;
 
+DROP VIEW lockinfo;
 DROP TABLE
 IF EXISTS
     partitioning_test_2009,

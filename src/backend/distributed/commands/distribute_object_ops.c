@@ -85,13 +85,6 @@ static DistributeObjectOps Any_AlterFunction = {
 	.postprocess = NULL,
 	.address = AlterFunctionStmtObjectAddress,
 };
-static DistributeObjectOps Any_AlterObjectSchema = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterTableSchemaStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
 static DistributeObjectOps Any_AlterPolicy = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -386,6 +379,13 @@ static DistributeObjectOps Table_AlterTable = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+static DistributeObjectOps Table_AlterObjectSchema = {
+	.deparse = DeparseAlterTableSchemaStmt,
+	.qualify = QualifyAlterTableSchemaStmt,
+	.preprocess = PreprocessAlterTableSchemaStmt,
+	.postprocess = PostprocessAlterTableSchemaStmt,
+	.address = AlterTableSchemaStmtObjectAddress,
+};
 static DistributeObjectOps Table_Drop = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -522,6 +522,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterObjectSchema;
 				}
 
+				case OBJECT_TABLE:
+				{
+					return &Table_AlterObjectSchema;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterObjectSchema;
@@ -529,7 +534,7 @@ GetDistributeObjectOps(Node *node)
 
 				default:
 				{
-					return &Any_AlterObjectSchema;
+					return &NoDistributeOps;
 				}
 			}
 		}

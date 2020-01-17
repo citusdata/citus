@@ -96,6 +96,11 @@ typedef struct FastPathRestrictionContext
 	 * key contains parameter, so check for it before using.
 	 */
 	Const *distributionKeyValue;
+
+	/*
+	 * Set to true when distKey = Param; in the queryTree
+	 */
+	bool distributionKeyHasParam;
 }FastPathRestrictionContext;
 
 typedef struct PlannerRestrictionContext

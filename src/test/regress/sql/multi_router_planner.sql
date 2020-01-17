@@ -10,6 +10,10 @@ SET citus.next_shard_id TO 840000;
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
 
+-- prevent PG 11 - PG 12 outputs to diverge
+-- and CTE inlining is not relevant to router plannery anyway
+SET citus.enable_cte_inlining TO false;
+
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -785,6 +789,8 @@ UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :s
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
 
+SET citus.log_remote_commands TO on;
+
 -- single shard select queries are router plannable
 SELECT * FROM articles_range where author_id = 1;
 SELECT * FROM articles_range where author_id = 1 or author_id = 5;
@@ -799,6 +805,8 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 -- zero shard join is router plannable
 SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1 and au.id = 2;
+
+RESET citus.log_remote_commands;
 
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns

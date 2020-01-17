@@ -5,6 +5,10 @@ SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 16000000;
 
+-- CTE inlining should not happen because
+-- the tests rely on intermediate results
+SET citus.enable_cte_inlining TO false;
+
 SELECT pg_backend_pid() as pid \gset
 
 CREATE TABLE users_table (user_id int, user_name text);

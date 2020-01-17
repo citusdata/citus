@@ -5,6 +5,8 @@ CREATE SCHEMA subquery_in_where;
 SET search_path TO subquery_in_where, public;
 SET client_min_messages TO DEBUG1;
 --CTEs can be used as a recurring tuple with subqueries in WHERE
+-- prevent PG 11 - PG 12 outputs to diverge
+SET citus.enable_cte_inlining TO false;
 WITH event_id
      AS (SELECT user_id AS events_user_id,
                 time    AS events_time,
@@ -22,6 +24,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
+SET citus.enable_cte_inlining TO true;
 --Correlated subqueries can not be used in WHERE clause
 WITH event_id
      AS (SELECT user_id AS events_user_id,
@@ -33,6 +36,7 @@ FROM   event_id
 WHERE  events_user_id IN (SELECT user_id
                           FROM   users_table
                           WHERE  users_table.time = events_time);
+DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM public.users_table WHERE (users_table."time" OPERATOR(pg_catalog.=) event_id.events_time)))
 ERROR:  cannot pushdown the subquery
@@ -71,14 +75,15 @@ WHERE  events_user_id IN (
         FROM users_table
         ORDER BY 1
         limit 10));
+DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  push down of limit count: 10
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
 DEBUG:  push down of limit count: 10
 DEBUG:  generating subplan XXX_2 for subquery SELECT value_1 FROM public.users_table ORDER BY value_1 LIMIT 10
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)
-DEBUG:  generating subplan XXX_4 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
-DEBUG:  generating subplan XXX_5 for subquery SELECT events_user_id, events_time, event_type FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id ORDER BY events_user_id, events_time, event_type LIMIT 10
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) sub_table WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_4 for subquery SELECT events_user_id, events_time, event_type FROM (SELECT events_table.user_id AS events_user_id, events_table."time" AS events_time, events_table.event_type FROM public.events_table) event_id ORDER BY events_user_id, events_time, event_type LIMIT 10
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) sub_table WHERE (events_user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)))
  count
 ---------------------------------------------------------------------
     10
@@ -129,14 +134,15 @@ IN
 	LIMIT
 		10
 	);
-DEBUG:  generating subplan XXX_1 for CTE event_id: SELECT user_id AS events_user_id, "time" AS events_time, event_type FROM public.events_table
-DEBUG:  generating subplan XXX_2 for subquery SELECT events_user_id FROM (SELECT intermediate_result.events_user_id, intermediate_result.events_time, intermediate_result.event_type FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer, events_time timestamp without time zone, event_type integer)) event_id ORDER BY events_user_id LIMIT 10
+DEBUG:  CTE event_id is going to be inlined via distributed planning
 DEBUG:  push down of limit count: 10
-DEBUG:  generating subplan XXX_3 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  generating subplan XXX_1 for subquery SELECT events_user_id FROM (SELECT events_table.user_id AS events_user_id, events_table."time" AS events_time, events_table.event_type FROM public.events_table) event_id ORDER BY events_user_id LIMIT 10
 DEBUG:  push down of limit count: 10
-DEBUG:  generating subplan XXX_4 for subquery SELECT value_1 FROM public.users_table ORDER BY value_1 LIMIT 10
-DEBUG:  generating subplan XXX_5 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.events_user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer)))
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.users_table ORDER BY user_id LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_3 for subquery SELECT value_1 FROM public.users_table ORDER BY value_1 LIMIT 10
+DEBUG:  generating subplan XXX_4 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.events_user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(events_user_id integer)))
  user_id
 ---------------------------------------------------------------------
        1
@@ -324,12 +330,12 @@ SELECT
 	COUNT(*)
 FROM
 	cte;
-DEBUG:  generating subplan XXX_1 for CTE cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM public.users_table ORDER BY users_table.user_id, users_table.value_2 DESC LIMIT 10) sub_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT events_table.value_2 FROM public.events_table))
+DEBUG:  CTE cte is going to be inlined via distributed planning
 DEBUG:  push down of limit count: 10
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table ORDER BY user_id, value_2 DESC LIMIT 10
 DEBUG:  generating subplan XXX_2 for subquery SELECT value_2 FROM public.events_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) sub_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte
+DEBUG:  generating subplan XXX_3 for subquery SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) sub_table WHERE (user_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte
  count
 ---------------------------------------------------------------------
     10

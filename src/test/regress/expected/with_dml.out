@@ -97,7 +97,8 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  generating subplan XXX_1 for CTE ids_to_insert: SELECT (((tenant_id)::integer OPERATOR(pg_catalog.*) 100))::text AS tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.>) 7)
+DEBUG:  CTE ids_to_insert is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT (((tenant_id)::integer OPERATOR(pg_catalog.*) 100))::text AS tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.>) 7)
 DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT ids_to_insert.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_insert, with_dml.distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) ids_to_insert.tenant_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) citus_insert_select_subquery
 -- not a very meaningful query
@@ -145,7 +146,8 @@ SET dept =
 		SELECT DISTINCT tenant_id::int FROM distributed_table
 		) select * from vals where tenant_id = 8 )
 		WHERE dept = 8;
-DEBUG:  generating subplan XXX_1 for CTE vals: SELECT DISTINCT (tenant_id)::integer AS tenant_id FROM with_dml.distributed_table
+DEBUG:  CTE vals is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT (tenant_id)::integer AS tenant_id FROM with_dml.distributed_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE with_dml.second_distributed_table SET dept = (SELECT vals.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id integer)) vals WHERE (vals.tenant_id OPERATOR(pg_catalog.=) 8)) WHERE (dept OPERATOR(pg_catalog.=) 8)
 -- Subquery inside the UPDATE statement
 UPDATE
