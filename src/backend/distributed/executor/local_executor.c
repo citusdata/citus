@@ -143,7 +143,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		char *shardQueryString = NULL;
 
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
@@ -153,10 +152,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 */
 		if (localPlan != NULL)
 		{
-			shardQueryString = task->queryStringLazy
-							   ? task->queryStringLazy
-							   : "<optimized out by local execution>";
-
 			Query *jobQuery = distributedPlan->workerJob->jobQuery;
 			LOCKMODE lockMode =
 				IsModifyCommand(jobQuery) ? RowExclusiveLock : (jobQuery->hasForUpdate ?
@@ -171,9 +166,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		}
 		else
 		{
-			shardQueryString = TaskQueryString(task);
-
-			Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes,
+			Query *shardQuery = ParseQueryString(TaskQueryString(task), parameterTypes,
 												 numParams);
 
 			/*
@@ -196,6 +189,10 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		}
 
 		LogLocalCommand(task);
+
+		char *shardQueryString = task->queryStringLazy
+								 ? task->queryStringLazy
+								 : "<optimized out by local execution>";
 
 		totalRowsProcessed +=
 			ExecuteLocalTaskPlan(scanState, localPlan, shardQueryString);
