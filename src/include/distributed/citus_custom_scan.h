@@ -42,4 +42,6 @@ extern EState * ScanStateGetExecutorState(CitusScanState *scanState);
 extern CustomScan * FetchCitusCustomScanIfExists(Plan *plan);
 extern bool IsCitusPlan(Plan *plan);
 extern bool IsCitusCustomScan(Plan *plan);
+
+extern PlannedStmt * GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan);
 #endif /* CITUS_CUSTOM_SCAN_H */

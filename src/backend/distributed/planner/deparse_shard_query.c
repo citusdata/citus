@@ -265,6 +265,81 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 
 /*
+ * UpdateRelationsToLocalShardTables walks over the query tree and appends shard ids to
+ * relations. The caller is responsible for ensuring that the resulting Query can
+ * be executed locally.
+ */
+bool
+UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* want to look at all RTEs, even in subqueries, CTEs and such */
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, UpdateRelationsToLocalShardTables,
+								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateRelationsToLocalShardTables,
+									  relationShardList);
+	}
+
+	RangeTblEntry *newRte = (RangeTblEntry *) node;
+
+	if (newRte->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	/*
+	 * Search for the restrictions associated with the RTE. There better be
+	 * some, otherwise this query wouldn't be elegible as a router query.
+	 *
+	 * FIXME: We should probably use a hashtable here, to do efficient
+	 * lookup.
+	 */
+	ListCell *relationShardCell = NULL;
+	RelationShard *relationShard = NULL;
+
+	foreach(relationShardCell, relationShardList)
+	{
+		relationShard = (RelationShard *) lfirst(relationShardCell);
+
+		if (newRte->relid == relationShard->relationId)
+		{
+			break;
+		}
+
+		relationShard = NULL;
+	}
+
+	/* the function should only be called with local shards */
+	if (relationShard == NULL)
+	{
+		return true;
+	}
+
+	uint64 shardId = relationShard->shardId;
+	Oid relationId = relationShard->relationId;
+
+	char *relationName = get_rel_name(relationId);
+	AppendShardIdToName(&relationName, shardId);
+
+	Oid schemaId = get_rel_namespace(relationId);
+
+	newRte->relid = get_relname_relid(relationName, schemaId);
+
+	return false;
+}
+
+
+/*
  * ConvertRteToSubqueryWithEmptyResult converts given relation RTE into
  * subquery RTE that returns no results.
  */

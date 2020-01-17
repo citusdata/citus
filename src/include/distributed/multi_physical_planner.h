@@ -117,6 +117,21 @@ typedef enum RowModifyLevel
 	ROW_MODIFY_NONCOMMUTATIVE = 3
 } RowModifyLevel;
 
+
+/*
+ * LocalPlannedStatement represents a local plan of a shard. The scope
+ * for the LocalPlannedStatement is Task.
+ */
+typedef struct LocalPlannedStatement
+{
+	CitusNode type;
+
+	uint64 shardId;
+	uint32 localGroupId;
+	PlannedStmt *localPlan;
+} LocalPlannedStatement;
+
+
 /*
  * Job represents a logical unit of work that contains one set of data transfers
  * in our physical plan. The physical planner maps each SQL query into one or
@@ -135,6 +150,9 @@ typedef struct Job
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
 	Const *partitionKeyValue;
+
+	/* for local shard queries, we may save the local plan here */
+	List *localPlannedStatements;
 } Job;
 
 
