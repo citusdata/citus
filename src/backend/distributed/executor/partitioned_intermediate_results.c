@@ -149,7 +149,7 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	UseCoordinatedTransaction();
+	EnsureDistributedTransactionId();
 
 	CreateIntermediateResultsDirectory();
 

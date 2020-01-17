@@ -188,12 +188,14 @@ ROLLBACK;
 
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;
-	INSERT INTO
-		target_table
-	SELECT
-		col_2,
-		col_1
-	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
+	WITH r AS (
+		INSERT INTO
+			target_table
+		SELECT
+			col_2,
+			col_1
+		FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *)
+	SELECT * FROM r ORDER BY col_1;
 ROLLBACK;
 
 -- Following two queries are supported since we no not modify but only select from

@@ -32,6 +32,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/cte_inline.h"
 #include "distributed/distributed_deadlock_detection.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
@@ -453,6 +454,16 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&EnableSingleHashRepartitioning,
 		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_repartitioned_insert_select",
+		gettext_noop("Enables repartitioned INSERT/SELECTs"),
+		NULL,
+		&EnableRepartitionedInsertSelect,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
