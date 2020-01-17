@@ -1,7 +1,9 @@
 #ifndef ADAPTIVE_EXECUTOR_H
 #define ADAPTIVE_EXECUTOR_H
 
-#include "server/funcapi.h"
+#include "postgres.h"
+#include "funcapi.h"
+
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 
