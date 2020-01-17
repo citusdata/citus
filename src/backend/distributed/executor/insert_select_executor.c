@@ -1057,6 +1057,12 @@ IsRedistributablePlan(Plan *selectPlan)
 		return false;
 	}
 
+	/* don't use redistribution for repartition joins for now */
+	if (distSelectJob->dependentJobList != NIL)
+	{
+		return false;
+	}
+
 	return true;
 }
 

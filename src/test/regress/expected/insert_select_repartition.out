@@ -978,5 +978,21 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
 (8 rows)
 
 DROP TABLE source_table, target_table;
+--
+-- Don't use INSERT/SELECT repartition with repartition joins
+--
+create table test(x int, y int);
+select create_distributed_table('test', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+set citus.enable_repartition_joins to true;
+SET client_min_messages TO DEBUG1;
+insert into test(y, x) select a.x, b.y from test a JOIN test b USING (y);
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

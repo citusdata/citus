@@ -452,5 +452,17 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
 
 DROP TABLE source_table, target_table;
 
+--
+-- Don't use INSERT/SELECT repartition with repartition joins
+--
+
+create table test(x int, y int);
+select create_distributed_table('test', 'x');
+set citus.enable_repartition_joins to true;
+
+SET client_min_messages TO DEBUG1;
+insert into test(y, x) select a.x, b.y from test a JOIN test b USING (y);
+RESET client_min_messages;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
