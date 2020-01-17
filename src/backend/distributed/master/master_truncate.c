@@ -16,6 +16,7 @@
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
@@ -116,8 +117,7 @@ TruncateTaskList(Oid relationId)
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = shardQueryString->data;
+		SetTaskQueryString(task, shardQueryString->data);
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;

@@ -353,6 +353,19 @@ SetTaskQuery(Task *task, Query *query)
 
 
 /*
+ * SetTaskQueryString attaches the query string to the task so that it can be
+ * used during execution. It also unsets queryForLocalExecution to be sure
+ * these are kept in sync.
+ */
+void
+SetTaskQueryString(Task *task, char *queryString)
+{
+	task->queryForLocalExecution = NULL;
+	task->queryStringLazy = queryString;
+}
+
+
+/*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
 static char *

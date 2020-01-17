@@ -24,6 +24,7 @@
 extern void RebuildQueryStrings(Query *originalQuery, List *taskList);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern void SetTaskQuery(Task *task, Query *query);
+extern void SetTaskQueryString(Task *task, char *queryString);
 extern char * TaskQueryString(Task *task);
 
 

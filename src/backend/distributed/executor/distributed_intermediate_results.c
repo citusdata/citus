@@ -230,8 +230,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
 
-		selectTask->queryForLocalExecution = NULL;
-		selectTask->queryStringLazy = NULL;
+		SetTaskQueryString(selectTask, NULL);
 		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}
 }
@@ -548,7 +547,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 
 		Task *task = CitusMakeNode(Task);
 		task->taskType = SELECT_TASK;
-		task->queryStringLazy = QueryStringForFragmentsTransfer(fragmentsTransfer);
+		SetTaskQueryString(task, QueryStringForFragmentsTransfer(fragmentsTransfer));
 		task->taskPlacementList = list_make1(targetPlacement);
 
 		fetchTaskList = lappend(fetchTaskList, task);

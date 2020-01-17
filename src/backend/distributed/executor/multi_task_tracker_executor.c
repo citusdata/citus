@@ -1061,8 +1061,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 
 				StringInfo mapFetchTaskQueryString = MapFetchTaskQueryString(task,
 																			 mapTask);
-				task->queryForLocalExecution = NULL;
-				task->queryStringLazy = mapFetchTaskQueryString->data;
+				SetTaskQueryString(task, mapFetchTaskQueryString->data);
 				taskExecution->querySourceNodeIndex = mapTaskExecution->currentNodeIndex;
 			}
 
@@ -2733,8 +2732,7 @@ JobCleanupTask(uint64 jobId)
 	jobCleanupTask->jobId = jobId;
 	jobCleanupTask->taskId = JOB_CLEANUP_TASK_ID;
 	jobCleanupTask->replicationModel = REPLICATION_MODEL_INVALID;
-	jobCleanupTask->queryForLocalExecution = NULL;
-	jobCleanupTask->queryStringLazy = jobCleanupQuery->data;
+	SetTaskQueryString(jobCleanupTask, jobCleanupQuery->data);
 
 	return jobCleanupTask;
 }

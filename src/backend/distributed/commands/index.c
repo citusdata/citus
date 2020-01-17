@@ -23,6 +23,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -528,8 +529,7 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		SetTaskQueryString(task, pstrdup(ddlString.data));
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -574,8 +574,7 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		SetTaskQueryString(task, pstrdup(ddlString.data));
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
@@ -905,8 +904,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = pstrdup(ddlString.data);
+		SetTaskQueryString(task, pstrdup(ddlString.data));
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;

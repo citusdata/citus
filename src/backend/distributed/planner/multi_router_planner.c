@@ -1606,8 +1606,7 @@ CreateTask(TaskType taskType)
 	task->taskType = taskType;
 	task->jobId = INVALID_JOB_ID;
 	task->taskId = INVALID_TASK_ID;
-	task->queryForLocalExecution = NULL;
-	task->queryStringLazy = NULL;
+	SetTaskQueryString(task, NULL);
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
 	task->dependentTaskList = NIL;

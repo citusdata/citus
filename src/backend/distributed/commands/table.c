@@ -23,6 +23,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -1379,8 +1380,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = applyCommand->data;
+		SetTaskQueryString(task, applyCommand->data);
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;

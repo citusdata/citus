@@ -30,6 +30,7 @@
 #include "distributed/commands.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
@@ -515,8 +516,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = StringJoin(commandList, ';');
+		SetTaskQueryString(task, StringJoin(commandList, ';'));
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NIL;
 		task->anchorShardId = shardId;

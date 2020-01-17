@@ -1099,8 +1099,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
 						 projectedColumnsString->data,
 						 TaskQueryString(task));
-		task->queryForLocalExecution = NULL;
-		task->queryStringLazy = wrappedQuery->data;
+		SetTaskQueryString(task, wrappedQuery->data);
 	}
 }
 
