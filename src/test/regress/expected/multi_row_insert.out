@@ -11,7 +11,7 @@ SELECT create_distributed_table('source_table_xyz', 'key', 'range');
 (1 row)
 
 CALL public.create_range_partitioned_shards('source_table_xyz', '{"(0,a)","(25,z)"}','{"(24,a)","(49,z)"}');
-SELECT * FROM pg_dist_shard WHERE logicalrelid='source_table_xyz'::regclass::oid;
+SELECT * FROM pg_dist_shard WHERE logicalrelid='source_table_xyz'::regclass::oid ORDER BY shardid;
    logicalrelid   | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  source_table_xyz | 4213581 | t            | (0,a)         | (24,a)
