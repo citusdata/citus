@@ -73,6 +73,8 @@
 #include "miscadmin.h"
 
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
@@ -103,9 +105,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
-static bool TaskAccessesLocalNode(Task *task);
 static void LogLocalCommand(const char *command);
-
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -143,7 +143,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		const char *shardQueryString = task->queryString;
+		const char *shardQueryString = TaskQueryString(task);
 		Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes, numParams);
 
 		/*
@@ -167,7 +167,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		LogLocalCommand(shardQueryString);
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, task->queryString);
+			ExecuteLocalTaskPlan(scanState, localPlan, TaskQueryString(task));
 	}
 
 	return totalRowsProcessed;
@@ -432,7 +432,7 @@ ShouldExecuteTasksLocally(List *taskList)
  * TaskAccessesLocalNode returns true if any placements of the task reside on the
  * node that we're executing the query.
  */
-static bool
+bool
 TaskAccessesLocalNode(Task *task)
 {
 	ListCell *placementCell = NULL;

@@ -1581,6 +1581,14 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 		modifyTask->replicationModel = cacheEntry->replicationModel;
 		modifyTask->rowValuesLists = modifyRoute->rowValuesLists;
 
+		RelationShard *relationShard = CitusMakeNode(RelationShard);
+		relationShard->shardId = modifyRoute->shardId;
+		relationShard->relationId = distributedTableId;
+
+		modifyTask->relationShardList = list_make1(relationShard);
+
+		modifyTask->taskPlacementList = ShardPlacementList(modifyRoute->shardId);
+
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
 
@@ -1598,7 +1606,7 @@ CreateTask(TaskType taskType)
 	task->taskType = taskType;
 	task->jobId = INVALID_JOB_ID;
 	task->taskId = INVALID_TASK_ID;
-	task->queryString = NULL;
+	SetTaskQueryString(task, NULL);
 	task->anchorShardId = INVALID_SHARD_ID;
 	task->taskPlacementList = NIL;
 	task->dependentTaskList = NIL;
@@ -1875,20 +1883,22 @@ RemoveCoordinatorPlacement(List *placementList)
  */
 static List *
 SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList,
-						  uint64 shardId)
+						  List *placementList, uint64 shardId)
 {
 	Task *task = CreateTask(SELECT_TASK);
-	StringInfo queryString = makeStringInfo();
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
-	pg_get_query_def(query, queryString);
 
-	task->queryString = queryString->data;
+	/*
+	 * For performance reasons, we skip generating the queryString. For local
+	 * execution this is not needed, so we wait until the executor determines
+	 * that the query cannot be executed locally.
+	 */
+	task->taskPlacementList = placementList;
+	SetTaskQuery(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
-	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
 
@@ -1946,7 +1956,6 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList, uint64 shardId)
 {
 	Task *task = CreateTask(MODIFY_TASK);
-	StringInfo queryString = makeStringInfo();
 	List *rangeTableList = NIL;
 
 	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
@@ -1964,12 +1973,10 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 							   "and modify a reference table")));
 	}
 
-	pg_get_query_def(query, queryString);
-
-	task->queryString = queryString->data;
+	task->taskPlacementList = placementList;
+	SetTaskQuery(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
-	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;
 
@@ -2083,7 +2090,6 @@ PlanRouterQuery(Query *originalQuery,
 		List *shardIntervalList =
 			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
 												&isMultiShardQuery, distributionKeyValue);
-
 
 		/*
 		 * This could only happen when there is a parameter on the distribution key.

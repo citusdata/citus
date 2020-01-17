@@ -17,6 +17,7 @@
 
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -221,7 +222,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 							 shardPlacement->nodeId,
 							 quote_literal_cstr(taskPrefix),
 							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(selectTask->queryString),
+							 quote_literal_cstr(TaskQueryString(selectTask)),
 							 partitionColumnIndex,
 							 quote_literal_cstr(partitionMethodString),
 							 minValuesString->data, maxValuesString->data,
@@ -229,7 +230,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
 
-		selectTask->queryString = NULL;
+		SetTaskQueryString(selectTask, NULL);
 		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}
 }
@@ -546,7 +547,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 
 		Task *task = CitusMakeNode(Task);
 		task->taskType = SELECT_TASK;
-		task->queryString = QueryStringForFragmentsTransfer(fragmentsTransfer);
+		SetTaskQueryString(task, QueryStringForFragmentsTransfer(fragmentsTransfer));
 		task->taskPlacementList = list_make1(targetPlacement);
 
 		fetchTaskList = lappend(fetchTaskList, task);

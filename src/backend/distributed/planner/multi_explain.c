@@ -22,6 +22,7 @@
 #include "optimizer/cost.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
@@ -400,7 +401,7 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(task->queryString, es);
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block

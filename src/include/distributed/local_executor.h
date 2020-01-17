@@ -26,5 +26,6 @@ extern bool ShouldExecuteTasksLocally(List *taskList);
 extern void ErrorIfLocalExecutionHappened(void);
 extern void DisableLocalExecution(void);
 extern bool AnyTaskAccessesRemoteNode(List *taskList);
+extern bool TaskAccessesLocalNode(Task *task);
 
 #endif /* LOCAL_EXECUTION_H */

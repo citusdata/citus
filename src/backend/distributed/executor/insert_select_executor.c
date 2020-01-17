@@ -14,6 +14,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
@@ -1094,13 +1095,11 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		Assert(task->queryString != NULL);
-
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
 						 projectedColumnsString->data,
-						 task->queryString);
-		task->queryString = wrappedQuery->data;
+						 TaskQueryString(task));
+		SetTaskQueryString(task, wrappedQuery->data);
 	}
 }
 
