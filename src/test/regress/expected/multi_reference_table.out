@@ -1170,7 +1170,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -1181,7 +1181,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
 -- some tests for mark_tables_colocated
 -- should error out

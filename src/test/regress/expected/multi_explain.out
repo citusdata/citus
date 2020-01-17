@@ -1188,7 +1188,8 @@ ROLLBACK;
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 SELECT o_orderkey FROM orders_hash_part LIMIT 3;
-Custom Scan (Citus INSERT ... SELECT via coordinator)
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
   ->  Limit
         ->  Custom Scan (Citus Adaptive)
               Task Count: 4
@@ -1205,7 +1206,8 @@ t
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
 SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
-Custom Scan (Citus INSERT ... SELECT via coordinator)
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
   ->  Limit
         ->  Custom Scan (Citus Adaptive)
               Task Count: 4
@@ -1217,7 +1219,8 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
-Custom Scan (Citus INSERT ... SELECT via coordinator)
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
   ->  Function Scan on generate_series s
 -- WHERE EXISTS forces pg12 to materialize cte
 EXPLAIN (COSTS OFF)
@@ -1225,7 +1228,8 @@ WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
-Custom Scan (Citus INSERT ... SELECT via coordinator)
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
   ->  Result
         One-Time Filter: $3
         CTE cte1
@@ -1244,7 +1248,8 @@ EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
-Custom Scan (Citus INSERT ... SELECT via coordinator)
+Custom Scan (Citus INSERT ... SELECT)
+  INSERT/SELECT method: pull to coordinator
   ->  HashAggregate
         Group Key: s.s
         ->  Append

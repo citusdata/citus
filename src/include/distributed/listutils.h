@@ -73,5 +73,6 @@ extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
 										 Oid datumTypeId);
 extern HTAB * ListToHashSet(List *pointerList, Size keySize, bool isStringList);
 extern char * StringJoin(List *stringList, char delimiter);
+extern List * ListTake(List *pointerList, int size);
 
 #endif /* CITUS_LISTUTILS_H */

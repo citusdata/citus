@@ -62,7 +62,7 @@ CustomScanMethods TaskTrackerCustomScanMethods = {
 };
 
 CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
-	"Citus INSERT ... SELECT via coordinator",
+	"Citus INSERT ... SELECT",
 	CoordinatorInsertSelectCreateScan
 };
 

@@ -438,8 +438,8 @@ SELECT create_distributed_function('delegated_function(int)', 'a');
 SET client_min_messages TO DEBUG1;
 INSERT INTO test SELECT delegated_function(1);
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  not pushing down function calls in INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Don't push down in subqueries or CTEs.
 SELECT * FROM test WHERE not exists(
     SELECT delegated_function(4)
