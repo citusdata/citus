@@ -768,6 +768,24 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
+	#if PG_VERSION_NUM < 120000
+	Query *query = planContext->query;
+
+	/*
+	 * We had to implement this hack because on Postgres11 and below, the originalQuery
+	 * and the query would have significant differences in terms of CTEs where CTEs
+	 * would not be inlined on the query (as standard_planner() wouldn't inline CTEs
+	 * on PG 11 and below).
+	 *
+	 * Instead, we prefer to pass the inlined query to the distributed planning. We rely
+	 * on the fact that the query includes subqueries, and it'd definitely go through
+	 * query pushdown planning. During query pushdown planning, the only relevant query
+	 * tree is the original query.
+	 */
+	planContext->query = copyObject(copyOfOriginalQuery);
+#endif
+
+
 	/* simply recurse into CreateDistributedPlannedStmt() in a PG_TRY() block */
 	PlannedStmt *result = TryCreateDistributedPlannedStmt(planContext->plan,
 														  copyOfOriginalQuery,
@@ -775,6 +793,15 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->boundParams,
 														  planContext->
 														  plannerRestrictionContext);
+
+#if PG_VERSION_NUM < 120000
+
+	/*
+	 * Set back the original query, in case the planning failed and we need to go
+	 * into distributed planning again.
+	 */
+	planContext->query = query;
+#endif
 
 	return result;
 }
