@@ -71,7 +71,7 @@ struct ColocatedPlacementsHashEntry;
  * Hash table mapping placements to a list of connections.
  *
  * This stores a list of connections for each placement, because multiple
- * connections to the same placement may exist at the same time. E.g. a
+ * connections to the same placement may exist at the same time. E.g. an
  * adaptive executor query may reference the same placement in several
  * sub-tasks.
  *
@@ -118,7 +118,7 @@ static HTAB *ConnectionPlacementHash;
  * placements (i.e. the corresponding placements for different colocated
  * distributed tables) need to share connections.  Otherwise things like
  * foreign keys can very easily lead to unprincipled deadlocks.  This means
- * that there can only one DML/DDL connection for a set of colocated
+ * that there can only be one DML/DDL connection for a set of colocated
  * placements.
  *
  * A set of colocated placements is identified, besides node identifying
