@@ -72,6 +72,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
@@ -388,7 +389,7 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
  *  guarantee that any task have to be executed locally.
  */
 bool
-ShouldExecuteTasksLocally(List *taskList)
+ShouldExecuteTasksLocally(List *taskList, DistributedExecution *execution)
 {
 	if (!EnableLocalExecution)
 	{
@@ -433,10 +434,11 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * Still, we'll be avoding the network round trip for this node.
 		 *
 		 * Note that we shouldn't use local execution if any distributed execution
-		 * has happened because that'd break transaction visibility rules and
-		 * many other things.
+		 * modified a distributed table because that'd break transaction visibility
+		 * rules and many other things. Therefore it is the callers responsibility
+		 * to make sure no modifications are made in a distributed transaction
 		 */
-		return !AnyConnectionModifiedPlacements();
+		return !TransactionModifiedDistributedTable(execution);
 	}
 
 	if (!singleTask)

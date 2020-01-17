@@ -11,6 +11,7 @@
 #ifndef LOCAL_EXECUTION_H
 #define LOCAL_EXECUTION_H
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/citus_custom_scan.h"
 
 /* enabled with GUCs*/
@@ -28,6 +29,7 @@ extern void SetTaskQueryAndPlacementList(Task *task, Query *query, List *placeme
 extern char * TaskQueryString(Task *task);
 extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfLocalPlacementExecutionHappened(void);
+extern bool ShouldExecuteTasksLocally(List *taskList, DistributedExecution *execution);
 extern void ErrorIfTransactionAccessedLocalPlacement(void);
 extern void DisableLocalExecution(void);
 extern bool AnyTaskAccessesRemoteNode(List *taskList);
