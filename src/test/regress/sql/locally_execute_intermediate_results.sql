@@ -125,8 +125,7 @@ HAVING max(value) < (SELECT max(max) FROM cte_1);
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
--- TODO: fixed by #3396
-WITH a AS (SELECT * FROM table_1)
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -172,6 +171,67 @@ cte_2 AS (SELECT * FROM cte_1),
 cte_3 AS (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
 
+-- some cases around router queries
+-- a router query, but the having has two cte joins
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2
+WHERE KEY = 3
+GROUP BY KEY
+HAVING max(value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with another cte
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with the same CTEs
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- subPlans needed remotely as the subquery is pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key = bar.key;
+
+-- the second subquery needs to be recursively planned due to non-colocated subquery join
+-- so cte_2 becomes part of master query of that recursive subquery planning
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key != bar.key;
+
+
+-- now, forcing all subqueries to be on the local node
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  WHERE foo.key != bar.key;
 
 \c - - - :worker_1_port
 
@@ -287,8 +347,7 @@ HAVING max(value) < (SELECT max(max) FROM cte_1);
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
--- TODO: fixed by #3396
-WITH a AS (SELECT * FROM table_1)
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -345,6 +404,67 @@ cte_2 AS (SELECT * FROM cte_1),
 cte_3 AS (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
 
+
+-- some cases around router queries
+-- a router query, but the having has two cte joins
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2
+WHERE KEY = 3
+GROUP BY KEY
+HAVING max(value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with another cte
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with the same CTEs
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) > (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- subPlans needed remotely as the subquery is pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key = bar.key;
+
+-- the second subquery needs to be recursively planned due to non-colocated subquery join
+-- so cte_2 becomes part of master query of that recursive subquery planning
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key != bar.key;
+
+
+-- now, forcing all subqueries to be on the local node
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  WHERE foo.key != bar.key;
 
 -- finally, use round-robin policy on the workers with same set of queries
 set citus.task_assignment_policy TO "round-robin" ;
@@ -413,7 +533,6 @@ HAVING max(value) > (SELECT max FROM cte_1 JOIN cte_2 USING (max));
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, also the join tree contains only another CTE, so should be
 -- executed locally, but not on an Citus MX worker
--- TODO: fixed by #3396
 WITH cte_1 AS (SELECT max(value) FROM table_1),
 cte_2 AS (SELECT max(value) FROM table_1),
 cte_3 AS (SELECT * FROM table_2)
@@ -450,8 +569,7 @@ HAVING max(value) < (SELECT max(max) FROM cte_1);
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
--- TODO: fixed by #3396
-WITH a AS (SELECT * FROM table_1)
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -508,6 +626,80 @@ cte_2 AS (SELECT * FROM cte_1),
 cte_3 AS (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
 
+
+-- some cases around router queries
+-- a router query, but the having has two cte joins
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2
+WHERE KEY = 3
+GROUP BY KEY
+HAVING max(value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with another cte
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+-- the same query as above, try to hit local node with either of the queries
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+
+-- a router query, but the having has two cte joins
+-- and the jointree has a join with the same CTEs
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_1),
+     cte_3 AS (SELECT * FROM table_2)
+SELECT count(*)
+FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
+WHERE KEY = 3
+GROUP BY table_2.KEY
+HAVING max(table_2.value) >
+  (SELECT MAX FROM cte_1 JOIN cte_2 USING (MAX));
+
+- subPlans needed remotely as the subquery is pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key = bar.key;
+
+-- the second subquery needs to be recursively planned due to non-colocated subquery join
+-- so cte_2 becomes part of master query of that recursive subquery planning
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key != bar.key;
+
+
+-- now, forcing all subqueries to be on the local node
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
+  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  WHERE foo.key != bar.key;
 
 \c - - - :master_port
 

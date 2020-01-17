@@ -134,6 +134,16 @@ CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
 
 
 void
+CopyNodeUsedDistributedSubPlan(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(UsedDistributedSubPlan);
+
+	COPY_STRING_FIELD(subPlanId);
+	COPY_SCALAR_FIELD(locationMask);
+}
+
+
+void
 CopyNodeShardInterval(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(ShardInterval);
