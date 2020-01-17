@@ -388,6 +388,19 @@ typedef struct DistributedSubPlan
 } DistributedSubPlan;
 
 
+/*
+ * UsedDistributedSubPlan contains information about a subPlan that is used in a
+ * distributed plan.
+ */
+typedef struct UsedDistributedSubPlan
+{
+	CitusNode type;
+
+	char *subPlanId;
+	bool usedInHaving;
+} UsedDistributedSubPlan;
+
+
 /* OperatorCacheEntry contains information for each element in OperatorCache */
 typedef struct OperatorCacheEntry
 {

@@ -35,6 +35,7 @@ static const char *CitusNodeTagNamesD[] = {
 	"MapMergeJob",
 	"DistributedPlan",
 	"DistributedSubPlan",
+	"UsedDistributedSubPlan",
 	"Task",
 	"LocalPlannedStatement",
 	"TaskExecution",
@@ -382,6 +383,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 {
 	DEFINE_NODE_METHODS(DistributedPlan),
 	DEFINE_NODE_METHODS(DistributedSubPlan),
+	DEFINE_NODE_METHODS(UsedDistributedSubPlan),
 	DEFINE_NODE_METHODS(Job),
 	DEFINE_NODE_METHODS(ShardInterval),
 	DEFINE_NODE_METHODS(MapMergeJob),
