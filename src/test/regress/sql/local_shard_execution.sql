@@ -773,7 +773,7 @@ RESET client_min_messages;
 RESET citus.log_local_commands;
 
 \c - - - :master_port
-
+SET citus.next_shard_id TO 1480000;
 -- local execution with custom type
 SET citus.replication_model TO "streaming";
 SET citus.shard_replication_factor TO 1;
