@@ -557,7 +557,6 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 																	List *taskList,
 																	bool
 																	exludeFromTransaction);
-static bool TaskListContainsLocalHost(List *taskList);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RecordPlacementAccess(DistributedExecution *execution);
@@ -998,25 +997,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	}
 
 	return execution;
-}
-
-
-static bool
-TaskListContainsLocalHost(List *taskList)
-{
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-
-		if (TaskAccessesLocalNode(task))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 
