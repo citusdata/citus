@@ -222,8 +222,10 @@ test: multi_metadata_sync
 test: multi_unsupported_worker_operations
 
 # ----------
+# grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
 # multi_schema_support makes sure we can work with tables in schemas other than public with no problem
 # ----------
+test: grant_on_schema_propagation
 test: multi_schema_support
 
 # ----------

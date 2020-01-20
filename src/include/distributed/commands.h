@@ -190,6 +190,7 @@ extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 									   const char *queryString);
 extern List * PreprocessAlterObjectSchemaStmt(Node *alterObjectSchemaStmt,
 											  const char *alterObjectSchemaCommand);
+extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString);
 
 
 /* sequence.c - forward declarations */

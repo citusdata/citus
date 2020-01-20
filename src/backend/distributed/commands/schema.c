@@ -17,9 +17,12 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
 #include "distributed/commands.h"
 #include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include <distributed/metadata_sync.h>
 #include <distributed/remote_commands.h>
@@ -28,6 +31,9 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
+
+
+static List * FilterDistributedSchemas(List *schemas);
 
 
 /*
@@ -103,4 +109,71 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 	}
 
 	return NIL;
+}
+
+
+/*
+ * PreprocessGrantOnSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on schemas. Only grant statements for distributed schema are propagated.
+ */
+List *
+PreprocessGrantOnSchemaStmt(Node *node, const char *queryString)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_SCHEMA);
+
+	List *distributedSchemas = FilterDistributedSchemas(stmt->objects);
+
+	if (list_length(distributedSchemas) == 0)
+	{
+		return NIL;
+	}
+
+	List *originalObjects = stmt->objects;
+
+	stmt->objects = distributedSchemas;
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	stmt->objects = originalObjects;
+
+	return NodeDDLTaskList(ALL_WORKERS, list_make1(sql));
+}
+
+
+/*
+ * FilterDistributedSchemas filters the schema list and returns the distributed ones
+ * as a list
+ */
+static List *
+FilterDistributedSchemas(List *schemas)
+{
+	List *distributedSchemas = NIL;
+	ListCell *cell = NULL;
+
+	foreach(cell, schemas)
+	{
+		char *schemaName = strVal(lfirst(cell));
+		Oid schemaOid = get_namespace_oid(schemaName, true);
+
+		if (!OidIsValid(schemaOid))
+		{
+			continue;
+		}
+
+		ObjectAddress address = { 0 };
+		ObjectAddressSet(address, NamespaceRelationId, schemaOid);
+
+		if (!IsObjectDistributed(&address))
+		{
+			continue;
+		}
+
+		distributedSchemas = lappend(distributedSchemas, makeString(schemaName));
+	}
+
+	return distributedSchemas;
 }

@@ -29,6 +29,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
+#include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
@@ -43,6 +44,7 @@
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"
+#include "miscadmin.h"
 #include "nodes/pg_list.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
@@ -61,6 +63,13 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
+													  AclItem *aclItem);
+static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
+													  Oid schemaOid,
+													  char *permission,
+													  bool withGrantOption);
+static char * GenerateSetRoleQuery(Oid roleOid);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
@@ -1103,6 +1112,119 @@ CreateSchemaDDLCommand(Oid schemaId)
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, quotedSchemaName, ownerName);
 
 	return schemaNameDef->data;
+}
+
+
+/*
+ * GrantOnSchemaDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on schemas.
+ */
+List *
+GrantOnSchemaDDLCommands(Oid schemaOid)
+{
+	HeapTuple schemaTuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(schemaOid));
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(NAMESPACEOID, schemaTuple, Anum_pg_namespace_nspacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(schemaTuple);
+		return NIL;
+	}
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(schemaTuple);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnSchemaQueriesFromAclItem(
+								   schemaOid,
+								   &aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GenerateGrantOnSchemaQueryFromACL generates a query string for replicating a users permissions
+ * on a schema.
+ */
+List *
+GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_SCHEMA;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_SCHEMA;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_USAGE) || (permissions & ACL_USAGE));
+	Assert(!(grants & ACL_CREATE) || (permissions & ACL_CREATE));
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_USAGE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantOnSchemaStmtForRights(
+										  granteeOid, schemaOid, "USAGE", grants &
+										  ACL_USAGE));
+		queries = lappend(queries, query);
+	}
+	if (permissions & ACL_CREATE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantOnSchemaStmtForRights(
+										  granteeOid, schemaOid, "CREATE", grants &
+										  ACL_CREATE));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
+
+GrantStmt *
+GenerateGrantOnSchemaStmtForRights(Oid roleOid,
+								   Oid schemaOid,
+								   char *permission,
+								   bool withGrantOption)
+{
+	AccessPriv *accessPriv = makeNode(AccessPriv);
+	accessPriv->priv_name = permission;
+	accessPriv->cols = NULL;
+
+	RoleSpec *roleSpec = makeNode(RoleSpec);
+	roleSpec->roletype = OidIsValid(roleOid) ? ROLESPEC_CSTRING : ROLESPEC_PUBLIC;
+	roleSpec->rolename = OidIsValid(roleOid) ? GetUserNameFromId(roleOid, false) : NULL;
+	roleSpec->location = -1;
+
+	GrantStmt *stmt = makeNode(GrantStmt);
+	stmt->is_grant = true;
+	stmt->targtype = ACL_TARGET_OBJECT;
+	stmt->objtype = OBJECT_SCHEMA;
+	stmt->objects = list_make1(makeString(get_namespace_name(schemaOid)));
+	stmt->privileges = list_make1(accessPriv);
+	stmt->grantees = list_make1(roleSpec);
+	stmt->grant_option = withGrantOption;
+	return stmt;
+}
+
+
+static char *
+GenerateSetRoleQuery(Oid roleOid)
+{
+	StringInfo buf = makeStringInfo();
+	appendStringInfo(buf, "SET ROLE %s", quote_identifier(GetUserNameFromId(roleOid,
+																			false)));
+	return buf->data;
 }
 
 

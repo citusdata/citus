@@ -171,7 +171,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_SCHEMA:
 		{
-			const char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
+			char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
 
 			if (schemaDDLCommand == NULL)
 			{
@@ -179,7 +179,13 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
-			return list_make1((void *) schemaDDLCommand);
+			List *DDLCommands = list_make1(schemaDDLCommand);
+
+			List *grantDDLCommands = GrantOnSchemaDDLCommands(dependency->objectId);
+
+			DDLCommands = list_concat(DDLCommands, grantDDLCommands);
+
+			return DDLCommands;
 		}
 
 		case OCLASS_TYPE:
