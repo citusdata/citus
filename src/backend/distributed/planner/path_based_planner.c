@@ -30,6 +30,14 @@ static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
 static bool IsDistributedUnion(Path *path);
 static uint32 ColocationGroupForDistributedUnion(Path *path);
 
+typedef struct DistributedUnionPath
+{
+	CustomPath custom_path;
+
+	/* path to be executed on the worker */
+	Path *worker_path;
+} DistributedUnionPath;
+
 const CustomPathMethods distributedUnionMethods = {
 	.CustomName = "Distributed Union",
 	.PlanCustomPath = CreateDistributedUnionPlan,
@@ -40,22 +48,22 @@ const CustomPathMethods distributedUnionMethods = {
 CustomPath *
 WrapTableAccessWithDistributedUnion(Path *originalPath)
 {
-	CustomPath *distUnion = makeNode(CustomPath);
-	distUnion->path.pathtype = T_CustomScan;
-	distUnion->path.parent = originalPath->parent;
-	distUnion->path.pathtarget = originalPath->pathtarget;
-	distUnion->path.param_info = originalPath->param_info;
+	DistributedUnionPath *distUnion = newNode(sizeof(DistributedUnionPath), T_CustomPath);
+	distUnion->custom_path.path.pathtype = T_CustomScan;
+	distUnion->custom_path.path.parent = originalPath->parent;
+	distUnion->custom_path.path.pathtarget = originalPath->pathtarget;
+	distUnion->custom_path.path.param_info = originalPath->param_info;
 
 	/* TODO use a better cost model */
-	distUnion->path.rows = originalPath->rows;
-	distUnion->path.startup_cost = originalPath->startup_cost+1000;
-	distUnion->path.total_cost = originalPath->total_cost+1000;
+	distUnion->custom_path.path.rows = originalPath->rows;
+	distUnion->custom_path.path.startup_cost = originalPath->startup_cost+1000;
+	distUnion->custom_path.path.total_cost = originalPath->total_cost+1000;
 
-	distUnion->methods = &distributedUnionMethods;
+	distUnion->custom_path.methods = &distributedUnionMethods;
 
-	distUnion->custom_private = list_make1(originalPath);
+	distUnion->worker_path = originalPath;
 
-	return distUnion;
+	return (CustomPath *) distUnion;
 }
 
 
@@ -67,13 +75,14 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 						   List *clauses,
 						   List *custom_plans)
 {
+	DistributedUnionPath *distUnion = (DistributedUnionPath *) best_path;
+
 	Job *workerJob = CitusMakeNode(Job);
 	workerJob->jobId = UniqueJobId();
 
-	Path *originalPath = (Path *) list_nth(best_path->custom_private, 0);
 	ShardInterval *shardInterval = NULL;
 
-	Query *q = GetQueryFromPath(root, originalPath, tlist, clauses);
+	Query *q = GetQueryFromPath(root, distUnion->worker_path, tlist, clauses);
 	/*
 	 * Assume shards are colocated, any shard should suffice for now to find the initial
 	 * interval list
@@ -173,7 +182,7 @@ static uint32
 ColocationGroupForDistributedUnion(Path *path)
 {
 	Assert(IsDistributedUnion(path));
-	CustomPath *distUnion = castNode(CustomPath, path);
+	DistributedUnionPath *distUnion = (DistributedUnionPath *) path;
 	/* TODO actually retreive the right colocation id for the Distributed Union */
 	return 1;
 }
