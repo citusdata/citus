@@ -99,6 +99,7 @@ bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
 bool TransactionAccessedLocalPlacement = false;
+bool TransactionConnectedToLocalhost = false;
 
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
@@ -389,7 +390,7 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
  *  guarantee that any task have to be executed locally.
  */
 bool
-ShouldExecuteTasksLocally(List *taskList, DistributedExecution *execution)
+ShouldExecuteTasksLocally(List *taskList)
 {
 	if (!EnableLocalExecution)
 	{
@@ -438,7 +439,7 @@ ShouldExecuteTasksLocally(List *taskList, DistributedExecution *execution)
 		 * rules and many other things. Therefore it is the callers responsibility
 		 * to make sure no modifications are made in a distributed transaction
 		 */
-		return !TransactionModifiedDistributedTable(execution);
+		return !TransactionConnectedToLocalhost;
 	}
 
 	if (!singleTask)

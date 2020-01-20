@@ -74,7 +74,6 @@ extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 extern bool UpdateOrDeleteQuery(Query *query);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
-
 extern uint64 GetAnchorShardId(List *relationShardList);
 extern List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const **partitionValueConst,

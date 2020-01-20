@@ -239,11 +239,9 @@ SELECT create_distributed_table('task_assignment_test_table_2', 'test_id');
 SET citus.task_assignment_policy TO 'round-robin';
 
 -- Run the query two times to make sure that it hits two different workers
-<<<<<<< HEAD
 -- on consecutive runs
 -- prevent PG 11 - PG 12 outputs to diverge
 SET citus.enable_cte_inlining TO false;
-=======
 -- on consecutive runs only when local execution is not enabled
 INSERT INTO explain_outputs
 SELECT parse_explain_output($cmd$
@@ -260,14 +258,10 @@ $cmd$, 'task_assignment_test_table_2');
 SELECT COUNT(DISTINCT value) FROM explain_outputs;
 TRUNCATE explain_outputs;
 
-<<<<<<< HEAD
 -- Disable local execution and make sure it hits two different workers
 SET citus.enable_local_execution_planning TO FALSE;
->>>>>>> 49ab67564... Test case for locally executing a query that used to run on a round-robin worker
-=======
 -- Disable round-robin and make sure it is locally executed
 RESET citus.task_assignment_policy
->>>>>>> 685c377cb... Remove EnableLocalExecutionPlanning GUC
 INSERT INTO explain_outputs
 SELECT parse_explain_output($cmd$
 EXPLAIN WITH q1 AS (SELECT * FROM task_assignment_test_table_2) SELECT * FROM q1

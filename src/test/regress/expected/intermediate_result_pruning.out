@@ -789,18 +789,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 3) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 4)
 DEBUG:  generating subplan XXX_3 for subquery SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value FROM intermediate_result_pruning.table_2 WHERE ((key OPERATOR(pg_catalog.=) 1) AND ((value)::integer OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))))
-<<<<<<< HEAD
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-=======
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
->>>>>>> 7b69c7589... Change dummy placement creation logic to force local execution
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 -- same query, cte is on the FROM clause
 -- and this time the final query (and top-level intermediate result)
@@ -833,18 +826,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 3) INTERSECT SELECT table_1.key FROM intermediate_result_pruning.table_1 WHERE (table_1.key OPERATOR(pg_catalog.=) 4)
 DEBUG:  generating subplan XXX_3 for subquery SELECT cte_1.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_1 UNION SELECT cte_2.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table_2.key, table_2.value FROM intermediate_result_pruning.table_2, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo WHERE ((table_2.key OPERATOR(pg_catalog.<>) 1) AND (foo.key OPERATOR(pg_catalog.=) (table_2.value)::integer))
-<<<<<<< HEAD
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-=======
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
->>>>>>> 7b69c7589... Change dummy placement creation logic to force local execution
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 -- append partitioned/heap-type

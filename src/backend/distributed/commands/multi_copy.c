@@ -2910,6 +2910,11 @@ CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 		ClaimConnectionExclusively(connection);
 	}
 
+	if (!TransactionConnectedToLocalhost && placement->groupId == GetLocalGroupId())
+	{
+		TransactionConnectedToLocalhost = true;
+	}
+
 	return connection;
 }
 

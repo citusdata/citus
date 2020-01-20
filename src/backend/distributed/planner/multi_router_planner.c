@@ -156,11 +156,6 @@ static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static ShardPlacement * CreateDummyPlacement(void);
-static uint64 GetAnchorShardId(List *relationShardList);
-static List * TargetShardIntervalForFastPathQuery(Query *query,
-												  Const **partitionValueConst,
-												  bool *isMultiShardQuery,
-												  Const *distributionKeyValue);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
 										uint64 shardId);
@@ -2222,8 +2217,6 @@ List *
 FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 					 bool replacePrunedQueryWithDummy)
 {
-	static uint32 zeroShardQueryRoundRobin = 0;
-
 	List *workerList = NIL;
 
 	/*
