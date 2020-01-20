@@ -238,6 +238,9 @@ OptimizeJoinPath(Path *originalPath)
 		HashPath *hpath = castNode(HashPath, originalPath);
 		if (CanOptimizeHashPath(hpath))
 		{
+			/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
+			uint32 colocationId = ((DistributedUnionPath *) hpath->jpath.innerjoinpath)->colocationId;
+
 			hpath->jpath.innerjoinpath = ((DistributedUnionPath *)hpath->jpath.innerjoinpath)->worker_path;
 			hpath->jpath.outerjoinpath = ((DistributedUnionPath *)hpath->jpath.outerjoinpath)->worker_path;
 
@@ -245,8 +248,6 @@ OptimizeJoinPath(Path *originalPath)
 			hpath->jpath.path.startup_cost -= 2000; /* remove the double dist union cost */
 			hpath->jpath.path.total_cost -= 2000; /* remove the double dist union cost */
 
-			/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
-			uint32 colocationId = ((DistributedUnionPath *) hpath->jpath.innerjoinpath)->colocationId;
 			return (Path *) WrapTableAccessWithDistributedUnion((Path *) hpath, colocationId);
 		}
 	}
