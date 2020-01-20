@@ -146,6 +146,16 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
+		/*
+		 * If we have a valid shard id, a distributed table will be accessed
+		 * during execution.
+		 */
+		if (!TransactionAccessedLocalPlacement &&
+			task->anchorShardId != INVALID_SHARD_ID)
+		{
+			TransactionAccessedLocalPlacement = true;
+		}
+
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
 		/*

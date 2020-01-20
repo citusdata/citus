@@ -559,7 +559,6 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 																	exludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
-static void RecordPlacementAccess(DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
 static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
@@ -699,7 +698,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 		AdjustDistributedExecutionAfterLocalExecution(execution);
 	}
 
-	/* record connections to localhost */
 	if (ShouldRunTasksSequentially(execution->tasksToExecute))
 	{
 		SequentialRunDistributedExecution(execution);
@@ -767,9 +765,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
 
-	/* record if we accessed any local placements */
-	RecordPlacementAccess(execution);
-
 	/*
 	 * We're deliberately not setting execution->rowsProceessed here. The main reason
 	 * is that modifications to reference tables would end-up setting it both here
@@ -778,34 +773,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 	 */
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	executorState->es_processed = rowsProcessed;
-}
-
-
-/*
- * RecordPlacementAccess iterates over local tasks in a Distributed Execution
- * and records if any placements are accessed locally
- *
- */
-void
-RecordPlacementAccess(DistributedExecution *execution)
-{
-	Task *task = NULL;
-
-	/* early exit if we have already recorded a local placement access */
-	if (TransactionAccessedLocalPlacement)
-	{
-		return;
-	}
-
-	foreach_ptr(task, execution->localTaskList)
-	{
-		/* if we have a valid shard id, a distributed table will be accessed during execution */
-		if (task->anchorShardId != INVALID_SHARD_ID)
-		{
-			TransactionAccessedLocalPlacement = true;
-			return;
-		}
-	}
 }
 
 
