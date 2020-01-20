@@ -23,7 +23,7 @@ static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, str
 static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
 static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath, RangeTblEntry *rte);
 static Index VarnoFromFirstTargetEntry(List *tlist);
-static Query * GetQueryFromPath(List *tlist, RangeTblEntry *rte, List *clauses);
+static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
 
 static bool IsDistributedUnion(Path *path);
 static uint32 ColocationGroupForDistributedUnion(Path *path);
@@ -73,7 +73,7 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	List* shardIntervalList = LoadShardIntervalList(rte->relid);
 	ShardInterval *shardInterval = NULL;
 
-	Query *q = GetQueryFromPath(tlist, rte, clauses);
+	Query *q = GetQueryFromPath(root, originalPath, tlist, clauses);
 
 	int i = 0;
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -174,23 +174,27 @@ PathBasedPlannerRelationHook(PlannerInfo *root, RelOptInfo *relOptInfo, Index re
 
 
 
-
+/*
+ * varno_mapping is an array where the index is the varno in the original query, or 0 if
+ * no mapping is required.
+ */
 static Node *
-VarNoMutator(Node *expr, Index *varno)
+VarNoMutator(Node *expr, Index *varno_mapping)
 {
 	switch (nodeTag(expr))
 	{
 		case T_Var:
 		{
 			Var *var = castNode(Var, expr);
-			if (var->varno == *varno)
+			Index newVarNo = varno_mapping[var->varno];
+			if (newVarNo == 0)
 			{
-				/*nothing to change */
+				/* no mapping required */
 				return (Node *) var;
 			}
 
 			return (Node *) makeVar(
-				*varno,
+				newVarNo,
 				var->varattno,
 				var->vartype,
 				var->vartypmod,
@@ -201,27 +205,34 @@ VarNoMutator(Node *expr, Index *varno)
 
 		default:
 		{
-			return expression_tree_mutator(expr, (void*) VarNoMutator, varno);
+			return expression_tree_mutator(expr, (void*) VarNoMutator, varno_mapping);
 		}
 	}
 }
 
 
 static Query *
-GetQueryFromPath(List *tlist, RangeTblEntry *rte, List *clauses)
+GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses)
 {
+	Index scan_relid = path->parent->relid;
+	RangeTblEntry *rte = root->simple_rte_array[scan_relid];
+
 	Query *q = makeNode(Query);
 	q->commandType = CMD_SELECT;
 	q->rtable = list_make1(rte);
 
 	List *newTargetList = NIL;
 	TargetEntry *target = NULL;
-	foreach_ptr(target, tlist)
-	{
-		Index varno = 1;
-		TargetEntry *newTarget = (TargetEntry *) VarNoMutator((Node *)target, &varno);
-		newTargetList = lappend(newTargetList, newTarget);
-	}
+
+	Index *varno_mapping = palloc0(sizeof(Index) * root->simple_rel_array_size);
+	/*
+	 * map the rte index of the table we are scanning to the range table entry as we have
+	 * added it to the query
+	 */
+	varno_mapping[scan_relid] = 1;
+
+	/* copy the target list with mapped varno values to reflect the tables we are selecting */
+	newTargetList = (List *) VarNoMutator((Node *) tlist, varno_mapping);
 
 	q->targetList = newTargetList;
 	q->jointree = makeNode(FromExpr);
@@ -235,8 +246,7 @@ GetQueryFromPath(List *tlist, RangeTblEntry *rte, List *clauses)
 	foreach_ptr(rinfo, clauses)
 	{
 		Node *clause = (Node *) rinfo->clause;
-		Index varno = 1;
-		clause = VarNoMutator(clause, &varno);
+		clause = VarNoMutator(clause, varno_mapping);
 		quals = lappend(quals, clause);
 	}
 	q->jointree->quals = (Node *) quals;
