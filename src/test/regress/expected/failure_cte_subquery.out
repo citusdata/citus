@@ -3,14 +3,10 @@ SET SEARCH_PATH=cte_failure;
 SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 16000000;
-<<<<<<< HEAD
+SET citus.task_assignment_policy TO 'round-robin';
 -- CTE inlining should not happen because
 -- the tests rely on intermediate results
 SET citus.enable_cte_inlining TO false;
-SET citus.enable_local_execution_planning TO OFF;
-=======
-SET citus.task_assignment_policy TO 'round-robin';
->>>>>>> 685c377cb... Remove EnableLocalExecutionPlanning GUC
 SELECT pg_backend_pid() as pid \gset
 CREATE TABLE users_table (user_id int, user_name text);
 CREATE TABLE events_table(user_id int, event_id int, event_type int);
