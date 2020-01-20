@@ -168,21 +168,15 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 			ShardPlacement *placement = lfirst(placementCell);
 			workerNodeList = list_append_unique_int(workerNodeList, placement->nodeId);
 
+			if (placement->groupId == GetLocalGroupId())
+			{
+				entry->writeLocalFile = true;
+			}
+
 			/* early return if all the workers are accessed, and the result is written to local file */
 			if (list_length(workerNodeList) == workerNodeCount && entry->writeLocalFile)
 			{
 				return workerNodeList;
-			}
-		}
-
-		/* if there is a single and local task placement, write results to local file */
-		if (list_length(task->taskPlacementList) == 1)
-		{
-			ShardPlacement *placement = linitial(task->taskPlacementList);
-
-			if (placement->groupId == GetLocalGroupId())
-			{
-				entry->writeLocalFile = true;
 			}
 		}
 	}
@@ -225,13 +219,17 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 							   char *resultId)
 {
 	List *workerNodeList = NIL;
-
 	ListCell *nodeIdCell = NULL;
 	foreach(nodeIdCell, entry->nodeIdList)
 	{
 		uint32 nodeId = lfirst_int(nodeIdCell);
 
-		/* if we have a dummy placement, intermediate plan will be written locally */
+		/*
+		 * If we have a dummy placement, intermediate plan will be written locally.
+		 * Note that we do not skip the loop when entry->writeLocalFile, because
+		 * even though the entry is local, it might still be required to broadcast to
+		 * remote nodes.
+		 */
 		if (nodeId == DUMMY_NODE_ID)
 		{
 			entry->writeLocalFile = true;
@@ -242,13 +240,6 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 		Assert(workerNode != NULL);
 
 		workerNodeList = lappend(workerNodeList, workerNode);
-
-		if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
-			IsLoggableLevel(DEBUG4))
-		{
-			elog(DEBUG1, "Subplan %s will be sent to %s:%d", resultId,
-				 workerNode->workerName, workerNode->workerPort);
-		}
 	}
 
 	/* don't include the current worker if the result will be written to local file */
@@ -266,6 +257,23 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 				workerNodeList = list_delete_ptr(workerNodeList, workerNode);
 				break;
 			}
+		}
+	}
+
+	/* now, log the summary */
+	if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
+		IsLoggableLevel(DEBUG4))
+	{
+		if (entry->writeLocalFile)
+		{
+			elog(DEBUG1, "Subplan %s will be written to local file", resultId);
+		}
+
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodeList)
+		{
+			elog(DEBUG1, "Subplan %s will be sent to %s:%d", resultId,
+				 workerNode->workerName, workerNode->workerPort);
 		}
 	}
 

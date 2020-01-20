@@ -86,12 +86,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		if (workerNodeList == NIL || entry->writeLocalFile)
 		{
 			writeLocalFile = true;
-
-			if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
-				IsLoggableLevel(DEBUG4))
-			{
-				elog(DEBUG1, "Subplan %s will be written to local file", resultId);
-			}
 		}
 
 		SubPlanLevel++;
