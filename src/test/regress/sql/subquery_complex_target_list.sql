@@ -7,6 +7,11 @@ SET search_path TO subquery_complex, public;
 
 SET client_min_messages TO DEBUG1;
 
+-- the logs are enabled and it sometimes
+-- lead to flaky outputs when jit enabled
+SET jit_above_cost TO -1;
+
+
 -- COUNT DISTINCT at the top level query
 SELECT
   event_type, count(distinct value_2)
