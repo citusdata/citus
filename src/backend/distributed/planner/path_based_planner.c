@@ -27,7 +27,7 @@ static Index VarnoFromFirstTargetEntry(List *tlist);
 static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
 static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
 static Path * OptimizeJoinPath(Path *originalPath);
-static bool CanOptimizeHashPath(HashPath *hpath);
+static bool CanOptimizeJoinPath(JoinPath *jpath);
 static bool IsDistributedUnion(Path *path);
 
 typedef struct DistributedUnionPath
@@ -207,17 +207,17 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 }
 
 static bool
-CanOptimizeHashPath(HashPath *hpath)
+CanOptimizeJoinPath(JoinPath *jpath)
 {
-	if (!(IsDistributedUnion(hpath->jpath.innerjoinpath) &&
-		  IsDistributedUnion(hpath->jpath.outerjoinpath)))
+	if (!(IsDistributedUnion(jpath->innerjoinpath) &&
+		  IsDistributedUnion(jpath->outerjoinpath)))
 	{
 		/* can only optimize joins when both inner and outer are a distributed union */
 		return false;
 	}
 
-	DistributedUnionPath *innerDU = (DistributedUnionPath *) hpath->jpath.innerjoinpath;
-	DistributedUnionPath *outerDU = (DistributedUnionPath *) hpath->jpath.outerjoinpath;
+	DistributedUnionPath *innerDU = (DistributedUnionPath *) jpath->innerjoinpath;
+	DistributedUnionPath *outerDU = (DistributedUnionPath *) jpath->outerjoinpath;
 
 	if (innerDU->colocationId != outerDU->colocationId)
 	{
@@ -233,26 +233,33 @@ CanOptimizeHashPath(HashPath *hpath)
 static Path *
 OptimizeJoinPath(Path *originalPath)
 {
-	if (IsA(originalPath, HashPath))
+	switch (originalPath->pathtype)
 	{
-		HashPath *hpath = castNode(HashPath, originalPath);
-		if (CanOptimizeHashPath(hpath))
+		case T_NestLoop:
+		case T_HashJoin:
 		{
-			/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
-			uint32 colocationId = ((DistributedUnionPath *) hpath->jpath.innerjoinpath)->colocationId;
+			JoinPath *jpath = (JoinPath *) originalPath;
+			if (CanOptimizeJoinPath(jpath))
+			{
+				/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
+				uint32 colocationId = ((DistributedUnionPath *) jpath->innerjoinpath)->colocationId;
 
-			hpath->jpath.innerjoinpath = ((DistributedUnionPath *)hpath->jpath.innerjoinpath)->worker_path;
-			hpath->jpath.outerjoinpath = ((DistributedUnionPath *)hpath->jpath.outerjoinpath)->worker_path;
+				jpath->innerjoinpath = ((DistributedUnionPath *) jpath->innerjoinpath)->worker_path;
+				jpath->outerjoinpath = ((DistributedUnionPath *) jpath->outerjoinpath)->worker_path;
 
-			/* TODO update costs of hashjoin, very naife removal of DU cost for now */
-			hpath->jpath.path.startup_cost -= 2000; /* remove the double dist union cost */
-			hpath->jpath.path.total_cost -= 2000; /* remove the double dist union cost */
+				/* TODO update costs of hashjoin, very naife removal of DU cost for now */
+				jpath->path.startup_cost -= 2000; /* remove the double dist union cost */
+				jpath->path.total_cost -= 2000; /* remove the double dist union cost */
 
-			return (Path *) WrapTableAccessWithDistributedUnion((Path *) hpath, colocationId);
+				return (Path *) WrapTableAccessWithDistributedUnion((Path *) jpath, colocationId);
+			}
+		}
+
+		default:
+		{
+			return originalPath;
 		}
 	}
-
-	return originalPath;
 }
 
 
@@ -372,6 +379,7 @@ ApplyPathToQuery(PlannerInfo *root, Query *query, Path *path, PathQueryInfo *inf
 			break;
 		}
 
+		case T_NestLoop:
 		case T_HashJoin:
 		{
 			JoinPath *jpath = (JoinPath *) path;
