@@ -238,7 +238,6 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 			continue;
 		}
 
-
 		WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
 		Assert(workerNode != NULL);
 
@@ -258,7 +257,9 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 		WorkerNode *workerNode = NULL;
 		int32 localGroupId = GetLocalGroupId();
 
-		foreach_ptr(workerNode, workerNodeList)
+		/* we'll iterate over the list while deleting from it, so copy it */
+		List *copyOfWorkerNodeList = list_copy(workerNodeList);
+		foreach_ptr(workerNode, copyOfWorkerNodeList)
 		{
 			if (workerNode->groupId == localGroupId)
 			{
