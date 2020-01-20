@@ -1051,7 +1051,14 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		}
 	}
 
-	if (failures > 0 && successes == 0)
+	/*
+	 * If there were any failures we want to bail on a commit in two situations:
+	 * there were no successes, or there was a failure with a reference table shard.
+	 * Ideally issues with a reference table will've errored out earlier,
+	 * but if not, we abort now to avoid an unhealthy reference table shard.
+	 */
+	if (failures > 0 &&
+		(successes == 0 || ReferenceTableShardId(shardEntry->key.shardId)))
 	{
 		return false;
 	}
