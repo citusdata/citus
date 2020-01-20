@@ -45,6 +45,7 @@ FindSubPlansUsedInNode(Node *node)
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = lfirst(rangeTableCell);
+
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
 			char *resultId =
@@ -59,9 +60,27 @@ FindSubPlansUsedInNode(Node *node)
 			 * Use a Value to be able to use list_append_unique and store
 			 * the result ID in the DistributedPlan.
 			 */
-			Value *resultIdValue = makeString(resultId);
+			UsedDistributedSubPlan *usedPlan = CitusMakeNode(UsedDistributedSubPlan);
 
-			usedSubPlanList = list_append_unique(usedSubPlanList, resultIdValue);
+			usedPlan->subPlanId = pstrdup(resultId);
+			usedPlan->usedInHaving = false;
+			if (list_length(usedSubPlanList) == 0)
+			{
+				usedSubPlanList = lappend(usedSubPlanList, usedPlan);
+			}
+
+			ListCell *subPlanCell = NULL;
+			foreach(subPlanCell, usedSubPlanList)
+			{
+				UsedDistributedSubPlan *usedPlanInList = lfirst(subPlanCell);
+
+				if (strncmp(usedPlanInList->subPlanId, usedPlan->subPlanId, 255) == 0)
+				{
+					continue;
+				}
+
+				usedSubPlanList = lappend(usedSubPlanList, usedPlan);
+			}
 		}
 	}
 
@@ -86,18 +105,21 @@ void
 RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 							   DistributedPlan *distributedPlan)
 {
-	Value *usedSubPlanIdValue = NULL;
 	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
 	int workerNodeCount = GetWorkerNodeCount();
 
-	foreach_ptr(usedSubPlanIdValue, usedSubPlanNodeList)
+	foreach(subPlanCell, usedSubPlanNodeList)
 	{
-		char *resultId = strVal(usedSubPlanIdValue);
+		UsedDistributedSubPlan *usedPlan = lfirst(subPlanCell);
+
+		char *resultId = usedPlan->subPlanId;
 
 		IntermediateResultsHashEntry *entry = SearchIntermediateResult(
 			intermediateResultsHash, resultId);
+
+		entry->writeLocalFile = entry->writeLocalFile | usedPlan->usedInHaving;
 
 		/*
 		 * There is no need to traverse the whole plan if the intermediate result

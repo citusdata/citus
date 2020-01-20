@@ -1121,13 +1121,28 @@ RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 	 * usedSubPlanNodeList prevents the intermediate results to be sent to the
 	 * coordinator only.
 	 */
+	List *subplansInHaving = NIL;
 	if (originalQuery->hasSubLinks &&
 		FindNodeCheck(originalQuery->havingQual, IsNodeSubquery))
 	{
-		List *subplansInHaving = FindSubPlansUsedInNode(originalQuery->havingQual);
+		subplansInHaving = FindSubPlansUsedInNode(originalQuery->havingQual);
+	}
 
-		plan->usedSubPlanNodeList =
-			list_difference(plan->usedSubPlanNodeList, subplansInHaving);
+	ListCell *subPlanCell = NULL;
+	foreach(subPlanCell, plan->usedSubPlanNodeList)
+	{
+		UsedDistributedSubPlan *usedPlan = lfirst(subPlanCell);
+
+		ListCell *subPlanInHavingCell = NULL;
+		foreach(subPlanInHavingCell, subplansInHaving)
+		{
+			UsedDistributedSubPlan *havingSubPlan = lfirst(subPlanInHavingCell);
+
+			if (strncmp(usedPlan->subPlanId, havingSubPlan->subPlanId, 255) == 0)
+			{
+				usedPlan->usedInHaving = true;
+			}
+		}
 	}
 }
 
