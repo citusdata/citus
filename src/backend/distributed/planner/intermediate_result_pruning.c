@@ -264,7 +264,7 @@ FindAllWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry,
 	if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
 		IsLoggableLevel(DEBUG4))
 	{
-		if (entry->writeLocalFile)
+		if (entry->writeLocalFile || workerNodeList == NIL)
 		{
 			elog(DEBUG1, "Subplan %s will be written to local file", resultId);
 		}
