@@ -1597,8 +1597,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 		if (!TransactionConnectedToLocalhost)
 		{
-			TransactionConnectedToLocalhost = TransactionConnectedToLocalhost |
-											  TaskAccessesLocalNode(task);
+			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task);
 		}
 
 		/*
