@@ -38,7 +38,7 @@ FindSubPlansUsedInNode(Node *node)
 {
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
-	List *subPlanList = NIL;
+	List *usedSubPlanList = NIL;
 
 	ExtractRangeTableEntryWalker(node, &rangeTableList);
 
@@ -60,11 +60,12 @@ FindSubPlansUsedInNode(Node *node)
 			 * the result ID in the DistributedPlan.
 			 */
 			Value *resultIdValue = makeString(resultId);
-			subPlanList = list_append_unique(subPlanList, resultIdValue);
+
+			usedSubPlanList = list_append_unique(usedSubPlanList, resultIdValue);
 		}
 	}
 
-	return subPlanList;
+	return usedSubPlanList;
 }
 
 
