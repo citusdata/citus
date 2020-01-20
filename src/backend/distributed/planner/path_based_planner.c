@@ -22,13 +22,12 @@
 
 static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path, List *tlist, List *clauses, List *custom_plans);
 static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
-static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath);
+static CustomPath * WrapTableAccessWithDistributedUnion(PlannerInfo *root, Path *originalPath);
 static Index VarnoFromFirstTargetEntry(List *tlist);
 static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
 static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
 
 static bool IsDistributedUnion(Path *path);
-static uint32 ColocationGroupForDistributedUnion(Path *path);
 
 typedef struct DistributedUnionPath
 {
@@ -36,6 +35,8 @@ typedef struct DistributedUnionPath
 
 	/* path to be executed on the worker */
 	Path *worker_path;
+
+	uint32 colocationId;
 } DistributedUnionPath;
 
 const CustomPathMethods distributedUnionMethods = {
@@ -46,7 +47,7 @@ const CustomPathMethods distributedUnionMethods = {
 
 
 CustomPath *
-WrapTableAccessWithDistributedUnion(Path *originalPath)
+WrapTableAccessWithDistributedUnion(PlannerInfo *root, Path *originalPath)
 {
 	DistributedUnionPath *distUnion = newNode(sizeof(DistributedUnionPath), T_CustomPath);
 	distUnion->custom_path.path.pathtype = T_CustomScan;
@@ -62,6 +63,10 @@ WrapTableAccessWithDistributedUnion(Path *originalPath)
 	distUnion->custom_path.methods = &distributedUnionMethods;
 
 	distUnion->worker_path = originalPath;
+
+	/* collect the colocation group of the table */
+	RangeTblEntry *rte = root->simple_rte_array[originalPath->parent->relid];
+	distUnion->colocationId = TableColocationId(rte->relid);
 
 	return (CustomPath *) distUnion;
 }
@@ -178,16 +183,6 @@ IsDistributedUnion(Path *path)
 }
 
 
-static uint32
-ColocationGroupForDistributedUnion(Path *path)
-{
-	Assert(IsDistributedUnion(path));
-	DistributedUnionPath *distUnion = (DistributedUnionPath *) path;
-	/* TODO actually retreive the right colocation id for the Distributed Union */
-	return 1;
-}
-
-
 void
 PathBasedPlannerRelationHook(PlannerInfo *root, RelOptInfo *relOptInfo, Index restrictionIndex, RangeTblEntry *rte)
 {
@@ -202,7 +197,7 @@ PathBasedPlannerRelationHook(PlannerInfo *root, RelOptInfo *relOptInfo, Index re
 	foreach(pathCell, relOptInfo->pathlist)
 	{
 		Path *originalPath = lfirst(pathCell);
-		pathCell->data.ptr_value = WrapTableAccessWithDistributedUnion(originalPath);
+		pathCell->data.ptr_value = WrapTableAccessWithDistributedUnion(root, originalPath);
 	}
 }
 
