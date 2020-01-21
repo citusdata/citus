@@ -1595,11 +1595,11 @@ AssignTasksToConnections(DistributedExecution *execution)
 		bool placementExecutionReady = true;
 		int placementExecutionIndex = 0;
 		int placementExecutionCount = list_length(task->taskPlacementList);
+
 		if (!TransactionConnectedToLocalhost)
 		{
-			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task) &&
-											  TaskListModifiesDatabase(modLevel,
-																	   taskList);
+			/* connecting local host remotely */
+			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task);
 		}
 
 		/*
