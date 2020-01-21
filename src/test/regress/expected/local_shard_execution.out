@@ -528,7 +528,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 	TRUNCATE distributed_table CASCADE;
 NOTICE:  truncate cascades to table "second_distributed_table"
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -543,7 +543,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 	-- even no need to supply any data
 	COPY distributed_table FROM STDIN WITH CSV;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -557,7 +557,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,10)i;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -571,7 +571,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 	INSERT INTO distributed_table (key) SELECT key+1 FROM distributed_table;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -586,7 +586,7 @@ BEGIN;
 	DELETE FROM distributed_table WHERE key = 1;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
 	EXPLAIN ANALYZE DELETE FROM distributed_table WHERE key = 1;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -1225,7 +1225,7 @@ BEGIN;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
 	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SELECT count(*) FROM distributed_table;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;

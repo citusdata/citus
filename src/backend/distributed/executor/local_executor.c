@@ -505,7 +505,7 @@ ErrorIfTransactionAccessedPlacementsLocally(void)
 	if (TransactionAccessedLocalPlacement)
 	{
 		ereport(ERROR, (errmsg("cannot execute command because a local execution has "
-							   "already been done in the transaction"),
+							   "accessed a placement in the transaction"),
 						errhint("Try re-running the transaction with "
 								"\"SET LOCAL citus.enable_local_execution TO OFF;\""),
 						errdetail("Some parallel commands cannot be executed if a "
