@@ -1598,7 +1598,7 @@ AssignTasksToConnections(DistributedExecution *execution)
 
 		if (!TransactionConnectedToLocalhost)
 		{
-			/* connecting local host remotely */
+			/* connecting local host via remote connection, record this */
 			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task);
 		}
 
