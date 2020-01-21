@@ -13,6 +13,8 @@
 
 #include "distributed/subplan_execution.h"
 
+#define LOCAL_NODE_ID -1
+
 extern bool LogIntermediateResults;
 
 extern List * FindSubPlansUsedInNode(Node *node);

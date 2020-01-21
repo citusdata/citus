@@ -27,6 +27,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -68,6 +69,7 @@
 #include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"
+#include "postmaster/postmaster.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
@@ -150,6 +152,7 @@ static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
+static ShardPlacement * CreateDummyPlacement(void);
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
@@ -2214,8 +2217,6 @@ List *
 FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 					 bool replacePrunedQueryWithDummy)
 {
-	static uint32 zeroShardQueryRoundRobin = 0;
-
 	List *workerList = NIL;
 
 	/*
@@ -2230,27 +2231,60 @@ FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 	}
 	else if (replacePrunedQueryWithDummy)
 	{
-		List *workerNodeList = ActiveReadableWorkerNodeList();
-		if (workerNodeList != NIL)
+		ShardPlacement *dummyPlacement = CreateDummyPlacement();
+		if (dummyPlacement != NULL)
 		{
-			int workerNodeCount = list_length(workerNodeList);
-			int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
-			WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
-															 workerNodeIndex);
-			ShardPlacement *dummyPlacement =
-				(ShardPlacement *) CitusMakeNode(ShardPlacement);
-			dummyPlacement->nodeName = workerNode->workerName;
-			dummyPlacement->nodePort = workerNode->workerPort;
-			dummyPlacement->nodeId = workerNode->nodeId;
-			dummyPlacement->groupId = workerNode->groupId;
-
 			workerList = lappend(workerList, dummyPlacement);
-
-			zeroShardQueryRoundRobin++;
 		}
 	}
 
 	return workerList;
+}
+
+
+/*
+ * CreateDummyPlacement creates a dummy placement that can be used for queries
+ * that don't involve any shards. The typical examples are:
+ *       (a) queries that consist of only intermediate results
+ *       (b) queries that hit zero shards (... WHERE false;)
+ *
+ * If round robin policy is set, the placement could be on any node in pg_dist_node.
+ * Else, the local node is set for the placement.
+ */
+static ShardPlacement *
+CreateDummyPlacement(void)
+{
+	static uint32 zeroShardQueryRoundRobin = 0;
+	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
+
+	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
+	{
+		List *workerNodeList = ActiveReadableWorkerNodeList();
+		if (workerNodeList == NIL)
+		{
+			return NULL;
+		}
+
+		int workerNodeCount = list_length(workerNodeList);
+		int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
+														 workerNodeIndex);
+		dummyPlacement->nodeName = workerNode->workerName;
+		dummyPlacement->nodePort = workerNode->workerPort;
+		dummyPlacement->nodeId = workerNode->nodeId;
+		dummyPlacement->groupId = workerNode->groupId;
+
+		zeroShardQueryRoundRobin++;
+	}
+	else
+	{
+		dummyPlacement->nodeId = LOCAL_NODE_ID;
+		dummyPlacement->nodeName = LOCAL_HOST_NAME;
+		dummyPlacement->nodePort = PostPortNumber;
+		dummyPlacement->groupId = GetLocalGroupId();
+	}
+
+	return dummyPlacement;
 }
 
 
