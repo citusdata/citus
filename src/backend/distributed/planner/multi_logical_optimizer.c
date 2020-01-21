@@ -137,6 +137,18 @@ typedef struct QueryOrderByLimit
 
 
 /*
+ * LimitPushdownable tells us how a limit can be pushed down.
+ * See WorkerLimitCount for details.
+ */
+typedef enum LimitPushdownable
+{
+	LIMIT_CANNOT_PUSHDOWN,
+	LIMIT_CAN_PUSHDOWN,
+	LIMIT_CAN_APPROXIMATE,
+} LimitPushdownable;
+
+
+/*
  * OrderByLimitReference a structure that is used commonly while
  * processing sort and limit clauses.
  */
@@ -300,7 +312,7 @@ static List * GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
 													 Index *nextSortGroupRefIndex);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
-static bool HasOrderByAverage(List *sortClauseList, List *targetList);
+static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
 static bool HasOrderByHllType(List *sortClauseList, List *targetList);
 
@@ -4213,8 +4225,7 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 				 orderByLimitReference)
 {
 	Node *workerLimitNode = NULL;
-	bool canPushDownLimit = false;
-	bool canApproximate = false;
+	LimitPushdownable canPushDownLimit = LIMIT_CANNOT_PUSHDOWN;
 
 	/* no limit node to push down */
 	if (limitCount == NULL)
@@ -4239,27 +4250,27 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	if (orderByLimitReference.groupClauseIsEmpty ||
 		orderByLimitReference.groupedByDisjointPartitionColumn)
 	{
-		canPushDownLimit = true;
+		canPushDownLimit = LIMIT_CAN_PUSHDOWN;
 	}
 	else if (orderByLimitReference.sortClauseIsEmpty)
 	{
-		canPushDownLimit = false;
+		canPushDownLimit = LIMIT_CANNOT_PUSHDOWN;
 	}
 	else if (!orderByLimitReference.hasOrderByAggregate)
 	{
-		canPushDownLimit = true;
+		canPushDownLimit = LIMIT_CAN_PUSHDOWN;
 	}
-	else
+	else if (orderByLimitReference.canApproximate)
 	{
-		canApproximate = orderByLimitReference.canApproximate;
+		canPushDownLimit = LIMIT_CAN_APPROXIMATE;
 	}
 
 	/* create the workerLimitNode according to the decisions above */
-	if (canPushDownLimit)
+	if (canPushDownLimit == LIMIT_CAN_PUSHDOWN)
 	{
 		workerLimitNode = (Node *) copyObject(limitCount);
 	}
-	else if (canApproximate)
+	else if (canPushDownLimit == LIMIT_CAN_APPROXIMATE)
 	{
 		Const *workerLimitConst = (Const *) copyObject(limitCount);
 		int64 workerLimitCount = (int64) LimitClauseRowFetchCount;
@@ -4452,14 +4463,11 @@ CanPushDownLimitApproximate(List *sortClauseList, List *targetList)
 
 	if (sortClauseList != NIL)
 	{
-		bool orderByAverage = HasOrderByAverage(sortClauseList, targetList);
+		bool orderByNonCommutativeAggregate =
+			HasOrderByNonCommutativeAggregate(sortClauseList, targetList);
 		bool orderByComplex = HasOrderByComplexExpression(sortClauseList, targetList);
 
-		/*
-		 * If we don't have any order by average or any complex expressions with
-		 * aggregates in them, we can meaningfully approximate.
-		 */
-		if (!orderByAverage && !orderByComplex)
+		if (!orderByNonCommutativeAggregate && !orderByComplex)
 		{
 			canApproximate = true;
 		}
@@ -4497,13 +4505,13 @@ HasOrderByAggregate(List *sortClauseList, List *targetList)
 
 
 /*
- * HasOrderByAverage walks over the given order by clauses, and checks if we
- * have an order by an average. If we do, the function returns true.
+ * HasOrderByNonCommutativeAggregate walks over the given order by clauses,
+ * and checks if we have an order by an aggregate which is not commutative.
  */
 static bool
-HasOrderByAverage(List *sortClauseList, List *targetList)
+HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList)
 {
-	bool hasOrderByAverage = false;
+	bool hasOrderByNonCommutativeAggregate = false;
 	ListCell *sortClauseCell = NULL;
 
 	foreach(sortClauseCell, sortClauseList)
@@ -4517,15 +4525,22 @@ HasOrderByAverage(List *sortClauseList, List *targetList)
 			Aggref *aggregate = (Aggref *) sortExpression;
 
 			AggregateType aggregateType = GetAggregateType(aggregate);
-			if (aggregateType == AGGREGATE_AVERAGE)
+			if (aggregateType != AGGREGATE_MIN &&
+				aggregateType != AGGREGATE_MAX &&
+				aggregateType != AGGREGATE_SUM &&
+				aggregateType != AGGREGATE_COUNT &&
+				aggregateType != AGGREGATE_BIT_AND &&
+				aggregateType != AGGREGATE_BIT_OR &&
+				aggregateType != AGGREGATE_EVERY &&
+				aggregateType != AGGREGATE_ANY_VALUE)
 			{
-				hasOrderByAverage = true;
+				hasOrderByNonCommutativeAggregate = true;
 				break;
 			}
 		}
 	}
 
-	return hasOrderByAverage;
+	return hasOrderByNonCommutativeAggregate;
 }
 
 
