@@ -656,18 +656,34 @@ SELECT * FROM v_local_query_execution_2 WHERE key = 500;
 -- even if we switch from remote execution -> local execution,
 -- we are able to use remote execution after rollback
 BEGIN;
-	SAVEPOINT my_savepoint;
-
-	SELECT count(*) FROM distributed_table;
-
+    SAVEPOINT my_savepoint;
+    SELECT count(*) FROM distributed_table;
     DELETE FROM distributed_table WHERE key = 500;
-
     ROLLBACK TO SAVEPOINT my_savepoint;
-
-	DELETE FROM distributed_table WHERE key = 500;
-
+    DELETE FROM distributed_table WHERE key = 500;
 COMMIT;
 
+-- even if we switch from remote execution -> local execution,
+-- we are able to use remote execution after rollback 
+BEGIN;
+    SAVEPOINT my_savepoint;
+    DELETE FROM distributed_table;
+    DELETE FROM distributed_table WHERE key = 500;
+    ROLLBACK TO SAVEPOINT my_savepoint;
+    DELETE FROM distributed_table WHERE key = 500;
+ROLLBACK;
+
+-- even if we switch from remote execution -> local execution,
+-- we are able to use remote execution after rollback 
+BEGIN;
+    SAVEPOINT my_savepoint;
+    TRUNCATE distributed_table CASCADE;
+    SELECT count(*) FROM distributed_table WHERE key = 500;
+    ROLLBACK TO SAVEPOINT my_savepoint;
+    SELECT count(*) FROM distributed_table WHERE key = 500;
+ROLLBACK;
+
+-- even if we switch from local execution -> remote execution,
 -- even if we switch from local execution -> remote execution,
 -- we are able to use local execution after rollback
 BEGIN;

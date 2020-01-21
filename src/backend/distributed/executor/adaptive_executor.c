@@ -1588,16 +1588,18 @@ AssignTasksToConnections(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
 		bool placementExecutionReady = true;
 		int placementExecutionIndex = 0;
 		int placementExecutionCount = list_length(task->taskPlacementList);
-
 		if (!TransactionConnectedToLocalhost)
 		{
-			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task);
+			TransactionConnectedToLocalhost = TaskAccessesLocalNode(task) &&
+											  TaskListModifiesDatabase(modLevel,
+																	   taskList);
 		}
 
 		/*

@@ -1270,8 +1270,8 @@ NOTICE:  executing the command locally: SELECT key, value, age FROM (SELECT dist
 -- even if we switch from remote execution -> local execution,
 -- we are able to use remote execution after rollback
 BEGIN;
-	SAVEPOINT my_savepoint;
-	SELECT count(*) FROM distributed_table;
+    SAVEPOINT my_savepoint;
+    SELECT count(*) FROM distributed_table;
  count
 ---------------------------------------------------------------------
    101
@@ -1279,8 +1279,38 @@ BEGIN;
 
     DELETE FROM distributed_table WHERE key = 500;
     ROLLBACK TO SAVEPOINT my_savepoint;
-	DELETE FROM distributed_table WHERE key = 500;
+    DELETE FROM distributed_table WHERE key = 500;
 COMMIT;
+-- even if we switch from remote execution -> local execution,
+-- we are able to use remote execution after rollback
+BEGIN;
+    SAVEPOINT my_savepoint;
+    DELETE FROM distributed_table;
+    DELETE FROM distributed_table WHERE key = 500;
+    ROLLBACK TO SAVEPOINT my_savepoint;
+    DELETE FROM distributed_table WHERE key = 500;
+ROLLBACK;
+-- even if we switch from remote execution -> local execution,
+-- we are able to use remote execution after rollback
+BEGIN;
+    SAVEPOINT my_savepoint;
+    TRUNCATE distributed_table CASCADE;
+NOTICE:  truncate cascades to table "second_distributed_table"
+    SELECT count(*) FROM distributed_table WHERE key = 500;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+    ROLLBACK TO SAVEPOINT my_savepoint;
+    SELECT count(*) FROM distributed_table WHERE key = 500;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+-- even if we switch from local execution -> remote execution,
 -- even if we switch from local execution -> remote execution,
 -- we are able to use local execution after rollback
 BEGIN;
