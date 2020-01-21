@@ -1,11 +1,11 @@
 CREATE SCHEMA intermediate_result_pruning;
 SET search_path TO intermediate_result_pruning;
-SET citus.log_intermediate_results TO 1;
+SET citus.log_intermediate_results TO TRUE;
+SET citus.log_local_commands TO TRUE;
 
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1480000;
 SET citus.shard_replication_factor TO 1;
-SET citus.enable_local_execution TO 1;
 
 CREATE TABLE table_1 (key int, value text);
 SELECT create_distributed_table('table_1', 'key');
