@@ -1728,6 +1728,12 @@ AssignTasksToConnections(DistributedExecution *execution)
 				 */
 				placementExecutionReady = false;
 			}
+
+			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
+				GetLocalGroupId())
+			{
+				TransactionConnectedToLocalGroup = true;
+			}
 		}
 	}
 

@@ -18,6 +18,7 @@ extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
 extern bool TransactionAccessedLocalPlacement;
+extern bool TransactionConnectedToLocalGroup;
 
 extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,

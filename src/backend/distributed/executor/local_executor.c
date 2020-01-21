@@ -98,6 +98,7 @@ bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
 bool TransactionAccessedLocalPlacement = false;
+bool TransactionConnectedToLocalGroup = false;
 
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
@@ -447,7 +448,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * has happened because that'd break transaction visibility rules and
 		 * many other things.
 		 */
-		return !AnyConnectionAccessedPlacements();
+		return !TransactionConnectedToLocalGroup;
 	}
 
 	if (!singleTask)
