@@ -97,7 +97,7 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
-bool LocalExecutionHappened = false;
+bool TransactionAccessedLocalPlacement = false;
 
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
@@ -143,6 +143,17 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
+
+		/*
+		 * If we have a valid shard id, a distributed table will be accessed
+		 * during execution. Record it to apply the restrictions related to
+		 * local execution.
+		 */
+		if (!TransactionAccessedLocalPlacement &&
+			task->anchorShardId != INVALID_SHARD_ID)
+		{
+			TransactionAccessedLocalPlacement = true;
+		}
 
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
@@ -395,7 +406,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -447,7 +458,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * execution is happening one task at a time (e.g., similar to sequential
 		 * distributed execution).
 		 */
-		Assert(!LocalExecutionHappened);
+		Assert(!TransactionAccessedLocalPlacement);
 
 		return false;
 	}
@@ -481,17 +492,17 @@ TaskAccessesLocalNode(Task *task)
 
 
 /*
- * ErrorIfLocalExecutionHappened() errors out if a local query has already been executed
- * in the same transaction.
+ * ErrorIfTransactionAccessedPlacementsLocally() errors out if a local query on any shard
+ * has already been executed in the same transaction.
  *
  * This check is required because Citus currently hasn't implemented local execution
  * infrastructure for all the commands/executors. As we implement local execution for
  * the command/executor that this function call exists, we should simply remove the check.
  */
 void
-ErrorIfLocalExecutionHappened(void)
+ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		ereport(ERROR, (errmsg("cannot execute command because a local execution has "
 							   "already been done in the transaction"),

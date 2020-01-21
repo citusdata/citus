@@ -17,13 +17,13 @@
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
-extern bool LocalExecutionHappened;
+extern bool TransactionAccessedLocalPlacement;
 
 extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);
-extern void ErrorIfLocalExecutionHappened(void);
+extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void SetTaskQueryAndPlacementList(Task *task, Query *query, List *placementList);
 extern char * TaskQueryString(Task *task);
 extern bool TaskAccessesLocalNode(Task *task);
