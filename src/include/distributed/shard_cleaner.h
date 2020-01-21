@@ -15,6 +15,6 @@
 extern int DeferShardDeleteInterval;
 extern bool DeferShardDeleteOnMove;
 
-extern int TryDropMarkedShards(void);
+extern int TryDropMarkedShards(bool waitForCleanupLock);
 
 #endif /*CITUS_SHARD_CLEANER_H */
