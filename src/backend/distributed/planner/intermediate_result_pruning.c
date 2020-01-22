@@ -24,9 +24,9 @@
 /* controlled via GUC, used mostly for testing */
 bool LogIntermediateResults = false;
 
-static List * AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
-										   DistributedPlan *distributedPlan,
-										   int workerNodeCount);
+static void AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
+										 DistributedPlan *distributedPlan,
+										 int workerNodeCount);
 static List * FindAllRemoteWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry);
 static List * RemoveLocalNodeFromWorkerList(List *workerNodeList);
 static void LogIntermediateResultMulticastSummary(IntermediateResultsHashEntry *entry,
@@ -116,9 +116,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			 * workers will be in the node list. We can improve intermediate result
 			 * pruning by deciding which reference table shard will be accessed earlier
 			 */
-			entry->nodeIdList = AppendAllAccessedWorkerNodes(entry,
-															 distributedPlan,
-															 workerNodeCount);
+			AppendAllAccessedWorkerNodes(entry, distributedPlan, workerNodeCount);
 
 			elog(DEBUG4, "Subplan %s is used in %lu", resultId, distributedPlan->planId);
 		}
@@ -141,19 +139,20 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 
 /*
  * AppendAllAccessedWorkerNodes iterates over all the tasks in a distributed plan
- * to create the list of worker nodes that can be accessed when this plan is executed.
+ * to updates the list of worker nodes that can be accessed when this plan is
+ * executed in entry. Depending on the plan, the function may give the decision for
+ * writing the results locally.
  *
  * If there are multiple placements of a Shard, all of them are considered and
  * all the workers with placements are appended to the list. This effectively
  * means that if there is a reference table access in the distributed plan, all
  * the workers will be in the resulting list.
  */
-static List *
+static void
 AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
-							 DistributedPlan *distributedPlan, int
-							 workerNodeCount)
+							 DistributedPlan *distributedPlan,
+							 int workerNodeCount)
 {
-	List *workerNodeList = entry->nodeIdList;
 	List *taskList = distributedPlan->workerJob->taskList;
 	ListCell *taskCell = NULL;
 
@@ -171,17 +170,17 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 				continue;
 			}
 
-			workerNodeList = list_append_unique_int(workerNodeList, placement->nodeId);
+			entry->nodeIdList =
+				list_append_unique_int(entry->nodeIdList, placement->nodeId);
 
 			/* early return if all the workers are accessed */
-			if (list_length(workerNodeList) == workerNodeCount && entry->writeLocalFile)
+			if (list_length(entry->nodeIdList) == workerNodeCount &&
+				entry->writeLocalFile)
 			{
-				return workerNodeList;
+				return;
 			}
 		}
 	}
-
-	return workerNodeList;
 }
 
 
@@ -286,18 +285,19 @@ FindAllRemoteWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry)
 static List *
 RemoveLocalNodeFromWorkerList(List *workerNodeList)
 {
-	WorkerNode *workerNode = NULL;
 	int32 localGroupId = GetLocalGroupId();
 
-	/* we'll iterate over the list while deleting from it, so copy it */
-	List *copyOfWorkerNodeList = list_copy(workerNodeList);
-	foreach_ptr(workerNode, copyOfWorkerNodeList)
+	ListCell *workerNodeCell = NULL;
+	ListCell *prev = NULL;
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		if (workerNode->groupId == localGroupId)
 		{
-			workerNodeList = list_delete_ptr(workerNodeList, workerNode);
-			break;
+			return list_delete_cell(workerNodeList, workerNodeCell, prev);
 		}
+
+		prev = workerNodeCell;
 	}
 
 	return workerNodeList;
