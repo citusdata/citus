@@ -9,6 +9,9 @@ SET citus.next_shard_id TO 16000000;
 -- the tests rely on intermediate results
 SET citus.enable_cte_inlining TO false;
 
+-- prevent using locally executing the intermediate results
+SET citus.task_assignment_policy TO "round-robin";
+
 SELECT pg_backend_pid() as pid \gset
 
 CREATE TABLE users_table (user_id int, user_name text);
