@@ -37,8 +37,8 @@
  */
 typedef struct NodePair
 {
-	int sourceNodeId;
-	int targetNodeId;
+	uint32 sourceNodeId;
+	uint32 targetNodeId;
 } NodePair;
 
 
@@ -214,7 +214,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			ShardPlacement *shardPlacement = lfirst(placementCell);
 			StringInfo wrappedQuery = makeStringInfo();
 			appendStringInfo(wrappedQuery,
-							 "SELECT %d, partition_index"
+							 "SELECT %u, partition_index"
 							 ", %s || '_' || partition_index::text "
 							 ", rows_written "
 							 "FROM worker_partition_query_result"
@@ -370,8 +370,8 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
 								 DistTableCacheEntry *targetRelation)
 {
 	bool isNull = false;
-	int sourceNodeId = DatumGetInt32(slot_getattr(tupleSlot, 1, &isNull));
-	int targetShardIndex = DatumGetInt32(slot_getattr(tupleSlot, 2, &isNull));
+	uint32 sourceNodeId = DatumGetUInt32(slot_getattr(tupleSlot, 1, &isNull));
+	uint32 targetShardIndex = DatumGetUInt32(slot_getattr(tupleSlot, 2, &isNull));
 	text *resultId = DatumGetTextP(slot_getattr(tupleSlot, 3, &isNull));
 	int64 rowCount = DatumGetInt64(slot_getattr(tupleSlot, 4, &isNull));
 
@@ -533,7 +533,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 	{
 		NodeToNodeFragmentsTransfer *fragmentsTransfer = lfirst(transferCell);
 
-		int targetNodeId = fragmentsTransfer->nodes.targetNodeId;
+		uint32 targetNodeId = fragmentsTransfer->nodes.targetNodeId;
 
 		/* these should have already been pruned away in ColocationTransfers */
 		Assert(targetNodeId != fragmentsTransfer->nodes.sourceNodeId);

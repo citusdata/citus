@@ -88,9 +88,9 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 		bool columnNulls[5] = { 0 };
 		Datum columnValues[5] = {
 			CStringGetTextDatum(fragment->resultId),
-			Int32GetDatum(fragment->nodeId),
+			UInt32GetDatum(fragment->nodeId),
 			Int64GetDatum(fragment->rowCount),
-			Int64GetDatum(fragment->targetShardId),
+			UInt64GetDatum(fragment->targetShardId),
 			Int32GetDatum(fragment->targetShardIndex)
 		};
 
