@@ -54,3 +54,9 @@ CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix
 CREATE OR REPLACE FUNCTION top_transaction_context_size() RETURNS BIGINT
 LANGUAGE C STRICT VOLATILE
 AS 'citus', $$top_transaction_context_size$$;
+
+CREATE FUNCTION citus_stop_test_worker(int)
+    RETURNS int AS 'citus' LANGUAGE C;
+CREATE FUNCTION citus_start_test_worker(int)
+    RETURNS void AS 'citus' LANGUAGE C;
+

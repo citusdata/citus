@@ -308,9 +308,39 @@ COMMIT;
 
 SELECT * FROM researchers WHERE lab_id=10;
 
+-- Test https://github.com/citusdata/citus/issues/2179
+CREATE TABLE ref(a int unique, b int);
+SELECT create_reference_table('ref');
+BEGIN;
+SAVEPOINT start;
+INSERT INTO ref VALUES (1001,2);
+SELECT public.citus_stop_test_worker(:worker_2_port);
+SELECT * FROM ref;
+ROLLBACK TO SAVEPOINT start;
+SELECT * FROM ref;
+END;
+SELECT public.citus_start_test_worker(:worker_2_port);
+SELECT shardid FROM pg_dist_shard
+JOIN pg_dist_placement USING (shardid)
+WHERE shardstate = 3 AND logicalrelid = 'ref'::regclass;
+SELECT * FROM ref ORDER BY 1;
+
+-- Test https://github.com/citusdata/citus/issues/3360
+BEGIN;
+SELECT * FROM artists JOIN ref ON id = a;
+SELECT public.citus_stop_test_worker(:worker_2_port);
+INSERT INTO ref VALUES (1002,2);
+END;
+SELECT public.citus_start_test_worker(:worker_2_port);
+SELECT * FROM ref ORDER BY 1;
+
+-- Clean-up
+DROP TABLE artists;
+DROP TABLE researchers;
+DROP TABLE ref;
+
 -- Verify that we don't have a memory leak in subtransactions
 -- See https://github.com/citusdata/citus/pull/4000
-
 CREATE FUNCTION text2number(v_value text) RETURNS numeric
     LANGUAGE plpgsql VOLATILE
     AS $$

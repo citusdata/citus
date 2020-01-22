@@ -387,6 +387,12 @@ SET ROLE read_access;
 SELECT worker_cleanup_job_schema_cache();
 SET ROLE no_access;
 SELECT worker_cleanup_job_schema_cache();
+
+-- test other functions only superuser can call
+SET ROLE full_access;
+SELECT citus_stop_test_worker(:worker_1_port);
+SELECT citus_start_test_worker(:worker_1_port);
+
 RESET ROLE;
 
 -- to test access to files created during repartition we will create some on worker 1
