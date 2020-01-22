@@ -78,6 +78,7 @@ static bool IsFirstWorkerNode();
 static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 											  Oid oldRelationId, void *arg);
 static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
+static void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 
 
 /* exports for SQL callable functions */
@@ -332,6 +333,34 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
+	SetLocktagForShardDistributionMetadata(shardId, &tag);
+	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
+}
+
+
+/*
+ * TryLockShardDistributionMetadata tries to grab a lock for distribution
+ * metadata related to the specified shard, returning false if the lock
+ * is currently taken. Any locks acquired using this method are released
+ * at transaction end.
+ */
+bool
+TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SetLocktagForShardDistributionMetadata(shardId, &tag);
+	bool lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
+
+	return lockAcquired;
+}
+
+
+static void
+SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
+{
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 	DistTableCacheEntry *distributedTable = DistributedTableCacheEntry(
@@ -341,15 +370,13 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 	if (colocationId == INVALID_COLOCATION_ID ||
 		distributedTable->partitionMethod != DISTRIBUTE_BY_HASH)
 	{
-		SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+		SET_LOCKTAG_SHARD_METADATA_RESOURCE(*tag, MyDatabaseId, shardId);
 	}
 	else
 	{
-		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(tag, MyDatabaseId, colocationId,
+		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(*tag, MyDatabaseId, colocationId,
 													   shardInterval->shardIndex);
 	}
-
-	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
 }
 
 
@@ -458,27 +485,6 @@ GetSortedReferenceShardIntervals(List *relationList)
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
 	return shardIntervalList;
-}
-
-
-/*
- * TryLockShardDistributionMetadata tries to grab a lock for distribution
- * metadata related to the specified shard, returning false if the lock
- * is currently taken. Any locks acquired using this method are released
- * at transaction end.
- */
-bool
-TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
-{
-	LOCKTAG tag;
-	const bool sessionLock = false;
-	const bool dontWait = true;
-
-	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
-
-	bool lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
-
-	return lockAcquired;
 }
 
 
