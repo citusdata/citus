@@ -44,6 +44,7 @@ test: multi_mx_modifying_xacts
 test: multi_mx_explain
 test: multi_mx_reference_table
 test: multi_mx_insert_select_repartition
+test: locally_execute_intermediate_results
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
