@@ -686,6 +686,7 @@ distributed_local_mixed AS (SELECT * FROM reference_table WHERE key IN (SELECT k
 SELECT * FROM local_insert, distributed_local_mixed;
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
 NOTICE:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
+NOTICE:  executing the command locally: SELECT local_insert.key, local_insert.value, local_insert.age, distributed_local_mixed.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_local_mixed
  key | value | age | key
 ---------------------------------------------------------------------
    1 | 11    |  21 |   1
@@ -1435,6 +1436,7 @@ EXECUTE serial_prepared_local;
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (1000) RETURNING key
+NOTICE:  executing the command locally: SELECT key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_local_mixed
  key
 ---------------------------------------------------------------------
  1000

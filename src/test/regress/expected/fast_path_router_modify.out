@@ -368,8 +368,7 @@ EXECUTE prepared_zero_shard_select(1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -379,8 +378,7 @@ EXECUTE prepared_zero_shard_select(2);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -390,8 +388,7 @@ EXECUTE prepared_zero_shard_select(3);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 3) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 3) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -401,8 +398,7 @@ EXECUTE prepared_zero_shard_select(4);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 4) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 4) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -412,8 +408,7 @@ EXECUTE prepared_zero_shard_select(5);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 5) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 5) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -423,16 +418,14 @@ EXECUTE prepared_zero_shard_select(6);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 6) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 6) AND false)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE prepared_zero_shard_select(7);
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 7) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 7) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -466,16 +459,14 @@ EXECUTE prepared_zero_shard_update(7);
 -- same test with fast-path disabled
 SET citus.enable_fast_path_router_planner TO FALSE;
 EXECUTE prepared_zero_shard_select(1);
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE prepared_zero_shard_select(2);
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -490,8 +481,7 @@ PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 =
 EXECUTE prepared_zero_shard_select(1);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -500,8 +490,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
 EXECUTE prepared_zero_shard_select(2);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -510,8 +499,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
 EXECUTE prepared_zero_shard_select(3);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -520,8 +508,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
 EXECUTE prepared_zero_shard_select(4);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -530,8 +517,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
 EXECUTE prepared_zero_shard_select(5);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -540,16 +526,14 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: 4
 EXECUTE prepared_zero_shard_select(6);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE prepared_zero_shard_select(7);
-NOTICE:  issuing SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 3
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
      0

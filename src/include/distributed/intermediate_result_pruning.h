@@ -13,7 +13,7 @@
 
 #include "distributed/subplan_execution.h"
 
-#define LOCAL_NODE_ID -1
+#define LOCAL_NODE_ID 555
 
 extern bool LogIntermediateResults;
 
@@ -23,6 +23,9 @@ extern List * FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 extern HTAB * MakeIntermediateResultHTAB(void);
 extern void RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 										   DistributedPlan *distributedPlan);
+extern IntermediateResultsHashEntry * SearchIntermediateResult(HTAB
+															   *intermediateResultsHash,
+															   char *resultId);
 
 
 #endif /* INTERMEDIATE_RESULT_PRUNING_H */

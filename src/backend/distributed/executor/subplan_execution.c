@@ -46,7 +46,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	HTAB *intermediateResultsHash = MakeIntermediateResultHTAB();
 	RecordSubplanExecutionsOnNodes(intermediateResultsHash, distributedPlan);
 
-
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.
 	 *
@@ -61,40 +60,18 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
 		ParamListInfo params = NULL;
-		bool writeLocalFile = false;
 		char *resultId = GenerateResultId(planId, subPlanId);
-		List *workerNodeList =
+		List *remoteWorkerNodeList =
 			FindAllWorkerNodesUsingSubplan(intermediateResultsHash, resultId);
 
-		/*
-		 * Write intermediate results to local file only if there is no worker
-		 * node that receives them.
-		 *
-		 * This could happen in two cases:
-		 * (a) Subquery in the having
-		 * (b) The intermediate result is not used, such as RETURNING of a
-		 *     modifying CTE is not used
-		 *
-		 * For SELECT, Postgres/Citus is clever enough to not execute the CTE
-		 * if it is not used at all, but for modifications we have to execute
-		 * the queries.
-		 */
-		if (workerNodeList == NIL)
-		{
-			writeLocalFile = true;
-
-			if ((LogIntermediateResults && IsLoggableLevel(DEBUG1)) ||
-				IsLoggableLevel(DEBUG4))
-			{
-				elog(DEBUG1, "Subplan %s will be written to local file", resultId);
-			}
-		}
+		IntermediateResultsHashEntry *entry =
+			SearchIntermediateResult(intermediateResultsHash, resultId);
 
 		SubPlanLevel++;
 		EState *estate = CreateExecutorState();
-		DestReceiver *copyDest = CreateRemoteFileDestReceiver(resultId, estate,
-															  workerNodeList,
-															  writeLocalFile);
+		DestReceiver *copyDest =
+			CreateRemoteFileDestReceiver(resultId, estate, remoteWorkerNodeList,
+										 entry->writeLocalFile);
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
