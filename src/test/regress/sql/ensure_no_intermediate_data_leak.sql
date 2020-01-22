@@ -7,5 +7,20 @@
 -- WINDOWS SUPPORT SO WE DISABLE THIS TEST ON WINDOWS
 ------
 
-SELECT pg_ls_dir('base/pgsql_job_cache') WHERE citus_version() NOT ILIKE '%windows%';
-SELECT * FROM run_command_on_workers($$SELECT pg_ls_dir('base/pgsql_job_cache') r WHERE citus_version() NOT ILIKE '%windows%'$$) WHERE result <> '';
+WITH xact_dirs AS (
+  SELECT pg_ls_dir('base/pgsql_job_cache') dir WHERE citus_version() NOT ILIKE '%windows%'
+), result_files AS (
+  SELECT dir, pg_ls_dir('base/pgsql_job_cache/' || dir) result_file FROM xact_dirs
+)
+SELECT array_agg((xact_dirs.dir, result_files.result_file)) FROM xact_dirs LEFT OUTER JOIN result_files ON xact_dirs.dir = result_files.dir;
+
+
+SELECT * FROM run_command_on_workers($$
+  WITH xact_dirs AS (
+    SELECT pg_ls_dir('base/pgsql_job_cache') dir WHERE citus_version() NOT ILIKE '%windows%'
+  ), result_files AS (
+    SELECT dir, pg_ls_dir('base/pgsql_job_cache/' || dir) result_file FROM xact_dirs
+  )
+  SELECT array_agg((xact_dirs.dir, result_files.result_file)) FROM xact_dirs LEFT OUTER JOIN result_files ON xact_dirs.dir = result_files.dir;
+$$) WHERE result <> '';
+
