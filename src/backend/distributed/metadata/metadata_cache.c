@@ -2281,7 +2281,7 @@ CitusTableVisibleFuncId(void)
  * one session connected to it, we do not need to implement any invalidation
  * mechanism.
  */
-char *
+const char *
 CurrentDatabaseName(void)
 {
 	if (!MetadataCache.databaseNameValid)

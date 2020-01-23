@@ -846,7 +846,7 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 		{
 			char *nodeName = taskTracker->workerName;
 			uint32 nodePort = taskTracker->workerPort;
-			char *nodeDatabase = CurrentDatabaseName();
+			const char *nodeDatabase = CurrentDatabaseName();
 			char *nodeUser = taskTracker->userName;
 
 			int32 connectionId = MultiClientConnectStart(nodeName, nodePort,

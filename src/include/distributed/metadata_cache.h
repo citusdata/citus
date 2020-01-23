@@ -216,7 +216,7 @@ extern Oid BinaryCopyFormatId(void);
 extern Oid CitusExtensionOwner(void);
 extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
-extern char * CurrentDatabaseName(void);
+extern const char * CurrentDatabaseName(void);
 
 
 #endif /* METADATA_CACHE_H */
