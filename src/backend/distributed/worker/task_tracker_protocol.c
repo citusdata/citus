@@ -354,7 +354,7 @@ CreateJobSchema(StringInfo schemaName)
 static void
 CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 {
-	char *databaseName = CurrentDatabaseName();
+	const char *databaseName = CurrentDatabaseName();
 	char *userName = CurrentUserName();
 
 	/* increase task priority for cleanup tasks */
