@@ -14,11 +14,7 @@
 #include "distributed/subplan_execution.h"
 
 /*
- * TODO: In theory, a node can have the nodeID UINT32_MAX,
- * but in practice that doesn't sound realistic. In addition
- * to that, pg_dist_node_nodeid_seq would error out after
- * getting to UINT32_MAX as that's the limit. Thus, we'd have
- * a bigger problem than this.
+ * UINT32_MAX is reserved in pg_dist_node, so we can use it safely.
  */
 #define LOCAL_NODE_ID UINT32_MAX
 
