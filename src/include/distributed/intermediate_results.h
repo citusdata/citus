@@ -31,7 +31,7 @@ typedef struct DistributedResultFragment
 	char *resultId;
 
 	/* location of the result */
-	int nodeId;
+	uint32 nodeId;
 
 	/* number of rows in the result file */
 	int rowCount;
