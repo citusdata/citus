@@ -528,7 +528,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 	TRUNCATE distributed_table CASCADE;
 NOTICE:  truncate cascades to table "second_distributed_table"
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -543,7 +543,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 	-- even no need to supply any data
 	COPY distributed_table FROM STDIN WITH CSV;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -557,7 +557,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,10)i;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -571,7 +571,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 	INSERT INTO distributed_table (key) SELECT key+1 FROM distributed_table;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -586,7 +586,7 @@ BEGIN;
 	DELETE FROM distributed_table WHERE key = 1;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
 	EXPLAIN ANALYZE DELETE FROM distributed_table WHERE key = 1;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -686,6 +686,7 @@ distributed_local_mixed AS (SELECT * FROM reference_table WHERE key IN (SELECT k
 SELECT * FROM local_insert, distributed_local_mixed;
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text RETURNING citus_table_alias.key, citus_table_alias.value, citus_table_alias.age
 NOTICE:  executing the command locally: SELECT key FROM local_shard_execution.reference_table_1470000 reference_table WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT local_insert.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert))
+NOTICE:  executing the command locally: SELECT local_insert.key, local_insert.value, local_insert.age, distributed_local_mixed.key FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint)) local_insert, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_local_mixed
  key | value | age | key
 ---------------------------------------------------------------------
    1 | 11    |  21 |   1
@@ -732,6 +733,7 @@ WHERE
 	distributed_table.value = all_data.value AND distributed_table.key = 1
 ORDER BY
 	1 DESC;
+NOTICE:  executing the command locally: SELECT distributed_table.key FROM local_shard_execution.distributed_table_1470001 distributed_table, (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) all_data WHERE ((distributed_table.value OPERATOR(pg_catalog.=) all_data.value) AND (distributed_table.key OPERATOR(pg_catalog.=) 1)) ORDER BY distributed_table.key DESC
  key
 ---------------------------------------------------------------------
    1
@@ -1225,7 +1227,7 @@ BEGIN;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
 	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SELECT count(*) FROM distributed_table;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;
@@ -1434,6 +1436,7 @@ EXECUTE serial_prepared_local;
 -- Citus currently doesn't allow using task_assignment_policy for intermediate results
 WITH distributed_local_mixed AS (INSERT INTO reference_table VALUES (1000) RETURNING *) SELECT * FROM distributed_local_mixed;
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.reference_table_1470000 (key) VALUES (1000) RETURNING key
+NOTICE:  executing the command locally: SELECT key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_local_mixed
  key
 ---------------------------------------------------------------------
  1000

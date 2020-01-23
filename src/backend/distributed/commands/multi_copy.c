@@ -1828,7 +1828,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	/* Citus currently doesn't know how to handle COPY command locally */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfTransactionAccessedPlacementsLocally();
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -2908,6 +2908,11 @@ CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 	if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
 		ClaimConnectionExclusively(connection);
+	}
+
+	if (!TransactionConnectedToLocalGroup && placement->groupId == GetLocalGroupId())
+	{
+		TransactionConnectedToLocalGroup = true;
 	}
 
 	return connection;

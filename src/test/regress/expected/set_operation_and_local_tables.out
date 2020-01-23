@@ -81,7 +81,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 ERROR:  division by zero
-CONTEXT:  while executing command on localhost:xxxxx
 -- we should be able to run set operations with generate series and local tables as well
 ((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i) ORDER BY 1 DESC;
 DEBUG:  Local tables cannot be used in distributed queries.

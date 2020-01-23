@@ -764,8 +764,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
 
-	LocalExecutionHappened = true;
-
 	/*
 	 * We're deliberately not setting execution->rowsProceessed here. The main reason
 	 * is that modifications to reference tables would end-up setting it both here
@@ -882,7 +880,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * The code-paths that rely on this function do not know how execute
 	 * commands locally.
 	 */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfTransactionAccessedPlacementsLocally();
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1009,7 +1007,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
 		 * In case localExecutionHappened, we force the executor to use 2PC.
@@ -1729,6 +1727,12 @@ AssignTasksToConnections(DistributedExecution *execution)
 				 * placements.
 				 */
 				placementExecutionReady = false;
+			}
+
+			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
+				GetLocalGroupId())
+			{
+				TransactionConnectedToLocalGroup = true;
 			}
 		}
 	}
