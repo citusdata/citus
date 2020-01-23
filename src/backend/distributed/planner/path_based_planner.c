@@ -226,8 +226,9 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 	/* the distirbuted table has a partition key, lets check filters if there is a value */
 	if (partitionKey != NULL)
 	{
-		/* TODO set correct varattno for multi table queries*/
-		partitionKey->varattno = 1;
+		/* use the first rel id included in this relation */
+		partitionKey->varno = bms_next_member(relOptInfo->relids, -1);
+		Assert(bms_num_members(relOptInfo->relids) == 1);
 
 		partitionValue = ExtractPartitionValue(relOptInfo->baserestrictinfo, partitionKey);
 	}
@@ -307,7 +308,12 @@ CanOptimizeJoinPath(JoinPath *jpath)
 		return false;
 	}
 
-	/* TODO check if join is on distribution column, assume for now */
+	if (!equal(innerDU->partitionValue, outerDU->partitionValue))
+	{
+		/* TODO this is most likely too strict, but if the values are strictly the same we can easily take one during merging */
+		return false;
+	}
+
 	return true;
 }
 
@@ -324,7 +330,9 @@ OptimizeJoinPath(Path *originalPath)
 			if (CanOptimizeJoinPath(jpath))
 			{
 				/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
-				uint32 colocationId = ((DistributedUnionPath *) jpath->innerjoinpath)->colocationId;
+				DistributedUnionPath *baseDistUnion = (DistributedUnionPath *) jpath->innerjoinpath;
+				uint32 colocationId = baseDistUnion->colocationId;
+				Expr *partitionValue = baseDistUnion->partitionValue;
 
 				jpath->innerjoinpath = ((DistributedUnionPath *) jpath->innerjoinpath)->worker_path;
 				jpath->outerjoinpath = ((DistributedUnionPath *) jpath->outerjoinpath)->worker_path;
@@ -333,7 +341,10 @@ OptimizeJoinPath(Path *originalPath)
 				jpath->path.startup_cost -= 2000; /* remove the double dist union cost */
 				jpath->path.total_cost -= 2000; /* remove the double dist union cost */
 
-				return (Path *) WrapTableAccessWithDistributedUnion((Path *) jpath, colocationId, NULL);
+				return (Path *) WrapTableAccessWithDistributedUnion(
+					(Path *) jpath,
+					colocationId,
+					partitionValue);
 			}
 		}
 
