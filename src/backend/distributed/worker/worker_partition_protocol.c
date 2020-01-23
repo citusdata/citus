@@ -783,7 +783,7 @@ CitusRemoveDirectory(StringInfo filename)
 		removed = unlink(filename->data);
 	}
 
-	if (removed != 0)
+	if (removed != 0 && errno != ENOENT)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not remove file \"%s\": %m", filename->data)));
