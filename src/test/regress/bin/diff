@@ -18,7 +18,7 @@ file2="${@:(-1):1}"
 # filename of the expected file as the test name. We can have multiple
 # expected files for a single test with _0, _1, ... suffixes.
 # So for the test name, we also strip the additional suffix.
-test=$(basename $file1 .out | sed -E "s/_[0-9]+$//")
+test=$(basename "$file1" .out | sed -E "s/_[0-9]+$//")
 args=${@:1:$#-2}
 BASEDIR=$(dirname "$0")
 
@@ -33,16 +33,11 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
-	sed -Ef $BASEDIR/normalize.sed < $file1 > "$file1.modified"
-	mv "$file1" "$file1.unmodified"
-	mv "$file1.modified" "$file1"
+	sed -Ef $BASEDIR/normalize.sed < "$file1" > "$file1.modified"
 	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
-	mv "$file2" "$file2.unmodified"
-	mv "$file2.modified" "$file2"
-	$DIFF -w $args $file1 $file2
-	exitcode=$?
-	exit $exitcode
+	"$DIFF" -w $args "$file1.modified" "$file2.modified" | diff-filter
+	exit ${PIPESTATUS[0]}
 else
-	exec $DIFF -w $args $file1 $file2
+	exec "$DIFF" -w $args "$file1" "$file2"
 fi
 

@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+"""
+diff-filter denormalizes diff output by having lines beginning with ' ' or '+'
+come from file2's unmodified version.
+"""
+
+def main():
+	from sys import stdin, stdout
+
+	for line in stdin:
+		if line.startswith('+++ '):
+			tab = line.rindex('\t')
+			fname = line[4:tab]
+			file2 = iter(open(fname.replace('.modified', '')))
+			file2line = 1
+			stdout.write(line)
+		elif line.startswith('@@ '):
+			idx_start = line.index('+') + 1
+			idx_end = idx_start + 1
+			while line[idx_end].isdigit():
+				idx_end += 1
+			linenum = int(line[idx_start:idx_end])
+			while file2line < linenum:
+				next(file2)
+				file2line += 1
+			stdout.write(line)
+		elif line.startswith(' '):
+			stdout.write(' ')
+			stdout.write(next(file2))
+			file2line += 1
+		elif line.startswith('+'):
+			stdout.write('+')
+			stdout.write(next(file2))
+			file2line += 1
+		else:
+			stdout.write(line)
+
+main()
