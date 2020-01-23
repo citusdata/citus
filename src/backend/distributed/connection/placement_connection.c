@@ -134,7 +134,7 @@ static HTAB *ConnectionPlacementHash;
 typedef struct ColocatedPlacementsHashKey
 {
 	/* to identify host - database can't differ */
-	int nodeId;
+	uint32 nodeId;
 
 	/* colocation group, or invalid */
 	uint32 colocationGroupId;
