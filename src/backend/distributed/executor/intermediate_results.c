@@ -667,10 +667,7 @@ RemoveIntermediateResultsDirectory(void)
 {
 	if (CreatedResultsDirectory)
 	{
-		StringInfo resultsDirectory = makeStringInfo();
-		appendStringInfoString(resultsDirectory, IntermediateResultsDirectory());
-
-		CitusRemoveDirectory(resultsDirectory);
+		CitusRemoveDirectory(IntermediateResultsDirectory());
 
 		CreatedResultsDirectory = false;
 	}

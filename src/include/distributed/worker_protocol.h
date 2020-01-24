@@ -117,7 +117,7 @@ extern bool CacheDirectoryElement(const char *filename);
 extern bool JobDirectoryElement(const char *filename);
 extern bool DirectoryExists(StringInfo directoryName);
 extern void CitusCreateDirectory(StringInfo directoryName);
-extern void CitusRemoveDirectory(StringInfo filename);
+extern void CitusRemoveDirectory(const char *filename);
 extern StringInfo InitTaskDirectory(uint64 jobId, uint32 taskId);
 extern void RemoveJobSchema(StringInfo schemaName);
 extern Datum * DeconstructArrayObject(ArrayType *arrayObject);
