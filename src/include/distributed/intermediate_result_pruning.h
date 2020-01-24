@@ -29,5 +29,8 @@ extern void RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 extern IntermediateResultsHashEntry * SearchIntermediateResult(HTAB *resultsHash,
 															   char *resultId);
 
+/* utility functions related to UsedSubPlans */
+extern List * MergeUsedSubPlanLists(List *leftSubPlanList, List *rightSubPlanList);
+extern void UpdateUsedPlanListLocation(List *subPlanList, int localtionMask);
 
 #endif /* INTERMEDIATE_RESULT_PRUNING_H */

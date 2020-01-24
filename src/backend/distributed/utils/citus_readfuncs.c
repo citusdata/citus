@@ -245,6 +245,16 @@ ReadDistributedSubPlan(READFUNC_ARGS)
 
 
 READFUNC_RET
+ReadUsedDistributedSubPlan(READFUNC_ARGS)
+{
+	READ_LOCALS(UsedDistributedSubPlan);
+
+	READ_STRING_FIELD(subPlanId);
+	READ_INT_FIELD(locationMask);
+}
+
+
+READFUNC_RET
 ReadShardInterval(READFUNC_ARGS)
 {
 	READ_LOCALS(ShardInterval);

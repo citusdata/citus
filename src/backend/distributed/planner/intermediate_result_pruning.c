@@ -31,23 +31,29 @@ static List * FindAllRemoteWorkerNodesUsingSubplan(IntermediateResultsHashEntry 
 static List * RemoveLocalNodeFromWorkerList(List *workerNodeList);
 static void LogIntermediateResultMulticastSummary(IntermediateResultsHashEntry *entry,
 												  List *workerNodeList);
+static bool UsedSubPlansEqual(UsedDistributedSubPlan *left,
+							  UsedDistributedSubPlan *right);
+static UsedDistributedSubPlan * UsedSubPlanListMember(List *list,
+													  UsedDistributedSubPlan *usedPlan);
+
 
 /*
  * FindSubPlansUsedInPlan finds all the subplans used by the plan by traversing
- * the range table entries in the plan.
+ * the input node.
  */
 List *
 FindSubPlansUsedInNode(Node *node)
 {
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
-	List *subPlanList = NIL;
+	List *usedSubPlanList = NIL;
 
 	ExtractRangeTableEntryWalker(node, &rangeTableList);
 
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = lfirst(rangeTableCell);
+
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
 			char *resultId =
@@ -62,12 +68,21 @@ FindSubPlansUsedInNode(Node *node)
 			 * Use a Value to be able to use list_append_unique and store
 			 * the result ID in the DistributedPlan.
 			 */
-			Value *resultIdValue = makeString(resultId);
-			subPlanList = list_append_unique(subPlanList, resultIdValue);
+			UsedDistributedSubPlan *usedPlan = CitusMakeNode(UsedDistributedSubPlan);
+
+			usedPlan->subPlanId = pstrdup(resultId);
+
+			/* the callers are responsible for setting the accurate location */
+			usedPlan->locationMask = SUBPLAN_ACCESS_NONE;
+
+			if (!UsedSubPlanListMember(usedSubPlanList, usedPlan))
+			{
+				usedSubPlanList = lappend(usedSubPlanList, usedPlan);
+			}
 		}
 	}
 
-	return subPlanList;
+	return usedSubPlanList;
 }
 
 
@@ -88,26 +103,36 @@ void
 RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 							   DistributedPlan *distributedPlan)
 {
-	Value *usedSubPlanIdValue = NULL;
 	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
 	int workerNodeCount = GetWorkerNodeCount();
 
-	foreach_ptr(usedSubPlanIdValue, usedSubPlanNodeList)
+	foreach(subPlanCell, usedSubPlanNodeList)
 	{
-		char *resultId = strVal(usedSubPlanIdValue);
+		UsedDistributedSubPlan *usedPlan = lfirst(subPlanCell);
+
+		char *resultId = usedPlan->subPlanId;
 
 		IntermediateResultsHashEntry *entry = SearchIntermediateResult(
 			intermediateResultsHash, resultId);
 
-		/* no need to traverse the whole plan if all the workers are hit */
+		if (usedPlan->locationMask & SUBPLAN_ACCESS_LOCAL)
+		{
+			/* subPlan needs to be written locally as the planner decided */
+			entry->writeLocalFile = true;
+		}
+
+		/*
+		 * There is no need to traverse the whole plan if the intermediate result
+		 * will be written to a local file and send to all nodes
+		 */
 		if (list_length(entry->nodeIdList) == workerNodeCount && entry->writeLocalFile)
 		{
 			elog(DEBUG4, "Subplan %s is used in all workers", resultId);
 			break;
 		}
-		else
+		else if (usedPlan->locationMask & SUBPLAN_ACCESS_REMOTE)
 		{
 			/*
 			 * traverse the plan and add find all worker nodes
@@ -221,20 +246,6 @@ FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 		SearchIntermediateResult(intermediateResultsHash, resultId);
 
 	List *remoteWorkerNodes = FindAllRemoteWorkerNodesUsingSubplan(entry);
-	if (remoteWorkerNodes == NIL)
-	{
-		/*
-		 * This could happen in two cases:
-		 * (a) Subquery in the having
-		 * (b) The intermediate result is not used, such as RETURNING of a
-		 *     modifying CTE is not used
-		 *
-		 * For SELECT, Postgres/Citus is clever enough to not execute the CTE
-		 * if it is not used at all, but for modifications we have to execute
-		 * the queries.
-		 */
-		entry->writeLocalFile = true;
-	}
 
 	/*
 	 * Don't include the current worker if the result will be written to local
@@ -368,4 +379,98 @@ SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 	}
 
 	return entry;
+}
+
+
+/*
+ * MergeUsedSubPlanLists is a utility function that merges the two input
+ * UsedSubPlan lists. Existence of the items of the rightSubPlanList
+ * checked in leftSubPlanList. If not found, items are added to
+ * leftSubPlanList. If found, the locationMask fields are merged.
+ *
+ * Finally, the in-place modified leftSubPlanList is returned.
+ */
+List *
+MergeUsedSubPlanLists(List *leftSubPlanList, List *rightSubPlanList)
+{
+	ListCell *rightListCell;
+
+	foreach(rightListCell, rightSubPlanList)
+	{
+		UsedDistributedSubPlan *memberOnRightList = lfirst(rightListCell);
+		UsedDistributedSubPlan *memberOnLeftList =
+			UsedSubPlanListMember(leftSubPlanList, memberOnRightList);
+
+		if (memberOnLeftList == NULL)
+		{
+			leftSubPlanList = lappend(leftSubPlanList, memberOnRightList);
+		}
+		else
+		{
+			memberOnLeftList->locationMask |= memberOnRightList->locationMask;
+		}
+	}
+
+	return leftSubPlanList;
+}
+
+
+/*
+ * UsedSubPlanListMember is a utility function inspired from list_member(),
+ * but operating on UsedDistributedSubPlan struct, which doesn't have equal()
+ * function defined (similar to all Citus node types).
+ */
+static UsedDistributedSubPlan *
+UsedSubPlanListMember(List *usedSubPlanList, UsedDistributedSubPlan *usedPlan)
+{
+	const ListCell *usedSubPlanCell;
+
+	foreach(usedSubPlanCell, usedSubPlanList)
+	{
+		if (UsedSubPlansEqual(lfirst(usedSubPlanCell), usedPlan))
+		{
+			return lfirst(usedSubPlanCell);
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * UpdateUsedPlanListLocation is a utility function which iterates over the list
+ * and updates the subPlanLocation to the input location.
+ */
+void
+UpdateUsedPlanListLocation(List *subPlanList, int locationMask)
+{
+	ListCell *subPlanCell = NULL;
+	foreach(subPlanCell, subPlanList)
+	{
+		UsedDistributedSubPlan *subPlan = lfirst(subPlanCell);
+
+		subPlan->locationMask |= locationMask;
+	}
+}
+
+
+/*
+ * UsedSubPlansEqual is a utility function inspired from equal(),
+ * but operating on UsedDistributedSubPlan struct, which doesn't have equal()
+ * function defined (similar to all Citus node types).
+ */
+static bool
+UsedSubPlansEqual(UsedDistributedSubPlan *left, UsedDistributedSubPlan *right)
+{
+	if (left == NULL || right == NULL)
+	{
+		return false;
+	}
+
+	if (strncmp(left->subPlanId, right->subPlanId, NAMEDATALEN) == 0)
+	{
+		return true;
+	}
+
+	return false;
 }

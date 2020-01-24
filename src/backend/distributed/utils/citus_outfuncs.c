@@ -212,6 +212,17 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(plan);
 }
 
+void
+OutUsedDistributedSubPlan(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(UsedDistributedSubPlan);
+
+	WRITE_NODE_TYPE("USEDDISTRIBUTEDSUBPLAN");
+
+	WRITE_STRING_FIELD(subPlanId);
+	WRITE_INT_FIELD(locationMask);
+}
+
 
 void
 OutMultiProject(OUTFUNC_ARGS)

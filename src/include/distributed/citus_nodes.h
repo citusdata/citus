@@ -57,6 +57,7 @@ typedef enum CitusNodeTag
 	T_MapMergeJob,
 	T_DistributedPlan,
 	T_DistributedSubPlan,
+	T_UsedDistributedSubPlan,
 	T_Task,
 	T_LocalPlannedStatement,
 	T_TaskExecution,

@@ -44,6 +44,10 @@
 #define MERGE_FILES_AND_RUN_QUERY_COMMAND \
 	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, %s, %s)"
 
+#define SUBPLAN_ACCESS_NONE 0
+#define SUBPLAN_ACCESS_LOCAL 1
+#define SUBPLAN_ACCESS_REMOTE 2
+
 
 typedef enum CitusRTEKind
 {
@@ -386,6 +390,19 @@ typedef struct DistributedSubPlan
 	uint32 subPlanId;
 	PlannedStmt *plan;
 } DistributedSubPlan;
+
+
+/*
+ * UsedDistributedSubPlan contains information about a subPlan that is used in a
+ * distributed plan.
+ */
+typedef struct UsedDistributedSubPlan
+{
+	CitusNode type;
+
+	char *subPlanId;
+	int locationMask;
+} UsedDistributedSubPlan;
 
 
 /* OperatorCacheEntry contains information for each element in OperatorCache */
