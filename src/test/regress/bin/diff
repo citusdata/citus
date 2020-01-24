@@ -33,8 +33,12 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
-	sed -Ef $BASEDIR/normalize.sed < "$file1" > "$file1.modified"
-	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
+
+	sed -Ef "$BASEDIR/normalize_remove_lines.sed" < "$file1" > "$file1.modified-deleted-lines-only"
+	sed -Ef "$BASEDIR/normalize_remove_lines.sed" < "$file2" > "$file2.modified-deleted-lines-only"
+
+	sed -Ef "$BASEDIR/normalize.sed" < "$file1.modified-deleted-lines-only" > "$file1.modified"
+	sed -Ef "$BASEDIR/normalize.sed" < "$file2.modified-deleted-lines-only" > "$file2.modified"
 	"$DIFF" -w $args "$file1.modified" "$file2.modified" | diff-filter
 	exit ${PIPESTATUS[0]}
 else

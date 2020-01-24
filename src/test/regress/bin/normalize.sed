@@ -43,23 +43,12 @@ s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345
 
 # normalize pkey constraints in multi_insert_select.sql
 s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[0-9]+"/"\1xxxxxxx"/g
-
-# ignore could not consume warnings
-/WARNING:  could not consume data from worker node/d
-
-# ignore WAL warnings
-/DEBUG: .+creating and filling new WAL file/d
-
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
-
-# Line info varies between versions
-/^LINE [0-9]+:.*$/d
-/^ *\^$/d
 
 # Remove trailing whitespace
 s/ *$//g

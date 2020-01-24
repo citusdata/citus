@@ -12,7 +12,7 @@ def main():
 		if line.startswith('+++ '):
 			tab = line.rindex('\t')
 			fname = line[4:tab]
-			file2 = iter(open(fname.replace('.modified', '')))
+			file2 = iter(open(fname.replace('.modified', '.modified-deleted-lines-only')))
 			file2line = 1
 			stdout.write(line)
 		elif line.startswith('@@ '):
