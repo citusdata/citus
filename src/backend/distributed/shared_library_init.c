@@ -55,6 +55,7 @@
 #include "distributed/combine_query_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/path_based_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/recursive_planning.h"
@@ -296,6 +297,8 @@ _PG_init(void)
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
+	create_upper_paths_hook = PathBasedPlannedUpperPathHook;
+
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
