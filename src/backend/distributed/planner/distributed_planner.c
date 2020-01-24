@@ -136,7 +136,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool setPartitionedTablesInherited = false;
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 	int rteIdCounter = 1;
-	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
 	DistributedPlanningContext planContext = {
 		.query = parse,
@@ -167,11 +166,13 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		else
 		{
 			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
-			if (needsDistributedPlanning)
-			{
-				fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
-			}
 		}
+	}
+
+	bool fastPathRouterQuery = false;
+	if (needsDistributedPlanning)
+	{
+		fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
 	}
 
 	if (fastPathRouterQuery)
