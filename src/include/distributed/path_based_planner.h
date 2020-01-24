@@ -18,5 +18,10 @@ extern void PathBasedPlannerJoinHook(PlannerInfo *root,
 									 RelOptInfo *innerrel,
 									 JoinType jointype,
 									 JoinPathExtraData *extra);
+extern void PathBasedPlannedUpperPathHook(PlannerInfo *root,
+										  UpperRelationKind stage,
+										  RelOptInfo *input_rel,
+										  RelOptInfo *output_rel,
+										  void *extra);
 
 #endif //CITUS_PATH_BASED_PLANNER_H
