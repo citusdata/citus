@@ -4,9 +4,6 @@
 # doing the actual diff. Rules for normalization are in normalize.sed. See
 # the comments there for more information.
 #
-# We only normalize tests listed in normalized_tests.lst. We use the bare
-# diff for other tests.
-#
 # Note that src/test/regress/Makefile adds this directory to $PATH so
 # pg_regress uses this diff tool instead of the system diff tool.
 set -eu -o pipefail
@@ -33,9 +30,9 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
-	sed -Ef $BASEDIR/normalize.sed < "$file1" > "$file1.modified"
-	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
-	"$DIFF" -w $args "$file1.modified" "$file2.modified" | diff-filter
+	sed -Ef "$BASEDIR/normalize.sed" < "$file1" > "$file1.modified"
+	sed -Ef "$BASEDIR/normalize.sed" < "$file2" > "$file2.modified"
+	"$DIFF" -w $args "$file1.modified" "$file2.modified" | diff-filter "$BASEDIR/normalize.sed"
 	exit ${PIPESTATUS[0]}
 else
 	exec "$DIFF" -w $args "$file1" "$file2"

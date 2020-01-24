@@ -9,6 +9,7 @@
 /build/
 /results/
 /log/
+/bin/test/results/
 
 # Regression test output
 /regression.diffs
