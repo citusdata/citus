@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# This is to make the following command work to update the test output:
+# cp src/test/regress/{results,expected}/multi_cluster_management.out
+#
+# This can not be done in the custom "diff" command, because that is executed
+# multiple times
+
+for modified_file in {results,expected}/*.modified; do
+	original=${modified_file%.modified}
+	mv "$original" "$original.unmodified"
+	mv "$modified_file" "$original"
+done
