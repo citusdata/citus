@@ -783,6 +783,8 @@ push(@arguments, @ARGV);
 
 my $startTime = time();
 
+my $exitcode = 0;
+
 # Finally run the tests
 if ($vanillatest)
 {
@@ -797,30 +799,33 @@ if ($vanillatest)
 	    mkdir "./testtablespace";
 
 	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
-	    system("$plainRegress", ("--inputdir",  $pgregressdir),
-	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule"))) == 0
-		or die "Could not run vanilla tests";
+	    $exitcode = system("$plainRegress", ("--inputdir",  $pgregressdir),
+	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule")))
 	}
 	else
 	{
-	    system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel")) == 0
-		or die "Could not run vanilla tests";
+	    $exitcode = system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel"))
 	}
 }
 elsif ($isolationtester)
 {
     push(@arguments, "--dbname=regression");
-    system("$isolationRegress", @arguments) == 0
-      or die "Could not run isolation tests";
+    $exitcode = system("$isolationRegress", @arguments)
 }
 else
 {
-    system("$plainRegress", @arguments) == 0
-	or die "Could not run regression tests";
+    $exitcode = system("$plainRegress", @arguments);
 }
 
+system (catfile("bin", "copy_modified"));
 my $endTime = time();
 
-print "Finished in ". ($endTime - $startTime)." seconds. \n";
+if ($exitcode == 0) {
+	print "Finished in ". ($endTime - $startTime)." seconds. \n";
+	exit 0;
+}
+else {
+	die "Failed in ". ($endTime - $startTime)." seconds. \n";
 
-exit 0;
+}
+

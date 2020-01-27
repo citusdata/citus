@@ -433,6 +433,7 @@ CacheLocalPlanForTask(Task *task, DistributedPlan *originalDistributedPlan)
 	if (rangeTableEntry->relid == InvalidOid)
 	{
 		pfree(shardQuery);
+		MemoryContextSwitchTo(oldContext);
 		return;
 	}
 
