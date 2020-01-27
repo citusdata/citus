@@ -495,7 +495,7 @@ PREPARE non_inlined_cte_without_params AS
     SELECT
         *, (SELECT 1)
     FROM
-        cte_1 ORDER BY 1 DESC LIMIT 3;
+        cte_1 ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 3;
 PREPARE inlined_cte_has_parameter_on_non_dist_key(text) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE value = $1 GROUP BY key)
 	SELECT * FROM cte_1 ORDER BY 1 DESC LIMIT 3;
