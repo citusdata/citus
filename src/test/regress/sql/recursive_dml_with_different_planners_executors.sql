@@ -10,13 +10,17 @@ SELECT create_distributed_table('second_distributed_table', 'tenant_id');
 CREATE TABLE reference_table (id text, name text);
 SELECT create_reference_table('reference_table');
 
+BEGIN;
 INSERT INTO distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
 INSERT INTO second_distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 SET client_min_messages TO DEBUG1;
 
 -- subquery with router planner
 -- joined with a real-time query
+BEGIN;
 UPDATE
 	distributed_table
 SET dept = foo.dept FROM
@@ -24,8 +28,11 @@ SET dept = foo.dept FROM
 	(SELECT tenant_id FROM second_distributed_table WHERE dept IN (1, 2, 3, 4) OFFSET 0) as bar
 	WHERE foo.tenant_id = bar.tenant_id
 	AND distributed_table.tenant_id = bar.tenant_id;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- a non colocated subquery inside the UPDATE
+BEGIN;
 UPDATE distributed_table SET dept = foo.max_dept FROM
 (
 	SELECT
@@ -35,21 +42,26 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 	WHERE tenant_id NOT IN
 				(SELECT tenant_id FROM second_distributed_table WHERE dept IN (1, 2, 3, 4))
 ) as  foo WHERE foo.max_dept > dept * 3;
-
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- subquery with repartition query
 SET citus.enable_repartition_joins to ON;
 
+BEGIN;
 UPDATE distributed_table SET dept = foo.some_tenants::int FROM
 (
 	SELECT
 	 	DISTINCT second_distributed_table.tenant_id as some_tenants
 	 FROM second_distributed_table, distributed_table WHERE second_distributed_table.dept = distributed_table.dept
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 SET citus.enable_repartition_joins to OFF;
 
 -- final query is router
+BEGIN;
 UPDATE distributed_table SET dept = foo.max_dept FROM
 (
 	SELECT
@@ -59,7 +71,8 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 	WHERE tenant_id IN
 				(SELECT tenant_id FROM second_distributed_table WHERE dept IN (1, 2, 3, 4))
 ) as  foo WHERE foo.max_dept >= dept and tenant_id = '8';
-
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_with_different_planner_executors CASCADE;

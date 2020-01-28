@@ -35,6 +35,13 @@ DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_tabl
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_2,repartitioned_results_xxxxx_from_4213582_to_2,repartitioned_results_xxxxx_from_4213584_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213588 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer)
 RESET client_min_messages;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 SELECT * FROM target_table WHERE a=-1 OR a=-3 OR a=-7 ORDER BY a;
  a
 ---------------------------------------------------------------------
@@ -105,6 +112,13 @@ SELECT * FROM target_table WHERE key = (26, 'b')::composite_key_type;
   1 |     2 | (26,b)
 (1 row)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- with explicit column names
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
@@ -129,6 +143,13 @@ SELECT * FROM target_table ORDER BY key;
   0 |     6 | (31,f)
 (7 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- missing value for a column
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
@@ -152,6 +173,13 @@ SELECT * FROM target_table ORDER BY key;
   0 |       | (30,e)
   0 |       | (31,f)
 (7 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 -- ON CONFLICT
 SET client_min_messages TO DEBUG2;
@@ -179,10 +207,24 @@ SELECT * FROM target_table ORDER BY key;
   1 |       | (31,f)
 (7 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- missing value for distribution column
 INSERT INTO target_table(value) SELECT value FROM source_table;
 ERROR:  the partition column of table insert_select_repartition.target_table should have a value
 DROP TABLE source_table, target_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- different column types
 -- verifies that we add necessary casts, otherwise even shard routing won't
 -- work correctly and we will see 2 values for the same primary key.
@@ -227,6 +269,13 @@ SELECT * FROM target_table ORDER BY 1;
      5 |     5
 (5 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 DROP TABLE source_table, target_table;
 --
 -- array coercion
@@ -264,6 +313,13 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (4 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 --
 -- worker queries can have more columns than necessary. ExpandWorkerTargetEntry()
 -- might add additional columns to the target list.
@@ -296,6 +352,13 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {-1}
 (4 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 --
 -- repartitioned INSERT/SELECT followed/preceded by other DML in same transaction
 --
@@ -313,11 +376,25 @@ SELECT * FROM target_table ORDER BY a;
 (4 rows)
 
 DELETE FROM target_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
 (0 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 -- case 2. followed by UPDATE
 TRUNCATE target_table;
@@ -333,6 +410,13 @@ SELECT * FROM target_table ORDER BY a;
 (4 rows)
 
 UPDATE target_table SET b=array_append(b, a);
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a  |     b
@@ -342,6 +426,13 @@ SELECT * FROM target_table ORDER BY a;
  -2 | {4,6,-2}
  -1 | {1,2,3,-1}
 (4 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 -- case 3. followed by multi-row INSERT
 TRUNCATE target_table;
@@ -370,6 +461,13 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (7 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- case 4. followed by distributed INSERT/SELECT
 TRUNCATE target_table;
 BEGIN;
@@ -384,6 +482,13 @@ SELECT * FROM target_table ORDER BY a;
 (4 rows)
 
 INSERT INTO target_table SELECT * FROM target_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a  |    b
@@ -397,6 +502,13 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
  -1 | {1,2,3}
 (8 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 -- case 5. preceded by DELETE
 TRUNCATE target_table;
@@ -413,11 +525,25 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (4 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- case 6. preceded by UPDATE
 TRUNCATE target_table;
 BEGIN;
 UPDATE target_table SET b=array_append(b, a);
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a  |    b
@@ -428,11 +554,25 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (4 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- case 7. preceded by multi-row INSERT
 TRUNCATE target_table;
 BEGIN;
 INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a  |    b
@@ -446,12 +586,26 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (7 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- case 8. preceded by distributed INSERT/SELECT
 TRUNCATE target_table;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 BEGIN;
 INSERT INTO target_table SELECT * FROM target_table;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 END;
 SELECT * FROM target_table ORDER BY a;
  a  |    b
@@ -470,10 +624,18 @@ SELECT * FROM target_table ORDER BY a;
  -1 | {1,2,3}
 (12 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 --
 -- repartitioned INSERT/SELECT with RETURNING
 --
 TRUNCATE target_table;
+BEGIN;
 SET client_min_messages TO DEBUG1;
 WITH c AS (
     INSERT INTO target_table
@@ -493,6 +655,14 @@ DEBUG:  performing repartitioned INSERT ... SELECT
 (4 rows)
 
 RESET client_min_messages;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
+END;
 --
 -- in combination with CTEs
 --
@@ -517,6 +687,13 @@ SELECT * FROM target_table ORDER BY a;
  -2 | {4,6}
  -1 | {1,2,3}
 (4 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 DROP TABLE source_table, target_table;
 --
@@ -554,6 +731,13 @@ SELECT * FROM target_table ORDER BY a;
  4 | 361
  5 | 400
 (6 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 --
 -- EXPLAIN output should specify repartitioned INSERT/SELECT
@@ -598,6 +782,13 @@ SELECT * FROM target_table ORDER BY a;
  361 | 361
  400 | 400
 (6 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 --
 -- Prepared INSERT/SELECT
@@ -654,6 +845,13 @@ SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY
  3 |     6 |               1
  4 |     6 |               1
 (5 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 --
 -- INSERT/SELECT in CTE
@@ -712,6 +910,13 @@ SELECT * FROM target_table ORDER BY a, b;
  5 | 400
  5 | 400
 (26 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 DROP TABLE source_table, target_table;
 --
@@ -787,6 +992,13 @@ SELECT * FROM target_table ORDER BY b;
  10 | 100
 (10 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 -- verify that values have been replicated to both replicas
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
  nodename  | nodeport | shardid | success | result
@@ -825,6 +1037,13 @@ SELECT * FROM target_table ORDER BY a, b;
  1 |  81
  1 | 100
 (8 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 --
 -- ROLLBACK after out of range error
@@ -895,6 +1114,13 @@ SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s
  localhost |    57638 | 4213628 | t       | 2
 (8 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
 DROP TABLE source_table, target_table;
 --
 -- Select column names should be unique
@@ -932,6 +1158,13 @@ SELECT count(*) FROM target_table;
 ---------------------------------------------------------------------
     10
 (1 row)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 --
 -- Disable repartitioned insert/select
@@ -976,6 +1209,13 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on source_table_4213629 source_table
 (8 rows)
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
 
 DROP TABLE source_table, target_table;
 --

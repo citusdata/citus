@@ -41,6 +41,7 @@ ORDER BY
 (6 rows)
 
 -- window clause operates on the results of a subquery
+BEGIN;
 SELECT
 	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
 FROM (
@@ -93,6 +94,14 @@ ORDER BY
        5 |   0
 (32 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
+END;
 -- window function operates on the results of
 -- a join
 SELECT
@@ -120,6 +129,7 @@ LIMIT 5;
 (5 rows)
 
 -- the same query, but this time join with an alias
+BEGIN;
 SELECT
 	user_id, value_1, SUM(j.value_1) OVER (PARTITION BY j.user_id)
 FROM
@@ -143,6 +153,14 @@ LIMIT 5;
        4 |       4 |  15
 (5 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
+END;
 -- querying views that have window functions should be ok
 CREATE VIEW window_view AS
 SELECT
@@ -197,6 +215,7 @@ ORDER BY
 
 DROP VIEW users_view, window_view;
 -- window function uses columns from two different tables
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -222,7 +241,16 @@ LIMIT 10;
        2 | 106
 (10 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
+END;
 -- the same query with reference table column is also on the partition by clause
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -248,8 +276,17 @@ LIMIT 10;
        3 |  18
 (10 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 3
+ localhost |    57638 | t       | 3
+(2 rows)
+
+END;
 -- similar query with no distribution column is on the partition by clause
 -- is not supported
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -263,6 +300,9 @@ ORDER BY
 LIMIT 10;
 ERROR:  could not run distributed query because the window function that is used cannot be pushed down
 HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+END;
 -- ORDER BY in the window function is an aggregate
 SELECT
 	user_id, rank() OVER my_win as rnk, avg(value_2) as avg_val_2

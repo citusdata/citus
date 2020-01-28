@@ -2,6 +2,7 @@
 -- test insert select functionality for window functions
 -- ===================================================================
 
+BEGIN;
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -13,12 +14,15 @@ FROM
     events_table
     WINDOW my_win AS (PARTITION BY user_id ORDER BY time DESC)
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- the same test with different syntax
+BEGIN;
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -29,12 +33,15 @@ FROM
   FROM
     events_table
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- similar test with lag
+BEGIN;
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg, value_3_agg)
 SELECT
    user_id, time, lag_event_type, row_no
@@ -45,12 +52,15 @@ FROM
   FROM
     events_table WINDOW my_win AS (PARTITION BY user_id ORDER BY time DESC)
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- simple window function, partitioned and grouped by on the distribution key
+BEGIN;
 INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT
    user_id, rnk, tme
@@ -64,12 +74,15 @@ FROM
     user_id,  date_trunc('day', time)
   WINDOW my_win AS (PARTITION BY user_id ORDER BY avg(event_type) DESC)
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- top level query has a group by on the result of the window function
+BEGIN;
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    min(user_id), min(time), lag_event_type
@@ -82,12 +95,15 @@ FROM
 ) as foo
 GROUP BY
   lag_event_type;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- window functions should work along with joins as well
+BEGIN;
 INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
@@ -100,12 +116,15 @@ SELECT * FROM
     event_type < 2
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time)
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
 -- two window functions in a single subquery should work fine as well
+BEGIN;
 INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
@@ -119,6 +138,8 @@ SELECT * FROM
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;

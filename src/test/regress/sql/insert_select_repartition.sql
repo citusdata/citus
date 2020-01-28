@@ -19,6 +19,8 @@ SET client_min_messages TO DEBUG2;
 INSERT INTO target_table SELECT -a FROM source_table;
 RESET client_min_messages;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 SELECT * FROM target_table WHERE a=-1 OR a=-3 OR a=-7 ORDER BY a;
 
 DROP TABLE source_table, target_table;
@@ -53,6 +55,8 @@ RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
 SELECT * FROM target_table WHERE key = (26, 'b')::composite_key_type;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 -- with explicit column names
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
@@ -60,6 +64,7 @@ INSERT INTO target_table(value, key) SELECT value, mapped_key FROM source_table;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 -- missing value for a column
 TRUNCATE target_table;
 SET client_min_messages TO DEBUG2;
@@ -67,6 +72,7 @@ INSERT INTO target_table(key) SELECT mapped_key AS key_renamed FROM source_table
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 -- ON CONFLICT
 SET client_min_messages TO DEBUG2;
 INSERT INTO target_table(key)
@@ -76,10 +82,12 @@ ON CONFLICT (key) DO UPDATE SET f1=1;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY key;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 -- missing value for distribution column
 INSERT INTO target_table(value) SELECT value FROM source_table;
 DROP TABLE source_table, target_table;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 -- different column types
 -- verifies that we add necessary casts, otherwise even shard routing won't
 -- work correctly and we will see 2 values for the same primary key.
@@ -102,6 +110,8 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY 1;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 DROP TABLE source_table, target_table;
 
 --
@@ -122,6 +132,8 @@ INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 --
 -- worker queries can have more columns than necessary. ExpandWorkerTargetEntry()
@@ -144,6 +156,8 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 --
 -- repartitioned INSERT/SELECT followed/preceded by other DML in same transaction
 --
@@ -154,8 +168,11 @@ BEGIN;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 SELECT * FROM target_table ORDER BY a;
 DELETE FROM target_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 -- case 2. followed by UPDATE
 TRUNCATE target_table;
@@ -163,8 +180,11 @@ BEGIN;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 SELECT * FROM target_table ORDER BY a;
 UPDATE target_table SET b=array_append(b, a);
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 -- case 3. followed by multi-row INSERT
 TRUNCATE target_table;
@@ -175,14 +195,19 @@ INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARR
 END;
 SELECT * FROM target_table ORDER BY a;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 -- case 4. followed by distributed INSERT/SELECT
 TRUNCATE target_table;
 BEGIN;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 SELECT * FROM target_table ORDER BY a;
 INSERT INTO target_table SELECT * FROM target_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 -- case 5. preceded by DELETE
 TRUNCATE target_table;
@@ -192,21 +217,29 @@ INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 END;
 SELECT * FROM target_table ORDER BY a;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 -- case 6. preceded by UPDATE
 TRUNCATE target_table;
 BEGIN;
 UPDATE target_table SET b=array_append(b, a);
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 -- case 7. preceded by multi-row INSERT
 TRUNCATE target_table;
 BEGIN;
 INSERT INTO target_table VALUES (-5, ARRAY[10,11]), (-6, ARRAY[11,12]), (-7, ARRAY[999]);
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 -- case 8. preceded by distributed INSERT/SELECT
 TRUNCATE target_table;
@@ -214,13 +247,17 @@ INSERT INTO target_table SELECT mapped_key, c FROM source_table;
 BEGIN;
 INSERT INTO target_table SELECT * FROM target_table;
 INSERT INTO target_table SELECT mapped_key, c FROM source_table;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 END;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 --
 -- repartitioned INSERT/SELECT with RETURNING
 --
 TRUNCATE target_table;
+BEGIN;
 SET client_min_messages TO DEBUG1;
 WITH c AS (
     INSERT INTO target_table
@@ -229,6 +266,8 @@ WITH c AS (
 SELECT * FROM c ORDER by a;
 RESET client_min_messages;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 --
 -- in combination with CTEs
 --
@@ -242,6 +281,8 @@ INSERT INTO target_table
 SELECT mapped_key, c FROM t NATURAL JOIN source_table;
 RESET client_min_messages;
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 DROP TABLE source_table, target_table;
 
@@ -265,6 +306,8 @@ RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 --
 -- EXPLAIN output should specify repartitioned INSERT/SELECT
 --
@@ -283,6 +326,8 @@ INSERT INTO target_table
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 --
 -- Prepared INSERT/SELECT
@@ -311,6 +356,8 @@ RESET client_min_messages;
 
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 --
 -- INSERT/SELECT in CTE
 --
@@ -325,6 +372,8 @@ INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a, b;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 DROP TABLE source_table, target_table;
 
@@ -357,6 +406,8 @@ END;
 
 SELECT * FROM target_table ORDER BY b;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 -- verify that values have been replicated to both replicas
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
 
@@ -371,6 +422,8 @@ INSERT INTO target_table SELECT 1.12, b::bigint FROM source_table WHERE b IS NOT
 RESET client_min_messages;
 
 SELECT * FROM target_table ORDER BY a, b;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 --
 -- ROLLBACK after out of range error
@@ -409,6 +462,8 @@ SELECT * FROM target_table ORDER BY a;
 -- replica has received correct number of rows
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 DROP TABLE source_table, target_table;
 
 --
@@ -432,6 +487,8 @@ RESET client_min_messages;
 
 SELECT count(*) FROM target_table;
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+
 --
 -- Disable repartitioned insert/select
 --
@@ -449,6 +506,8 @@ SELECT count(*) FROM target_table;
 
 SET citus.enable_repartitioned_insert_select TO ON;
 EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2 AS aa FROM source_table;
+
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
 
 DROP TABLE source_table, target_table;
 

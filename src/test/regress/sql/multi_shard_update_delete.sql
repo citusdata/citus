@@ -315,6 +315,7 @@ WHERE  user_id IN (SELECT user_id
               SELECT user_id
               FROM   events_test_table) returning value_3;
 
+BEGIN;
 UPDATE users_test_table
 SET value_1 = 5
 WHERE
@@ -328,7 +329,10 @@ WHERE
            GROUP BY
               user_id
           );
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
+BEGIN;
 UPDATE users_test_table
 SET value_3 = 1
 WHERE
@@ -343,7 +347,10 @@ WHERE
            GROUP BY
               user_id
           );
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
+BEGIN;
 UPDATE users_test_table
 SET value_2 = 4
 WHERE
@@ -369,6 +376,8 @@ WHERE
         user_id = e1.user_id
     ) e2 ON true
 );
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 UPDATE users_test_table
 SET value_3 = 5

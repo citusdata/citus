@@ -25,6 +25,7 @@ ORDER BY
 	2 DESC NULLS LAST, 1 DESC;
 
 -- window clause operates on the results of a subquery
+BEGIN;
 SELECT
 	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
 FROM (
@@ -41,6 +42,8 @@ GROUP BY
 	1, value_1
 ORDER BY
 	2 DESC, 1;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- window function operates on the results of
 -- a join
@@ -61,6 +64,7 @@ ORDER BY
 LIMIT 5;
 
 -- the same query, but this time join with an alias
+BEGIN;
 SELECT
 	user_id, value_1, SUM(j.value_1) OVER (PARTITION BY j.user_id)
 FROM
@@ -75,8 +79,11 @@ GROUP BY
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- querying views that have window functions should be ok
+
 CREATE VIEW window_view AS
 SELECT
   DISTINCT user_id, rank() OVER (PARTITION BY user_id ORDER BY value_1)
@@ -111,6 +118,7 @@ ORDER BY
 DROP VIEW users_view, window_view;
 
 -- window function uses columns from two different tables
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -122,8 +130,11 @@ WINDOW
 ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- the same query with reference table column is also on the partition by clause
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -135,9 +146,12 @@ WINDOW
 ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- similar query with no distribution column is on the partition by clause
 -- is not supported
+BEGIN;
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -149,6 +163,8 @@ WINDOW
 ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- ORDER BY in the window function is an aggregate
 SELECT

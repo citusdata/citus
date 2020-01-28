@@ -21,11 +21,21 @@ SELECT create_reference_table('reference_table');
 
 (1 row)
 
+BEGIN;
 INSERT INTO distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
 INSERT INTO second_distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 6
+ localhost |    57638 | t       | 6
+(2 rows)
+
+END;
 SET client_min_messages TO DEBUG1;
 -- subquery with router planner
 -- joined with a real-time query
+BEGIN;
 UPDATE
 	distributed_table
 SET dept = foo.dept FROM
@@ -35,7 +45,16 @@ SET dept = foo.dept FROM
 	AND distributed_table.tenant_id = bar.tenant_id;
 DEBUG:  generating subplan XXX_1 for subquery SELECT tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4])) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.dept FROM (SELECT second_distributed_table.tenant_id, second_distributed_table.dept FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) 1)) foo, (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) bar WHERE ((foo.tenant_id OPERATOR(pg_catalog.=) bar.tenant_id) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) bar.tenant_id))
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- a non colocated subquery inside the UPDATE
+BEGIN;
 UPDATE distributed_table SET dept = foo.max_dept FROM
 (
 	SELECT
@@ -48,8 +67,17 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 DEBUG:  generating subplan XXX_1 for subquery SELECT tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))
 DEBUG:  generating subplan XXX_2 for subquery SELECT max(dept) AS max_dept FROM (SELECT DISTINCT distributed_table_1.tenant_id, distributed_table_1.dept FROM recursive_dml_with_different_planner_executors.distributed_table distributed_table_1) distributed_table WHERE (NOT (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text))))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.max_dept FROM (SELECT intermediate_result.max_dept FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max_dept integer)) foo WHERE (foo.max_dept OPERATOR(pg_catalog.>) (distributed_table.dept OPERATOR(pg_catalog.*) 3))
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- subquery with repartition query
 SET citus.enable_repartition_joins to ON;
+BEGIN;
 UPDATE distributed_table SET dept = foo.some_tenants::int FROM
 (
 	SELECT
@@ -58,8 +86,17 @@ UPDATE distributed_table SET dept = foo.some_tenants::int FROM
 ) as foo;
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT second_distributed_table.tenant_id AS some_tenants FROM recursive_dml_with_different_planner_executors.second_distributed_table, recursive_dml_with_different_planner_executors.distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) distributed_table.dept)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = (foo.some_tenants)::integer FROM (SELECT intermediate_result.some_tenants FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(some_tenants text)) foo
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 19
+ localhost |    57638 | t       | 19
+(2 rows)
+
+END;
 SET citus.enable_repartition_joins to OFF;
 -- final query is router
+BEGIN;
 UPDATE distributed_table SET dept = foo.max_dept FROM
 (
 	SELECT
@@ -71,6 +108,14 @@ UPDATE distributed_table SET dept = foo.max_dept FROM
 ) as  foo WHERE foo.max_dept >= dept and tenant_id = '8';
 DEBUG:  generating subplan XXX_1 for subquery SELECT max(dept) AS max_dept FROM (SELECT DISTINCT distributed_table_1.tenant_id, distributed_table_1.dept FROM recursive_dml_with_different_planner_executors.distributed_table distributed_table_1) distributed_table WHERE (tenant_id OPERATOR(pg_catalog.=) ANY (SELECT second_distributed_table.tenant_id FROM recursive_dml_with_different_planner_executors.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_with_different_planner_executors.distributed_table SET dept = foo.max_dept FROM (SELECT intermediate_result.max_dept FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max_dept integer)) foo WHERE ((foo.max_dept OPERATOR(pg_catalog.>=) distributed_table.dept) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) '8'::text))
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_with_different_planner_executors CASCADE;
 NOTICE:  drop cascades to 3 other objects

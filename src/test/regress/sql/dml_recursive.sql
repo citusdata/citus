@@ -2,6 +2,8 @@ CREATE SCHEMA recursive_dml_queries;
 SET search_path TO recursive_dml_queries, public;
 SET citus.next_shard_id TO 2370000;
 
+SHOW max_connections;
+
 CREATE TABLE recursive_dml_queries.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
 
@@ -13,8 +15,16 @@ SELECT create_reference_table('reference_table');
 
 CREATE TABLE recursive_dml_queries.local_table (id text, name text);
 
+BEGIN;
 INSERT INTO distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
+
+BEGIN;
 INSERT INTO second_distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
+
 INSERT INTO reference_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 INSERT INTO local_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 
@@ -30,6 +40,7 @@ CREATE VIEW tenant_ids AS
 SET client_min_messages TO DEBUG1;
 
 -- the subquery foo is recursively planned
+BEGIN;
 UPDATE
 	reference_table
 SET
@@ -45,9 +56,12 @@ WHERE
 	foo.avg_tenant_id::int::text = reference_table.id
 RETURNING
 	reference_table.name;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- the subquery foo is recursively planned
 -- but note that the subquery foo itself is pushdownable
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -72,9 +86,12 @@ WHERE
 	AND second_distributed_table.dept IN (2)
 RETURNING
 	second_distributed_table.tenant_id, second_distributed_table.dept;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- the subquery foo is recursively planned
 -- and foo itself is a non colocated subquery and recursively planned
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -107,8 +124,11 @@ FROM
 WHERE
 	foo.tenant_id != second_distributed_table.tenant_id
 	AND second_distributed_table.dept IN (3);
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- we currently do not allow local tables in modification queries
+BEGIN;
 UPDATE
 	distributed_table
 SET
@@ -124,8 +144,11 @@ WHERE
 	foo.avg_tenant_id::int::text = distributed_table.tenant_id
 RETURNING
 	distributed_table.*;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- we currently do not allow views in modification queries
+BEGIN;
 UPDATE
 	distributed_table
 SET
@@ -141,10 +164,13 @@ WHERE
 	foo.avg_tenant_id::int::text = distributed_table.tenant_id
 RETURNING
 	distributed_table.*;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
 -- recursively planned, however it can be planned using the repartition planner
 SET citus.enable_repartition_joins to on;
+BEGIN;
 SELECT DISTINCT foo_inner_1.tenant_id FROM
 (
     SELECT
@@ -170,12 +196,15 @@ foo_inner_1 JOIN LATERAL
 ) foo_inner_2
 ON (foo_inner_2.tenant_id != foo_inner_1.tenant_id)
 ORDER BY foo_inner_1.tenant_id;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 RESET citus.enable_repartition_joins;
 
 
 -- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
 -- recursively planned, this one can not be planned by the repartion planner
 -- because of the IN query on a non unique column
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -207,7 +236,8 @@ FROM
 	ON (foo_inner_2.tenant_id != foo_inner_1.tenant_id)
 	) as foo
 RETURNING *;
-
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+END;
 
 -- again a corrolated subquery
 -- this time distribution key eq. exists

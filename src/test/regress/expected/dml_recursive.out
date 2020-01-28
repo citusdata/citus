@@ -1,6 +1,12 @@
 CREATE SCHEMA recursive_dml_queries;
 SET search_path TO recursive_dml_queries, public;
 SET citus.next_shard_id TO 2370000;
+SHOW max_connections;
+ max_connections
+---------------------------------------------------------------------
+ 100
+(1 row)
+
 CREATE TABLE recursive_dml_queries.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
  create_distributed_table
@@ -23,8 +29,26 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 CREATE TABLE recursive_dml_queries.local_table (id text, name text);
+BEGIN;
 INSERT INTO distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 6
+ localhost |    57638 | t       | 6
+(2 rows)
+
+END;
+BEGIN;
 INSERT INTO second_distributed_table SELECT i::text, i % 10, row_to_json(row(i, i*i)) FROM generate_series (0, 100) i;
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 6
+ localhost |    57638 | t       | 6
+(2 rows)
+
+END;
 INSERT INTO reference_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 INSERT INTO local_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
 CREATE VIEW tenant_ids AS
@@ -37,6 +61,7 @@ CREATE VIEW tenant_ids AS
 	ORDER BY 2 DESC, 1 DESC;
 SET client_min_messages TO DEBUG1;
 -- the subquery foo is recursively planned
+BEGIN;
 UPDATE
 	reference_table
 SET
@@ -59,8 +84,17 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml
  new_user_50
 (1 row)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- the subquery foo is recursively planned
 -- but note that the subquery foo itself is pushdownable
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -101,8 +135,17 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml
  92        |   18
 (10 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- the subquery foo is recursively planned
 -- and foo itself is a non colocated subquery and recursively planned
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -138,7 +181,16 @@ WHERE
 DEBUG:  generating subplan XXX_1 for subquery SELECT second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[4, 5])))
 DEBUG:  generating subplan XXX_2 for subquery SELECT DISTINCT foo_inner_1.tenant_id FROM (SELECT second_distributed_table.dept, second_distributed_table.tenant_id FROM recursive_dml_queries.second_distributed_table, recursive_dml_queries.distributed_table WHERE ((distributed_table.tenant_id OPERATOR(pg_catalog.=) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) ANY (ARRAY[3, 4])))) foo_inner_1, (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo_inner_2 WHERE (foo_inner_1.tenant_id OPERATOR(pg_catalog.<>) foo_inner_2.tenant_id)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.second_distributed_table SET dept = ((foo.tenant_id)::integer OPERATOR(pg_catalog./) 4) FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) foo WHERE ((foo.tenant_id OPERATOR(pg_catalog.<>) second_distributed_table.tenant_id) AND (second_distributed_table.dept OPERATOR(pg_catalog.=) 3))
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- we currently do not allow local tables in modification queries
+BEGIN;
 UPDATE
 	distributed_table
 SET
@@ -161,7 +213,16 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 7
+ localhost |    57638 | t       | 7
+(2 rows)
+
+END;
 -- we currently do not allow views in modification queries
+BEGIN;
 UPDATE
 	distributed_table
 SET
@@ -184,9 +245,18 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 5
+ localhost |    57638 | t       | 5
+(2 rows)
+
+END;
 -- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
 -- recursively planned, however it can be planned using the repartition planner
 SET citus.enable_repartition_joins to on;
+BEGIN;
 SELECT DISTINCT foo_inner_1.tenant_id FROM
 (
     SELECT
@@ -226,10 +296,19 @@ ORDER BY foo_inner_1.tenant_id;
  94
 (10 rows)
 
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 18
+ localhost |    57638 | t       | 18
+(2 rows)
+
+END;
 RESET citus.enable_repartition_joins;
 -- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
 -- recursively planned, this one can not be planned by the repartion planner
 -- because of the IN query on a non unique column
+BEGIN;
 UPDATE
 	second_distributed_table
 SET
@@ -263,6 +342,9 @@ FROM
 RETURNING *;
 DEBUG:  generating subplan XXX_1 for subquery SELECT dept FROM recursive_dml_queries.second_distributed_table
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+SELECT * FROM run_command_on_workers($$ select count(*) from pg_stat_activity where backend_type = 'client backend'; $$);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+END;
 -- again a corrolated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
