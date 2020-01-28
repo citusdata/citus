@@ -23,7 +23,6 @@
 static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path, List *tlist, List *clauses, List *custom_plans);
 static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
 static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath, uint32 colocationId, Expr *partitionValue, Oid sampleRelid);
-static Index VarnoFromFirstTargetEntry(List *tlist);
 static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
 static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
 static Path * OptimizeJoinPath(Path *originalPath);
@@ -140,7 +139,8 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	distributedPlan->hasReturning = true;
 
 	CustomScan *plan = makeNode(CustomScan);
-	plan->scan.scanrelid = VarnoFromFirstTargetEntry(tlist);
+	plan->scan.scanrelid = 0;
+	plan->custom_scan_tlist = tlist;
 	plan->flags = best_path->flags;
 	plan->methods = &AdaptiveExecutorCustomScanMethods;
 	plan->custom_private = list_make1(distributedPlan);
@@ -566,15 +566,6 @@ GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses)
 }
 
 
-static Index
-VarnoFromFirstTargetEntry(List *tlist)
-{
-	TargetEntry *entry = linitial_node(TargetEntry, tlist);
-	Var *var = castNode(Var, entry->expr);
-	return var->varno;
-}
-
-
 void
 PathBasedPlannedUpperPathHook(PlannerInfo *root,
 							  UpperRelationKind stage,
@@ -694,17 +685,26 @@ CanOptimizeAggPath(PlannerInfo *root, AggPath *apath)
 	 */
 	foreach_ptr(sgc, apath->groupClause)
 	{
-		PathKey *groupKey = list_nth_node(PathKey, root->group_pathkeys, sgc->tleSortGroupRef - 1);
-		EquivalenceMember *ec_member = NULL;
-		foreach_ptr(ec_member, groupKey->pk_eclass->ec_members)
+		PathTarget *target = apath->path.pathtarget;
+		Expr *targetExpr = NULL;
+		Index i = 0;
+		foreach_ptr(targetExpr, target->exprs)
 		{
-			if (!IsA(ec_member->em_expr, Var))
+			Index targetSortGroupRef = target->sortgrouprefs[i];
+			i++;
+
+			if (targetSortGroupRef != sgc->tleSortGroupRef)
 			{
 				continue;
 			}
 
-			Var *ec_var = castNode(Var, ec_member->em_expr);
-			Index rteIndex = ec_var->varno;
+			if (!IsA(targetExpr, Var))
+			{
+				continue;
+			}
+
+			Var *targetVar = castNode(Var, targetExpr);
+			Index rteIndex = targetVar->varno;
 			RangeTblEntry *rte = root->simple_rte_array[rteIndex];
 
 			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(rte->relid);
@@ -714,7 +714,7 @@ CanOptimizeAggPath(PlannerInfo *root, AggPath *apath)
 				continue;
 			}
 
-			if (cacheEntry->partitionColumn->varattno == ec_var->varno)
+			if (cacheEntry->partitionColumn->varattno == targetVar->varattno)
 			{
 				/*
 				 * grouping column contains the distribution column of a distributed
