@@ -188,6 +188,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
+	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 
 	/*
 	 * We'll keep this lock for a while, but that's ok because nothing
@@ -230,7 +231,6 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * schema drop call can block if another process is creating the schema or
 	 * writing to a table within the schema.
 	 */
-	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	CitusRemoveDirectory(jobDirectoryName->data);
 
 	RemoveJobSchema(jobSchemaName);
@@ -450,7 +450,7 @@ CleanupTask(WorkerTask *workerTask)
 		return;
 	}
 
-	/* remove the task from the shared hash */
+	/* remove task from the shared hash */
 	WorkerTask *taskRemoved = hash_search(TaskTrackerTaskHash, hashKey, HASH_REMOVE,
 										  NULL);
 	if (taskRemoved == NULL)

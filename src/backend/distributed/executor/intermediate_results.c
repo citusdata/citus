@@ -558,11 +558,10 @@ char *
 CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
-	int makeOK = 0;
 
 	if (!CreatedResultsDirectory)
 	{
-		makeOK = mkdir(resultDirectory, S_IRWXU);
+		int makeOK = mkdir(resultDirectory, S_IRWXU);
 		if (makeOK != 0)
 		{
 			if (errno == EEXIST)
