@@ -19,14 +19,14 @@ DECLARE
    activity record;
 BEGIN
     LOOP
+        PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
-	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
         IF activity.pid IS NOT NULL THEN
             RETURN activity;
         ELSE
             PERFORM pg_sleep(0.1);
-            PERFORM pg_stat_clear_snapshot();
-        END IF ;
+        END IF;
     END LOOP;
 END;
 $$;
@@ -237,14 +237,14 @@ DECLARE
    activity record;
 BEGIN
     LOOP
+        PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
-	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
         IF activity.pid IS NOT NULL THEN
             RETURN activity;
         ELSE
             PERFORM pg_sleep(0.1);
-            PERFORM pg_stat_clear_snapshot();
-        END IF ;
+        END IF;
     END LOOP;
 END;
 $$;

@@ -298,6 +298,16 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
 
+		LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+		pid_t dbDataWorkerPid = myDbData->workerPid;
+		LWLockRelease(&MaintenanceDaemonControl->lock);
+
+		if (dbDataWorkerPid != MyProcPid)
+		{
+			/* if multiple daemons are alive, only keep the one in the hash table */
+			proc_exit(1);
+		}
+
 		CHECK_FOR_INTERRUPTS();
 
 		/*

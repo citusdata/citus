@@ -29,10 +29,6 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
 -- procedures are distributed by text arguments, when run in isolation it is not guaranteed a table actually exists.
 CREATE TABLE colocation_table(id text);
 SET citus.replication_model TO 'streaming';
@@ -49,7 +45,7 @@ SELECT create_distributed_function('raise_info(text)', '$1', colocate_with := 'c
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync();
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
