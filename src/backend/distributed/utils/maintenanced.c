@@ -305,7 +305,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		if (dbDataWorkerPid != MyProcPid)
 		{
 			/* if multiple daemons are alive, only keep the one in the hash table */
-			proc_exit(1);
+			proc_exit(0);
 		}
 
 		CHECK_FOR_INTERRUPTS();
