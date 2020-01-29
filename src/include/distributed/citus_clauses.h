@@ -15,9 +15,25 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
+
+/*
+ * This struct is used to pass information to master
+ * evaluation logic.
+ */
+typedef struct MasterEvaluationContext
+{
+	PlanState *planState;
+	bool evaluateParams;
+	bool evaluateFunctions;
+} MasterEvaluationContext;
+
+
 extern bool RequiresMasterEvaluation(Query *query);
-extern void ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState);
-extern Node * PartiallyEvaluateExpression(Node *expression, PlanState *planState);
+extern void ExecuteMasterEvaluableFunctionsAndParameters(Query *query,
+														 PlanState *planState);
+extern void ExecuteMasterEvaluableParameters(Query *query, PlanState *planState);
+extern Node * PartiallyEvaluateExpression(Node *expression,
+										  MasterEvaluationContext *masterEvaluationContext);
 extern bool CitusIsVolatileFunction(Node *node);
 extern bool CitusIsMutableFunction(Node *node);
 
