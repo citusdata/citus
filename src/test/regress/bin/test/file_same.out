@@ -1,0 +1,14 @@
+This line is missing in file_different
+Ports are replaced with xxxxx: localhost:1728
+This line is the same
+This line is also the same
+DEBUG: we remove this line creating and filling new WAL file
+Line above was deleted é
+Filler 1, localhost:21870
+Filler 2, localhost:2187
+Filler 3, localhost:218
+This line is missing in file_different
+Line below will be removed, localhost:2187
+DEBUG: we remove this line creating and filling new WAL file
+This line will be changed ✓
+End of file

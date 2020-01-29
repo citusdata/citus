@@ -817,7 +817,7 @@ else
     $exitcode = system("$plainRegress", @arguments);
 }
 
-system (catfile("bin", "copy_modified"));
+system ("copy_modified");
 my $endTime = time();
 
 if ($exitcode == 0) {

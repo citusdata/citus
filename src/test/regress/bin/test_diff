@@ -1,0 +1,38 @@
+#!/bin/bash
+
+SCRIPT=`realpath -s "$0"`
+SCRIPTPATH=`dirname "$SCRIPT"`
+PATH="$SCRIPTPATH:$PATH"
+
+cp "$SCRIPTPATH/test/file.out" "$SCRIPTPATH/test/file_same.out"
+mkdir -p "$SCRIPTPATH/test/results"
+
+# diff file.out against file_$1.out, also strip out timestamps & file paths
+function create_result()
+{
+	diff -dU2 -w "$SCRIPTPATH/test/file.out" "$SCRIPTPATH/test/file_$1.out" \
+		| sed -E 's/^(\+\+\+|---).+\/([^/]+)\t.+$/\1 \2/' \
+		> "$SCRIPTPATH/test/results/$1.out"
+}
+
+# compare whether result is same as expected
+function check_result()
+{
+	cmp -s "$SCRIPTPATH/test/expected/$1.out" "$SCRIPTPATH/test/results/$1.out"
+	if test $? -ne 0
+	then
+		diff -u "$SCRIPTPATH/test/expected/$1.out" "$SCRIPTPATH/test/results/$1.out"
+		exit 1
+	fi
+}
+
+function test_case()
+{
+	# call twice as tests invoke diff multiple times
+	create_result "$1"
+	create_result "$1"
+	check_result "$1"
+}
+
+test_case "same"
+test_case "different"
