@@ -989,10 +989,62 @@ select create_distributed_table('test', 'x');
 (1 row)
 
 set citus.enable_repartition_joins to true;
+INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
+EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+(11 rows)
+
 SET client_min_messages TO DEBUG1;
-insert into test(y, x) select a.x, b.y from test a JOIN test b USING (y);
+INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 RESET client_min_messages;
+SELECT count(*) FROM test;
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
+TRUNCATE test;
+INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
+EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+(11 rows)
+
+SET client_min_messages TO DEBUG1;
+INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
+SELECT count(*) FROM test;
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;

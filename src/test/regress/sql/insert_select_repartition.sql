@@ -460,9 +460,26 @@ create table test(x int, y int);
 select create_distributed_table('test', 'x');
 set citus.enable_repartition_joins to true;
 
+INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
+
+EXPLAIN (costs off) INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
+
 SET client_min_messages TO DEBUG1;
-insert into test(y, x) select a.x, b.y from test a JOIN test b USING (y);
+INSERT INTO test(y, x) SELECT a.x, b.y FROM test a JOIN test b USING (y);
 RESET client_min_messages;
+
+SELECT count(*) FROM test;
+
+TRUNCATE test;
+INSERT INTO test SELECT i, i FROM generate_series(1, 10) i;
+
+EXPLAIN (costs off) INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
+
+SET client_min_messages TO DEBUG1;
+INSERT INTO test SELECT a.* FROM test a JOIN test b USING (y);
+RESET client_min_messages;
+
+SELECT count(*) FROM test;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
