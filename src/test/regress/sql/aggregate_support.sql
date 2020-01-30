@@ -68,6 +68,10 @@ select sum2(val), sum2_strict(val) from aggdata where valf = 0;
 select key, stddev(valf) from aggdata group by key having stddev(valf) > 2 order by key;
 select key, stddev(valf) from aggdata group by key having stddev(val::float8) > 1 order by key;
 
+-- Test https://github.com/citusdata/citus/issues/3446
+set citus.coordinator_aggregation_strategy to 'row-gather';
+select id, stddev(val) from aggdata group by id order by 1;
+set citus.coordinator_aggregation_strategy to 'disabled';
 
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
 -- we do not currently support pseudotypes for transition types, so this errors for now
