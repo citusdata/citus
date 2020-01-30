@@ -48,9 +48,17 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 -- meaningful results. First, we check that we don't push down the limit clause
 -- for non-commutative aggregates.
 
-SELECT l_partkey, avg(l_suppkey) AS average FROM lineitem
+SELECT l_partkey, avg(l_suppkey) FROM lineitem
 	GROUP BY l_partkey
-	ORDER BY average DESC, l_partkey LIMIT 10;
+	ORDER BY 2 DESC, l_partkey LIMIT 10;
+SELECT l_partkey, stddev(l_suppkey::float8) FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY 2 DESC NULLS LAST, l_partkey LIMIT 10;
+
+-- also test that we handle execution on coordinator properly
+SELECT l_partkey, avg(distinct l_suppkey) FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY 2 DESC, l_partkey LIMIT 10;
 
 -- Next, check that we don't apply the limit optimization for expressions that
 -- have aggregates within them
