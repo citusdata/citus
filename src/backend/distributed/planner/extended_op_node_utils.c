@@ -76,7 +76,8 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 		hasNonPartitionColumnDistinctAgg;
 	extendedOpNodeProperties.pullDistinctColumns = pullDistinctColumns;
 	extendedOpNodeProperties.pushDownWindowFunctions = pushDownWindowFunctions;
-	extendedOpNodeProperties.pullUpIntermediateRows = pullUpIntermediateRows;
+	extendedOpNodeProperties.pullUpIntermediateRows =
+		!groupedByDisjointPartitionColumn && pullUpIntermediateRows;
 
 	return extendedOpNodeProperties;
 }

@@ -127,6 +127,25 @@ select key, stddev(valf) from aggdata group by key having stddev(val::float8) > 
    2 | 1.01500410508201
 (1 row)
 
+-- Test https://github.com/citusdata/citus/issues/3446
+set citus.coordinator_aggregation_strategy to 'row-gather';
+select id, stddev(val) from aggdata group by id order by 1;
+ id | stddev
+---------------------------------------------------------------------
+  1 |
+  2 |
+  3 |
+  4 |
+  5 |
+  6 |
+  7 |
+  8 |
+  9 |
+ 10 |
+ 11 |
+(11 rows)
+
+set citus.coordinator_aggregation_strategy to 'disabled';
 -- test polymorphic aggregates from https://github.com/citusdata/citus/issues/2397
 -- we do not currently support pseudotypes for transition types, so this errors for now
 CREATE OR REPLACE FUNCTION first_agg(anyelement, anyelement)
