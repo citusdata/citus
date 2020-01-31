@@ -1,0 +1,51 @@
+syntax = "proto2";
+
+package protobuf;
+
+enum CompressionType {
+  // Values should match with the corresponding struct in cstore_fdw.h
+  NONE = 0;
+  PG_LZ = 1;
+};
+
+message ColumnBlockSkipNode {
+  optional uint64 rowCount = 1;
+  optional bytes minimumValue = 2;
+  optional bytes maximumValue = 3;
+  optional uint64 valueBlockOffset = 4;
+  optional uint64 valueLength = 5;
+  optional CompressionType valueCompressionType = 6;
+  optional uint64 existsBlockOffset = 7;
+  optional uint64 existsLength = 8;
+}
+
+message ColumnBlockSkipList {
+  repeated ColumnBlockSkipNode blockSkipNodeArray = 1;
+}
+
+message StripeFooter {
+  repeated uint64 skipListSizeArray = 1;
+  repeated uint64 existsSizeArray = 2;
+  repeated uint64 valueSizeArray = 3;
+}
+
+message StripeMetadata {
+  optional uint64 fileOffset = 1;
+  optional uint64 skipListLength = 2;
+  optional uint64 dataLength = 3;
+  optional uint64 footerLength = 4;
+}
+
+message TableFooter {
+  repeated StripeMetadata stripeMetadataArray = 1;
+  optional uint32 blockRowCount = 2;
+}
+
+message PostScript {
+  optional uint64 tableFooterLength = 1;
+  optional uint64 versionMajor = 2;
+  optional uint64 versionMinor = 3;
+  
+  // Leave this last in the record
+  optional string magicNumber = 8000;
+}
