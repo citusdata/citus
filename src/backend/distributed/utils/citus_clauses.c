@@ -34,6 +34,8 @@ static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typm
 static bool CitusIsVolatileFunctionIdChecker(Oid func_id, void *context);
 static bool CitusIsMutableFunctionIdChecker(Oid func_id, void *context);
 static bool ShouldEvaluateExpressionType(NodeTag nodeTag);
+static bool ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *
+													evaluationContext);
 
 /*
  * RequiresMastereEvaluation returns the executor needs to reparse and
@@ -48,7 +50,7 @@ RequiresMasterEvaluation(Query *query)
 
 
 /*
- * ExecuteMasterEvaluableFunctions evaluates expressions and external parameters
+ * ExecuteMasterEvaluableFunctionsAndParameters evaluates expressions and parameters
  * that can be resolved to a constant.
  */
 void
@@ -57,8 +59,7 @@ ExecuteMasterEvaluableFunctionsAndParameters(Query *query, PlanState *planState)
 	MasterEvaluationContext masterEvaluationContext;
 
 	masterEvaluationContext.planState = planState;
-	masterEvaluationContext.evaluateParams = true;
-	masterEvaluationContext.evaluateFunctions = true;
+	masterEvaluationContext.evaluationMode = EVALUATE_FUNCTIONS_PARAMS;
 
 	PartiallyEvaluateExpression((Node *) query, &masterEvaluationContext);
 }
@@ -74,8 +75,7 @@ ExecuteMasterEvaluableParameters(Query *query, PlanState *planState)
 	MasterEvaluationContext masterEvaluationContext;
 
 	masterEvaluationContext.planState = planState;
-	masterEvaluationContext.evaluateParams = true;
-	masterEvaluationContext.evaluateFunctions = false;
+	masterEvaluationContext.evaluationMode = EVALUATE_PARAMS;
 
 	PartiallyEvaluateExpression((Node *) query, &masterEvaluationContext);
 }
@@ -112,7 +112,8 @@ PartiallyEvaluateExpression(Node *expression,
 											exprCollation(expression),
 											masterEvaluationContext);
 	}
-	else if (ShouldEvaluateExpressionType(nodeTag))
+	else if (ShouldEvaluateExpressionType(nodeTag) &&
+			 ShouldEvaluateFunctionWithMasterContext(masterEvaluationContext))
 	{
 		if (FindNodeCheck(expression, IsVarNode))
 		{
@@ -142,6 +143,24 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 
 	return expression;
+}
+
+
+/*
+ * ShouldEvaluateFunctionWithMasterContext is a helper function  which is used to
+ * decide whether the function/expression should be evaluated with the input
+ * masterEvaluationContext.
+ */
+static bool
+ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *evaluationContext)
+{
+	if (evaluationContext == NULL)
+	{
+		/* if no context provided, evaluate, which is the default behaviour */
+		return true;
+	}
+
+	return evaluationContext->evaluationMode == EVALUATE_FUNCTIONS_PARAMS;
 }
 
 
@@ -213,13 +232,13 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 
 		if (IsA(expr, Param))
 		{
-			if (!masterEvaluationContext->evaluateParams)
+			if (masterEvaluationContext->evaluationMode == EVALUATE_NONE)
 			{
 				/* bail out, the caller doesn't want params to be evaluated  */
 				return expr;
 			}
 		}
-		else if (!masterEvaluationContext->evaluateFunctions)
+		else if (masterEvaluationContext->evaluationMode != EVALUATE_FUNCTIONS_PARAMS)
 		{
 			/* should only get here for node types we should evaluate */
 			Assert(ShouldEvaluateExpressionType(nodeTag(expr)));

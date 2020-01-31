@@ -17,14 +17,29 @@
 
 
 /*
+ * MasterEvaluationMode is used to signal what expressions in the query
+ * should be evaluated on the coordinator.
+ */
+typedef enum MasterEvaluationMode
+{
+	/* evaluate nothing */
+	EVALUATE_NONE = 0,
+
+	/* evaluate only external parameters */
+	EVALUATE_PARAMS,
+
+	/* evaluate both the functions/expressions and the external paramaters */
+	EVALUATE_FUNCTIONS_PARAMS
+} MasterEvaluationMode;
+
+/*
  * This struct is used to pass information to master
  * evaluation logic.
  */
 typedef struct MasterEvaluationContext
 {
 	PlanState *planState;
-	bool evaluateParams;
-	bool evaluateFunctions;
+	MasterEvaluationMode evaluationMode;
 } MasterEvaluationContext;
 
 
