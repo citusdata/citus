@@ -49,7 +49,7 @@ def main():
 		if line.startswith('+++ '):
 			tab = line.rindex('\t')
 			fname = line[4:tab]
-			file2 = FileScanner(open(fname.replace('.modified', '')), sed)
+			file2 = FileScanner(open(fname.replace('.modified', ''), encoding='utf8'), sed)
 			stdout.write(line)
 		elif line.startswith('@@ '):
 			idx_start = line.index('+') + 1
