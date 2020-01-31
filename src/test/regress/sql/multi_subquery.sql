@@ -642,7 +642,7 @@ GROUP BY t1.event_type HAVING t1.event_type > avg(2 + (SELECT t2.value_2 FROM us
 ORDER BY 1;
 
 SELECT t1.event_type FROM events_table t1
-GROUP BY t1.event_type HAVING t1.event_type > avg(t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+GROUP BY t1.event_type HAVING t1.event_type > avg((SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1) - t1.value_2)
 ORDER BY 1;
 
 RESET citus.coordinator_aggregation_strategy;

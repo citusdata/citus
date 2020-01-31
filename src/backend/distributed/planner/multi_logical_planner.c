@@ -405,17 +405,6 @@ FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
 
 
 /*
- * QueryContainsDistributedTableRTE determines whether the given
- * query contains a distributed table.
- */
-bool
-QueryContainsDistributedTableRTE(Query *query)
-{
-	return FindNodeCheck((Node *) query, IsDistributedTableRTE);
-}
-
-
-/*
  * NodeTryGetRteRelid returns the relid of the given RTE_RELATION RangeTableEntry.
  * Returns InvalidOid if any of these assumptions fail for given node.
  */

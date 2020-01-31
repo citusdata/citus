@@ -898,15 +898,28 @@ ERROR:  Subqueries in HAVING cannot refer to outer query
 SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type > avg((SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
 ORDER BY 1;
-ERROR:  cannot handle unplanned sub-select
+ event_type
+---------------------------------------------------------------------
+          6
+(1 row)
+
 SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type > avg(2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
 ORDER BY 1;
-ERROR:  cannot handle unplanned sub-select
+ event_type
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT t1.event_type FROM events_table t1
-GROUP BY t1.event_type HAVING t1.event_type > avg(t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+GROUP BY t1.event_type HAVING t1.event_type > avg((SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1) - t1.value_2)
 ORDER BY 1;
-ERROR:  cannot handle unplanned sub-select
+ event_type
+---------------------------------------------------------------------
+          4
+          5
+          6
+(3 rows)
+
 RESET citus.coordinator_aggregation_strategy;
 SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type > corr(t1.value_3, t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
