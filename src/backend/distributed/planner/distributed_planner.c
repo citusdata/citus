@@ -1790,6 +1790,31 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 {
 	DistTableCacheEntry *cacheEntry = NULL;
 
+	if (ReplaceCitusExtraDataContainer)
+	{
+		/*
+		 * We got here by planning the query part that needs to be executed on the query
+		 * coordinator node.
+		 * We are looking for an occurance of the citus_extra_datacontainer function
+		 * encoding the remote scan we plan to execute here.
+		 */
+
+
+		Path *path = CreateCitusCustomScanPath(root, relOptInfo, restrictionIndex, rte,
+											   ReplaceCitusExtraDataContainerWithCustomScan);
+
+		/* reset path info that was already gathered */
+		relOptInfo->pathlist = NIL;
+		relOptInfo->cheapest_startup_path = NULL;
+		relOptInfo->cheapest_total_path = NULL;
+		relOptInfo->cheapest_unique_path = NULL;
+
+		/* add our new path*/
+		add_path(relOptInfo, path);
+
+		return;
+	}
+
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
 	AdjustReadIntermediateResultArrayCost(rte, relOptInfo);
 

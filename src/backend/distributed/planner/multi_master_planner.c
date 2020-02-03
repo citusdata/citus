@@ -25,6 +25,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
+#include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
@@ -58,6 +59,13 @@ static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 static Agg * makeAggNode(List *groupClauseList, List *havingQual,
 						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
 static void FinalizeStatement(PlannerInfo *root, PlannedStmt *stmt, Plan *topLevelPlan);
+
+static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
+									  struct CustomPath *best_path, List *tlist,
+									  List *clauses, List *custom_plans);
+struct List * CitusCustomScanPathReparameterize(PlannerInfo *root,
+												List *custom_private,
+												RelOptInfo *child_rel);
 
 
 /*
@@ -132,49 +140,55 @@ MasterTargetList(List *workerTargetList)
 }
 
 
-static Plan *
-replace_function_scan_with_remote_scan(Plan *plan, CustomScan *remoteScan)
-{
-	if (IsA(plan, FunctionScan))
-	{
-		FunctionScan *functionScan = castNode(FunctionScan, plan);
-		CustomScan *copyRemoteScan = remoteScan;
-		/* TODO decide if we want to copy the statement, can't do so now as plan references need to be updated which requires context we dont have here at the moment */
-//		copyRemoteScan = copyObject(copyRemoteScan);
-		/*
-		 * The standard planner might have shuffled around the target list compared to the
-		 * target list of our function. The source tuples of the function align with the
-		 * internal layout of the tuple from the remote scan so we can simply reuse the
-		 * target list from the standard plan of the function scan
-		 */
-		copyRemoteScan->scan.plan.targetlist = functionScan->scan.plan.targetlist;
-
-		return (Plan *) copyRemoteScan;
-	}
-
-	return plan;
-}
-
-
-static Plan *
-PlanMutator(Plan *plan, Plan *(*mutator) (), void *context)
-{
-	if (plan == NULL)
-	{
-		return NULL;
-	}
-
-	plan = mutator(plan, context);
-
-	/* recurse into child plans */
-	plan->lefttree = PlanMutator(plan->lefttree, mutator, context);
-	plan->righttree = PlanMutator(plan->righttree, mutator, context);
-
-	return plan;
-}
-
-
 bool UseStdPlanner = false;
+bool ReplaceCitusExtraDataContainer = false;
+CustomScan *ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+static CustomPathMethods CitusCustomScanPathMethods = {
+	.CustomName = "CitusCustomScanPath",
+	.PlanCustomPath = CitusCustomScanPathPlan,
+	.ReparameterizeCustomPathByChild = CitusCustomScanPathReparameterize
+};
+
+
+Path *
+CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
+						  Index restrictionIndex, RangeTblEntry *rte,
+						  CustomScan *remoteScan)
+{
+	CitusCustomScanPath *path = (CitusCustomScanPath *) newNode(
+		sizeof(CitusCustomScanPath), T_CustomPath);
+	path->custom_path.methods = &CitusCustomScanPathMethods;
+	path->custom_path.path.pathtype = T_CustomScan;
+	path->custom_path.path.pathtarget = relOptInfo->reltarget;
+	path->custom_path.path.parent = relOptInfo;
+
+	/* TODO come up with reasonable row counts */
+	path->remoteScan = remoteScan;
+
+	return (Path *) path;
+}
+
+
+static Plan *
+CitusCustomScanPathPlan(PlannerInfo *root,
+						RelOptInfo *rel,
+						struct CustomPath *best_path,
+						List *tlist,
+						List *clauses,
+						List *custom_plans)
+{
+	CitusCustomScanPath *citusPath = (CitusCustomScanPath *) best_path;
+	return (Plan *) citusPath->remoteScan;
+}
+
+
+struct List *
+CitusCustomScanPathReparameterize(PlannerInfo *root,
+								  List *custom_private,
+								  RelOptInfo *child_rel)
+{
+	return NIL;
+}
 
 /*
  * BuildSelectStatement builds the final select statement to run on the master
@@ -203,19 +217,38 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	root->planner_cxt = CurrentMemoryContext;
 	root->wt_param_id = -1;
 
-	PlannedStmt *standardStmt = standard_planner(masterQuery, 0, NULL);
-	/* replace FUNCTIONSCAN NODE with remoteScan */
 	remoteScan->custom_scan_tlist = masterTargetList;
 	remoteScan->scan.plan.targetlist = masterTargetList;
-	pprint(standardStmt);
-	standardStmt->planTree = PlanMutator(standardStmt->planTree,
-										 replace_function_scan_with_remote_scan,
-										 remoteScan);
+
+	/* This code should not be re-entrant */
+	PlannedStmt *standardStmt = NULL;
+	PG_TRY();
+	{
+		Assert(ReplaceCitusExtraDataContainer == false);
+		Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
+		ReplaceCitusExtraDataContainer = true;
+		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
+
+		standardStmt = standard_planner(masterQuery, 0, NULL);
+
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+	}
+	PG_CATCH();
+	{
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	Assert(standardStmt != NULL);
+
 	/*
 	 * TODO; with the final targetlist set we can set the plan references, might need to
 	 * be moved inside replace_function_scan_with_remote_scan
 	 */
-	set_plan_references(root, (Plan *)remoteScan);
+//	set_plan_references(root, (Plan *)remoteScan);
 	{
 		/*
 		 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans

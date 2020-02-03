@@ -161,6 +161,26 @@ typedef struct DistributedPlanningContext
 } DistributedPlanningContext;
 
 
+/*
+ * CitusCustomScanPath is injected into the planner during the master query planning phase
+ * of the logical planner.
+ * We call out to the standard planner to plan the master query part for the output of the
+ * logical planner. This makes it easier to implement new sql features into the logical
+ * planner by not having to manually implement the plan creation for the query on the
+ * master.
+ */
+typedef struct CitusCustomScanPath
+{
+	CustomPath custom_path;
+
+	/*
+	 * Custom scan node computed by the citus planner that will produce the tuples for the
+	 * path we are injecting during the planning of the master query
+	 */
+	CustomScan *remoteScan;
+} CitusCustomScanPath;
+
+
 extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 										 ParamListInfo boundParams);
 extern List * ExtractRangeTableEntryList(Query *query);
