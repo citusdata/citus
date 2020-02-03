@@ -40,6 +40,31 @@ SELECT create_reference_table('ref_test_table');
 4,5,'rr4'
 \.
 
+-- Test two reference table joins, will both run in parallel
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ROLLBACK;
+
+-- Test two reference table joins, second one will be serialized
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+INSERT INTO ref_test_table VALUES(1,2,'da');
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ROLLBACK;
+
+-- this does not work because the inserts into shards go over different connections
+-- and the insert into the reference table goes over a single connection, and the
+-- final SELECT cannot see both
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+INSERT INTO test_table VALUES(1,2,'da');
+INSERT INTO test_table VALUES(2,2,'da');
+INSERT INTO test_table VALUES(3,3,'da');
+INSERT INTO ref_test_table VALUES(1,2,'da');
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ROLLBACK;
+
 -- Test with select and router insert
 BEGIN;
 SELECT COUNT(*) FROM test_table;
