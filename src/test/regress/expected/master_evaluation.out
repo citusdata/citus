@@ -16,6 +16,19 @@ SELECT create_distributed_function('get_local_node_id_volatile()');
 
 (1 row)
 
+CREATE OR REPLACE FUNCTION get_local_node_id_volatile_sum_with_param(int)
+RETURNS INT AS $$
+DECLARE localGroupId int;
+BEGIN
+	SELECT groupid + $1 INTO localGroupId FROM pg_dist_local_group;
+  RETURN localGroupId;
+END; $$ language plpgsql VOLATILE;
+SELECT create_distributed_function('get_local_node_id_volatile_sum_with_param(int)');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE master_evaluation_table (key int, value int);
 SELECT create_distributed_table('master_evaluation_table', 'key');
  create_distributed_table
@@ -30,8 +43,8 @@ SELECT get_local_node_id_volatile();
                           0
 (1 row)
 
--- load data such that we have 1 row per node
-INSERT INTO master_evaluation_table SELECT i, 0 FROM generate_series(0,100)i;
+-- load data
+INSERT INTO master_evaluation_table SELECT i, i FROM generate_series(0,100)i;
 -- we expect that the function is evaluated on the worker node, so we should get a row
 SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
  ?column?
@@ -105,10 +118,10 @@ SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatil
 
 -- make sure that we get the results from the workers when the query is sent to workers
 SET citus.task_assignment_policy TO "round-robin";
-SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatile() > 0;
+SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatile() = 0;
  count | ?column?
 ---------------------------------------------------------------------
-   101 | t
+   101 | f
 (1 row)
 
 RESET citus.task_assignment_policy;
@@ -119,10 +132,401 @@ SELECT min(get_local_node_id_volatile())  > 0 FROM master_evaluation_table;
  t
 (1 row)
 
-SELECT count(*) FROM master_evaluation_table WHERE value >= get_local_node_id_volatile();
- count
+SELECT count(*) > 0 FROM master_evaluation_table WHERE value >= get_local_node_id_volatile();
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- let's have some tests around expressions
+-- for modifications, we expect the evaluation to happen on the coordinator
+-- thus the results should be 0
+PREPARE insert_with_param_expression(int) AS INSERT INTO master_evaluation_table (key, value) VALUES ($1 + get_local_node_id_volatile(), $1 + get_local_node_id_volatile()) RETURNING key, value;
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param_expression(0);
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+-- for modifications, we expect the evaluation to happen on the coordinator
+-- thus the results should be 0
+PREPARE insert_with_param(int) AS INSERT INTO master_evaluation_table (key, value) VALUES ($1, $1) RETURNING key, value;
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+EXECUTE insert_with_param(0 + get_local_node_id_volatile());
+ key | value
+---------------------------------------------------------------------
+   0 |     0
+(1 row)
+
+PREPARE router_select_with_param_expression(int) AS SELECT value > 0 FROM master_evaluation_table WHERE key = $1 + get_local_node_id_volatile();
+-- for selects, we expect the evaluation to happen on the workers
+-- this means that the query should be hitting multiple workers
+SET client_min_messages TO DEBUG2;
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_param_expression(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_select_with_param(int) AS SELECT DISTINCT value FROM master_evaluation_table WHERE key = $1;
+-- this time the parameter itself is a function, so should be evaluated
+-- on the coordinator
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
 ---------------------------------------------------------------------
      0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- same calls with functions as the parametres only
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE router_select_with_param(get_local_node_id_volatile());
+ value
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- this time use the parameter inside the function
+PREPARE router_select_with_parameter_in_function(int) AS SELECT bool_and(get_local_node_id_volatile_sum_with_param($1) > 1) FROM master_evaluation_table WHERE key = get_local_node_id_volatile_sum_with_param($1);
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_select_with_parameter_in_function(0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET client_min_messages;
+RESET citus.log_remote_commands;
+-- numeric has different casting affects, so some tests on that
+CREATE TABLE master_evaluation_table_2 (key numeric, value numeric);
+SELECT create_distributed_table('master_evaluation_table_2', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ CREATE OR REPLACE FUNCTION TEST_RANDOM (INTEGER, INTEGER) RETURNS INTEGER AS $$
+DECLARE
+    start_int ALIAS FOR $1;
+    end_int ALIAS FOR $2;
+BEGIN
+    RETURN trunc(random() * (end_int-start_int) + start_int);
+END;
+$$ LANGUAGE 'plpgsql' STRICT;
+CREATE OR REPLACE PROCEDURE master_evaluation.test_procedure(int)
+ LANGUAGE plpgsql
+AS $procedure$
+DECLARE filterKey INTEGER;
+BEGIN
+  filterKey := round(master_evaluation.TEST_RANDOM(1,1)) + $1;
+  PERFORM DISTINCT value FROM master_evaluation_table_2 WHERE key = filterKey;
+END;
+$procedure$;
+-- we couldn't find a meaningful query to write for this
+-- however this query fails before https://github.com/citusdata/citus/pull/3454
+SET client_min_messages TO DEBUG2;
+\set VERBOSITY TERSE
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+CALL test_procedure(100);
+CREATE OR REPLACE PROCEDURE master_evaluation.test_procedure_2(int)
+ LANGUAGE plpgsql
+AS $procedure$
+DECLARE filterKey INTEGER;
+BEGIN
+  filterKey := round(master_evaluation.TEST_RANDOM(1,1)) + $1;
+  INSERT INTO master_evaluation_table_2 VALUES (filterKey, filterKey);
+END;
+$procedure$;
+RESET citus.log_remote_commands ;
+RESET client_min_messages;
+-- these calls would INSERT key = 101, so test if insert succeeded
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+CALL test_procedure_2(100);
+SELECT count(*) FROM master_evaluation_table_2 WHERE key = 101;
+ count
+---------------------------------------------------------------------
+     7
 (1 row)
 
 SET client_min_messages TO ERROR;
