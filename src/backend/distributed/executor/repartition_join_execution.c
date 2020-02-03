@@ -68,7 +68,7 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 
 	List *jobIds = CreateTemporarySchemasForMergeTasks(topLevelJob);
 
-	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
+	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks, jobIds);
 
 	return jobIds;
 }

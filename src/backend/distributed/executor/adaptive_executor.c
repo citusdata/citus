@@ -543,14 +543,15 @@ typedef struct TaskPlacementExecution
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
-														 List *taskList, bool
-														 hasReturning,
+														 List *taskList,
+														 bool hasReturning,
 														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
 														 int targetPoolSize,
 														 TransactionProperties *
-														 xactProperties);
+														 xactProperties,
+														 List *jobIdList);
 static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLevel
 																	modLevel,
 																	List *taskList,
@@ -680,7 +681,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 		tupleDescriptor,
 		scanState->tuplestorestate,
 		targetPoolSize,
-		&xactProperties);
+		&xactProperties,
+		jobIdList);
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -803,24 +805,24 @@ ExecuteUtilityTaskListWithoutResults(List *taskList)
 
 
 /*
- * ExecuteTaskListRepartiton is a proxy to ExecuteTaskListExtended() with defaults
- * for some of the arguments for a repartition query.
+ * ExecuteTaskListOutsideTransaction is a proxy to ExecuteTaskListExtended
+ * with defaults for some of the arguments.
  */
 uint64
-ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList, int
-								  targetPoolSize)
+ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
+								  int targetPoolSize, List *jobIdList)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
 
-	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, true);
+	TransactionProperties xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, taskList, true);
 
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, jobIdList);
 }
 
 
@@ -840,7 +842,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, NIL);
 }
 
 
@@ -860,7 +862,7 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, NIL);
 }
 
 
@@ -872,7 +874,7 @@ uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize,
-						TransactionProperties *xactProperties)
+						TransactionProperties *xactProperties, List *jobIdList)
 {
 	ParamListInfo paramListInfo = NULL;
 
@@ -890,7 +892,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	DistributedExecution *execution =
 		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
-								   xactProperties);
+								   xactProperties, jobIdList);
 
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
@@ -909,7 +911,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 						   bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize,
-						   TransactionProperties *xactProperties)
+						   TransactionProperties *xactProperties, List *jobIdList)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -940,6 +942,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
+
+	execution->jobIdList = jobIdList;
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
 	if (tupleDescriptor != NULL)

@@ -14,7 +14,8 @@
 
 #include "nodes/pg_list.h"
 
-extern void ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks);
+extern void ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks,
+										  List *jobIds);
 
 
 #endif /* DIRECTED_ACYCLIC_GRAPH_EXECUTION_H */

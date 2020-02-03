@@ -51,7 +51,7 @@ static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
  * execute all of them in parallel. The parallelism is bound by MaxAdaptiveExecutorPoolSize.
  */
 void
-ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks)
+ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks, List *jobIds)
 {
 	HTAB *completedTasks = CreateTaskHashTable();
 
@@ -66,7 +66,7 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks)
 			break;
 		}
 		ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, curTasks,
-										  MaxAdaptiveExecutorPoolSize);
+										  MaxAdaptiveExecutorPoolSize, jobIds);
 
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;
