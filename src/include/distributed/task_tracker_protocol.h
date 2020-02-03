@@ -17,7 +17,7 @@
 
 #include "fmgr.h"
 
-extern void CreateJobSchema(StringInfo schemaName);
+extern void CreateJobSchema(StringInfo schemaName, char *schemaOwner);
 
 /* Function declarations for distributed task management */
 extern Datum task_tracker_assign_task(PG_FUNCTION_ARGS);
