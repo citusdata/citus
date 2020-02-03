@@ -592,6 +592,15 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 								"modified over multiple connections")));
 			}
 		}
+		else if (accessType == PLACEMENT_ACCESS_SELECT &&
+				 placementEntry->hasSecondaryConnections &&
+				 !placementConnection->hadDDL && !placementConnection->hadDML)
+		{
+			/*
+			 * Two separate connections have already selected from this placement
+			 * and it was not modified. There is no benefit to using this connection.
+			 */
+		}
 		else if (CanUseExistingConnection(flags, userName, placementConnection))
 		{
 			/*
@@ -599,7 +608,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			 */
 
 			Assert(placementConnection != NULL);
-
 			chosenConnection = placementConnection->connection;
 
 			if (placementConnection->hadDDL || placementConnection->hadDML)
