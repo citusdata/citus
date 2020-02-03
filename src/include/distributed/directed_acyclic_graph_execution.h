@@ -1,14 +1,14 @@
 /*-------------------------------------------------------------------------
  *
- * directed_acylic_graph_execution.h
- *	  Execution logic for directed acylic graph tasks.
+ * directed_acyclic_graph_execution.h
+ *	  Execution logic for directed acyclic graph tasks.
  *
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
-#ifndef DIRECTED_ACYLIC_GRAPH_EXECUTION_H
-#define DIRECTED_ACYLIC_GRAPH_EXECUTION_H
+#ifndef DIRECTED_ACYCLIC_GRAPH_EXECUTION_H
+#define DIRECTED_ACYCLIC_GRAPH_EXECUTION_H
 
 #include "postgres.h"
 
@@ -17,4 +17,4 @@
 extern void ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks);
 
 
-#endif /* DIRECTED_ACYLIC_GRAPH_EXECUTION_H */
+#endif /* DIRECTED_ACYCLIC_GRAPH_EXECUTION_H */

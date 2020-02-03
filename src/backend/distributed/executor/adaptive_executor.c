@@ -646,7 +646,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/*
 	 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
 	 * clear why this is necessary (instead of locking the parent during DDL), but
-	 * We do the same for consistency.
+	 * we do the same for consistency.
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 

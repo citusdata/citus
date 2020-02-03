@@ -16,8 +16,8 @@
  *
  *
  * Repartition queries do not begin a transaction even if we are in
- * a transaction block. As we dont begin a transaction, they wont see the
- * DDLs that happened earlier in the transaction because we dont have that
+ * a transaction block. As we don't begin a transaction, they won't see the
+ * DDLs that happened earlier in the transaction because we don't have that
  * transaction id with repartition queries. Therefore we error in this case.
  *
  * Copyright (c) Citus Data, Inc.
@@ -29,7 +29,7 @@
 #include "utils/builtins.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acylic_graph_execution.h"
+#include "distributed/directed_acyclic_graph_execution.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"
