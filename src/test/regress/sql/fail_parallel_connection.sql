@@ -1,7 +1,7 @@
 --
 -- failure_parallel_connection.sql tests some behaviour of connection management
 -- where Citus is expected to use multiple connections.
--- 
+--
 -- In other words, we're not testing any failures in this test. We're trying to make
 -- sure that Citus uses 1-connection per placement of distributed table even after
 -- a join with distributed table
