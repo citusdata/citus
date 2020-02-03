@@ -55,7 +55,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext,
 											   uint32 taskIdIndex,
-											   bool allRelationsJoinedOnPartitionKey);
+											   bool allRelationsJoinedOnPartitionKey,
+											   DeferredErrorMessage **routerPlannerError);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
@@ -259,7 +260,14 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 															targetShardInterval,
 															plannerRestrictionContext,
 															taskIdIndex,
-															allDistributionKeysInQueryAreEqual);
+															allDistributionKeysInQueryAreEqual,
+															&distributedPlan->
+															planningError);
+
+		if (distributedPlan->planningError != NULL)
+		{
+			return distributedPlan;
+		}
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -408,7 +416,8 @@ static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
 								 PlannerRestrictionContext *plannerRestrictionContext,
 								 uint32 taskIdIndex,
-								 bool safeToPushdownSubquery)
+								 bool safeToPushdownSubquery,
+								 DeferredErrorMessage **routerPlannerError)
 {
 	Query *copiedQuery = copyObject(originalQuery);
 	RangeTblEntry *copiedInsertRte = ExtractResultRelationRTE(copiedQuery);
@@ -517,10 +526,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	if (planningError)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given "
-							   "modification"),
-						errdetail("Select query cannot be pushed down to the worker.")));
+		*routerPlannerError = planningError;
+		return NULL;
 	}
 
 

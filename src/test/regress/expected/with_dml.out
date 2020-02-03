@@ -70,9 +70,13 @@ WHERE
 	AND EXISTS (SELECT * FROM ids_to_delete);
 DEBUG:  generating subplan XXX_1 for CTE ids_to_delete: SELECT tenant_id FROM with_dml.distributed_table WHERE (dept OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE with_dml.distributed_table SET dept = (distributed_table.dept OPERATOR(pg_catalog.+) 1) FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete, (SELECT distributed_table_1.tenant_id FROM with_dml.distributed_table distributed_table_1 WHERE ((distributed_table_1.tenant_id)::integer OPERATOR(pg_catalog.<) 60)) some_tenants WHERE ((some_tenants.tenant_id OPERATOR(pg_catalog.=) ids_to_delete.tenant_id) AND (distributed_table.tenant_id OPERATOR(pg_catalog.=) some_tenants.tenant_id) AND (EXISTS (SELECT ids_to_delete_1.tenant_id FROM (SELECT intermediate_result.tenant_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text)) ids_to_delete_1)))
--- this query errors out since we've some hard
--- errors in the INSERT ... SELECT pushdown
--- which prevents to fallback to recursive planning
+SET client_min_messages TO WARNING;
+-- this query falls back repartitioned insert/select since we've some hard
+-- errors in the INSERT ... SELECT pushdown which prevents to fallback to
+-- recursive planning
+SELECT * FROM
+coordinator_plan($Q$
+EXPLAIN (costs off)
 WITH ids_to_upsert AS
 (
 	SELECT tenant_id FROM distributed_table WHERE dept > 7
@@ -81,8 +85,14 @@ INSERT INTO distributed_table
        SELECT distributed_table.tenant_id FROM ids_to_upsert, distributed_table
        		WHERE  distributed_table.tenant_id = ids_to_upsert.tenant_id
        	ON CONFLICT (tenant_id) DO UPDATE SET dept = 8;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+$Q$) s
+WHERE s LIKE '%INSERT/SELECT method%';
+             query_plan
+---------------------------------------------------------------------
+   INSERT/SELECT method: repartition
+(1 row)
+
+SET client_min_messages TO DEBUG1;
 -- the following query is very similar to the above one
 -- but this time the query is pulled to coordinator since
 -- we return before hitting any hard errors

@@ -623,13 +623,11 @@ FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_second.user_id IN (19, 20, 21);
 
- -- the following is a very tricky query for Citus
- -- although we do not support pushing down JOINs on non-partition
- -- columns here it is safe to push it down given that we're looking for
- -- a specific value (i.e., value_1 = 12) on the joining column.
- -- Note that the query always hits the same shard on raw_events_second
- -- and this query wouldn't have worked if we're to use different worker
- -- count or shard replication factor
+SET client_min_messages TO WARNING;
+
+ -- following query should use repartitioned joins and results should
+ -- be routed via coordinator
+ SET citus.enable_repartition_joins TO true;
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -669,11 +667,15 @@ FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
 
  -- same as the above with INNER JOIN
+ -- we support this with route to coordinator
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
  FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
+$Q$);
 
 -- even if there is a filter on the partition key, since the join is not on the partition key we reject
 -- this query
@@ -686,32 +688,48 @@ WHERE
   raw_events_first.user_id = 10;
 
  -- same as the above with INNER JOIN
+ -- we support this with route to coordinator
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
  FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
  WHERE raw_events_first.user_id = 10;
+$Q$);
 
  -- make things a bit more complicate with IN clauses
+ -- we support this with route to coordinator
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
  FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
    WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
+$Q$);
 
- -- implicit join on non partition column should also not be pushed down
+ -- implicit join on non partition column should also not be pushed down,
+ -- so we fall back to route via coordinator
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
  FROM   raw_events_first,
         raw_events_second
  WHERE  raw_events_second.user_id = raw_events_first.value_1;
+$Q$);
 
- -- the following is again a tricky query for Citus
- -- if the given filter was on value_1 as shown in the above, Citus could
- -- push it down. But here the query is refused
+RESET client_min_messages;
+
+ -- The following is again a tricky query for Citus. If the given filter was
+ -- on value_1 as shown in the above, Citus could push it down and use
+ -- distributed INSERT/SELECT. But we instead fall back to route via coordinator.
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -719,10 +737,12 @@ WHERE
         raw_events_second
  WHERE  raw_events_second.user_id = raw_events_first.value_1
         AND raw_events_first.value_2 = 12;
+$Q$);
 
- -- lets do some unsupported query tests with subqueries
  -- foo is not joined on the partition key so the query is not
- -- pushed down
+ -- pushed down. So instead we route via coordinator.
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events
              (user_id, value_4_agg)
  SELECT
@@ -751,9 +771,12 @@ WHERE
  ON (f.id = f2.id)) as outer_most
  GROUP BY
    outer_most.id;
+$Q$);
 
  -- if the given filter was on value_1 as shown in the above, Citus could
- -- push it down. But here the query is refused
+ -- push it down. But here the query falls back to route via coordinator.
+ SELECT coordinator_plan($Q$
+ EXPLAIN (costs off)
  INSERT INTO agg_events
              (user_id)
  SELECT raw_events_first.user_id
@@ -761,10 +784,12 @@ WHERE
         raw_events_second
  WHERE  raw_events_second.user_id = raw_events_first.value_1
         AND raw_events_first.value_2 = 12;
+$Q$);
 
- -- lets do some unsupported query tests with subqueries
  -- foo is not joined on the partition key so the query is not
- -- pushed down
+ -- pushed down, and it falls back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
  INSERT INTO agg_events
              (user_id, value_4_agg)
  SELECT
@@ -793,6 +818,7 @@ WHERE
  ON (f.id = f2.id)) as outer_most
  GROUP BY
    outer_most.id;
+$Q$);
 
 INSERT INTO agg_events
             (value_4_agg,
@@ -809,6 +835,8 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         WHERE  raw_events_first.user_id != raw_events_second.user_id
         GROUP  BY raw_events_second.user_id) AS foo;
 
+
+SET client_min_messages TO DEBUG2;
 
 -- INSERT returns NULL partition key value via coordinator
 INSERT INTO agg_events
@@ -941,7 +969,12 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
 
+SET client_min_messages TO WARNING;
+
 -- cannot pushdown the query since the JOIN is not equi JOIN
+-- falls back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -969,9 +1002,12 @@ outer_most.id, max(outer_most.value)
             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
-
+$Q$);
 
 -- cannot pushdown since foo2 is not join on partition key
+-- falls back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -1000,8 +1036,12 @@ FROM
 ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
+$Q$);
 
 -- cannot push down since foo doesn't have en equi join
+-- falls back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events
             (user_id, value_4_agg)
 SELECT
@@ -1030,10 +1070,13 @@ FROM
 ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
-
+$Q$);
 
 -- some unsupported LATERAL JOINs
 -- join on averages is not on the partition key
+-- should fall back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1050,8 +1093,12 @@ FROM
       raw_events_first WHERE
       value_4 = reference_ids.user_id) as averages ON true
     GROUP BY averages.user_id;
+$Q$);
 
 -- join among reference_ids and averages is not on the partition key
+-- should fall back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1067,8 +1114,12 @@ FROM
     FROM
       raw_events_first) as averages ON averages.value_4 = reference_ids.user_id
     GROUP BY averages.user_id;
+$Q$);
 
 -- join among the agg_ids and averages is not on the partition key
+-- should fall back to route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events (user_id, value_4_agg)
 SELECT
   averages.user_id, avg(averages.value_4)
@@ -1086,19 +1137,24 @@ FROM
 JOIN LATERAL
     (SELECT user_id, value_4 FROM agg_events) as agg_ids ON (agg_ids.value_4 = averages.user_id)
     GROUP BY averages.user_id;
+$Q$);
 
--- not supported subqueries in WHERE clause
--- since the selected value in the WHERE is not
--- partition key
+-- Selected value in the WHERE is not partition key, so we cannot use distributed
+-- INSERT/SELECT and falls back route via coordinator
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
 FROM   raw_events_first
 WHERE  user_id IN (SELECT value_1
                    FROM   raw_events_second);
+$Q$);
 
 -- same as above but slightly more complex
 -- since it also includes subquery in FROM as well
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_events
             (user_id)
 SELECT f2.id FROM
@@ -1124,8 +1180,11 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id)
 WHERE f.id IN (SELECT value_1
                FROM   raw_events_second);
+$Q$);
 
 -- some more semi-anti join tests
+
+SET client_min_messages TO DEBUG2;
 
 -- join in where
 INSERT INTO raw_events_second
@@ -1136,7 +1195,12 @@ WHERE  user_id IN (SELECT raw_events_second.user_id
                    FROM   raw_events_second, raw_events_first
                    WHERE  raw_events_second.user_id = raw_events_first.user_id AND raw_events_first.user_id = 200);
 
+RESET client_min_messages;
+
 -- we cannot push this down since it is NOT IN
+-- we use repartition insert/select instead
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -1144,7 +1208,9 @@ FROM   raw_events_first
 WHERE  user_id NOT IN (SELECT raw_events_second.user_id
                    FROM   raw_events_second, raw_events_first
                    WHERE  raw_events_second.user_id = raw_events_first.user_id AND raw_events_first.user_id = 200);
+$Q$);
 
+SET client_min_messages TO DEBUG2;
 
 -- safe to push down
 INSERT INTO raw_events_second
@@ -1195,8 +1261,12 @@ WHERE  NOT EXISTS (SELECT 1
  GROUP BY
    outer_most.id;
 
+RESET client_min_messages;
 
 -- cannot push down since the f.id IN is matched with value_1
+-- we use repartition insert/select instead
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -1224,6 +1294,9 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id)
 WHERE f.id IN (SELECT value_1
                FROM   raw_events_second));
+$Q$);
+
+SET client_min_messages TO DEBUG2;
 
 -- same as above, but this time is it safe to push down since
 -- f.id IN is matched with user_id
@@ -1254,6 +1327,8 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id)
 WHERE f.id IN (SELECT user_id
                FROM   raw_events_second));
+
+RESET client_min_messages;
 
 -- cannot push down since top level user_id is matched with NOT IN
 INSERT INTO raw_events_second
