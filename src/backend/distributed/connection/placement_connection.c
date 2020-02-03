@@ -593,11 +593,12 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			}
 		}
 		else if (accessType == PLACEMENT_ACCESS_SELECT &&
-				 placementEntry->hasSecondaryConnections)
+				 placementEntry->hasSecondaryConnections &&
+				 !placementConnection->hadDDL && !placementConnection->hadDML)
 		{
 			/*
-			 * Two separate connections have already selected from this placements.
-			 * There is no benefit to using this connection.
+			 * Two separate connections have already selected from this placement
+			 * and it was not modified. There is no benefit to using this connection.
 			 */
 		}
 		else if (CanUseExistingConnection(flags, userName, placementConnection))
