@@ -16,6 +16,7 @@
 
 #include "access/xact.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
@@ -1330,9 +1331,9 @@ Assign2PCIdentifier(MultiConnection *connection)
 	uint64 transactionNumber = CurrentDistributedTransactionNumber();
 
 	/* print all numbers as unsigned to guarantee no minus symbols appear in the name */
-	snprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
-			 PREPARED_TRANSACTION_NAME_FORMAT, GetLocalGroupId(), MyProcPid,
-			 transactionNumber, connectionNumber++);
+	SafeSnprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
+				 PREPARED_TRANSACTION_NAME_FORMAT, GetLocalGroupId(), MyProcPid,
+				 transactionNumber, connectionNumber++);
 }
 
 

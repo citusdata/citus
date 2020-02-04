@@ -33,6 +33,8 @@
 #include "utils/snapmgr.h"
 
 #include "distributed/citus_acquire_lock.h"
+#include "distributed/citus_safe_lib.h"
+#include "distributed/connection_management.h"
 #include "distributed/version_compat.h"
 
 /* forward declaration of background worker entrypoint */
@@ -41,7 +43,6 @@ extern void LockAcquireHelperMain(Datum main_arg);
 /* forward declaration of helper functions */
 static void lock_acquire_helper_sigterm(SIGNAL_ARGS);
 static void EnsureStopLockAcquireHelper(void *arg);
-static long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 
 /* LockAcquireHelperArgs contains extra arguments to be used to start the worker */
 typedef struct LockAcquireHelperArgs
@@ -74,27 +75,21 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 	args.lock_cooldown = lock_cooldown;
 
 	/* construct the background worker and start it */
-	snprintf(worker.bgw_name, BGW_MAXLEN,
-			 "Citus Lock Acquire Helper: %d/%u",
-			 backendToHelp, MyDatabaseId);
-	snprintf(worker.bgw_type, BGW_MAXLEN, "citus_lock_aqcuire");
+	SafeSnprintf(worker.bgw_name, sizeof(worker.bgw_name),
+				 "Citus Lock Acquire Helper: %d/%u", backendToHelp, MyDatabaseId);
+	strcpy_s(worker.bgw_type, sizeof(worker.bgw_type), "citus_lock_aqcuire");
 
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 
-	snprintf(worker.bgw_library_name, BGW_MAXLEN, "citus");
-	snprintf(worker.bgw_function_name, BGW_MAXLEN, "LockAcquireHelperMain");
+	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
+	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_function_name),
+			 "LockAcquireHelperMain");
 	worker.bgw_main_arg = Int32GetDatum(backendToHelp);
 	worker.bgw_notify_pid = 0;
 
-	/*
-	 * we check if args fits in bgw_extra to make sure it is safe to copy the data. Once
-	 * we exceed the size of data to copy this way we need to look into a different way of
-	 * passing the arguments to the worker.
-	 */
-	Assert(sizeof(worker.bgw_extra) >= sizeof(args));
-	memcpy(worker.bgw_extra, &args, sizeof(args));
+	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &args, sizeof(args));
 
 	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
 	{
@@ -303,19 +298,4 @@ LockAcquireHelperMain(Datum main_arg)
 
 	/* safely got to the end, exit without problem */
 	proc_exit(0);
-}
-
-
-/*
- * DeadlineTimestampTzToTimeout returns the numer of miliseconds that still need to elapse
- * before the deadline provided as an argument will be reached. The outcome can be used to
- * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
- */
-static long
-DeadlineTimestampTzToTimeout(TimestampTz deadline)
-{
-	long secs = 0;
-	int msecs = 0;
-	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &msecs);
-	return secs * 1000 + msecs / 1000;
 }

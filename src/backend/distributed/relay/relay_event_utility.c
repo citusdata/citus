@@ -29,6 +29,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
@@ -694,8 +695,8 @@ AppendShardIdToName(char **name, uint64 shardId)
 							   NAMEDATALEN)));
 	}
 
-	snprintf(shardIdAndSeparator, NAMEDATALEN, "%c" UINT64_FORMAT,
-			 SHARD_NAME_SEPARATOR, shardId);
+	SafeSnprintf(shardIdAndSeparator, NAMEDATALEN, "%c" UINT64_FORMAT,
+				 SHARD_NAME_SEPARATOR, shardId);
 	int shardIdAndSeparatorLength = strlen(shardIdAndSeparator);
 
 	/*
@@ -705,7 +706,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 
 	if (nameLength < (NAMEDATALEN - shardIdAndSeparatorLength))
 	{
-		snprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
+		SafeSnprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
 
 	/*
@@ -739,14 +740,14 @@ AppendShardIdToName(char **name, uint64 shardId)
 		multiByteClipLength = pg_mbcliplen(*name, nameLength, (NAMEDATALEN -
 															   shardIdAndSeparatorLength -
 															   10));
-		snprintf(extendedName, NAMEDATALEN, "%.*s%c%.8x%s",
-				 multiByteClipLength, (*name),
-				 SHARD_NAME_SEPARATOR, longNameHash,
-				 shardIdAndSeparator);
+		SafeSnprintf(extendedName, NAMEDATALEN, "%.*s%c%.8x%s",
+					 multiByteClipLength, (*name),
+					 SHARD_NAME_SEPARATOR, longNameHash,
+					 shardIdAndSeparator);
 	}
 
 	(*name) = (char *) repalloc((*name), NAMEDATALEN);
-	int neededBytes = snprintf((*name), NAMEDATALEN, "%s", extendedName);
+	int neededBytes = SafeSnprintf((*name), NAMEDATALEN, "%s", extendedName);
 	if (neededBytes < 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),

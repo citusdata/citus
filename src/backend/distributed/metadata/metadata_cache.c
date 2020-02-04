@@ -438,7 +438,7 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 		{
 			GroupShardPlacement *shardPlacement = CitusMakeNode(GroupShardPlacement);
 
-			memcpy(shardPlacement, &placementArray[i], sizeof(GroupShardPlacement));
+			*shardPlacement = placementArray[i];
 
 			return shardPlacement;
 		}
@@ -513,9 +513,11 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 	WorkerNode *workerNode = LookupNodeForGroup(groupId);
 
 	/* copy everything into shardPlacement but preserve the header */
-	memcpy((((CitusNode *) shardPlacement) + 1),
-		   (((CitusNode *) groupShardPlacement) + 1),
-		   sizeof(GroupShardPlacement) - sizeof(CitusNode));
+	CitusNode header = shardPlacement->type;
+	GroupShardPlacement *shardPlacementAsGroupPlacement =
+		(GroupShardPlacement *) shardPlacement;
+	*shardPlacementAsGroupPlacement = *groupShardPlacement;
+	shardPlacement->type = header;
 
 	shardPlacement->nodeName = pstrdup(workerNode->workerName);
 	shardPlacement->nodePort = workerNode->workerPort;
@@ -561,7 +563,7 @@ LookupNodeByNodeId(uint32 nodeId)
 		if (workerNode->nodeId == nodeId)
 		{
 			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
-			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+			*workerNodeCopy = *workerNode;
 
 			return workerNodeCopy;
 		}
@@ -3597,7 +3599,7 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 	ScanKeyData scanKey[1];
 
 	/* copy scankey to local copy, it will be modified during the scan */
-	memcpy(scanKey, DistPartitionScanKey, sizeof(DistPartitionScanKey));
+	scanKey[0] = DistPartitionScanKey[0];
 
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
@@ -3631,7 +3633,7 @@ LookupDistShardTuples(Oid relationId)
 	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
 
 	/* copy scankey to local copy, it will be modified during the scan */
-	memcpy(scanKey, DistShardScanKey, sizeof(DistShardScanKey));
+	scanKey[0] = DistShardScanKey[0];
 
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);

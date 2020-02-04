@@ -1025,7 +1025,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		standard_planner(newQuery, 0, boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
-		memcpy(query, newQuery, sizeof(Query));
+		*query = *newQuery;
 
 		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
 		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,

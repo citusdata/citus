@@ -981,7 +981,7 @@ CopyPartialPruningInstance(PruningInstance *sourceInstance)
 	 * being partial - if necessary it'll be marked so again by
 	 * PrunableExpressionsWalker().
 	 */
-	memcpy(newInstance, sourceInstance, sizeof(PruningInstance));
+	*newInstance = *sourceInstance;
 	newInstance->addedToPruningInstances = false;
 	newInstance->isPartial = false;
 

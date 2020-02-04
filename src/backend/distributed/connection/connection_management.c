@@ -15,6 +15,8 @@
 
 #include "miscadmin.h"
 
+#include "safe_lib.h"
+
 #include "access/hash.h"
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
@@ -108,7 +110,8 @@ InitializeConnectionManagement(void)
 	info.hcxt = ConnectionContext;
 	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
-	memcpy(&connParamsInfo, &info, sizeof(HASHCTL));
+	/* connParamsInfo is same as info, except for entrysize */
+	connParamsInfo = info;
 	connParamsInfo.entrysize = sizeof(ConnParamsHashEntry);
 
 	ConnectionHash = hash_create("citus connection cache (host,port,user,database)",
@@ -1212,7 +1215,8 @@ DefaultCitusNoticeProcessor(void *arg, const char *message)
 	char *nodeName = connection->hostname;
 	uint32 nodePort = connection->port;
 	char *trimmedMessage = TrimLogLevel(message);
-	char *level = strtok((char *) message, ":");
+	char *strtokPosition;
+	char *level = strtok_r((char *) message, ":", &strtokPosition);
 
 	ereport(CitusNoticeLogLevel,
 			(errmsg("%s", ApplyLogRedaction(trimmedMessage)),
