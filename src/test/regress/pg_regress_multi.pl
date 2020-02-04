@@ -771,7 +771,8 @@ my @arguments = (
     "--host", $host,
     '--port', $masterPort,
     '--user', $user,
-    '--bindir', catfile($TMP_CHECKDIR, $TMP_BINDIR)
+    '--bindir', catfile($TMP_CHECKDIR, $TMP_BINDIR),
+	'--max-connections', 1
 );
 
 # Add load extension parameters to the argument list

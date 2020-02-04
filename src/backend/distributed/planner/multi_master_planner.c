@@ -217,8 +217,14 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	root->planner_cxt = CurrentMemoryContext;
 	root->wt_param_id = -1;
 
-	remoteScan->custom_scan_tlist = masterTargetList;
-	remoteScan->scan.plan.targetlist = masterTargetList;
+	/*
+	 * the standard planner will scribble on the target list, since we need the target
+	 * list for alias creation we make a copy here.
+	 * TODO might be able to prevent the copy if we can move the alias creation before the standard planner
+	 */
+	List *masterTargetListCopy = copyObject(masterTargetList);
+	remoteScan->custom_scan_tlist = masterTargetListCopy;
+	remoteScan->scan.plan.targetlist = masterTargetListCopy;
 
 	/* This code should not be re-entrant */
 	PlannedStmt *standardStmt = NULL;

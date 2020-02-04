@@ -1799,7 +1799,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		 * encoding the remote scan we plan to execute here.
 		 */
 
-
+		/* TODO verify the relation access is the function call */
 		Path *path = CreateCitusCustomScanPath(root, relOptInfo, restrictionIndex, rte,
 											   ReplaceCitusExtraDataContainerWithCustomScan);
 
