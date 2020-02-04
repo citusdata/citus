@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
@@ -189,8 +190,8 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 			continue;
 		}
 
-		void *matchingKeyword = bsearch(&option->keyword, whitelist, whitelistLength,
-										sizeof(char *), pg_qsort_strcmp);
+		void *matchingKeyword = SafeBsearch(&option->keyword, whitelist, whitelistLength,
+											sizeof(char *), pg_qsort_strcmp);
 		if (matchingKeyword == NULL)
 		{
 			/* the whitelist lacks this keyword; error out! */

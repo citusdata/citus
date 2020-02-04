@@ -21,17 +21,7 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #ifdef HAVE_LIBCURL
 
 #include <curl/curl.h>
-#ifndef WIN32
 #include <sys/utsname.h>
-#else
-typedef struct utsname
-{
-	char sysname[65];
-	char release[65];
-	char version[65];
-	char machine[65];
-} utsname;
-#endif
 
 #include "access/xact.h"
 #include "distributed/metadata_cache.h"
@@ -54,9 +44,6 @@ static bool SendHttpPostJsonRequest(const char *url, const char *postFields,
 									long timeoutSeconds,
 									curl_write_callback responseCallback);
 static bool PerformHttpRequest(CURL *curl);
-#ifdef WIN32
-static int uname(struct utsname *buf);
-#endif
 
 
 /* WarnIfSyncDNS warns if libcurl is compiled with synchronous DNS. */
@@ -360,103 +347,3 @@ citus_server_id(PG_FUNCTION_ARGS)
 
 	PG_RETURN_UUID_P((pg_uuid_t *) buf);
 }
-
-
-#ifdef WIN32
-
-/*
- * Inspired by perl5's win32_uname
- * https://github.com/Perl/perl5/blob/69374fe705978962b85217f3eb828a93f836fd8d/win32/win32.c#L2057
- */
-static int
-uname(struct utsname *buf)
-{
-	OSVERSIONINFO ver;
-
-	ver.dwOSVersionInfoSize = sizeof(ver);
-	GetVersionEx(&ver);
-
-	switch (ver.dwPlatformId)
-	{
-		case VER_PLATFORM_WIN32_WINDOWS:
-		{
-			strcpy(buf->sysname, "Windows");
-			break;
-		}
-
-		case VER_PLATFORM_WIN32_NT:
-		{
-			strcpy(buf->sysname, "Windows NT");
-			break;
-		}
-
-		case VER_PLATFORM_WIN32s:
-		{
-			strcpy(buf->sysname, "Win32s");
-			break;
-		}
-
-		default:
-		{
-			strcpy(buf->sysname, "Win32 Unknown");
-			break;
-		}
-	}
-
-	sprintf(buf->release, "%d.%d", ver.dwMajorVersion, ver.dwMinorVersion);
-
-	{
-		SYSTEM_INFO info;
-		char *arch;
-
-		GetSystemInfo(&info);
-		DWORD procarch = info.wProcessorArchitecture;
-
-		switch (procarch)
-		{
-			case PROCESSOR_ARCHITECTURE_INTEL:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_IA64:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_AMD64:
-			{
-				arch = "x86";
-				break;
-			}
-
-			case PROCESSOR_ARCHITECTURE_UNKNOWN:
-			{
-				arch = "x86";
-				break;
-			}
-
-			default:
-			{
-				arch = NULL;
-				break;
-			}
-		}
-
-		if (arch != NULL)
-		{
-			strcpy(buf->machine, arch);
-		}
-		else
-		{
-			sprintf(buf->machine, "unknown(0x%x)", procarch);
-		}
-	}
-
-	return 0;
-}
-
-
-#endif

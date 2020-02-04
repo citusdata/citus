@@ -31,6 +31,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -230,7 +231,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	List *sizeList = ReadFirstColumnAsText(result);
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
-	uint64 tableSize = atol(tableSizeString);
+	uint64 tableSize = SafeStringToUint64(tableSizeString);
 
 	PQclear(result);
 	ClearResults(connection, raiseErrors);
@@ -608,7 +609,7 @@ void
 CopyShardPlacement(ShardPlacement *srcPlacement, ShardPlacement *destPlacement)
 {
 	/* first copy all by-value fields */
-	memcpy(destPlacement, srcPlacement, sizeof(ShardPlacement));
+	*destPlacement = *srcPlacement;
 
 	/* and then the fields pointing to external values */
 	if (srcPlacement->nodeName)

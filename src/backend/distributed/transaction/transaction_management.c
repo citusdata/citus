@@ -20,6 +20,7 @@
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
@@ -538,7 +539,7 @@ AdjustMaxPreparedTransactions(void)
 	{
 		char newvalue[12];
 
-		snprintf(newvalue, sizeof(newvalue), "%d", MaxConnections * 2);
+		SafeSnprintf(newvalue, sizeof(newvalue), "%d", MaxConnections * 2);
 
 		SetConfigOption("max_prepared_transactions", newvalue, PGC_POSTMASTER,
 						PGC_S_OVERRIDE);

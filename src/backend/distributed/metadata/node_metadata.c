@@ -873,7 +873,7 @@ FindWorkerNode(char *nodeName, int32 nodePort)
 	if (handleFound)
 	{
 		WorkerNode *workerNode = (WorkerNode *) palloc(sizeof(WorkerNode));
-		memcpy(workerNode, cachedWorkerNode, sizeof(WorkerNode));
+		*workerNode = *cachedWorkerNode;
 		return workerNode;
 	}
 

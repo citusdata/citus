@@ -692,16 +692,17 @@ TrackerHash(const char *taskTrackerHashName, List *workerNodeList, char *userNam
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		char taskStateHashName[MAXPGPATH];
 		uint32 taskStateCount = 32;
 		HASHCTL info;
 
 		/* insert task tracker into the tracker hash */
 		TaskTracker *taskTracker = TrackerHashEnter(taskTrackerHash, nodeName, nodePort);
 
+
 		/* for each task tracker, create hash to track its assigned tasks */
-		snprintf(taskStateHashName, MAXPGPATH,
-				 "Task Tracker \"%s:%u\" Task State Hash", nodeName, nodePort);
+		StringInfo taskStateHashName = makeStringInfo();
+		appendStringInfo(taskStateHashName, "Task Tracker \"%s:%u\" Task State Hash",
+						 nodeName, nodePort);
 
 		memset(&info, 0, sizeof(info));
 		info.keysize = sizeof(uint64) + sizeof(uint32);
@@ -710,12 +711,12 @@ TrackerHash(const char *taskTrackerHashName, List *workerNodeList, char *userNam
 		info.hcxt = CurrentMemoryContext;
 		int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
-		HTAB *taskStateHash = hash_create(taskStateHashName, taskStateCount, &info,
+		HTAB *taskStateHash = hash_create(taskStateHashName->data, taskStateCount, &info,
 										  hashFlags);
 		if (taskStateHash == NULL)
 		{
 			ereport(FATAL, (errcode(ERRCODE_OUT_OF_MEMORY),
-							errmsg("could not initialize %s", taskStateHashName)));
+							errmsg("could not initialize %s", taskStateHashName->data)));
 		}
 
 		taskTracker->taskStateHash = taskStateHash;
@@ -781,7 +782,7 @@ TrackerHashEnter(HTAB *taskTrackerHash, char *nodeName, uint32 nodePort)
 	}
 
 	/* init task tracker object with zeroed out task tracker key */
-	memcpy(taskTracker, &taskTrackerKey, sizeof(TaskTracker));
+	*taskTracker = taskTrackerKey;
 	taskTracker->trackerStatus = TRACKER_CONNECT_START;
 	taskTracker->connectionId = INVALID_CONNECTION_ID;
 	taskTracker->currentTaskIndex = -1;

@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-/* necessary to get alloca() on illumos */
+/* necessary to get alloca on illumos */
 #ifdef __sun
 #include <alloca.h>
 #endif
@@ -21,11 +21,14 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
+#include "safe_lib.h"
+
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
@@ -188,6 +191,14 @@ _PG_init(void)
 	}
 
 	/*
+	 * Register contstraint_handler hooks of safestringlib first. This way
+	 * loading the extension will error out if one of these constraints are hit
+	 * during load.
+	 */
+	set_str_constraint_handler_s(ereport_constraint_handler);
+	set_mem_constraint_handler_s(ereport_constraint_handler);
+
+	/*
 	 * Perform checks before registering any hooks, to avoid erroring out in a
 	 * partial state.
 	 *
@@ -290,7 +301,13 @@ ResizeStackToMaximumDepth(void)
 #ifndef WIN32
 	long max_stack_depth_bytes = max_stack_depth * 1024L;
 
-	volatile char *stack_resizer = alloca(max_stack_depth_bytes);
+	/*
+	 * Explanation of IGNORE-BANNED:
+	 * alloca is safe to use here since we limit the allocated size. We cannot
+	 * use malloc as a replacement, since we actually want to grow the stack
+	 * here.
+	 */
+	volatile char *stack_resizer = alloca(max_stack_depth_bytes); /* IGNORE-BANNED */
 
 	/*
 	 * Different architectures might have different directions while

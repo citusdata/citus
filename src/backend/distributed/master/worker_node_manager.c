@@ -355,7 +355,7 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 		if (workerNode->isActive && checkFunction(workerNode))
 		{
 			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
-			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+			*workerNodeCopy = *workerNode;
 			workerNodeList = lappend(workerNodeList, workerNodeCopy);
 		}
 	}

@@ -3294,8 +3294,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 		/* can't be copied, we copy (flatly) a RelOptInfo, and then decouple baserestrictinfo */
 		newRestriction->relOptInfo = palloc(sizeof(RelOptInfo));
-		memcpy(newRestriction->relOptInfo, oldRestriction->relOptInfo,
-			   sizeof(RelOptInfo));
+		*newRestriction->relOptInfo = *oldRestriction->relOptInfo;
 
 		newRestriction->relOptInfo->baserestrictinfo =
 			copyObject(oldRestriction->relOptInfo->baserestrictinfo);
