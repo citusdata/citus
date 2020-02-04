@@ -4278,12 +4278,16 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 	ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
 	uint32 intervalCount = mapMergeJob->partitionCount;
 
-	if (partitionType != SINGLE_HASH_PARTITION_TYPE && partitionType !=
-		RANGE_PARTITION_TYPE)
+	if (partitionType == DUAL_HASH_PARTITION_TYPE)
 	{
 		partitionColumnType = INT4OID;
 		partitionColumnTypeMod = get_typmodin(INT4OID);
 		intervalArray = GenerateSyntheticShardIntervalArray(intervalCount);
+	}
+	else if (partitionType == SINGLE_HASH_PARTITION_TYPE)
+	{
+		partitionColumnType = INT4OID;
+		partitionColumnTypeMod = get_typmodin(INT4OID);
 	}
 
 	ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);
