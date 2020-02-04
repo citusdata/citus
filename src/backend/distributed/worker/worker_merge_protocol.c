@@ -68,6 +68,9 @@ Datum
 worker_create_schema(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
+	text *ownerText = PG_GETARG_TEXT_P(1);
+	char *ownerString = TextDatumGetCString(ownerText);
+
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
 	CheckCitusVersion(ERROR);
@@ -75,7 +78,7 @@ worker_create_schema(PG_FUNCTION_ARGS)
 	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
-		CreateJobSchema(jobSchemaName);
+		CreateJobSchema(jobSchemaName, ownerString);
 	}
 
 	PG_RETURN_VOID();
