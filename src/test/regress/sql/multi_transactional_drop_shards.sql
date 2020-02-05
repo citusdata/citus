@@ -377,9 +377,8 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;
-GRANT ALL ON SCHEMA public TO try_drop_table;
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
-SELECT run_command_on_workers('GRANT ALL ON SCHEMA public TO try_drop_table');
+GRANT ALL ON SCHEMA public TO try_drop_table;
 
 \c - try_drop_table - :master_port
 

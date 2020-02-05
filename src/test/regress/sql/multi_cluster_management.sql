@@ -68,6 +68,9 @@ GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 
+-- Removing public schema from pg_dist_object because it breaks the next tests
+DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
+
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);

@@ -1101,11 +1101,6 @@ CreateSchemaDDLCommand(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
 
-	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
-	{
-		return NULL;
-	}
-
 	StringInfo schemaNameDef = makeStringInfo();
 	const char *quotedSchemaName = quote_identifier(schemaName);
 	const char *ownerName = quote_identifier(SchemaOwnerName(schemaId));

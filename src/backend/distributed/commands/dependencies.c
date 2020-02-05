@@ -173,12 +173,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		{
 			char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
 
-			if (schemaDDLCommand == NULL)
-			{
-				/* no schema to create */
-				return NIL;
-			}
-
 			List *DDLCommands = list_make1(schemaDDLCommand);
 
 			List *grantDDLCommands = GrantOnSchemaDDLCommands(dependency->objectId);
