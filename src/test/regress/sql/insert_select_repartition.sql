@@ -481,5 +481,66 @@ RESET client_min_messages;
 
 SELECT count(*) FROM test;
 
+--
+-- In the following case we coerce some columns and move uncoerced versions to the
+-- end of SELECT list. The following case verifies that we rename those columns so
+-- we don't get "column reference is ambiguous" errors.
+--
+
+CREATE TABLE target_table(
+    c1 int,
+    c2 int,
+    c3 timestamp,
+    a int,
+    b int,
+    c int,
+    c4 int,
+    c5 int,
+    c6 int[],
+    cardinality int,
+    sum int,
+    PRIMARY KEY (c1, c2, c3, c4, c5, c6)
+);
+
+SET citus.shard_count TO 5;
+SELECT create_distributed_table('target_table', 'c1');
+
+CREATE TABLE source_table(
+    c1 int,
+    c2 int,
+    c3 date,
+    c4 int,
+    cardinality int,
+    sum int
+);
+
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('source_table', 'c1');
+
+CREATE OR REPLACE FUNCTION dist_func(a int, b int) RETURNS int[]
+AS $$
+BEGIN
+ RETURN array_fill(a, ARRAY[b]);
+END;
+$$
+LANGUAGE plpgsql STABLE;
+
+SELECT create_distributed_function('dist_func(int, int)');
+
+SET client_min_messages TO DEBUG;
+INSERT INTO target_table AS enriched(c1, c2, c3, c4, c5, c6, cardinality, sum)
+SELECT c1, c2, c3, c4, -1::float AS c5,
+       dist_func(c1, 4) c6,
+       sum(cardinality),
+       sum(sum)
+FROM source_table
+GROUP BY c1, c2, c3, c4, c5, c6
+ON CONFLICT(c1, c2, c3, c4, c5, c6)
+DO UPDATE SET
+ cardinality = enriched.cardinality + excluded.cardinality,
+ sum = enriched.sum + excluded.sum;
+
+-- clean-up
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
