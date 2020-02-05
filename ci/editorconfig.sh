@@ -4,6 +4,7 @@ for f in $(git ls-tree -r HEAD --name-only); do
     if [ "$f" = "${f%.out}" ]  &&
         [ "$f" = "${f%.data}" ] &&
         [ "$f" = "${f%.png}" ] &&
+        [ "$(echo "$f" | cut -d / -f1)" != "vendor" ] &&
         [ "$(dirname "$f")" != "src/test/regress/output" ]
     then
         # Trim trailing whitespace
