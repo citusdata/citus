@@ -2342,8 +2342,8 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
- * IsLocalReferenceTableJoin returns if the given query is a join between
- * reference tables and local tables.
+ * IsLocalReferenceTableJoin returns true if the given query is a valid join
+ * query between reference tables and local tables
  */
 static bool
 IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
@@ -2352,28 +2352,11 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 	bool hasLocalTable = false;
 	ListCell *rangeTableCell = false;
 
-	bool hasReferenceTableReplica = false;
-
 	/*
-	 * We only allow join between reference tables and local tables in the
-	 * coordinator.
+	 * Check if we are in the coordinator and coordinator can have reference
+	 * table placements
 	 */
-	if (!IsCoordinator())
-	{
-		return false;
-	}
-
-	/*
-	 * All groups that have pg_dist_node entries, also have reference
-	 * table replicas.
-	 */
-	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasReferenceTableReplica);
-
-	/*
-	 * If reference table doesn't have replicas on the coordinator, we don't
-	 * allow joins with local tables.
-	 */
-	if (!hasReferenceTableReplica)
+	if (!CanUseCoordinatorLocalTablesWithReferenceTables())
 	{
 		return false;
 	}
