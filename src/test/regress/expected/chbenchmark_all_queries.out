@@ -345,7 +345,7 @@ GROUP BY
 ORDER BY
     revenue DESC,
     o_entry_d;
-LOG:  join order: [ "oorder" ][ local partition join "customer" ][ local partition join "new_order" ][ local partition join "order_line" ]
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "new_order" ][ local partition join "order_line" ]
  ol_o_id | ol_w_id | ol_d_id | revenue |        o_entry_d
 ---------------------------------------------------------------------
       10 |      10 |      10 |   10.00 | Fri Oct 17 00:00:00 2008
@@ -414,7 +414,7 @@ WHERE c_id = o_c_id
   AND o_entry_d >= '2007-01-02 00:00:00.000000'
 GROUP BY n_name
 ORDER BY revenue DESC;
-LOG:  join order: [ "order_line" ][ local partition join "oorder" ][ local partition join "stock" ][ reference join "supplier" ][ reference join "nation" ][ reference join "region" ][ dual partition join "customer" ]
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "order_line" ][ local partition join "stock" ][ reference join "supplier" ][ reference join "nation" ][ reference join "region" ]
           n_name           | revenue
 ---------------------------------------------------------------------
  Germany                   |    3.00
@@ -472,7 +472,7 @@ ORDER BY
     su_nationkey,
     cust_nation,
     l_year;
-LOG:  join order: [ "oorder" ][ local partition join "order_line" ][ local partition join "customer" ][ reference join "nation" ][ reference join "nation" ][ reference join "supplier" ][ dual partition join "stock" ]
+LOG:  join order: [ "order_line" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "nation" ][ reference join "supplier" ][ dual partition join "stock" ]
  supp_nation | cust_nation | l_year | revenue
 ---------------------------------------------------------------------
            9 | C           |   2008 |    3.00
@@ -512,7 +512,7 @@ WHERE i_id = s_i_id
   AND i_id = ol_i_id
 GROUP BY extract(YEAR FROM o_entry_d)
 ORDER BY l_year;
-LOG:  join order: [ "oorder" ][ local partition join "order_line" ][ reference join "item" ][ local partition join "customer" ][ reference join "nation" ][ reference join "region" ][ dual partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
+LOG:  join order: [ "order_line" ][ reference join "item" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "region" ][ dual partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
  l_year |       mkt_share
 ---------------------------------------------------------------------
    2008 | 0.50000000000000000000
@@ -582,7 +582,7 @@ GROUP BY
     c_phone,
     n_name
 ORDER BY revenue DESC;
-LOG:  join order: [ "oorder" ][ local partition join "customer" ][ reference join "nation" ][ local partition join "order_line" ]
+LOG:  join order: [ "customer" ][ reference join "nation" ][ local partition join "oorder" ][ local partition join "order_line" ]
  c_id | c_last | revenue |  c_city   |     c_phone      |          n_name
 ---------------------------------------------------------------------
    10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia
@@ -794,7 +794,7 @@ HAVING sum(ol_amount) > 5 -- was 200, but thats too big for the dataset
 ORDER BY
     sum(ol_amount) DESC,
     o_entry_d;
-LOG:  join order: [ "oorder" ][ local partition join "customer" ][ local partition join "order_line" ]
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "order_line" ]
  c_last | o_id |        o_entry_d         | o_ol_cnt |  sum
 ---------------------------------------------------------------------
  John   |   10 | Fri Oct 17 00:00:00 2008 |        1 | 10.00

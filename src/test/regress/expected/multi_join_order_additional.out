@@ -184,7 +184,7 @@ JOIN (
       JOIN events_table USING (user_id)
      WHERE event_type = 5
 ) AS some_users ON (some_users.user_id = bar.user_id);
-LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ dual partition join "events_table" ]
+LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ local partition join "events_table" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
