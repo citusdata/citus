@@ -2,6 +2,12 @@ SET citus.next_shard_id TO 1650000;
 CREATE SCHEMA chbenchmark_all_queries;
 SET search_path TO chbenchmark_all_queries;
 
+-- we want to make sure the join order is stable. If the join order of a table changes due
+-- to a chacnge you are making, please verify if it is not a regression. If the join order
+-- became better feel free to update the output.
+SET citus.log_multi_join_order TO on;
+SET client_min_messages TO log;
+
 SET citus.enable_repartition_joins TO on;
 CREATE TABLE order_line (
     ol_w_id int NOT NULL,
