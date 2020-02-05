@@ -770,6 +770,18 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 			if (selectEntry->ressortgroupref != 0)
 			{
 				selectEntry->resjunk = true;
+
+				/*
+				 * This entry might still end up in the SELECT output list, so
+				 * rename it to avoid ambiguity.
+				 *
+				 * See https://github.com/citusdata/citus/pull/3470.
+				 */
+				resnameString = makeStringInfo();
+				appendStringInfo(resnameString, "discarded_target_item_%d",
+								 targetEntryIndex);
+				selectEntry->resname = resnameString->data;
+
 				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
 			}
 		}
