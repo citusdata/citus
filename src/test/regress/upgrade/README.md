@@ -72,8 +72,6 @@ only be run during PG versions.
 
 Citus upgrade test is used for testing citus version upgrades from specific version to master. The purpose of this test is to ensure that a newly made change does not result in unexpected upgrade errors.
 
-The citus upgrade test is designed to be run on a docker image for CircleCI, so we won't explain here how to run it in your local.
-
 Currently the citus upgrade test assumes that:
 
 - You have citus artifact tarballs, both for old version and master.
