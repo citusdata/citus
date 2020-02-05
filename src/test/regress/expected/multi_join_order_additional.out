@@ -168,6 +168,30 @@ LOG:  join order: [ "orders_hash" ][ single range partition join "customer_appen
          explain statements for distributed queries are not enabled
 (3 rows)
 
+-- Validate a 4 way join that could be done locally is planned as such by the logical
+-- planner. It used to be planned as a repartition join due to no 1 table being directly
+-- joined to all other tables, but instead follows a chain.
+EXPLAIN SELECT count(*)
+FROM (
+    SELECT users_table.user_id
+      FROM users_table
+      JOIN events_table USING (user_id)
+     WHERE event_type = 5
+) AS bar
+JOIN (
+    SELECT users_table.user_id
+      FROM users_table
+      JOIN events_table USING (user_id)
+     WHERE event_type = 5
+) AS some_users ON (some_users.user_id = bar.user_id);
+LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ dual partition join "events_table" ]
+                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
+
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
 DROP TABLE lineitem_hash;
