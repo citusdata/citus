@@ -24,6 +24,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -89,6 +90,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -139,6 +141,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -210,6 +213,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -260,6 +264,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -331,6 +336,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -381,6 +387,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -448,6 +455,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1
@@ -498,6 +506,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -571,6 +580,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1
@@ -621,6 +631,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -694,6 +705,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1
@@ -744,6 +756,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -836,6 +849,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1
@@ -886,6 +900,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -971,6 +986,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1
@@ -1021,6 +1037,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1115,6 +1132,7 @@ pg_identify_object_as_address
 
 (schema,{myschema},{})
 (schema,{myschema2},{})
+(schema,{public},{})
 count
 
 1
@@ -1165,6 +1183,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1223,6 +1242,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(schema,{public},{})
 (type,{public.tt1},{})
 count
 
@@ -1274,6 +1294,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1331,6 +1352,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(schema,{public},{})
 (type,{public.tt1},{})
 count
 
@@ -1382,6 +1404,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1458,6 +1481,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (schema,{myschema},{})
+(schema,{public},{})
 (type,{myschema.tt1},{})
 count
 
@@ -1509,6 +1533,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1584,6 +1609,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
+(schema,{public},{})
 count
 
 0
@@ -1634,6 +1660,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1714,6 +1741,7 @@ step s2-print-distributed-objects:
 pg_identify_object_as_address
 
 (function,"{public,add}","{integer,integer}")
+(schema,{public},{})
 count
 
 0
@@ -1764,6 +1792,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(schema,{public},{})
 count
 
 0
@@ -1846,6 +1875,7 @@ pg_identify_object_as_address
 
 (function,"{myschema,add}","{integer,integer}")
 (schema,{myschema},{})
+(schema,{public},{})
 count
 
 1

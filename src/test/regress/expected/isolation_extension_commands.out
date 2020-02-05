@@ -26,7 +26,7 @@ step s1-print:
 
 count
 
-1
+2
 extname        extversion     nspname
 
 seg            1.1            public
@@ -73,7 +73,7 @@ step s1-print:
 
 count
 
-1
+2
 extname        extversion     nspname
 
 seg            1.2            public
@@ -126,7 +126,7 @@ step s1-print:
 
 count
 
-0
+1
 extname        extversion     nspname
 
 run_command_on_workers
@@ -168,7 +168,7 @@ step s1-print:
 
 count
 
-2
+3
 extname        extversion     nspname
 
 seg            1.3            schema1
@@ -215,7 +215,7 @@ step s1-print:
 
 count
 
-1
+2
 extname        extversion     nspname
 
 run_command_on_workers
@@ -270,7 +270,7 @@ step s1-print:
 
 count
 
-4
+5
 extname        extversion     nspname
 
 seg            1.3            schema3
@@ -322,7 +322,7 @@ step s1-print:
 
 count
 
-4
+5
 extname        extversion     nspname
 
 seg            1.3            schema1
@@ -379,7 +379,7 @@ step s1-print:
 
 count
 
-3
+4
 extname        extversion     nspname
 
 seg            1.1            public
@@ -444,7 +444,7 @@ step s1-print:
 
 count
 
-4
+5
 extname        extversion     nspname
 
 seg            1.2            public
@@ -497,7 +497,7 @@ step s1-print:
 
 count
 
-3
+4
 extname        extversion     nspname
 
 run_command_on_workers
@@ -538,7 +538,7 @@ step s1-print:
 
 count
 
-3
+4
 extname        extversion     nspname
 
 seg            1.3            schema1
@@ -597,7 +597,7 @@ step s1-print:
 
 count
 
-4
+5
 extname        extversion     nspname
 
 seg            1.3            schema2
@@ -648,7 +648,7 @@ step s1-print:
 
 count
 
-3
+4
 extname        extversion     nspname
 
 seg            1.1            public
@@ -709,7 +709,7 @@ step s1-print:
 
 count
 
-3
+4
 extname        extversion     nspname
 
 run_command_on_workers

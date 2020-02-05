@@ -356,6 +356,83 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE')
 
 (1 row)
 
+-- test grants on public schema
+-- first remove one of the worker nodes
+SET citus.shard_replication_factor TO 1;
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- distribute the public schema (it has to be distributed by now but just in case)
+CREATE TABLE public_schema_table (id INT);
+SELECT create_distributed_table('public_schema_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- give cascading permissions
+GRANT USAGE, CREATE ON SCHEMA PUBLIC TO role_1 WITH GRANT OPTION;
+SET ROLE role_1;
+GRANT USAGE ON SCHEMA PUBLIC TO PUBLIC;
+RESET ROLE;
+-- check if the grants are propagated correctly
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |                               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |                               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+(1 row)
+
+\c - - - :master_port
+-- add the previously removed node
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- check if the grants are propagated correctly
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |                               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+(1 row)
+
+\c - - - :worker_2_port
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |                               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+(1 row)
+
+\c - - - :master_port
+-- revoke those new permissions
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM role_1 CASCADE;
+-- check if the grants are propagated correctly
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
+ nspname |               nspacl
+---------------------------------------------------------------------
+ public  | {postgres=UC/postgres,=UC/postgres}
+(1 row)
+
+\c - - - :master_port
+DROP TABLE public_schema_table;
 SELECT run_command_on_coordinator_and_workers('DROP ROLE role_1, role_2, role_3');
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------
