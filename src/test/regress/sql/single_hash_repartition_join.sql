@@ -137,6 +137,16 @@ WHERE
 
 RESET client_min_messages;
 
+CREATE TABLE test_numeric  (a numeric, b numeric);
+SET citus.shard_count TO 7;
+SELECT create_distributed_table('test_numeric', 'a');
+
+INSERT INTO test_numeric SELECT i,i FROM generate_series(0,1000) i;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SET citus.enable_repartition_joins TO on;
+SELECT count(*) FROM test_numeric t1 JOIN test_numeric as t2 ON (t1.a = t2.b);
+
+SET client_min_messages TO ERROR;
 RESET search_path;
 DROP SCHEMA single_hash_repartition CASCADE;
 SET citus.enable_single_hash_repartition_joins TO OFF;
