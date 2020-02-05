@@ -353,7 +353,7 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 
 		if (flags & OUTSIDE_TRANSACTION)
 		{
-			/* dont return connections that are used in transactions */
+			/* don't return connections that are used in transactions */
 			if (connection->remoteTransaction.transactionState !=
 				REMOTE_TRANS_NOT_STARTED)
 			{

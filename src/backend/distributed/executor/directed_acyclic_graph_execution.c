@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * directed_acylic_graph_execution_logic.c
+ * directed_acyclic_graph_execution_logic.c
  *
  * Logic to run tasks in their dependency order.
  *
@@ -11,7 +11,7 @@
 #include "access/hash.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acylic_graph_execution.h"
+#include "distributed/directed_acyclic_graph_execution.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"
@@ -51,7 +51,7 @@ static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
  * execute all of them in parallel. The parallelism is bound by MaxAdaptiveExecutorPoolSize.
  */
 void
-ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks)
+ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks, List *jobIds)
 {
 	HTAB *completedTasks = CreateTaskHashTable();
 
@@ -66,7 +66,7 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks)
 			break;
 		}
 		ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, curTasks,
-										  MaxAdaptiveExecutorPoolSize);
+										  MaxAdaptiveExecutorPoolSize, jobIds);
 
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;

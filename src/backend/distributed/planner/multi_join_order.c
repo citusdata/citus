@@ -238,7 +238,7 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 
 		/*
 		 * Check if both join columns and both partition key columns match, since the
-		 * current and candidate column's can't be NULL we know they wont match if either
+		 * current and candidate column's can't be NULL we know they won't match if either
 		 * of the columns resolved to NULL above.
 		 */
 		if (equal(leftColumn, currentColumn) &&
