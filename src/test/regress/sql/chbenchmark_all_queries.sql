@@ -724,5 +724,112 @@ WHERE substr(c_phone,1,1) in ('1','2','3','4','5','6','7')
 GROUP BY substr(c_state,1,1)
 ORDER BY substr(c_state,1,1);
 
+
+-- There are some queries that have specific interactions with single repartition.
+-- Here we test Q7-Q9 with single repartition enabled
+SET citus.enable_single_hash_repartition_joins TO on;
+
+-- Query 7
+SELECT
+    su_nationkey as supp_nation,
+    substr(c_state,1,1) as cust_nation,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as revenue
+FROM
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2
+WHERE ol_supply_w_id = s_w_id
+  AND ol_i_id = s_i_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND su_nationkey = n1.n_nationkey
+  AND ascii(substr(c_state,1,1)) = n2.n_nationkey
+  AND (
+        (n1.n_name = 'Germany' AND n2.n_name = 'Cambodia')
+        OR (n1.n_name = 'Cambodia' AND n2.n_name = 'Germany')
+    )
+  AND ol_delivery_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+GROUP BY
+    su_nationkey,
+    substr(c_state,1,1),
+    extract(year from o_entry_d)
+ORDER BY
+    su_nationkey,
+    cust_nation,
+    l_year;
+
+-- Query 8
+SELECT
+    extract(year from o_entry_d) as l_year,
+    sum(case when n2.n_name = 'Germany' then ol_amount else 0 end) / sum(ol_amount) as mkt_share
+FROM
+    item,
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2,
+    region
+WHERE i_id = s_i_id
+  AND ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id),10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND n1.n_nationkey = ascii(substr(c_state,1,1))
+  AND n1.n_regionkey = r_regionkey
+  AND ol_i_id < 1000
+  AND r_name = 'Europe'
+  AND su_nationkey = n2.n_nationkey
+  AND o_entry_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+  AND i_data LIKE '%b'
+  AND i_id = ol_i_id
+GROUP BY extract(YEAR FROM o_entry_d)
+ORDER BY l_year;
+
+-- Query 9
+SELECT
+    n_name,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as sum_profit
+FROM
+    item,
+    stock,
+    supplier,
+    order_line,
+    oorder,
+    nation
+WHERE ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND ol_i_id = i_id
+  AND su_nationkey = n_nationkey
+  AND i_data LIKE '%b' -- this used to be %BB but that will not work with our small dataset
+GROUP BY
+    n_name,
+    extract(YEAR FROM o_entry_d)
+ORDER BY
+    n_name,
+    l_year DESC;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA chbenchmark_all_queries CASCADE;
