@@ -82,9 +82,11 @@ typedef struct DistributedObjectOpsContainer
 #define PP_CAT_II(p, res) res
 
 #define REGISTER_SECTION_POINTER(section_name, ptr) \
-	void *PP_CAT(section_name, __COUNTER__) \
+	void *PP_CAT3(section_name, ptr, __COUNTER__) \
+	__attribute__((unused)) \
 	__attribute__((section("__DATA," # section_name))) \
-		= ptr \
+		= &ptr
+
 
 #define SECTION_ARRAY(_type, _section) \
 	extern _type __start_ ## _section[] __asm("section$start$__DATA$" # _section); \
@@ -99,7 +101,7 @@ typedef struct DistributedObjectOpsContainer
 		.type = T_ ## stmt, \
 		.ops = &opsvar, \
 	}; \
-	REGISTER_SECTION_POINTER(opscontainer, &PP_CAT(opscontainer, opsvar))
+	REGISTER_SECTION_POINTER(opscontainer, PP_CAT(opscontainer, opsvar))
 
 #define REGISTER_DISTRIBUTED_OPERATION_NESTED(stmt, objectVarName, objtype, opsvar) \
 	static DistributedObjectOpsContainer PP_CAT3(opscontainer_, stmt, objtype) = { \
@@ -109,7 +111,7 @@ typedef struct DistributedObjectOpsContainer
 		.nestedType = objtype, \
 		.ops = &opsvar, \
 	}; \
-	REGISTER_SECTION_POINTER(opscontainer, &PP_CAT3(opscontainer_, stmt, objtype))
+	REGISTER_SECTION_POINTER(opscontainer, PP_CAT3(opscontainer_, stmt, objtype))
 
 #define REGISTER_DISTRIBUTED_OPERATION_NESTED_NEW(stmt, objectVarName, objtype) \
 	static DistributeObjectOps PP_CAT3(distops, stmt, objtype); \
