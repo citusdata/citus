@@ -90,10 +90,45 @@ DEBUG:  push down of limit count: 150
 -- We now test scenarios where applying the limit optimization wouldn't produce
 -- meaningful results. First, we check that we don't push down the limit clause
 -- for non-commutative aggregates.
-SELECT l_partkey, avg(l_suppkey) AS average FROM lineitem
+SELECT l_partkey, avg(l_suppkey) FROM lineitem
 	GROUP BY l_partkey
-	ORDER BY average DESC, l_partkey LIMIT 10;
- l_partkey |        average
+	ORDER BY 2 DESC, l_partkey LIMIT 10;
+ l_partkey |          avg
+---------------------------------------------------------------------
+      9998 | 9999.0000000000000000
+    102466 | 9997.0000000000000000
+    184959 | 9996.0000000000000000
+     17492 | 9994.0000000000000000
+    124966 | 9991.0000000000000000
+     89989 | 9990.0000000000000000
+     32479 | 9989.0000000000000000
+    144960 | 9989.0000000000000000
+    147473 | 9988.0000000000000000
+     37481 | 9985.0000000000000000
+(10 rows)
+
+SELECT l_partkey, stddev(l_suppkey::float8) FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY 2 DESC NULLS LAST, l_partkey LIMIT 10;
+ l_partkey |      stddev
+---------------------------------------------------------------------
+    192434 | 5343.60594542674
+    160226 | 5337.24198439606
+    151174 |  5335.1206640525
+     60844 | 5316.02878096046
+     62405 | 5316.02878096046
+     50168 |  5313.9074606169
+     52148 |  5313.9074606169
+     52398 |  5313.9074606169
+     10259 | 5305.42217924267
+      3496 | 5303.30085889911
+(10 rows)
+
+-- also test that we handle execution on coordinator properly
+SELECT l_partkey, avg(distinct l_suppkey) FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY 2 DESC, l_partkey LIMIT 10;
+ l_partkey |          avg
 ---------------------------------------------------------------------
       9998 | 9999.0000000000000000
     102466 | 9997.0000000000000000

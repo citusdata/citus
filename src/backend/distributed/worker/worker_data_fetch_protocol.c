@@ -238,7 +238,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	}
 
 	/* we use the same database name on the master and worker nodes */
-	char *nodeDatabase = CurrentDatabaseName();
+	const char *nodeDatabase = CurrentDatabaseName();
 
 	/* connect to remote node */
 	int32 connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, nodeUser);

@@ -353,7 +353,7 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 
 		if (flags & OUTSIDE_TRANSACTION)
 		{
-			/* dont return connections that are used in transactions */
+			/* don't return connections that are used in transactions */
 			if (connection->remoteTransaction.transactionState !=
 				REMOTE_TRANS_NOT_STARTED)
 			{
@@ -845,9 +845,9 @@ long
 DeadlineTimestampTzToTimeout(TimestampTz deadline)
 {
 	long secs = 0;
-	int msecs = 0;
-	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &msecs);
-	return secs * 1000 + msecs / 1000;
+	int microsecs = 0;
+	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &microsecs);
+	return secs * 1000 + microsecs / 1000;
 }
 
 

@@ -71,7 +71,7 @@ struct ColocatedPlacementsHashEntry;
  * Hash table mapping placements to a list of connections.
  *
  * This stores a list of connections for each placement, because multiple
- * connections to the same placement may exist at the same time. E.g. a
+ * connections to the same placement may exist at the same time. E.g. an
  * adaptive executor query may reference the same placement in several
  * sub-tasks.
  *
@@ -118,7 +118,7 @@ static HTAB *ConnectionPlacementHash;
  * placements (i.e. the corresponding placements for different colocated
  * distributed tables) need to share connections.  Otherwise things like
  * foreign keys can very easily lead to unprincipled deadlocks.  This means
- * that there can only one DML/DDL connection for a set of colocated
+ * that there can only be one DML/DDL connection for a set of colocated
  * placements.
  *
  * A set of colocated placements is identified, besides node identifying
@@ -134,7 +134,7 @@ static HTAB *ConnectionPlacementHash;
 typedef struct ColocatedPlacementsHashKey
 {
 	/* to identify host - database can't differ */
-	int nodeId;
+	uint32 nodeId;
 
 	/* colocation group, or invalid */
 	uint32 colocationGroupId;
@@ -592,6 +592,15 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 								"modified over multiple connections")));
 			}
 		}
+		else if (accessType == PLACEMENT_ACCESS_SELECT &&
+				 placementEntry->hasSecondaryConnections &&
+				 !placementConnection->hadDDL && !placementConnection->hadDML)
+		{
+			/*
+			 * Two separate connections have already selected from this placement
+			 * and it was not modified. There is no benefit to using this connection.
+			 */
+		}
 		else if (CanUseExistingConnection(flags, userName, placementConnection))
 		{
 			/*
@@ -599,7 +608,6 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 			 */
 
 			Assert(placementConnection != NULL);
-
 			chosenConnection = placementConnection->connection;
 
 			if (placementConnection->hadDDL || placementConnection->hadDML)
@@ -1051,7 +1059,14 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		}
 	}
 
-	if (failures > 0 && successes == 0)
+	/*
+	 * If there were any failures we want to bail on a commit in two situations:
+	 * there were no successes, or there was a failure with a reference table shard.
+	 * Ideally issues with a reference table will've errored out earlier,
+	 * but if not, we abort now to avoid an unhealthy reference table shard.
+	 */
+	if (failures > 0 &&
+		(successes == 0 || ReferenceTableShardId(shardEntry->key.shardId)))
 	{
 		return false;
 	}
@@ -1160,20 +1175,4 @@ ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize)
 	{
 		return 0;
 	}
-}
-
-
-/*
- * AnyConnectionAccessedPlacements simply checks the number of entries in
- * ConnectionPlacementHash. This is useful to detect whether we're in a
- * distirbuted transaction and already executed at least one command that
- * accessed to a placement.
- */
-bool
-AnyConnectionAccessedPlacements(void)
-{
-	/* this is initialized on PG_INIT */
-	Assert(ConnectionPlacementHash != NULL);
-
-	return hash_get_num_entries(ConnectionPlacementHash) > 0;
 }

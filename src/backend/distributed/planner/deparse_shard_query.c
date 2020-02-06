@@ -17,6 +17,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -36,6 +37,8 @@
 static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
 								  RangeTblEntry *valuesRTE, Task *task);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
+static bool ShouldLazyDeparseQuery(Task *task);
+static char * DeparseTaskQuery(Task *task, Query *query);
 
 
 /*
@@ -105,13 +108,15 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		}
 
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
-								task->queryString == NULL ? "(null)" :
-								ApplyLogRedaction(task->queryString))));
+								task->queryForLocalExecution == NULL &&
+								task->queryStringLazy == NULL
+								? "(null)"
+								: ApplyLogRedaction(TaskQueryString(task)))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
-								ApplyLogRedaction(task->queryString))));
+								ApplyLogRedaction(TaskQueryString(task)))));
 	}
 }
 
@@ -127,7 +132,6 @@ static void
 UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *valuesRTE,
 					  Task *task)
 {
-	StringInfo queryString = makeStringInfo();
 	List *oldValuesLists = NIL;
 
 	if (valuesRTE != NULL)
@@ -139,30 +143,40 @@ UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *value
 		valuesRTE->values_lists = task->rowValuesLists;
 	}
 
-	/*
-	 * For INSERT queries, we only have one relation to update, so we can
-	 * use deparse_shard_query(). For UPDATE and DELETE queries, we may have
-	 * subqueries and joins, so we use relation shard list to update shard
-	 * names and call pg_get_query_def() directly.
-	 */
-	if (query->commandType == CMD_INSERT)
+	if (query->commandType != CMD_INSERT)
 	{
-		deparse_shard_query(query, distributedTableId, task->anchorShardId, queryString);
-	}
-	else
-	{
+		/*
+		 * For UPDATE and DELETE queries, we may have subqueries and joins, so
+		 * we use relation shard list to update shard names and call
+		 * pg_get_query_def() directly.
+		 */
 		List *relationShardList = task->relationShardList;
 		UpdateRelationToShardNames((Node *) query, relationShardList);
-
-		pg_get_query_def(query, queryString);
 	}
+	else if (ShouldLazyDeparseQuery(task))
+	{
+		/*
+		 * not all insert queries are copied before calling this
+		 * function, so we do it here
+		 */
+		query = copyObject(query);
+	}
+
+	if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * We store this in the task so we can lazily call
+		 * deparse_shard_query when the string is needed
+		 */
+		task->anchorDistributedTableId = distributedTableId;
+	}
+
+	SetTaskQuery(task, query);
 
 	if (valuesRTE != NULL)
 	{
 		valuesRTE->values_lists = oldValuesLists;
 	}
-
-	task->queryString = queryString->data;
 }
 
 
@@ -251,6 +265,81 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 
 /*
+ * UpdateRelationsToLocalShardTables walks over the query tree and appends shard ids to
+ * relations. The caller is responsible for ensuring that the resulting Query can
+ * be executed locally.
+ */
+bool
+UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	/* want to look at all RTEs, even in subqueries, CTEs and such */
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, UpdateRelationsToLocalShardTables,
+								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, UpdateRelationsToLocalShardTables,
+									  relationShardList);
+	}
+
+	RangeTblEntry *newRte = (RangeTblEntry *) node;
+
+	if (newRte->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	/*
+	 * Search for the restrictions associated with the RTE. There better be
+	 * some, otherwise this query wouldn't be elegible as a router query.
+	 *
+	 * FIXME: We should probably use a hashtable here, to do efficient
+	 * lookup.
+	 */
+	ListCell *relationShardCell = NULL;
+	RelationShard *relationShard = NULL;
+
+	foreach(relationShardCell, relationShardList)
+	{
+		relationShard = (RelationShard *) lfirst(relationShardCell);
+
+		if (newRte->relid == relationShard->relationId)
+		{
+			break;
+		}
+
+		relationShard = NULL;
+	}
+
+	/* the function should only be called with local shards */
+	if (relationShard == NULL)
+	{
+		return true;
+	}
+
+	uint64 shardId = relationShard->shardId;
+	Oid relationId = relationShard->relationId;
+
+	char *relationName = get_rel_name(relationId);
+	AppendShardIdToName(&relationName, shardId);
+
+	Oid schemaId = get_rel_namespace(relationId);
+
+	newRte->relid = get_relname_relid(relationName, schemaId);
+
+	return false;
+}
+
+
+/*
  * ConvertRteToSubqueryWithEmptyResult converts given relation RTE into
  * subquery RTE that returns no results.
  */
@@ -302,4 +391,112 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	rte->rtekind = RTE_SUBQUERY;
 	rte->subquery = subquery;
 	rte->alias = copyObject(rte->eref);
+}
+
+
+/*
+ * ShouldLazyDeparseQuery returns true if we should lazily deparse the query
+ * when adding it to the task. Right now it simply checks if any shards on the
+ * local node can be used for the task.
+ */
+static bool
+ShouldLazyDeparseQuery(Task *task)
+{
+	return TaskAccessesLocalNode(task);
+}
+
+
+/*
+ * SetTaskQuery attaches the query to the task so that it can be used during
+ * execution. If local execution can possibly take place it sets task->queryForLocalExecution.
+ * If not it deparses the query and sets queryStringLazy, to avoid blowing the
+ * size of the task unnecesarily.
+ */
+void
+SetTaskQuery(Task *task, Query *query)
+{
+	if (ShouldLazyDeparseQuery(task))
+	{
+		task->queryForLocalExecution = query;
+		task->queryStringLazy = NULL;
+		return;
+	}
+
+	task->queryForLocalExecution = NULL;
+	task->queryStringLazy = DeparseTaskQuery(task, query);
+}
+
+
+/*
+ * SetTaskQueryString attaches the query string to the task so that it can be
+ * used during execution. It also unsets queryForLocalExecution to be sure
+ * these are kept in sync.
+ */
+void
+SetTaskQueryString(Task *task, char *queryString)
+{
+	task->queryForLocalExecution = NULL;
+	task->queryStringLazy = queryString;
+}
+
+
+/*
+ * DeparseTaskQuery is a general way of deparsing a query based on a task.
+ */
+static char *
+DeparseTaskQuery(Task *task, Query *query)
+{
+	StringInfo queryString = makeStringInfo();
+
+	if (query->commandType == CMD_INSERT)
+	{
+		/*
+		 * For INSERT queries we cannot use pg_get_query_def. Mainly because we
+		 * cannot run UpdateRelationToShardNames on an INSERT query. This is
+		 * because the PG deparsing logic fails when trying to insert into a
+		 * RTE_FUNCTION (which is what will happen if you call
+		 * UpdateRelationToShardNames).
+		 */
+		deparse_shard_query(query, task->anchorDistributedTableId, task->anchorShardId,
+							queryString);
+	}
+	else
+	{
+		pg_get_query_def(query, queryString);
+	}
+
+	return queryString->data;
+}
+
+
+/*
+ * TaskQueryString generates task->queryStringLazy if missing.
+ *
+ * For performance reasons, the queryString is generated lazily. For example
+ * for local queries it is usually not needed to generate it, so this way we
+ * can skip the expensive deparsing+parsing.
+ */
+char *
+TaskQueryString(Task *task)
+{
+	if (task->queryStringLazy != NULL)
+	{
+		return task->queryStringLazy;
+	}
+	Assert(task->queryForLocalExecution != NULL);
+
+
+	/*
+	 * Switch to the memory context of task->queryForLocalExecution before generating the query
+	 * string. This way the query string is not freed in between multiple
+	 * executions of a prepared statement. Except when UpdateTaskQueryString is
+	 * used to set task->queryForLocalExecution, in that case it is freed but it will be set to
+	 * NULL on the next execution of the query because UpdateTaskQueryString
+	 * does that.
+	 */
+	MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+															  task->queryForLocalExecution));
+	task->queryStringLazy = DeparseTaskQuery(task, task->queryForLocalExecution);
+	MemoryContextSwitchTo(previousContext);
+	return task->queryStringLazy;
 }

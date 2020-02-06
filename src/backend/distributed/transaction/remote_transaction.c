@@ -58,7 +58,6 @@ void
 StartRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
 	ListCell *subIdCell = NULL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_NOT_STARTED);
@@ -68,28 +67,8 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	transaction->transactionState = REMOTE_TRANS_STARTING;
 
-	/*
-	 * Explicitly specify READ COMMITTED, the default on the remote
-	 * side might have been changed, and that would cause problematic
-	 * behaviour.
-	 */
-	appendStringInfoString(beginAndSetDistributedTransactionId,
-						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
-
-	/*
-	 * Append BEGIN and assign_distributed_transaction_id() statements into a single command
-	 * and send both in one step. The reason is purely performance, we don't want
-	 * seperate roundtrips for these two statements.
-	 */
-	DistributedTransactionId *distributedTransactionId =
-		GetCurrentDistributedTransactionId();
-	const char *timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
-	appendStringInfo(beginAndSetDistributedTransactionId,
-					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
-					 ", '%s');",
-					 distributedTransactionId->initiatorNodeIdentifier,
-					 distributedTransactionId->transactionNumber,
-					 timestamp);
+	StringInfo beginAndSetDistributedTransactionId =
+		BeginAndSetDistributedTransactionIdCommand();
 
 	/* append context for in-progress SAVEPOINTs for this transaction */
 	List *activeSubXacts = ActiveSubXactContexts();
@@ -126,6 +105,42 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	}
 
 	transaction->beginSent = true;
+}
+
+
+/*
+ * BeginAndSetDistributedTransactionIdCommand returns a command which starts
+ * a transaction and assigns the current distributed transaction id.
+ */
+StringInfo
+BeginAndSetDistributedTransactionIdCommand(void)
+{
+	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
+
+	/*
+	 * Explicitly specify READ COMMITTED, the default on the remote
+	 * side might have been changed, and that would cause problematic
+	 * behaviour.
+	 */
+	appendStringInfoString(beginAndSetDistributedTransactionId,
+						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
+
+	/*
+	 * Append BEGIN and assign_distributed_transaction_id() statements into a single command
+	 * and send both in one step. The reason is purely performance, we don't want
+	 * seperate roundtrips for these two statements.
+	 */
+	DistributedTransactionId *distributedTransactionId =
+		GetCurrentDistributedTransactionId();
+	const char *timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
+	appendStringInfo(beginAndSetDistributedTransactionId,
+					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
+					 ", '%s');",
+					 distributedTransactionId->initiatorNodeIdentifier,
+					 distributedTransactionId->transactionNumber,
+					 timestamp);
+
+	return beginAndSetDistributedTransactionId;
 }
 
 

@@ -16,6 +16,7 @@
 #include "commands/vacuum.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/resource_lock.h"
@@ -225,7 +226,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->jobId = jobId;
 		task->taskId = taskId++;
 		task->taskType = VACUUM_ANALYZE_TASK;
-		task->queryString = pstrdup(vacuumString->data);
+		SetTaskQueryString(task, pstrdup(vacuumString->data));
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;

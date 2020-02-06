@@ -32,9 +32,8 @@ END;
 $$;
 
 -- check maintenance daemon is started
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
 
 -- ensure no objects were created outside pg_catalog
@@ -213,9 +212,8 @@ CREATE USER testuser SUPERUSER;
 SET ROLE testuser;
 CREATE EXTENSION citus;
 
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
 
 -- and recreate as the right owner
@@ -252,9 +250,8 @@ END;
 $$;
 
 -- see that the deamon started
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
 
 -- Test that database with active worker can be dropped.

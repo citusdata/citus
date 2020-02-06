@@ -155,6 +155,14 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
+SET citus.task_executor_type TO 'adaptive';
+SET citus.enable_repartition_joins TO true;
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
@@ -235,6 +243,14 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
+SET citus.task_executor_type TO 'adaptive';
+SET citus.enable_repartition_joins TO true;
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
@@ -275,6 +291,10 @@ SET citus.task_executor_type TO 'task-tracker';
 SELECT count(*), min(current_user) FROM test;
 ERROR:  permission denied for table test
 -- test re-partition query
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ERROR:  permission denied for table test
+SET citus.task_executor_type TO 'adaptive';
+SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 ERROR:  permission denied for table test
 -- should not be able to transmit directly

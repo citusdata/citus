@@ -153,8 +153,9 @@ UPDATE target_table SET col_2 = 4 WHERE col_1 IN (SELECT col_1 FROM cte);
 
 RESET client_min_messages;
 
--- Following query is not supported since error checks of the subquery pushdown planner
--- and insert select planner have not been unified. It should work after unifying them.
+-- Following query is supported by using repartition join for the insert/select
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 WITH cte AS (
 	SELECT
 		col_1, col_2
@@ -167,6 +168,7 @@ SELECT
 	source_table_1.col_2
 FROM cte, source_table_1
 WHERE cte.col_1 = source_table_1.col_1 ON CONFLICT DO NOTHING;
+$Q$);
 
 SET citus.enable_cte_inlining TO true;
 
@@ -188,12 +190,14 @@ ROLLBACK;
 
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;
-	INSERT INTO
-		target_table
-	SELECT
-		col_2,
-		col_1
-	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *;
+	WITH r AS (
+		INSERT INTO
+			target_table
+		SELECT
+			col_2,
+			col_1
+		FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 1 RETURNING *)
+	SELECT * FROM r ORDER BY col_1;
 ROLLBACK;
 
 -- Following two queries are supported since we no not modify but only select from

@@ -416,29 +416,40 @@ ORDER BY user_lastseen DESC;
 ------------------------------------
 ------------------------------------
 
--- not pushable since partition key is NOT IN
+-- not pushable since partition key is NOT IN. Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id NOT IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+$Q$);
 
--- not pushable since partition key is not selected from the second subquery
+-- not pushable since partition key is not selected from the second subquery.
+-- Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT value_1 FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+$Q$);
 
--- not pushable since second subquery does not return bare partition key
+-- not pushable since second subquery does not return bare partition key.
+-- Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT 3 * user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+$Q$);
 
 ------------------------------------
 ------------------------------------
@@ -568,7 +579,9 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
 ------------------------------------
 ------------------------------------
 
--- not pushable due to NOT IN
+-- not pushable due to NOT IN. Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -579,8 +592,12 @@ And user_id NOT in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
+$Q$);
 
--- not pushable since we're not selecting the partition key
+-- not pushable since we're not selecting the partition key.
+-- Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -591,9 +608,12 @@ And user_id  in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
+$Q$);
 
  -- not pushable since we're not selecting the partition key
- -- from the events table
+ -- from the events table. Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -604,6 +624,7 @@ And event_type  in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
+$Q$);
 
 ------------------------------------
 ------------------------------------
@@ -611,23 +632,33 @@ And event_type  in
 ------------------------------------
 ------------------------------------
 
--- not pushable due to NOT IN
+-- not pushable due to NOT IN. Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id NOT IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
+$Q$);
 
--- not pushable due to not selecting the partition key
+-- not pushable due to not selecting the partition key. Use pull to coordinator.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id IN (SELECT value_2 from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
+$Q$);
 
--- not pushable due to not comparing user id from the events table
+-- not pushable due to not comparing user id from the events table.
+-- Use pull to coordinator.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE event_type IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
+$Q$);
 
 ------------------------------------
 ------------------------------------

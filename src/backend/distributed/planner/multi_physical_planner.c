@@ -2449,7 +2449,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
 								ApplyLogRedaction(queryString->data))));
-		subqueryTask->queryString = queryString->data;
+		SetTaskQueryString(subqueryTask, queryString->data);
 	}
 
 	subqueryTask->dependentTaskList = NULL;
@@ -3977,7 +3977,7 @@ CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType, char *queryStrin
 	task->taskId = taskId;
 	task->taskType = taskType;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
-	task->queryString = queryString;
+	SetTaskQueryString(task, queryString);
 
 	return task;
 }
@@ -4244,7 +4244,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 
 		/* convert filter query task into map task */
 		Task *mapTask = filterTask;
-		mapTask->queryString = mapQueryString->data;
+		SetTaskQueryString(mapTask, mapQueryString->data);
 		mapTask->taskType = MAP_TASK;
 
 		mapTaskList = lappend(mapTaskList, mapTask);
@@ -4266,7 +4266,7 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 
 	/* wrap repartition query string around filter query string */
 	StringInfo mapQueryString = makeStringInfo();
-	char *filterQueryString = filterTask->queryString;
+	char *filterQueryString = TaskQueryString(filterTask);
 	char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
 	PartitionType partitionType = mapMergeJob->partitionType;
 
@@ -4278,12 +4278,16 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 	ShardInterval **intervalArray = mapMergeJob->sortedShardIntervalArray;
 	uint32 intervalCount = mapMergeJob->partitionCount;
 
-	if (partitionType != SINGLE_HASH_PARTITION_TYPE && partitionType !=
-		RANGE_PARTITION_TYPE)
+	if (partitionType == DUAL_HASH_PARTITION_TYPE)
 	{
 		partitionColumnType = INT4OID;
 		partitionColumnTypeMod = get_typmodin(INT4OID);
 		intervalArray = GenerateSyntheticShardIntervalArray(intervalCount);
+	}
+	else if (partitionType == SINGLE_HASH_PARTITION_TYPE)
+	{
+		partitionColumnType = INT4OID;
+		partitionColumnTypeMod = get_typmodin(INT4OID);
 	}
 
 	ArrayType *splitPointObject = SplitPointObject(intervalArray, intervalCount);

@@ -77,7 +77,8 @@ extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
 									  Tuplestorestate *tupleStore,
 									  bool hasReturning, int targetPoolSize,
-									  TransactionProperties *xactProperties);
+									  TransactionProperties *xactProperties,
+									  List *jobIdList);
 extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,

@@ -1926,40 +1926,40 @@ INSERT INTO articles_hash
 	SELECT * FROM articles_hash WHERE author_id = $2 AND word_count = $1 OFFSET 0;
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 EXECUTE insert_sel(1,1);
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- one final interesting preperad statement
 -- where one of the filters is on the target list
 PREPARE fast_path_agg_filter(int, int) AS

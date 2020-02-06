@@ -63,9 +63,18 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *targetRelation = DistributedTableCacheEntry(relationId);
+
+	/*
+	 * Here SELECT query's target list should match column list of target relation,
+	 * so their partition column indexes are equal.
+	 */
+	int partitionColumnIndex = targetRelation->partitionMethod != DISTRIBUTE_BY_NONE ?
+							   targetRelation->partitionColumn->varattno - 1 : 0;
+
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, taskList,
-												  distTableCacheEntry, binaryFormat);
+												  partitionColumnIndex,
+												  targetRelation, binaryFormat);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
@@ -79,9 +88,9 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 		bool columnNulls[5] = { 0 };
 		Datum columnValues[5] = {
 			CStringGetTextDatum(fragment->resultId),
-			Int32GetDatum(fragment->nodeId),
+			UInt32GetDatum(fragment->nodeId),
 			Int64GetDatum(fragment->rowCount),
-			Int64GetDatum(fragment->targetShardId),
+			UInt64GetDatum(fragment->targetShardId),
 			Int32GetDatum(fragment->targetShardIndex)
 		};
 
@@ -126,7 +135,16 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	List *taskList = job->taskList;
 
 	DistTableCacheEntry *targetRelation = DistributedTableCacheEntry(relationId);
+
+	/*
+	 * Here SELECT query's target list should match column list of target relation,
+	 * so their partition column indexes are equal.
+	 */
+	int partitionColumnIndex = targetRelation->partitionMethod != DISTRIBUTE_BY_NONE ?
+							   targetRelation->partitionColumn->varattno - 1 : 0;
+
 	List **shardResultIds = RedistributeTaskListResults(resultIdPrefix, taskList,
+														partitionColumnIndex,
 														targetRelation, binaryFormat);
 
 	TupleDesc tupleDescriptor = NULL;

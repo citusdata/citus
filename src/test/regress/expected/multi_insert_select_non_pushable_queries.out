@@ -30,8 +30,7 @@ FROM (
   ) t
   GROUP BY user_id
 ) q;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 --  Funnel grouped by whether or not a user has done an event
@@ -159,7 +158,6 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  generating subplan XXX_1 for subquery SELECT u.user_id, 'step=>1'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[100, 101, 102])))
 DEBUG:  generating subplan XXX_2 for subquery SELECT u.user_id, 'step=>2'::text AS event, e."time" FROM public.users_table u, public.events_table e WHERE ((u.user_id OPERATOR(pg_catalog.=) e.user_id) AND (u.user_id OPERATOR(pg_catalog.>=) 10) AND (u.user_id OPERATOR(pg_catalog.<=) 25) AND (e.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[103, 104, 105])))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
@@ -310,7 +308,6 @@ GROUP BY
 ORDER BY
   count_pay;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.user_id, 'action=>1'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 10) AND (events_table.event_type OPERATOR(pg_catalog.<) 12))
 DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.user_id, 'action=>2'::text AS event, events_table."time" FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (users_table.user_id OPERATOR(pg_catalog.>=) 10) AND (users_table.user_id OPERATOR(pg_catalog.<=) 70) AND (events_table.event_type OPERATOR(pg_catalog.>) 12) AND (events_table.event_type OPERATOR(pg_catalog.<) 14))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone) UNION SELECT intermediate_result.user_id, intermediate_result.event, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event text, "time" timestamp without time zone)
@@ -352,8 +349,7 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since lateral join is not on the partition key
 INSERT INTO agg_results_third (user_id, agg_time, value_2_agg)
 SELECT
@@ -381,8 +377,7 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since lateral join is not on the partition key
 INSERT INTO agg_results_third (user_id, agg_time, value_2_agg)
 SELECT
@@ -410,40 +405,80 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Count the number of distinct users_table who are in segment X and Y and Z
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
--- not pushable since partition key is NOT IN
+-- not pushable since partition key is NOT IN. Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id NOT IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- not pushable since partition key is not selected from the second subquery
+$Q$);
+                   coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
+-- not pushable since partition key is not selected from the second subquery.
+-- Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT value_1 FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- not pushable since second subquery does not return bare partition key
+$Q$);
+                   coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
+-- not pushable since second subquery does not return bare partition key.
+-- Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third (user_id)
 SELECT DISTINCT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT 3 * user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
     AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+$Q$);
+                   coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Find customers who have done X, and satisfy other customer specific criteria
@@ -455,16 +490,14 @@ SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 101 AND value_1 < 110
   AND value_2 >= 5
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND user_id!=users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since the join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 101 AND value_1 < 110
   AND value_2 >= 5
   AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND event_type = users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Customers who haven’t done X, and satisfy other customer specific criteria
@@ -476,16 +509,14 @@ SELECT user_id, value_2 FROM users_table WHERE
   value_1 = 101
   AND value_2 >= 5
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id!=users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since the join is not the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 = 101
   AND value_2 >= 5
   AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND event_type=users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Customers who have done X and Y, and satisfy other customer specific criteria
@@ -498,8 +529,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   AND value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type!=100 AND value_3 > 100 AND user_id=users_table.user_id)
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id!=users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
@@ -511,8 +541,7 @@ SELECT user_id, value_2 FROM users_table WHERE
   value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id!=users_table.user_id)
   AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
@@ -534,8 +563,7 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
                             AND user_id != users_table.user_id
                      GROUP  BY user_id
                      HAVING Count(*) > 2);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since the second join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
   SELECT user_id,
@@ -552,8 +580,7 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
                             AND event_type = users_table.user_id
                      GROUP  BY user_id
                      HAVING Count(*) > 2);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- not pushable since the second join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_2_agg)
   SELECT user_id,
@@ -570,14 +597,15 @@ INSERT INTO agg_results_third(user_id, value_2_agg)
                             AND user_id = users_table.value_1
                      GROUP  BY user_id
                      HAVING Count(*) > 2);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Find me all users_table who has done some event and has filters
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
--- not pushable due to NOT IN
+-- not pushable due to NOT IN. Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -588,9 +616,21 @@ And user_id NOT in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- not pushable since we're not selecting the partition key
+$Q$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
+-- not pushable since we're not selecting the partition key.
+-- Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -601,10 +641,21 @@ And user_id  in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+$Q$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
  -- not pushable since we're not selecting the partition key
- -- from the events table
+ -- from the events table. Use repartition insert/select.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id)
 Select user_id
 From events_table
@@ -615,34 +666,83 @@ And event_type  in
    From users_table
    Where value_1 = 15
    And value_2 > 25);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+$Q$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
+
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Which events_table did people who has done some specific events_table
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
--- not pushable due to NOT IN
+-- not pushable due to NOT IN. Use pull to coordinator instead.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id NOT IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- not pushable due to not selecting the partition key
+$Q$);
+                        coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id, remote_scan.event_type
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
+-- not pushable due to not selecting the partition key. Use pull to coordinator.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE user_id IN (SELECT value_2 from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- not pushable due to not comparing user id from the events table
+$Q$);
+                        coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id, remote_scan.event_type
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
+-- not pushable due to not comparing user id from the events table.
+-- Use pull to coordinator.
+SELECT coordinator_plan($Q$
+EXPLAIN (costs off)
 INSERT INTO agg_results_third(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
 WHERE event_type IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+$Q$);
+                        coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  HashAggregate
+         Group Key: remote_scan.user_id, remote_scan.event_type
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
+
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 -- Find my assets that have the highest probability and fetch their metadata
@@ -664,8 +764,7 @@ FROM
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 50;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- not pushable since the join is not on the partition key
 INSERT INTO agg_results_third(user_id, value_1_agg, value_3_agg)
 SELECT
@@ -682,8 +781,8 @@ FROM
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE users_table.value_1 < 50;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- supported via recursive planning
 INSERT INTO agg_results (user_id, agg_time, value_2_agg)
 SELECT

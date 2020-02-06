@@ -16,8 +16,8 @@
  *
  *
  * Repartition queries do not begin a transaction even if we are in
- * a transaction block. As we dont begin a transaction, they wont see the
- * DDLs that happened earlier in the transaction because we dont have that
+ * a transaction block. As we don't begin a transaction, they won't see the
+ * DDLs that happened earlier in the transaction because we don't have that
  * transaction id with repartition queries. Therefore we error in this case.
  *
  * Copyright (c) Citus Data, Inc.
@@ -25,12 +25,15 @@
 
 #include "postgres.h"
 #include "access/hash.h"
+#include "miscadmin.h"
+#include "utils/builtins.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acylic_graph_execution.h"
+#include "distributed/directed_acyclic_graph_execution.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/worker_manager.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/worker_transaction.h"
@@ -46,7 +49,7 @@
 static List * CreateTemporarySchemasForMergeTasks(Job *topLevelJob);
 static List * ExtractJobsInJobTree(Job *job);
 static void TraverseJobTree(Job *curJob, List **jobs);
-static char * GenerateCreateSchemasCommand(List *jobIds);
+static char * GenerateCreateSchemasCommand(List *jobIds, char *schemaOwner);
 static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
 
@@ -65,7 +68,7 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 
 	List *jobIds = CreateTemporarySchemasForMergeTasks(topLevelJob);
 
-	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks);
+	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks, jobIds);
 
 	return jobIds;
 }
@@ -79,7 +82,7 @@ static List *
 CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
 {
 	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
-	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds);
+	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds, CurrentUserName());
 	SendCommandToAllWorkers(createSchemasCommand, CitusExtensionOwnerName());
 	return jobIds;
 }
@@ -120,9 +123,18 @@ TraverseJobTree(Job *curJob, List **jobIds)
  * GenerateCreateSchemasCommand returns concatanated create schema commands.
  */
 static char *
-GenerateCreateSchemasCommand(List *jobIds)
+GenerateCreateSchemasCommand(List *jobIds, char *ownerName)
 {
-	return GenerateJobCommands(jobIds, WORKER_CREATE_SCHEMA_QUERY);
+	StringInfo createSchemaCommand = makeStringInfo();
+	ListCell *jobIdCell = NULL;
+
+	foreach(jobIdCell, jobIds)
+	{
+		uint64 jobId = (uint64) lfirst(jobIdCell);
+		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY,
+						 jobId, quote_literal_cstr(ownerName));
+	}
+	return createSchemaCommand->data;
 }
 
 

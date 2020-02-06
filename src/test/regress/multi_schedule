@@ -42,9 +42,13 @@ test: multi_read_from_secondaries
 test: multi_create_table
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select
-test: multi_insert_select_window multi_shard_update_delete window_functions dml_recursive recursive_dml_with_different_planners_executors
+test: multi_shard_update_delete recursive_dml_with_different_planners_executors
+test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict
 test: multi_row_insert
+
+# following should not run in parallel because it relies on connection counts to workers
+test: insert_select_connection_leak
 
 # ---------
 # at the end of the regression tests regaring recursively planned modifications
@@ -222,8 +226,10 @@ test: multi_metadata_sync
 test: multi_unsupported_worker_operations
 
 # ----------
+# grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
 # multi_schema_support makes sure we can work with tables in schemas other than public with no problem
 # ----------
+test: grant_on_schema_propagation
 test: multi_schema_support
 
 # ----------

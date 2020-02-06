@@ -31,7 +31,7 @@ typedef struct DistributedResultFragment
 	char *resultId;
 
 	/* location of the result */
-	int nodeId;
+	uint32 nodeId;
 
 	/* number of rows in the result file */
 	int rowCount;
@@ -62,9 +62,11 @@ extern char * CreateIntermediateResultsDirectory(void);
 /* distributed_intermediate_results.c */
 extern List ** RedistributeTaskListResults(char *resultIdPrefix,
 										   List *selectTaskList,
+										   int partitionColumnIndex,
 										   DistTableCacheEntry *targetRelation,
 										   bool binaryFormat);
 extern List * PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+									   int partitionColumnIndex,
 									   DistTableCacheEntry *distributionScheme,
 									   bool binaryFormat);
 

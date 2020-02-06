@@ -29,6 +29,54 @@ SELECT create_reference_table('ref_test_table');
 (1 row)
 
 \COPY ref_test_table FROM stdin delimiter ',';
+-- Test two reference table joins, will both run in parallel
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+ROLLBACK;
+-- Test two reference table joins, second one will be serialized
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+INSERT INTO ref_test_table VALUES(1,2,'da');
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+ROLLBACK;
+-- this does not work because the inserts into shards go over different connections
+-- and the insert into the reference table goes over a single connection, and the
+-- final SELECT cannot see both
+BEGIN;
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+INSERT INTO test_table VALUES(1,2,'da');
+INSERT INTO test_table VALUES(2,2,'da');
+INSERT INTO test_table VALUES(3,3,'da');
+INSERT INTO ref_test_table VALUES(1,2,'da');
+SELECT COUNT(*) FROM test_table JOIN ref_test_table USING (id);
+ERROR:  cannot perform query with placements that were modified over multiple connections
+ROLLBACK;
 -- Test with select and router insert
 BEGIN;
 SELECT COUNT(*) FROM test_table;

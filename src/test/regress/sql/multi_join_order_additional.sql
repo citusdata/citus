@@ -108,8 +108,24 @@ EXPLAIN SELECT count(*) FROM orders, customer_hash
 EXPLAIN SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 
--- Reset client logging level to its previous value
+-- Validate a 4 way join that could be done locally is planned as such by the logical
+-- planner. It used to be planned as a repartition join due to no 1 table being directly
+-- joined to all other tables, but instead follows a chain.
+EXPLAIN SELECT count(*)
+FROM (
+    SELECT users_table.user_id
+      FROM users_table
+      JOIN events_table USING (user_id)
+     WHERE event_type = 5
+) AS bar
+JOIN (
+    SELECT users_table.user_id
+      FROM users_table
+      JOIN events_table USING (user_id)
+     WHERE event_type = 5
+) AS some_users ON (some_users.user_id = bar.user_id);
 
+-- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
 
 DROP TABLE lineitem_hash;

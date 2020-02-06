@@ -102,7 +102,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	if (!schemaExists)
 	{
 		/* lock gets automatically released upon return from this function */
-		CreateJobSchema(jobSchemaName);
+		CreateJobSchema(jobSchemaName, NULL);
 	}
 	else
 	{
@@ -231,7 +231,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * writing to a table within the schema.
 	 */
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
-	CitusRemoveDirectory(jobDirectoryName);
+	CitusRemoveDirectory(jobDirectoryName->data);
 
 	RemoveJobSchema(jobSchemaName);
 	UnlockJobResource(jobId, AccessExclusiveLock);
@@ -306,9 +306,11 @@ TaskTrackerRunning(void)
  * this function ensures that our pg_ prefixed schema names can be created.
  * Further note that the created schema does not become visible to other
  * processes until the transaction commits.
+ *
+ * If schemaOwner is NULL, then current user is used.
  */
 void
-CreateJobSchema(StringInfo schemaName)
+CreateJobSchema(StringInfo schemaName, char *schemaOwner)
 {
 	const char *queryString = NULL;
 
@@ -324,10 +326,15 @@ CreateJobSchema(StringInfo schemaName)
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
+	if (schemaOwner == NULL)
+	{
+		schemaOwner = GetUserNameFromId(savedUserId, false);
+	}
+
 	/* build a CREATE SCHEMA statement */
 	currentUserRole.type = T_RoleSpec;
 	currentUserRole.roletype = ROLESPEC_CSTRING;
-	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
+	currentUserRole.rolename = schemaOwner;
 	currentUserRole.location = -1;
 
 	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
@@ -354,7 +361,7 @@ CreateJobSchema(StringInfo schemaName)
 static void
 CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 {
-	char *databaseName = CurrentDatabaseName();
+	const char *databaseName = CurrentDatabaseName();
 	char *userName = CurrentUserName();
 
 	/* increase task priority for cleanup tasks */

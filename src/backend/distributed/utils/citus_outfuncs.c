@@ -212,6 +212,17 @@ OutDistributedSubPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(plan);
 }
 
+void
+OutUsedDistributedSubPlan(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(UsedDistributedSubPlan);
+
+	WRITE_NODE_TYPE("USEDDISTRIBUTEDSUBPLAN");
+
+	WRITE_STRING_FIELD(subPlanId);
+	WRITE_INT_FIELD(locationMask);
+}
+
 
 void
 OutMultiProject(OUTFUNC_ARGS)
@@ -327,6 +338,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
 	WRITE_NODE_FIELD(partitionKeyValue);
+	WRITE_NODE_FIELD(localPlannedStatements);
 }
 
 
@@ -410,7 +422,7 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(groupId);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
-	WRITE_INT_FIELD(nodeId);
+	WRITE_UINT_FIELD(nodeId);
 	/* so we can deal with 0 */
 	WRITE_INT_FIELD(partitionMethod);
 	WRITE_UINT_FIELD(colocationGroupId);
@@ -463,7 +475,9 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	WRITE_STRING_FIELD(queryString);
+	WRITE_NODE_FIELD(queryForLocalExecution);
+	WRITE_STRING_FIELD(queryStringLazy);
+	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
 	WRITE_NODE_FIELD(dependentTaskList);
@@ -478,6 +492,19 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(relationRowLockList);
 	WRITE_NODE_FIELD(rowValuesLists);
 	WRITE_BOOL_FIELD(partiallyLocalOrRemote);
+}
+
+
+void
+OutLocalPlannedStatement(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(LocalPlannedStatement);
+
+	WRITE_NODE_TYPE("LocalPlannedStatement");
+
+	WRITE_UINT64_FIELD(shardId);
+	WRITE_UINT_FIELD(localGroupId);
+	WRITE_NODE_FIELD(localPlan);
 }
 
 

@@ -72,8 +72,6 @@ only be run during PG versions.
 
 Citus upgrade test is used for testing citus version upgrades from specific version to master. The purpose of this test is to ensure that a newly made change does not result in unexpected upgrade errors.
 
-The citus upgrade test is designed to be run on a docker image for CircleCI, so we won't explain here how to run it in your local.
-
 Currently the citus upgrade test assumes that:
 
 - You have citus artifact tarballs, both for old version and master.
@@ -91,7 +89,7 @@ How the citus upgrade test work:
 
 Note that when the version of citus changes, we should update `MASTER_VERSION` with the new version of citus otherwise that will be outdated and it will fail.
 
-There is a target for citus upgrade test. We run citus upgrade tests both in normal mode and in mixed mode. In mixed mode, we dont upgrade one of the workers. `'citus.enable_version_checks' : 'false'` is used to prevent citus from giving an error for mixed mode.
+There is a target for citus upgrade test. We run citus upgrade tests both in normal mode and in mixed mode. In mixed mode, we don't upgrade one of the workers. `'citus.enable_version_checks' : 'false'` is used to prevent citus from giving an error for mixed mode.
 
 To see full command list:
 

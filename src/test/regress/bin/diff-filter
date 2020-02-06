@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+
+"""
+diff-filter denormalizes diff output by having lines beginning with ' ' or '+'
+come from file2's unmodified version.
+"""
+
+from sys import argv, stdin, stdout
+import re
+
+
+class FileScanner:
+	"""
+	FileScanner is an iterator over the lines of a file.
+	It can apply a rewrite rule which can be used to skip lines.
+	"""
+	def __init__(self, file, rewrite = lambda x:x):
+		self.file = file
+		self.line = 1
+		self.rewrite = rewrite
+
+	def __next__(self):
+		while True:
+			nextline = self.rewrite(next(self.file))
+			if nextline is not None:
+				self.line += 1
+				return nextline
+
+
+def main():
+	# we only test //d rules, as we need to ignore those lines
+	regexregex = re.compile(r"^/(?P<rule>.*)/d$")
+	regexpipeline = []
+	for line in open(argv[1]):
+		line = line.strip()
+		if not line or line.startswith('#') or not line.endswith('d'):
+			continue
+		rule = regexregex.match(line)
+		if not rule:
+			raise 'Failed to parse regex rule: %s' % line
+		regexpipeline.append(re.compile(rule.group('rule')))
+
+	def sed(line):
+		if any(regex.match(line) for regex in regexpipeline):
+			return None
+		return line
+
+	for line in stdin:
+		if line.startswith('+++ '):
+			tab = line.rindex('\t')
+			fname = line[4:tab]
+			file2 = FileScanner(open(fname.replace('.modified', ''), encoding='utf8'), sed)
+			stdout.write(line)
+		elif line.startswith('@@ '):
+			idx_start = line.index('+') + 1
+			idx_end = idx_start + 1
+			while line[idx_end].isdigit():
+				idx_end += 1
+			linenum = int(line[idx_start:idx_end])
+			while file2.line < linenum:
+				next(file2)
+			stdout.write(line)
+		elif line.startswith(' '):
+			stdout.write(' ')
+			stdout.write(next(file2))
+		elif line.startswith('+'):
+			stdout.write('+')
+			stdout.write(next(file2))
+		else:
+			stdout.write(line)
+
+
+main()

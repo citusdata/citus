@@ -563,6 +563,10 @@ INSERT INTO
 	reference_table_test_fifth (value_2, value_3) VALUES (nextval('example_ref_value_seq'), nextval('example_ref_value_seq')::text)
 RETURNING value_1, value_2, value_3;
 
+INSERT INTO
+	reference_table_test_fifth (value_4) VALUES (now())
+RETURNING value_1, value_2, value_3;
+
 UPDATE
 	reference_table_test_fifth SET value_4 = now()
 WHERE
@@ -671,7 +675,8 @@ SELECT
 FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE
-	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 
 SET citus.task_executor_type to "task-tracker";
 SELECT

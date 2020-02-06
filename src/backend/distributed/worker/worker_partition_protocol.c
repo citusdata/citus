@@ -85,7 +85,7 @@ static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation,
 static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation,
 							  const void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
-static bool FileIsLink(char *filename, struct stat filestat);
+static bool FileIsLink(const char *filename, struct stat filestat);
 
 
 /* exports for SQL callable functions */
@@ -158,7 +158,7 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	CitusRemoveDirectory(taskDirectory);
+	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -232,7 +232,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	CitusRemoveDirectory(taskDirectory);
+	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -698,7 +698,7 @@ FileIsLink(char *filename, struct stat filestat)
 
 #else
 static bool
-FileIsLink(char *filename, struct stat filestat)
+FileIsLink(const char *filename, struct stat filestat)
 {
 	return S_ISLNK(filestat.st_mode);
 }
@@ -714,79 +714,91 @@ FileIsLink(char *filename, struct stat filestat)
  * system library's remove_all() method.
  */
 void
-CitusRemoveDirectory(StringInfo filename)
+CitusRemoveDirectory(const char *filename)
 {
-	struct stat fileStat;
-	int removed = 0;
-
-	int fileStated = stat(filename->data, &fileStat);
-	if (fileStated < 0)
+	/* files may be added during execution, loop when that occurs */
+	while (true)
 	{
-		if (errno == ENOENT)
-		{
-			return;  /* if file does not exist, return */
-		}
-		else
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not stat file \"%s\": %m", filename->data)));
-		}
-	}
+		struct stat fileStat;
+		int removed = 0;
 
-	/*
-	 * If this is a directory, iterate over all its contents and for each
-	 * content, recurse into this function. Also, make sure that we do not
-	 * recurse into symbolic links.
-	 */
-	if (S_ISDIR(fileStat.st_mode) && !FileIsLink(filename->data, fileStat))
-	{
-		const char *directoryName = filename->data;
-
-		DIR *directory = AllocateDir(directoryName);
-		if (directory == NULL)
+		int fileStated = stat(filename, &fileStat);
+		if (fileStated < 0)
 		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open directory \"%s\": %m",
-								   directoryName)));
-		}
-
-		struct dirent *directoryEntry = ReadDir(directory, directoryName);
-		for (; directoryEntry != NULL; directoryEntry = ReadDir(directory, directoryName))
-		{
-			const char *baseFilename = directoryEntry->d_name;
-
-			/* if system file, skip it */
-			if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
-				strncmp(baseFilename, "..", MAXPGPATH) == 0)
+			if (errno == ENOENT)
 			{
-				continue;
+				return;  /* if file does not exist, return */
+			}
+			else
+			{
+				ereport(ERROR, (errcode_for_file_access(),
+								errmsg("could not stat file \"%s\": %m", filename)));
+			}
+		}
+
+		/*
+		 * If this is a directory, iterate over all its contents and for each
+		 * content, recurse into this function. Also, make sure that we do not
+		 * recurse into symbolic links.
+		 */
+		if (S_ISDIR(fileStat.st_mode) && !FileIsLink(filename, fileStat))
+		{
+			const char *directoryName = filename;
+
+			DIR *directory = AllocateDir(directoryName);
+			if (directory == NULL)
+			{
+				ereport(ERROR, (errcode_for_file_access(),
+								errmsg("could not open directory \"%s\": %m",
+									   directoryName)));
 			}
 
 			StringInfo fullFilename = makeStringInfo();
-			appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
+			struct dirent *directoryEntry = ReadDir(directory, directoryName);
+			for (; directoryEntry != NULL; directoryEntry = ReadDir(directory,
+																	directoryName))
+			{
+				const char *baseFilename = directoryEntry->d_name;
 
-			CitusRemoveDirectory(fullFilename);
+				/* if system file, skip it */
+				if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
+					strncmp(baseFilename, "..", MAXPGPATH) == 0)
+				{
+					continue;
+				}
+
+				resetStringInfo(fullFilename);
+				appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
+
+				CitusRemoveDirectory(fullFilename->data);
+			}
 
 			FreeStringInfo(fullFilename);
+			FreeDir(directory);
 		}
 
-		FreeDir(directory);
-	}
+		/* we now have an empty directory or a regular file, remove it */
+		if (S_ISDIR(fileStat.st_mode))
+		{
+			removed = rmdir(filename);
 
-	/* we now have an empty directory or a regular file, remove it */
-	if (S_ISDIR(fileStat.st_mode))
-	{
-		removed = rmdir(filename->data);
-	}
-	else
-	{
-		removed = unlink(filename->data);
-	}
+			if (errno == ENOTEMPTY || errno == EEXIST)
+			{
+				continue;
+			}
+		}
+		else
+		{
+			removed = unlink(filename);
+		}
 
-	if (removed != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not remove file \"%s\": %m", filename->data)));
+		if (removed != 0 && errno != ENOENT)
+		{
+			ereport(ERROR, (errcode_for_file_access(),
+							errmsg("could not remove file \"%s\": %m", filename)));
+		}
+
+		return;
 	}
 }
 

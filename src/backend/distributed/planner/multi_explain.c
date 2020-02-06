@@ -22,6 +22,7 @@
 #include "optimizer/cost.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
@@ -32,6 +33,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
@@ -139,15 +141,34 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
 	Query *query = BuildSelectForInsertSelect(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
+	Oid targetRelationId = insertRte->relid;
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
 	if (es->analyze)
 	{
 		/* avoiding double execution here is tricky, error out for now */
 		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
 							   "... SELECT commands via the coordinator")));
+	}
+
+	/*
+	 * Make a copy of the query, since pg_plan_query may scribble on it and later
+	 * stages of EXPLAIN require it.
+	 */
+	Query *queryCopy = copyObject(query);
+	PlannedStmt *selectPlan = pg_plan_query(queryCopy, cursorOptions, params);
+	if (IsRedistributablePlan(selectPlan->planTree) &&
+		IsSupportedRedistributionTarget(targetRelationId))
+	{
+		ExplainPropertyText("INSERT/SELECT method", "repartition", es);
+	}
+	else
+	{
+		ExplainPropertyText("INSERT/SELECT method", "pull to coordinator", es);
 	}
 
 	ExplainOpenGroup("Select Query", "Select Query", false, es);
@@ -380,7 +401,7 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(task->queryString, es);
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
@@ -496,7 +517,7 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 	StringInfo nodeAddress = makeStringInfo();
 	char *nodeName = taskPlacement->nodeName;
 	uint32 nodePort = taskPlacement->nodePort;
-	char *nodeDatabase = CurrentDatabaseName();
+	const char *nodeDatabase = CurrentDatabaseName();
 	ListCell *explainOutputCell = NULL;
 	int rowIndex = 0;
 

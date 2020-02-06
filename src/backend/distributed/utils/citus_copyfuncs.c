@@ -85,6 +85,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(requiresMasterEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
 	COPY_NODE_FIELD(partitionKeyValue);
+	COPY_NODE_FIELD(localPlannedStatements);
 }
 
 
@@ -129,6 +130,16 @@ CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
 
 	COPY_SCALAR_FIELD(subPlanId);
 	COPY_NODE_FIELD(plan);
+}
+
+
+void
+CopyNodeUsedDistributedSubPlan(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(UsedDistributedSubPlan);
+
+	COPY_STRING_FIELD(subPlanId);
+	COPY_SCALAR_FIELD(locationMask);
 }
 
 
@@ -246,7 +257,9 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskType);
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
-	COPY_STRING_FIELD(queryString);
+	COPY_NODE_FIELD(queryForLocalExecution);
+	COPY_STRING_FIELD(queryStringLazy);
+	COPY_SCALAR_FIELD(anchorDistributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);
 	COPY_NODE_FIELD(dependentTaskList);
@@ -261,6 +274,17 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
+}
+
+
+void
+CopyNodeLocalPlannedStatement(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(LocalPlannedStatement);
+
+	COPY_SCALAR_FIELD(shardId);
+	COPY_SCALAR_FIELD(localGroupId);
+	COPY_NODE_FIELD(localPlan);
 }
 
 

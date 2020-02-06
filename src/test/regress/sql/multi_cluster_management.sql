@@ -68,6 +68,9 @@ GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 
+-- Removing public schema from pg_dist_object because it breaks the next tests
+DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
+
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
@@ -92,6 +95,7 @@ SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
 ABORT;
 
 \c - postgres - :master_port
+SET citus.next_shard_id TO 1220016;
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
@@ -109,9 +113,25 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
+-- mark all placements in the candidate node as to be deleted
+UPDATE pg_dist_placement SET shardstate=4 WHERE groupid=:worker_2_group;
+SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
+CREATE TABLE cluster_management_test_colocated (col_1 text, col_2 int);
+SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with=>'cluster_management_test');
+
+-- Check that colocated shards don't get created for shards that are to be deleted
+SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard;
+
+-- try to remove a node with only to be deleted placements and see that removal still fails
+SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_get_active_worker_nodes();
+
 -- clean-up
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=:worker_2_group;
+SET client_min_messages TO ERROR;
+DROP TABLE cluster_management_test_colocated;
+RESET client_min_messages;
 
 -- when there is no primary we should get a pretty error
 UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport=:worker_2_port;

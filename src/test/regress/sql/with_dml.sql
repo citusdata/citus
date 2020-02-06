@@ -56,9 +56,14 @@ WHERE
 	AND distributed_table.tenant_id = some_tenants.tenant_id
 	AND EXISTS (SELECT * FROM ids_to_delete);
 
--- this query errors out since we've some hard
--- errors in the INSERT ... SELECT pushdown
--- which prevents to fallback to recursive planning
+SET client_min_messages TO WARNING;
+
+-- this query falls back repartitioned insert/select since we've some hard
+-- errors in the INSERT ... SELECT pushdown which prevents to fallback to
+-- recursive planning
+SELECT * FROM
+coordinator_plan($Q$
+EXPLAIN (costs off)
 WITH ids_to_upsert AS
 (
 	SELECT tenant_id FROM distributed_table WHERE dept > 7
@@ -67,6 +72,10 @@ INSERT INTO distributed_table
        SELECT distributed_table.tenant_id FROM ids_to_upsert, distributed_table
        		WHERE  distributed_table.tenant_id = ids_to_upsert.tenant_id
        	ON CONFLICT (tenant_id) DO UPDATE SET dept = 8;
+$Q$) s
+WHERE s LIKE '%INSERT/SELECT method%';
+
+SET client_min_messages TO DEBUG1;
 
 -- the following query is very similar to the above one
 -- but this time the query is pulled to coordinator since

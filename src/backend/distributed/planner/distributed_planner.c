@@ -126,6 +126,7 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *pla
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 List *rangeTableList, int rteIdCounter);
 
+
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
@@ -142,6 +143,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		.cursorOptions = cursorOptions,
 		.boundParams = boundParams,
 	};
+
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -766,6 +768,24 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
+	#if PG_VERSION_NUM < 120000
+	Query *query = planContext->query;
+
+	/*
+	 * We had to implement this hack because on Postgres11 and below, the originalQuery
+	 * and the query would have significant differences in terms of CTEs where CTEs
+	 * would not be inlined on the query (as standard_planner() wouldn't inline CTEs
+	 * on PG 11 and below).
+	 *
+	 * Instead, we prefer to pass the inlined query to the distributed planning. We rely
+	 * on the fact that the query includes subqueries, and it'd definitely go through
+	 * query pushdown planning. During query pushdown planning, the only relevant query
+	 * tree is the original query.
+	 */
+	planContext->query = copyObject(copyOfOriginalQuery);
+#endif
+
+
 	/* simply recurse into CreateDistributedPlannedStmt() in a PG_TRY() block */
 	PlannedStmt *result = TryCreateDistributedPlannedStmt(planContext->plan,
 														  copyOfOriginalQuery,
@@ -773,6 +793,15 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->boundParams,
 														  planContext->
 														  plannerRestrictionContext);
+
+#if PG_VERSION_NUM < 120000
+
+	/*
+	 * Set back the original query, in case the planning failed and we need to go
+	 * into distributed planning again.
+	 */
+	planContext->query = query;
+#endif
 
 	return result;
 }
@@ -1083,23 +1112,49 @@ FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
 static void
 RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 {
-	/* first, get all the subplans in the query */
-	plan->usedSubPlanNodeList = FindSubPlansUsedInNode((Node *) originalQuery);
+	Node *havingQual = originalQuery->havingQual;
+
+	/* temporarily set to NULL, we're going to restore before the function returns */
+	originalQuery->havingQual = NULL;
 
 	/*
-	 * Later, remove the subplans used in the HAVING clause, because they
-	 * are only required in the coordinator. Including them in the
-	 * usedSubPlanNodeList prevents the intermediate results to be sent to the
-	 * coordinator only.
+	 * Mark the subplans as needed on remote side. Note that this decision is revisited
+	 * on execution, when the query only consists of intermediate results.
 	 */
-	if (originalQuery->hasSubLinks &&
-		FindNodeCheck(originalQuery->havingQual, IsNodeSubquery))
-	{
-		List *subplansInHaving = FindSubPlansUsedInNode(originalQuery->havingQual);
+	List *subplansExceptHaving = FindSubPlansUsedInNode((Node *) originalQuery);
+	UpdateUsedPlanListLocation(subplansExceptHaving, SUBPLAN_ACCESS_REMOTE);
 
-		plan->usedSubPlanNodeList =
-			list_difference(plan->usedSubPlanNodeList, subplansInHaving);
+	/* do the same for HAVING part of the query */
+	List *subplansInHaving = NIL;
+	if (originalQuery->hasSubLinks &&
+		FindNodeCheck(havingQual, IsNodeSubquery))
+	{
+		subplansInHaving = FindSubPlansUsedInNode(havingQual);
+		if (plan->masterQuery)
+		{
+			/*
+			 * If we have the master query, we're sure that the result is needed locally.
+			 * Otherwise, such as router queries, the plan may not be required locally.
+			 * Note that if the query consists of only intermediate results, the executor
+			 * may still prefer to write locally.
+			 *
+			 * If any of the subplansInHaving is used in other parts of the query,
+			 * we'll later merge it those subPlans and send it to remote.
+			 */
+			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
+		}
+		else
+		{
+			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_REMOTE);
+		}
 	}
+
+	/* set back the havingQual and the calculated subplans */
+	originalQuery->havingQual = havingQual;
+
+	/* merge the used subplans */
+	plan->usedSubPlanNodeList =
+		MergeUsedSubPlanLists(subplansExceptHaving, subplansInHaving);
 }
 
 

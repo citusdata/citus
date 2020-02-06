@@ -926,6 +926,14 @@ RETURNING value_1, value_2, value_3;
        3 |       1 | 2
 (1 row)
 
+INSERT INTO
+	reference_table_test_fifth (value_4) VALUES (now())
+RETURNING value_1, value_2, value_3;
+ value_1 | value_2 | value_3
+---------------------------------------------------------------------
+       4 |         |
+(1 row)
+
 UPDATE
 	reference_table_test_fifth SET value_4 = now()
 WHERE
@@ -1066,7 +1074,8 @@ SELECT
 FROM
 	reference_table_test, colocated_table_test, colocated_table_test_2
 WHERE
-	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2;
+	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
+ORDER BY 1;
 LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_test" ][ local partition join "colocated_table_test_2" ]
  value_2
 ---------------------------------------------------------------------
@@ -1170,7 +1179,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -1181,7 +1190,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
 -- some tests for mark_tables_colocated
 -- should error out

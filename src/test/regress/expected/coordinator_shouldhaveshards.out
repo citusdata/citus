@@ -1,6 +1,7 @@
 -- Test queries on a distributed table with shards on the coordinator
 CREATE SCHEMA coordinator_shouldhaveshards;
 SET search_path TO coordinator_shouldhaveshards;
+SET citus.next_shard_id TO 1503000;
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
@@ -31,11 +32,16 @@ WHERE logicalrelid = 'test'::regclass AND groupid = 0;
      2
 (1 row)
 
+--- enable logging to see which tasks are executed locally
+SET client_min_messages TO LOG;
+SET citus.log_local_commands TO ON;
 -- INSERT..SELECT with COPY under the covers
 INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
 -- router queries execute locally
 INSERT INTO test VALUES (1, 1);
+NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1503000 (x, y) VALUES (1, 1)
 SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
@@ -57,12 +63,15 @@ WITH a AS (SELECT * FROM test) SELECT count(*) FROM test;
 -- multi-shard queries in transaction blocks execute locally
 BEGIN;
 SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
 (1 row)
 
 SELECT count(*) FROM test;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503000 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503003 test WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -71,12 +80,15 @@ SELECT count(*) FROM test;
 END;
 BEGIN;
 SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
 (1 row)
 
 SELECT count(*) FROM test;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503000 test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.test_1503003 test WHERE true
  count
 ---------------------------------------------------------------------
    100
@@ -88,13 +100,14 @@ ALTER TABLE test ADD COLUMN z int;
 -- DDL after local execution
 BEGIN;
 SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1
 (1 row)
 
 ALTER TABLE test DROP COLUMN z;
-ERROR:  cannot execute command because a local execution has already been done in the transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
 HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
 ROLLBACK;

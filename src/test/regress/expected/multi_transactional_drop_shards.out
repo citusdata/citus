@@ -688,7 +688,6 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 CREATE USER try_drop_table WITH LOGIN;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-GRANT ALL ON SCHEMA public TO try_drop_table;
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
       run_command_on_workers
 ---------------------------------------------------------------------
@@ -696,13 +695,7 @@ SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
 
-SELECT run_command_on_workers('GRANT ALL ON SCHEMA public TO try_drop_table');
-  run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,GRANT)
- (localhost,57638,t,GRANT)
-(2 rows)
-
+GRANT ALL ON SCHEMA public TO try_drop_table;
 \c - try_drop_table - :master_port
 BEGIN;
 CREATE TABLE temp_dist_table (x int, y int);

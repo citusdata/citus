@@ -281,7 +281,6 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		ShardInterval *sourceShardInterval = (ShardInterval *) lfirst(sourceShardCell);
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 newShardId = GetNextShardId();
-		ListCell *sourceShardPlacementCell = NULL;
 
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
@@ -292,10 +291,14 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
 					   shardMinValueText, shardMaxValueText);
 
-		foreach(sourceShardPlacementCell, sourceShardPlacementList)
+		ShardPlacement *sourcePlacement = NULL;
+		foreach_ptr(sourcePlacement, sourceShardPlacementList)
 		{
-			ShardPlacement *sourcePlacement =
-				(ShardPlacement *) lfirst(sourceShardPlacementCell);
+			if (sourcePlacement->shardState == SHARD_STATE_TO_DELETE)
+			{
+				continue;
+			}
+
 			int32 groupId = sourcePlacement->groupId;
 			const ShardState shardState = SHARD_STATE_ACTIVE;
 			const uint64 shardSize = 0;

@@ -73,6 +73,8 @@
 #include "miscadmin.h"
 
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
@@ -95,7 +97,8 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
-bool LocalExecutionHappened = false;
+bool TransactionAccessedLocalPlacement = false;
+bool TransactionConnectedToLocalGroup = false;
 
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
@@ -103,9 +106,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
-static bool TaskAccessesLocalNode(Task *task);
-static void LogLocalCommand(const char *command);
-
+static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -123,6 +124,7 @@ uint64
 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 {
 	EState *executorState = ScanStateGetExecutorState(scanState);
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	ParamListInfo paramListInfo = copyParamList(executorState->es_param_list_info);
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
@@ -143,31 +145,69 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		const char *shardQueryString = task->queryString;
-		Query *shardQuery = ParseQueryString(shardQueryString, parameterTypes, numParams);
+		/*
+		 * If we have a valid shard id, a distributed table will be accessed
+		 * during execution. Record it to apply the restrictions related to
+		 * local execution.
+		 */
+		if (!TransactionAccessedLocalPlacement &&
+			task->anchorShardId != INVALID_SHARD_ID)
+		{
+			TransactionAccessedLocalPlacement = true;
+		}
+
+		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
 		/*
-		 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
-		 * intermediate results in the query. That'd trigger ExecuteLocalTaskPlan()
-		 * go through the distributed executor, which we do not want since the
-		 * query is already known to be local.
+		 * If the plan is already cached, don't need to re-plan, just
+		 * acquire necessary locks.
 		 */
-		int cursorOptions = 0;
+		if (localPlan != NULL)
+		{
+			Query *jobQuery = distributedPlan->workerJob->jobQuery;
+			LOCKMODE lockMode =
+				IsModifyCommand(jobQuery) ? RowExclusiveLock : (jobQuery->hasForUpdate ?
+																RowShareLock :
+																AccessShareLock);
 
-		/*
-		 * Altough the shardQuery is local to this node, we prefer planner()
-		 * over standard_planner(). The primary reason for that is Citus itself
-		 * is not very tolarent standard_planner() calls that doesn't go through
-		 * distributed_planner() because of the way that restriction hooks are
-		 * implemented. So, let planner to call distributed_planner() which
-		 * eventually calls standard_planner().
-		 */
-		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+			ListCell *oidCell = NULL;
+			foreach(oidCell, localPlan->relationOids)
+			{
+				LockRelationOid(lfirst_oid(oidCell), lockMode);
+			}
+		}
+		else
+		{
+			Query *shardQuery = ParseQueryString(TaskQueryString(task), parameterTypes,
+												 numParams);
 
-		LogLocalCommand(shardQueryString);
+			/*
+			 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
+			 * intermediate results in the query. That'd trigger ExecuteLocalTaskPlan()
+			 * go through the distributed executor, which we do not want since the
+			 * query is already known to be local.
+			 */
+			int cursorOptions = 0;
+
+			/*
+			 * Altough the shardQuery is local to this node, we prefer planner()
+			 * over standard_planner(). The primary reason for that is Citus itself
+			 * is not very tolarent standard_planner() calls that doesn't go through
+			 * distributed_planner() because of the way that restriction hooks are
+			 * implemented. So, let planner to call distributed_planner() which
+			 * eventually calls standard_planner().
+			 */
+			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+		}
+
+		LogLocalCommand(task);
+
+		char *shardQueryString = task->queryStringLazy
+								 ? task->queryStringLazy
+								 : "<optimized out by local execution>";
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, task->queryString);
+			ExecuteLocalTaskPlan(scanState, localPlan, shardQueryString);
 	}
 
 	return totalRowsProcessed;
@@ -367,7 +407,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -408,7 +448,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * has happened because that'd break transaction visibility rules and
 		 * many other things.
 		 */
-		return !AnyConnectionAccessedPlacements();
+		return !TransactionConnectedToLocalGroup;
 	}
 
 	if (!singleTask)
@@ -419,7 +459,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * execution is happening one task at a time (e.g., similar to sequential
 		 * distributed execution).
 		 */
-		Assert(!LocalExecutionHappened);
+		Assert(!TransactionAccessedLocalPlacement);
 
 		return false;
 	}
@@ -432,7 +472,7 @@ ShouldExecuteTasksLocally(List *taskList)
  * TaskAccessesLocalNode returns true if any placements of the task reside on the
  * node that we're executing the query.
  */
-static bool
+bool
 TaskAccessesLocalNode(Task *task)
 {
 	ListCell *placementCell = NULL;
@@ -453,20 +493,20 @@ TaskAccessesLocalNode(Task *task)
 
 
 /*
- * ErrorIfLocalExecutionHappened() errors out if a local query has already been executed
- * in the same transaction.
+ * ErrorIfTransactionAccessedPlacementsLocally() errors out if a local query on any shard
+ * has already been executed in the same transaction.
  *
  * This check is required because Citus currently hasn't implemented local execution
  * infrastructure for all the commands/executors. As we implement local execution for
  * the command/executor that this function call exists, we should simply remove the check.
  */
 void
-ErrorIfLocalExecutionHappened(void)
+ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		ereport(ERROR, (errmsg("cannot execute command because a local execution has "
-							   "already been done in the transaction"),
+							   "accessed a placement in the transaction"),
 						errhint("Try re-running the transaction with "
 								"\"SET LOCAL citus.enable_local_execution TO OFF;\""),
 						errdetail("Some parallel commands cannot be executed if a "
@@ -482,7 +522,7 @@ ErrorIfLocalExecutionHappened(void)
  * meaning it is part of distributed execution.
  */
 static void
-LogLocalCommand(const char *command)
+LogLocalCommand(Task *task)
 {
 	if (!(LogRemoteCommands || LogLocalCommands))
 	{
@@ -490,7 +530,7 @@ LogLocalCommand(const char *command)
 	}
 
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(command))));
+							ApplyLogRedaction(TaskQueryString(task)))));
 }
 
 

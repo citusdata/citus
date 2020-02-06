@@ -131,9 +131,14 @@
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
+#include "commands/schemacmds.h"
+#include "distributed/adaptive_executor.h"
+#include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -144,17 +149,14 @@
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
-#include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "distributed/adaptive_executor.h"
-#include "distributed/repartition_join_execution.h"
+#include "distributed/worker_protocol.h"
 #include "lib/ilist.h"
-#include "commands/schemacmds.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/int8.h"
@@ -541,14 +543,15 @@ typedef struct TaskPlacementExecution
 
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
-														 List *taskList, bool
-														 hasReturning,
+														 List *taskList,
+														 bool hasReturning,
 														 ParamListInfo paramListInfo,
 														 TupleDesc tupleDescriptor,
 														 Tuplestorestate *tupleStore,
 														 int targetPoolSize,
 														 TransactionProperties *
-														 xactProperties);
+														 xactProperties,
+														 List *jobIdList);
 static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLevel
 																	modLevel,
 																	List *taskList,
@@ -644,7 +647,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/*
 	 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
 	 * clear why this is necessary (instead of locking the parent during DDL), but
-	 * We do the same for consistency.
+	 * we do the same for consistency.
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
@@ -678,7 +681,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 		tupleDescriptor,
 		scanState->tuplestorestate,
 		targetPoolSize,
-		&xactProperties);
+		&xactProperties,
+		jobIdList);
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
@@ -762,8 +766,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
 
-	LocalExecutionHappened = true;
-
 	/*
 	 * We're deliberately not setting execution->rowsProceessed here. The main reason
 	 * is that modifications to reference tables would end-up setting it both here
@@ -803,24 +805,24 @@ ExecuteUtilityTaskListWithoutResults(List *taskList)
 
 
 /*
- * ExecuteTaskListRepartiton is a proxy to ExecuteTaskListExtended() with defaults
- * for some of the arguments for a repartition query.
+ * ExecuteTaskListOutsideTransaction is a proxy to ExecuteTaskListExtended
+ * with defaults for some of the arguments.
  */
 uint64
-ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList, int
-								  targetPoolSize)
+ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
+								  int targetPoolSize, List *jobIdList)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
 	bool hasReturning = false;
 
-	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, true);
+	TransactionProperties xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, taskList, true);
 
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, jobIdList);
 }
 
 
@@ -840,7 +842,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, NIL);
 }
 
 
@@ -860,7 +862,7 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties);
+								   &xactProperties, NIL);
 }
 
 
@@ -872,7 +874,7 @@ uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize,
-						TransactionProperties *xactProperties)
+						TransactionProperties *xactProperties, List *jobIdList)
 {
 	ParamListInfo paramListInfo = NULL;
 
@@ -880,7 +882,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * The code-paths that rely on this function do not know how execute
 	 * commands locally.
 	 */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfTransactionAccessedPlacementsLocally();
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -890,7 +892,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	DistributedExecution *execution =
 		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
-								   xactProperties);
+								   xactProperties, jobIdList);
 
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
@@ -905,10 +907,11 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
  * a distributed plan.
  */
 static DistributedExecution *
-CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasReturning,
+CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
+						   bool hasReturning,
 						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupleStore, int targetPoolSize,
-						   TransactionProperties *xactProperties)
+						   TransactionProperties *xactProperties, List *jobIdList)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -939,6 +942,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList, bool hasRetu
 
 	execution->connectionSetChanged = false;
 	execution->waitFlagsChanged = false;
+
+	execution->jobIdList = jobIdList;
 
 	/* allocate execution specific data once, on the ExecutorState memory context */
 	if (tupleDescriptor != NULL)
@@ -1006,7 +1011,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (LocalExecutionHappened)
+	if (TransactionAccessedLocalPlacement)
 	{
 		/*
 		 * In case localExecutionHappened, we force the executor to use 2PC.
@@ -1350,8 +1355,6 @@ ReadOnlyTask(TaskType taskType)
 static bool
 SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList)
 {
-	ListCell *rtiLockCell = NULL;
-
 	if (modLevel != ROW_MODIFY_READONLY)
 	{
 		return false;
@@ -1364,9 +1367,9 @@ SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList)
 	}
 
 	Task *task = (Task *) linitial(taskList);
-	foreach(rtiLockCell, task->relationRowLockList)
+	RelationRowLock *relationRowLock = NULL;
+	foreach_ptr(relationRowLock, task->relationRowLockList)
 	{
-		RelationRowLock *relationRowLock = (RelationRowLock *) lfirst(rtiLockCell);
 		Oid relationId = relationRowLock->relationId;
 
 		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
@@ -1442,12 +1445,9 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	 */
 	if (list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList))
 	{
-		ListCell *taskCell = NULL;
-
-		foreach(taskCell, taskList)
+		Task *task = NULL;
+		foreach_ptr(task, taskList)
 		{
-			Task *task = (Task *) lfirst(taskCell);
-
 			AcquireExecutorShardLocks(task, modLevel);
 		}
 	}
@@ -1460,8 +1460,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 
 /*
  * FinishDistributedExecution cleans up resources associated with a
- * distributed execution. In particular, it releases connections and
- * clears their state.
+ * distributed execution.
  */
 static void
 FinishDistributedExecution(DistributedExecution *execution)
@@ -1477,25 +1476,22 @@ FinishDistributedExecution(DistributedExecution *execution)
 
 
 /*
- * CleanUpSessions does any clean-up necessary for the session
- * used during the execution. We only reach the function after
- * successfully completing all the tasks and we expect no tasks
- * are still in progress.
+ * CleanUpSessions does any clean-up necessary for the session used
+ * during the execution. We only reach the function after successfully
+ * completing all the tasks and we expect no tasks are still in progress.
  */
 static void
 CleanUpSessions(DistributedExecution *execution)
 {
 	List *sessionList = execution->sessionList;
-	ListCell *sessionCell = NULL;
 
 	/* we get to this function only after successful executions */
 	Assert(!execution->failed && execution->unfinishedTaskCount == 0);
 
 	/* always trigger wait event set in the first round */
-	foreach(sessionCell, sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
-
 		MultiConnection *connection = session->connection;
 
 		ereport(DEBUG4, (errmsg("Total number of commands sent over the session %ld: %ld",
@@ -1572,10 +1568,9 @@ CleanUpSessions(DistributedExecution *execution)
 static void
 UnclaimAllSessionConnections(List *sessionList)
 {
-	ListCell *sessionCell = NULL;
-	foreach(sessionCell, sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
 
 		UnclaimConnection(connection);
@@ -1596,13 +1591,9 @@ AssignTasksToConnections(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
-	ListCell *taskCell = NULL;
-	ListCell *sessionCell = NULL;
-
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-		ListCell *taskPlacementCell = NULL;
 		bool placementExecutionReady = true;
 		int placementExecutionIndex = 0;
 		int placementExecutionCount = list_length(task->taskPlacementList);
@@ -1624,9 +1615,9 @@ AssignTasksToConnections(DistributedExecution *execution)
 			(hasReturning && !task->partiallyLocalOrRemote) ||
 			modLevel == ROW_MODIFY_READONLY;
 
-		foreach(taskPlacementCell, task->taskPlacementList)
+		ShardPlacement *taskPlacement = NULL;
+		foreach_ptr(taskPlacement, task->taskPlacementList)
 		{
-			ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(taskPlacementCell);
 			int connectionFlags = 0;
 			char *nodeName = taskPlacement->nodeName;
 			int nodePort = taskPlacement->nodePort;
@@ -1741,6 +1732,12 @@ AssignTasksToConnections(DistributedExecution *execution)
 				 */
 				placementExecutionReady = false;
 			}
+
+			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
+				GetLocalGroupId())
+			{
+				TransactionConnectedToLocalGroup = true;
+			}
 		}
 	}
 
@@ -1751,9 +1748,9 @@ AssignTasksToConnections(DistributedExecution *execution)
 	 * We need to do this after assigning tasks to connections because the same
 	 * connection may be be returned multiple times by GetPlacementListConnectionIfCached.
 	 */
-	foreach(sessionCell, execution->sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, execution->sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
 
 		ClaimConnectionExclusively(connection);
@@ -1832,12 +1829,8 @@ static WorkerPool *
 FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int nodePort)
 {
 	WorkerPool *workerPool = NULL;
-	ListCell *workerCell = NULL;
-
-	foreach(workerCell, execution->workerList)
+	foreach_ptr(workerPool, execution->workerList)
 	{
-		workerPool = lfirst(workerCell);
-
 		if (strncmp(nodeName, workerPool->nodeName, WORKER_LENGTH) == 0 &&
 			nodePort == workerPool->nodePort)
 		{
@@ -1873,14 +1866,11 @@ static WorkerSession *
 FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 {
 	DistributedExecution *execution = workerPool->distributedExecution;
-	WorkerSession *session = NULL;
-	ListCell *sessionCell = NULL;
 	static uint64 sessionId = 1;
 
-	foreach(sessionCell, workerPool->sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, workerPool->sessionList)
 	{
-		session = lfirst(sessionCell);
-
 		if (session->connection == connection)
 		{
 			return session;
@@ -1966,8 +1956,6 @@ static void
 SequentialRunDistributedExecution(DistributedExecution *execution)
 {
 	List *taskList = execution->tasksToExecute;
-
-	ListCell *taskCell = NULL;
 	int connectionMode = MultiShardConnectionType;
 
 	/*
@@ -1976,10 +1964,9 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 	 */
 	MultiShardConnectionType = SEQUENTIAL_CONNECTION;
 
-	foreach(taskCell, taskList)
+	Task *taskToExecute = NULL;
+	foreach_ptr(taskToExecute, taskList)
 	{
-		Task *taskToExecute = (Task *) lfirst(taskCell);
-
 		/* execute each task one by one */
 		execution->tasksToExecute = list_make1(taskToExecute);
 		execution->totalTaskCount = 1;
@@ -2029,12 +2016,11 @@ RunDistributedExecution(DistributedExecution *execution)
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
 			int eventIndex = 0;
-			ListCell *workerCell = NULL;
 			long timeout = NextEventTimeout(execution);
 
-			foreach(workerCell, execution->workerList)
+			WorkerPool *workerPool = NULL;
+			foreach_ptr(workerPool, execution->workerList)
 			{
-				WorkerPool *workerPool = lfirst(workerCell);
 				ManageWorkerPool(workerPool);
 			}
 
@@ -2416,14 +2402,12 @@ UsableConnectionCount(WorkerPool *workerPool)
 static long
 NextEventTimeout(DistributedExecution *execution)
 {
-	ListCell *workerCell = NULL;
 	TimestampTz now = GetCurrentTimestamp();
 	long eventTimeout = 1000; /* milliseconds */
 
-	foreach(workerCell, execution->workerList)
+	WorkerPool *workerPool = NULL;
+	foreach_ptr(workerPool, execution->workerList)
 	{
-		WorkerPool *workerPool = (WorkerPool *) lfirst(workerCell);
-
 		if (workerPool->failed)
 		{
 			/* worker pool may have already timed out */
@@ -2699,7 +2683,7 @@ HandleMultiConnectionSuccess(WorkerSession *session)
  *      BEGIN;
  *          -- assume that the following INSERT goes to worker-A
  *          -- also note that this single command does not activate
- *          -- 2PC itself since it is a single shard mofication
+ *          -- 2PC itself since it is a single shard modification
  *          INSERT INTO distributed_table (dist_key) VALUES (1);
  *
  *          -- do one more single shard UPDATE hitting the same
@@ -3130,9 +3114,9 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	int querySent = 0;
 
 	char *queryString = NULL;
-	if (task->queryString != NULL)
+	if (list_length(task->perPlacementQueryStrings) == 0)
 	{
-		queryString = task->queryString;
+		queryString = TaskQueryString(task);
 	}
 	else
 	{
@@ -3375,7 +3359,6 @@ WorkerPoolFailed(WorkerPool *workerPool)
 {
 	bool succeeded = false;
 	dlist_iter iter;
-	ListCell *sessionCell = NULL;
 
 	/* a pool cannot fail multiple times */
 	Assert(!workerPool->failed);
@@ -3396,10 +3379,9 @@ WorkerPoolFailed(WorkerPool *workerPool)
 		PlacementExecutionDone(placementExecution, succeeded);
 	}
 
-	foreach(sessionCell, workerPool->sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, workerPool->sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
-
 		WorkerSessionFailed(session);
 	}
 
@@ -3416,13 +3398,11 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	 */
 	if (UseConnectionPerPlacement())
 	{
-		ListCell *workerCell = NULL;
 		List *workerList = workerPool->distributedExecution->workerList;
 
-		foreach(workerCell, workerList)
+		WorkerPool *pool = NULL;
+		foreach_ptr(pool, workerList)
 		{
-			WorkerPool *pool = (WorkerPool *) lfirst(workerCell);
-
 			/* failed pools or pools without any connection attempts ignored */
 			if (pool->failed || pool->poolStartTime == 0)
 			{
@@ -3677,8 +3657,6 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 	}
 	else
 	{
-		ListCell *sessionCell = NULL;
-
 		if (placementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
 		{
 			/* remove from not-ready task queue */
@@ -3692,9 +3670,9 @@ PlacementExecutionReady(TaskPlacementExecution *placementExecution)
 		workerPool->readyTaskCount++;
 
 		/* wake up an idle connection by checking whether the connection is writeable */
-		foreach(sessionCell, workerPool->sessionList)
+		WorkerSession *session = NULL;
+		foreach_ptr(session, workerPool->sessionList)
 		{
-			WorkerSession *session = lfirst(sessionCell);
 			MultiConnection *connection = session->connection;
 			RemoteTransaction *transaction = &(connection->remoteTransaction);
 			RemoteTransactionState transactionState = transaction->transactionState;
@@ -3787,17 +3765,15 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 static WaitEventSet *
 BuildWaitEventSet(List *sessionList)
 {
-	ListCell *sessionCell = NULL;
-
 	/* additional 2 is for postmaster and latch */
 	int eventSetSize = list_length(sessionList) + 2;
 
 	WaitEventSet *waitEventSet =
 		CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
 
-	foreach(sessionCell, sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
 
 		if (connection->pgConn == NULL)
@@ -3820,8 +3796,7 @@ BuildWaitEventSet(List *sessionList)
 		}
 
 		int waitEventSetIndex = AddWaitEventToSet(waitEventSet, connection->waitFlags,
-												  sock,
-												  NULL, (void *) session);
+												  sock, NULL, (void *) session);
 		session->waitEventSetIndex = waitEventSetIndex;
 	}
 
@@ -3839,11 +3814,9 @@ BuildWaitEventSet(List *sessionList)
 static void
 UpdateWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 {
-	ListCell *sessionCell = NULL;
-
-	foreach(sessionCell, sessionList)
+	WorkerSession *session = NULL;
+	foreach_ptr(session, sessionList)
 	{
-		WorkerSession *session = lfirst(sessionCell);
 		MultiConnection *connection = session->connection;
 		int waitEventSetIndex = session->waitEventSetIndex;
 

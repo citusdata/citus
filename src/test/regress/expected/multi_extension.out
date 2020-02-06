@@ -27,13 +27,12 @@ BEGIN
 END;
 $$;
 -- check maintenance daemon is started
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
-  datname   | ?column? | ?column?
+  datname   | current_database | usename  | extowner
 ---------------------------------------------------------------------
- regression | t        | t
+ regression | regression       | postgres | postgres
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -226,13 +225,12 @@ DROP EXTENSION citus;
 CREATE USER testuser SUPERUSER;
 SET ROLE testuser;
 CREATE EXTENSION citus;
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
-  datname   | ?column? | ?column?
+  datname   | current_database | usename  | extowner
 ---------------------------------------------------------------------
- regression | t        | t
+ regression | regression       | testuser | testuser
 (1 row)
 
 -- and recreate as the right owner
@@ -267,13 +265,12 @@ BEGIN
 END;
 $$;
 -- see that the deamon started
-SELECT datname,
-    datname = current_database(),
-    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
- datname | ?column? | ?column?
+ datname | current_database | usename  | extowner
 ---------------------------------------------------------------------
- another | t        | t
+ another | another          | postgres | postgres
 (1 row)
 
 -- Test that database with active worker can be dropped.

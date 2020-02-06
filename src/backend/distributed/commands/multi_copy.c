@@ -88,6 +88,7 @@
 #include "foreign/foreign.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -829,6 +830,30 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	}
 
 	return useBinaryCopyFormat;
+}
+
+
+/*
+ * CanUseBinaryCopyFormatForTargetList returns true if we can use binary
+ * copy format for all columns of the given target list.
+ */
+bool
+CanUseBinaryCopyFormatForTargetList(List *targetEntryList)
+{
+	ListCell *targetEntryCell = NULL;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Node *targetExpr = (Node *) targetEntry->expr;
+
+		Oid columnType = exprType(targetExpr);
+		if (!CanUseBinaryCopyFormatForType(columnType))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
@@ -1803,7 +1828,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	/* Citus currently doesn't know how to handle COPY command locally */
-	ErrorIfLocalExecutionHappened();
+	ErrorIfTransactionAccessedPlacementsLocally();
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -2883,6 +2908,11 @@ CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 	if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
 		ClaimConnectionExclusively(connection);
+	}
+
+	if (!TransactionConnectedToLocalGroup && placement->groupId == GetLocalGroupId())
+	{
+		TransactionConnectedToLocalGroup = true;
 	}
 
 	return connection;

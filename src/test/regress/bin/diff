@@ -4,9 +4,6 @@
 # doing the actual diff. Rules for normalization are in normalize.sed. See
 # the comments there for more information.
 #
-# We only normalize tests listed in normalized_tests.lst. We use the bare
-# diff for other tests.
-#
 # Note that src/test/regress/Makefile adds this directory to $PATH so
 # pg_regress uses this diff tool instead of the system diff tool.
 set -eu -o pipefail
@@ -18,7 +15,7 @@ file2="${@:(-1):1}"
 # filename of the expected file as the test name. We can have multiple
 # expected files for a single test with _0, _1, ... suffixes.
 # So for the test name, we also strip the additional suffix.
-test=$(basename $file1 .out | sed -E "s/_[0-9]+$//")
+test=$(basename "$file1" .out | sed -E "s/_[0-9]+$//")
 args=${@:1:$#-2}
 BASEDIR=$(dirname "$0")
 
@@ -33,16 +30,11 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
-	sed -Ef $BASEDIR/normalize.sed < $file1 > "$file1.modified"
-	mv "$file1" "$file1.unmodified"
-	mv "$file1.modified" "$file1"
-	sed -Ef $BASEDIR/normalize.sed < "$file2" > "$file2.modified"
-	mv "$file2" "$file2.unmodified"
-	mv "$file2.modified" "$file2"
-	$DIFF -w $args $file1 $file2
-	exitcode=$?
-	exit $exitcode
+	sed -Ef "$BASEDIR/normalize.sed" < "$file1" > "$file1.modified"
+	sed -Ef "$BASEDIR/normalize.sed" < "$file2" > "$file2.modified"
+	"$DIFF" -w $args "$file1.modified" "$file2.modified" | LC_CTYPE=C.UTF-8 diff-filter "$BASEDIR/normalize.sed"
+	exit ${PIPESTATUS[0]}
 else
-	exec $DIFF -w $args $file1 $file2
+	exec "$DIFF" -w $args "$file1" "$file2"
 fi
 

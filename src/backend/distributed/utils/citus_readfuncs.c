@@ -189,6 +189,7 @@ readJobInfo(Job *local_node)
 	READ_BOOL_FIELD(requiresMasterEvaluation);
 	READ_BOOL_FIELD(deferredPruning);
 	READ_NODE_FIELD(partitionKeyValue);
+	READ_NODE_FIELD(localPlannedStatements);
 }
 
 
@@ -240,6 +241,16 @@ ReadDistributedSubPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(plan);
 
 	READ_DONE();
+}
+
+
+READFUNC_RET
+ReadUsedDistributedSubPlan(READFUNC_ARGS)
+{
+	READ_LOCALS(UsedDistributedSubPlan);
+
+	READ_STRING_FIELD(subPlanId);
+	READ_INT_FIELD(locationMask);
 }
 
 
@@ -320,7 +331,7 @@ ReadShardPlacement(READFUNC_ARGS)
 	READ_INT_FIELD(groupId);
 	READ_STRING_FIELD(nodeName);
 	READ_UINT_FIELD(nodePort);
-	READ_INT_FIELD(nodeId);
+	READ_UINT_FIELD(nodeId);
 	/* so we can deal with 0 */
 	READ_INT_FIELD(partitionMethod);
 	READ_UINT_FIELD(colocationGroupId);
@@ -377,7 +388,9 @@ ReadTask(READFUNC_ARGS)
 	READ_ENUM_FIELD(taskType, TaskType);
 	READ_UINT64_FIELD(jobId);
 	READ_UINT_FIELD(taskId);
-	READ_STRING_FIELD(queryString);
+	READ_NODE_FIELD(queryForLocalExecution);
+	READ_STRING_FIELD(queryStringLazy);
+	READ_OID_FIELD(anchorDistributedTableId);
 	READ_UINT64_FIELD(anchorShardId);
 	READ_NODE_FIELD(taskPlacementList);
 	READ_NODE_FIELD(dependentTaskList);
@@ -392,6 +405,19 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(relationRowLockList);
 	READ_NODE_FIELD(rowValuesLists);
 	READ_BOOL_FIELD(partiallyLocalOrRemote);
+
+	READ_DONE();
+}
+
+
+READFUNC_RET
+ReadLocalPlannedStatement(READFUNC_ARGS)
+{
+	READ_LOCALS(LocalPlannedStatement);
+
+	READ_UINT64_FIELD(shardId);
+	READ_UINT_FIELD(localGroupId);
+	READ_NODE_FIELD(localPlan);
 
 	READ_DONE();
 }

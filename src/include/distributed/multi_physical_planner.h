@@ -44,6 +44,10 @@
 #define MERGE_FILES_AND_RUN_QUERY_COMMAND \
 	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, %s, %s)"
 
+#define SUBPLAN_ACCESS_NONE 0
+#define SUBPLAN_ACCESS_LOCAL 1
+#define SUBPLAN_ACCESS_REMOTE 2
+
 
 typedef enum CitusRTEKind
 {
@@ -117,6 +121,21 @@ typedef enum RowModifyLevel
 	ROW_MODIFY_NONCOMMUTATIVE = 3
 } RowModifyLevel;
 
+
+/*
+ * LocalPlannedStatement represents a local plan of a shard. The scope
+ * for the LocalPlannedStatement is Task.
+ */
+typedef struct LocalPlannedStatement
+{
+	CitusNode type;
+
+	uint64 shardId;
+	uint32 localGroupId;
+	PlannedStmt *localPlan;
+} LocalPlannedStatement;
+
+
 /*
  * Job represents a logical unit of work that contains one set of data transfers
  * in our physical plan. The physical planner maps each SQL query into one or
@@ -135,6 +154,9 @@ typedef struct Job
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
 	Const *partitionKeyValue;
+
+	/* for local shard queries, we may save the local plan here */
+	List *localPlannedStatements;
 } Job;
 
 
@@ -182,15 +204,36 @@ typedef struct Task
 	uint32 taskId;
 
 	/*
-	 * If queryString != NULL, then we have a single query for all placements.
-	 * Otherwise, length of perPlacementQueryStrings is equal to length of
-	 * taskPlacementList and can assign a different query for each placement.
-	 * We need this flexibility when a query should return node specific values.
-	 * For example, on which node did we succeed storing some result files?
+	 * For most queries queryForLocalExecution and/or queryStringLazy is not
+	 * NULL. This means we have a single query for all placements.
+	 *
+	 * If this is not the case, the length of perPlacementQueryStrings is
+	 * non-zero and equal to length of taskPlacementList. Like this it can
+	 * assign a different query for each placement. We need this flexibility
+	 * when a query should return node specific values. For example, on which
+	 * node did we succeed storing some result files?
+	 *
+	 * queryForLocalExecution is only not null when the planner thinks the
+	 * query could possibly be locally executed. In that case deparsing+parsing
+	 * the query might not be necessary, so we do that lazily.
+	 *
+	 * queryForLocalExecution should only be set by using SetTaskQuery()
 	 */
-	char *queryString;
+	Query *queryForLocalExecution;
+
+	/*
+	 * In almost all cases queryStringLazy should be read only indirectly by
+	 * using TaskQueryString(). This will populate the field if only the
+	 * queryForLocalExecution field is not NULL.
+	 *
+	 * This field should only be set by using SetTaskQueryString() (or as a
+	 * side effect from TaskQueryString()). Otherwise it might not be in sync
+	 * with queryForLocalExecution.
+	 */
+	char *queryStringLazy;
 	List *perPlacementQueryStrings;
 
+	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */
 	List *taskPlacementList;    /* only applies to compute tasks */
 	List *dependentTaskList;     /* only applies to compute tasks */
@@ -347,6 +390,19 @@ typedef struct DistributedSubPlan
 	uint32 subPlanId;
 	PlannedStmt *plan;
 } DistributedSubPlan;
+
+
+/*
+ * UsedDistributedSubPlan contains information about a subPlan that is used in a
+ * distributed plan.
+ */
+typedef struct UsedDistributedSubPlan
+{
+	CitusNode type;
+
+	char *subPlanId;
+	int locationMask;
+} UsedDistributedSubPlan;
 
 
 /* OperatorCacheEntry contains information for each element in OperatorCache */

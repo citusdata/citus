@@ -1,0 +1,15 @@
+Ports are replaced with xxxxx: localhost:2187
+This line is the same
+This line is also the same
+DEBUG: we remove this line creating and filling new WAL file
+Line above was deleted é
+Filler 1, localhost:11111
+Filler 2, localhost:1111
+Filler 3, localhost:111
+This line has been inserted
+This line has also been inserted, localhost:10812
+DEBUG: we remove this line creating and filling new WAL file
+Line below will be removed, localhost:2781
+This line has been changed ✇
+End of file
+New line at end

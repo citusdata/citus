@@ -17,6 +17,7 @@
 
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -36,8 +37,8 @@
  */
 typedef struct NodePair
 {
-	int sourceNodeId;
-	int targetNodeId;
+	uint32 sourceNodeId;
+	uint32 targetNodeId;
 } NodePair;
 
 
@@ -54,6 +55,7 @@ typedef struct NodeToNodeFragmentsTransfer
 
 /* forward declarations of local functions */
 static void WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+									 int partitionColumnIndex,
 									 DistTableCacheEntry *targetRelation,
 									 bool binaryFormat);
 static List * ExecutePartitionTaskList(List *partitionTaskList,
@@ -89,9 +91,13 @@ static void ExecuteFetchTaskList(List *fetchTaskList);
  *
  * returnValue[shardIndex] is list of cstrings each of which is a resultId which
  * correspond to targetRelation->sortedShardIntervalArray[shardIndex].
+ *
+ * partitionColumnIndex determines the column in the selectTaskList to use for
+ * partitioning.
  */
 List **
 RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
+							int partitionColumnIndex,
 							DistTableCacheEntry *targetRelation,
 							bool binaryFormat)
 {
@@ -104,6 +110,7 @@ RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
 	UseCoordinatedTransaction();
 
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, selectTaskList,
+												  partitionColumnIndex,
 												  targetRelation, binaryFormat);
 	return ColocateFragmentsWithRelation(fragmentList, targetRelation);
 }
@@ -119,9 +126,13 @@ RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
  * partition of results. Empty results are omitted. Therefore, if we have N tasks
  * and target relation has M shards, we will have NxM-(number of empty results)
  * fragments.
+ *
+ * partitionColumnIndex determines the column in the selectTaskList to use for
+ * partitioning.
  */
 List *
 PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
@@ -141,7 +152,8 @@ PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
 	 */
 	UseCoordinatedTransaction();
 
-	WrapTasksForPartitioning(resultIdPrefix, selectTaskList, targetRelation,
+	WrapTasksForPartitioning(resultIdPrefix, selectTaskList,
+							 partitionColumnIndex, targetRelation,
 							 binaryFormat);
 	return ExecutePartitionTaskList(selectTaskList, targetRelation);
 }
@@ -154,6 +166,7 @@ PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
  */
 static void
 WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
@@ -164,11 +177,13 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 	ArrayType *minValueArray = NULL;
 	ArrayType *maxValueArray = NULL;
 	Var *partitionColumn = targetRelation->partitionColumn;
-	int partitionColumnIndex = partitionColumn->varoattno - 1;
-	Oid intervalTypeId = partitionColumn->vartype;
-	int32 intervalTypeMod = partitionColumn->vartypmod;
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = 0;
 	Oid intervalTypeOutFunc = InvalidOid;
 	bool intervalTypeVarlena = false;
+
+	GetIntervalTypeInfo(targetRelation->partitionMethod, partitionColumn,
+						&intervalTypeId, &intervalTypeMod);
 	getTypeOutputInfo(intervalTypeId, &intervalTypeOutFunc, &intervalTypeVarlena);
 
 	ShardMinMaxValueArrays(shardIntervalArray, shardCount, intervalTypeOutFunc,
@@ -199,7 +214,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			ShardPlacement *shardPlacement = lfirst(placementCell);
 			StringInfo wrappedQuery = makeStringInfo();
 			appendStringInfo(wrappedQuery,
-							 "SELECT %d, partition_index"
+							 "SELECT %u, partition_index"
 							 ", %s || '_' || partition_index::text "
 							 ", rows_written "
 							 "FROM worker_partition_query_result"
@@ -207,7 +222,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 							 shardPlacement->nodeId,
 							 quote_literal_cstr(taskPrefix),
 							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(selectTask->queryString),
+							 quote_literal_cstr(TaskQueryString(selectTask)),
 							 partitionColumnIndex,
 							 quote_literal_cstr(partitionMethodString),
 							 minValuesString->data, maxValuesString->data,
@@ -215,7 +230,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
 
-		selectTask->queryString = NULL;
+		SetTaskQueryString(selectTask, NULL);
 		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}
 }
@@ -355,8 +370,8 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
 								 DistTableCacheEntry *targetRelation)
 {
 	bool isNull = false;
-	int sourceNodeId = DatumGetInt32(slot_getattr(tupleSlot, 1, &isNull));
-	int targetShardIndex = DatumGetInt32(slot_getattr(tupleSlot, 2, &isNull));
+	uint32 sourceNodeId = DatumGetUInt32(slot_getattr(tupleSlot, 1, &isNull));
+	uint32 targetShardIndex = DatumGetUInt32(slot_getattr(tupleSlot, 2, &isNull));
 	text *resultId = DatumGetTextP(slot_getattr(tupleSlot, 3, &isNull));
 	int64 rowCount = DatumGetInt64(slot_getattr(tupleSlot, 4, &isNull));
 
@@ -398,7 +413,8 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 														 work_mem);
 
 	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
-							resultStore, hasReturning, targetPoolSize, &xactProperties);
+							resultStore, hasReturning, targetPoolSize, &xactProperties,
+							NIL);
 
 	return resultStore;
 }
@@ -518,7 +534,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 	{
 		NodeToNodeFragmentsTransfer *fragmentsTransfer = lfirst(transferCell);
 
-		int targetNodeId = fragmentsTransfer->nodes.targetNodeId;
+		uint32 targetNodeId = fragmentsTransfer->nodes.targetNodeId;
 
 		/* these should have already been pruned away in ColocationTransfers */
 		Assert(targetNodeId != fragmentsTransfer->nodes.sourceNodeId);
@@ -532,7 +548,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 
 		Task *task = CitusMakeNode(Task);
 		task->taskType = SELECT_TASK;
-		task->queryString = QueryStringForFragmentsTransfer(fragmentsTransfer);
+		SetTaskQueryString(task, QueryStringForFragmentsTransfer(fragmentsTransfer));
 		task->taskPlacementList = list_make1(targetPlacement);
 
 		fetchTaskList = lappend(fetchTaskList, task);

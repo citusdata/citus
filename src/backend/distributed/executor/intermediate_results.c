@@ -667,10 +667,7 @@ RemoveIntermediateResultsDirectory(void)
 {
 	if (CreatedResultsDirectory)
 	{
-		StringInfo resultsDirectory = makeStringInfo();
-		appendStringInfoString(resultsDirectory, IntermediateResultsDirectory());
-
-		CitusRemoveDirectory(resultsDirectory);
+		CitusRemoveDirectory(IntermediateResultsDirectory());
 
 		CreatedResultsDirectory = false;
 	}
@@ -804,7 +801,7 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 	char *remoteHost = text_to_cstring(remoteHostText);
 	int remotePort = PG_GETARG_INT32(2);
 
-	int connectionFlags = 0;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 	int resultIndex = 0;
 	int64 totalBytesWritten = 0L;
 
@@ -827,7 +824,7 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 	 * Intermediate results will be stored in a directory that is derived
 	 * from the distributed transaction ID.
 	 */
-	UseCoordinatedTransaction();
+	EnsureDistributedTransactionId();
 
 	MultiConnection *connection = GetNodeConnection(connectionFlags, remoteHost,
 													remotePort);
@@ -838,7 +835,8 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 							   remoteHost, remotePort)));
 	}
 
-	RemoteTransactionBeginIfNecessary(connection);
+	StringInfo beginAndSetXactId = BeginAndSetDistributedTransactionIdCommand();
+	ExecuteCriticalRemoteCommand(connection, beginAndSetXactId->data);
 
 	for (resultIndex = 0; resultIndex < resultCount; resultIndex++)
 	{
@@ -847,7 +845,9 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 		totalBytesWritten += FetchRemoteIntermediateResult(connection, resultId);
 	}
 
-	UnclaimConnection(connection);
+	ExecuteCriticalRemoteCommand(connection, "END");
+
+	CloseConnection(connection);
 
 	PG_RETURN_INT64(totalBytesWritten);
 }
@@ -894,7 +894,7 @@ FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId)
 
 	while (true)
 	{
-		int waitFlags = WL_SOCKET_READABLE;
+		int waitFlags = WL_SOCKET_READABLE | WL_POSTMASTER_DEATH;
 
 		CopyStatus copyStatus = CopyDataFromConnection(connection, &fileCompat,
 													   &totalBytesWritten);
