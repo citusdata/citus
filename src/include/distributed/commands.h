@@ -300,30 +300,11 @@ extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 extern void PostprocessTruncateStatement(TruncateStmt *truncateStatement);
 
 /* type.c - forward declarations */
-extern List * PreprocessCompositeTypeStmt(Node *stmt, const char *queryString);
-extern List * PostprocessCompositeTypeStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterTypeStmt(Node *stmt, const char *queryString);
-extern List * PreprocessCreateEnumStmt(Node *stmt, const char *queryString);
-extern List * PostprocessCreateEnumStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterEnumStmt(Node *stmt, const char *queryString);
-extern List * PostprocessAlterEnumStmt(Node *stmt, const char *queryString);
-extern List * PreprocessDropTypeStmt(Node *stmt, const char *queryString);
-extern List * PreprocessRenameTypeStmt(Node *stmt, const char *queryString);
 extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterTypeSchemaStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterTypeOwnerStmt(Node *stmt, const char *queryString);
-extern List * PostprocessAlterTypeSchemaStmt(Node *stmt, const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
-extern ObjectAddress CompositeTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress CreateEnumStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterEnumStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress RenameTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterTypeSchemaStmtObjectAddress(Node *stmt,
-													  bool missing_ok);
+
 extern ObjectAddress RenameTypeAttributeStmtObjectAddress(Node *stmt,
 														  bool missing_ok);
-extern ObjectAddress AlterTypeOwnerObjectAddress(Node *stmt, bool missing_ok);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
 

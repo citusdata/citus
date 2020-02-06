@@ -99,6 +99,101 @@ static List * EnumValsList(Oid typeOid);
 
 static bool ShouldPropagateTypeCreate(void);
 
+/* declaration of utility hook handlers */
+static List * PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString);
+static List * PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString);
+static ObjectAddress AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Type_AlterObjectSchema = {
+	.deparse = DeparseAlterTypeSchemaStmt,
+	.qualify = QualifyAlterTypeSchemaStmt,
+	.preprocess = PreprocessAlterTypeSchemaStmt,
+	.postprocess = PostprocessAlterTypeSchemaStmt,
+	.address = AlterTypeSchemaStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_TYPE,
+									  Type_AlterObjectSchema);
+
+static List * PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString);
+static ObjectAddress AlterTypeOwnerObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Type_AlterOwner = {
+	.deparse = DeparseAlterTypeOwnerStmt,
+	.qualify = QualifyAlterTypeOwnerStmt,
+	.preprocess = PreprocessAlterTypeOwnerStmt,
+	.postprocess = NULL,
+	.address = AlterTypeOwnerObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_TYPE,
+									  Type_AlterOwner);
+
+static List * PreprocessAlterTypeStmt(Node *node, const char *queryString);
+static ObjectAddress AlterTypeStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Type_AlterTable = {
+	.deparse = DeparseAlterTypeStmt,
+	.qualify = QualifyAlterTypeStmt,
+	.preprocess = PreprocessAlterTypeStmt,
+	.postprocess = NULL,
+	.address = AlterTypeStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_TYPE,
+									  Type_AlterTable);
+
+static List * PreprocessDropTypeStmt(Node *node, const char *queryString);
+static DistributeObjectOps Type_Drop = {
+	.deparse = DeparseDropTypeStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropTypeStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_TYPE, Type_Drop);
+
+static List * PreprocessRenameTypeStmt(Node *node, const char *queryString);
+static ObjectAddress RenameTypeStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Type_Rename = {
+	.deparse = DeparseRenameTypeStmt,
+	.qualify = QualifyRenameTypeStmt,
+	.preprocess = PreprocessRenameTypeStmt,
+	.postprocess = NULL,
+	.address = RenameTypeStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TYPE, Type_Rename);
+
+static List * PreprocessCompositeTypeStmt(Node *node, const char *queryString);
+static List * PostprocessCompositeTypeStmt(Node *node, const char *queryString);
+static ObjectAddress CompositeTypeStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_CompositeType = {
+	.deparse = DeparseCompositeTypeStmt,
+	.qualify = QualifyCompositeTypeStmt,
+	.preprocess = PreprocessCompositeTypeStmt,
+	.postprocess = PostprocessCompositeTypeStmt,
+	.address = CompositeTypeStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(CompositeTypeStmt, Any_CompositeType);
+
+static List * PreprocessCreateEnumStmt(Node *node, const char *queryString);
+static List * PostprocessCreateEnumStmt(Node *node, const char *queryString);
+static ObjectAddress CreateEnumStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_CreateEnum = {
+	.deparse = DeparseCreateEnumStmt,
+	.qualify = QualifyCreateEnumStmt,
+	.preprocess = PreprocessCreateEnumStmt,
+	.postprocess = PostprocessCreateEnumStmt,
+	.address = CreateEnumStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(CreateEnumStmt, Any_CreateEnum);
+
+static List * PreprocessAlterEnumStmt(Node *node, const char *queryString);
+static List * PostprocessAlterEnumStmt(Node *node, const char *queryString);
+static ObjectAddress AlterEnumStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_AlterEnum = {
+	.deparse = DeparseAlterEnumStmt,
+	.qualify = QualifyAlterEnumStmt,
+	.preprocess = PreprocessAlterEnumStmt,
+	.postprocess = PostprocessAlterEnumStmt,
+	.address = AlterEnumStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterEnumStmt, Any_AlterEnum);
+
 
 /*
  * PreprocessCompositeTypeStmt is called during the creation of a composite type. It is executed
@@ -111,7 +206,7 @@ static bool ShouldPropagateTypeCreate(void);
  * Since the planning happens before the statement has been applied locally we do not have
  * access to the ObjectAddress of the new type.
  */
-List *
+static List *
 PreprocessCompositeTypeStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
@@ -168,7 +263,7 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString)
  * we create it on the remote servers. Here we have access to the ObjectAddress of the new
  * type which we use to make sure the type's dependencies are on all nodes.
  */
-List *
+static List *
 PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 {
 	/* same check we perform during planning of the statement */
@@ -196,7 +291,7 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
  * Normally we would have a process step as well to re-ensure dependencies exists, however
  * this is already implemented by the post processing for adding columns to tables.
  */
-List *
+static List *
 PreprocessAlterTypeStmt(Node *node, const char *queryString)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
@@ -239,7 +334,7 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString)
  * Since planning is done before we have created the object locally we do not have an
  * ObjectAddress for the new type just yet.
  */
-List *
+static List *
 PreprocessCreateEnumStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
@@ -280,7 +375,7 @@ PreprocessCreateEnumStmt(Node *node, const char *queryString)
  * case we resolve the ObjectAddress for the just created object, distribute its
  * dependencies to all the nodes, and mark the object as distributed.
  */
-List *
+static List *
 PostprocessCreateEnumStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateTypeCreate())
@@ -311,7 +406,7 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
  * used to check if the type is distributed, if so the alter will be executed on the
  * workers directly to keep the types in sync accross the cluster.
  */
-List *
+static List *
 PreprocessAlterEnumStmt(Node *node, const char *queryString)
 {
 	List *commands = NIL;
@@ -379,7 +474,7 @@ PreprocessAlterEnumStmt(Node *node, const char *queryString)
  * For pg12 the statements can be called in a transaction but will only become visible
  * when the transaction commits. This is behaviour that is ok to perform in a 2PC.
  */
-List *
+static List *
 PostprocessAlterEnumStmt(Node *node, const char *queryString)
 {
 	/*
@@ -441,7 +536,7 @@ PostprocessAlterEnumStmt(Node *node, const char *queryString)
  * citus has distributed to the workers it will drop the type on the workers as well. If
  * no types in the drop list are distributed no calls will be made to the workers.
  */
-List *
+static List *
 PreprocessDropTypeStmt(Node *node, const char *queryString)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
@@ -510,7 +605,7 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
  * used to check if the type is distributed. If the type is distributed the rename is
  * executed on all the workers to keep the types in sync across the cluster.
  */
-List *
+static List *
 PreprocessRenameTypeStmt(Node *node, const char *queryString)
 {
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
@@ -575,7 +670,7 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString)
  *
  * In this stage we can prepare the commands that need to be run on all workers.
  */
-List *
+static List *
 PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -607,7 +702,7 @@ PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
  * can now use the new dependencies of the type to ensure all its dependencies exist on
  * the workers before we apply the commands remotely.
  */
-List *
+static List *
 PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -633,7 +728,7 @@ PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
  * If the type for which the owner is changed is distributed we execute the change on all
  * the workers to keep the type in sync across the cluster.
  */
-List *
+static List *
 PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -818,7 +913,7 @@ EnumValsList(Oid typeOid)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+static ObjectAddress
 CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
@@ -839,7 +934,7 @@ CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+static ObjectAddress
 CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
@@ -879,7 +974,7 @@ AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
  * AlterEnumStmtObjectAddress return the ObjectAddress of the enum type that is the
  * object of the AlterEnumStmt. Errors is missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
@@ -896,7 +991,7 @@ AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
  * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -920,7 +1015,7 @@ RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress
+static ObjectAddress
 AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1000,7 +1095,7 @@ RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the object
  * of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 AlterTypeOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);

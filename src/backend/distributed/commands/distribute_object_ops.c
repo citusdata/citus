@@ -73,15 +73,6 @@ static DistributeObjectOps Aggregate_Rename = {
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType,
 									  OBJECT_AGGREGATE, Aggregate_Rename);
 
-static DistributeObjectOps Any_AlterEnum = {
-	.deparse = DeparseAlterEnumStmt,
-	.qualify = QualifyAlterEnumStmt,
-	.preprocess = PreprocessAlterEnumStmt,
-	.postprocess = PostprocessAlterEnumStmt,
-	.address = AlterEnumStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterEnumStmt, Any_AlterEnum);
-
 static DistributeObjectOps Any_AlterExtension = {
 	.deparse = DeparseAlterExtensionStmt,
 	.qualify = NULL,
@@ -145,24 +136,6 @@ static DistributeObjectOps Any_Cluster = {
 };
 REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
 
-static DistributeObjectOps Any_CompositeType = {
-	.deparse = DeparseCompositeTypeStmt,
-	.qualify = QualifyCompositeTypeStmt,
-	.preprocess = PreprocessCompositeTypeStmt,
-	.postprocess = PostprocessCompositeTypeStmt,
-	.address = CompositeTypeStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(CompositeTypeStmt, Any_CompositeType);
-
-static DistributeObjectOps Any_CreateEnum = {
-	.deparse = DeparseCreateEnumStmt,
-	.qualify = QualifyCreateEnumStmt,
-	.preprocess = PreprocessCreateEnumStmt,
-	.postprocess = PostprocessCreateEnumStmt,
-	.address = CreateEnumStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(CreateEnumStmt, Any_CreateEnum);
-
 static DistributeObjectOps Any_CreateExtension = {
 	.deparse = DeparseCreateExtensionStmt,
 	.qualify = NULL,
@@ -223,6 +196,7 @@ REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TABCONSTRAI
 									  Any_Rename);
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_INDEX, Any_Rename);
 
+/* TODO this is a 2 level nested statement which we do not currently support */
 static DistributeObjectOps Attribute_Rename = {
 	.deparse = DeparseRenameAttributeStmt,
 	.qualify = QualifyRenameAttributeStmt,
@@ -536,54 +510,6 @@ static DistributeObjectOps Table_Drop = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_TABLE, Table_Drop);
-
-static DistributeObjectOps Type_AlterObjectSchema = {
-	.deparse = DeparseAlterTypeSchemaStmt,
-	.qualify = QualifyAlterTypeSchemaStmt,
-	.preprocess = PreprocessAlterTypeSchemaStmt,
-	.postprocess = PostprocessAlterTypeSchemaStmt,
-	.address = AlterTypeSchemaStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_TYPE,
-									  Type_AlterObjectSchema);
-
-static DistributeObjectOps Type_AlterOwner = {
-	.deparse = DeparseAlterTypeOwnerStmt,
-	.qualify = QualifyAlterTypeOwnerStmt,
-	.preprocess = PreprocessAlterTypeOwnerStmt,
-	.postprocess = NULL,
-	.address = AlterTypeOwnerObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_TYPE,
-									  Type_AlterOwner);
-
-static DistributeObjectOps Type_AlterTable = {
-	.deparse = DeparseAlterTypeStmt,
-	.qualify = QualifyAlterTypeStmt,
-	.preprocess = PreprocessAlterTypeStmt,
-	.postprocess = NULL,
-	.address = AlterTypeStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_TYPE,
-									  Type_AlterTable);
-
-static DistributeObjectOps Type_Drop = {
-	.deparse = DeparseDropTypeStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessDropTypeStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_TYPE, Type_Drop);
-
-static DistributeObjectOps Type_Rename = {
-	.deparse = DeparseRenameTypeStmt,
-	.qualify = QualifyRenameTypeStmt,
-	.preprocess = PreprocessRenameTypeStmt,
-	.postprocess = NULL,
-	.address = RenameTypeStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TYPE, Type_Rename);
 
 /* linker provided pointers */
 SECTION_ARRAY(DistributedObjectOpsContainer *, opscontainer);
