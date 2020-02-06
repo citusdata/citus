@@ -1,6 +1,11 @@
 SET citus.next_shard_id TO 1650000;
 CREATE SCHEMA chbenchmark_all_queries;
 SET search_path TO chbenchmark_all_queries;
+-- we want to make sure the join order is stable. If the join order of a table changes due
+-- to a chacnge you are making, please verify if it is not a regression. If the join order
+-- became better feel free to update the output.
+SET citus.log_multi_join_order TO on;
+SET client_min_messages TO log;
 SET citus.enable_repartition_joins TO on;
 CREATE TABLE order_line (
     ol_w_id int NOT NULL,
@@ -245,6 +250,7 @@ FROM order_line
 WHERE ol_delivery_d > '2007-01-02 00:00:00.000000'
 GROUP BY ol_number
 ORDER BY ol_number;
+LOG:  join order: [ "order_line" ]
  ol_number | sum_qty | sum_amount |        avg_qty         |       avg_amount       | count_order
 ---------------------------------------------------------------------
          0 |       0 |       0.00 | 0.00000000000000000000 | 0.00000000000000000000 |           1
@@ -301,6 +307,7 @@ ORDER BY
     n_name,
     su_name,
     i_id;
+LOG:  join order: [ "stock" ][ reference join "supplier" ][ reference join "nation" ][ reference join "region" ]
  su_suppkey |          su_name          |          n_name           | i_id |  i_name  | su_address |    su_phone     |                                              su_comment
 ---------------------------------------------------------------------
           9 | abc                       | Germany                   |    3 | Keyboard | def        | ghi             | jkl
@@ -338,6 +345,7 @@ GROUP BY
 ORDER BY
     revenue DESC,
     o_entry_d;
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "new_order" ][ local partition join "order_line" ]
  ol_o_id | ol_w_id | ol_d_id | revenue |        o_entry_d
 ---------------------------------------------------------------------
       10 |      10 |      10 |   10.00 | Fri Oct 17 00:00:00 2008
@@ -406,6 +414,7 @@ WHERE c_id = o_c_id
   AND o_entry_d >= '2007-01-02 00:00:00.000000'
 GROUP BY n_name
 ORDER BY revenue DESC;
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "order_line" ][ local partition join "stock" ][ reference join "supplier" ][ reference join "nation" ][ reference join "region" ]
           n_name           | revenue
 ---------------------------------------------------------------------
  Germany                   |    3.00
@@ -419,6 +428,7 @@ FROM order_line
 WHERE ol_delivery_d >= '1999-01-01 00:00:00.000000'
   AND ol_delivery_d < '2020-01-01 00:00:00.000000'
   AND ol_quantity BETWEEN 1 AND 100000;
+LOG:  join order: [ "order_line" ]
  revenue
 ---------------------------------------------------------------------
    55.00
@@ -462,6 +472,7 @@ ORDER BY
     su_nationkey,
     cust_nation,
     l_year;
+LOG:  join order: [ "order_line" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "nation" ][ reference join "supplier" ][ dual partition join "stock" ]
  supp_nation | cust_nation | l_year | revenue
 ---------------------------------------------------------------------
            9 | C           |   2008 |    3.00
@@ -501,6 +512,7 @@ WHERE i_id = s_i_id
   AND i_id = ol_i_id
 GROUP BY extract(YEAR FROM o_entry_d)
 ORDER BY l_year;
+LOG:  join order: [ "order_line" ][ reference join "item" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "region" ][ dual partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
  l_year |       mkt_share
 ---------------------------------------------------------------------
    2008 | 0.50000000000000000000
@@ -533,6 +545,7 @@ GROUP BY
 ORDER BY
     n_name,
     l_year DESC;
+LOG:  join order: [ "order_line" ][ reference join "item" ][ local partition join "oorder" ][ dual partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
           n_name           | l_year | sum_profit
 ---------------------------------------------------------------------
  Germany                   |   2008 |       3.00
@@ -569,6 +582,7 @@ GROUP BY
     c_phone,
     n_name
 ORDER BY revenue DESC;
+LOG:  join order: [ "customer" ][ reference join "nation" ][ local partition join "oorder" ][ local partition join "order_line" ]
  c_id | c_last | revenue |  c_city   |     c_phone      |          n_name
 ---------------------------------------------------------------------
    10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia
@@ -606,6 +620,7 @@ HAVING sum(s_order_cnt) >
             AND su_nationkey = n_nationkey
             AND n_name = 'Germany')
 ORDER BY ordercount DESC;
+LOG:  join order: [ "stock" ][ reference join "supplier" ][ reference join "nation" ]
  s_i_id | ordercount
 ---------------------------------------------------------------------
       3 |          3
@@ -626,6 +641,7 @@ WHERE ol_w_id = o_w_id
   AND ol_delivery_d < '2020-01-01 00:00:00.000000'
 GROUP BY o_ol_cnt
 ORDER BY o_ol_cnt;
+LOG:  join order: [ "oorder" ][ local partition join "order_line" ]
  o_ol_cnt | high_line_count | low_line_count
 ---------------------------------------------------------------------
         1 |               2 |              9
@@ -664,6 +680,7 @@ FROM
 WHERE ol_i_id = i_id
   AND ol_delivery_d >= '2007-01-02 00:00:00.000000'
   AND ol_delivery_d < '2020-01-02 00:00:00.000000';
+LOG:  join order: [ "order_line" ][ reference join "item" ]
      promo_revenue
 ---------------------------------------------------------------------
  0.00000000000000000000
@@ -693,6 +710,7 @@ FROM
 WHERE su_suppkey = supplier_no
   AND total_revenue = (SELECT max(total_revenue) FROM revenue)
 ORDER BY su_suppkey;
+LOG:  join order: [ "order_line" ][ dual partition join "stock" ]
  su_suppkey |          su_name          | su_address |    su_phone     | total_revenue
 ---------------------------------------------------------------------
           9 | abc                       | def        | ghi             |          3.00
@@ -738,6 +756,7 @@ FROM
        AND ol_i_id = i_id
      GROUP BY i_id) t
 WHERE ol_i_id = t.i_id;
+LOG:  join order: [ "order_line" ][ reference join "item" ]
      avg_yearly
 ---------------------------------------------------------------------
  27.5000000000000000
@@ -775,6 +794,7 @@ HAVING sum(ol_amount) > 5 -- was 200, but thats too big for the dataset
 ORDER BY
     sum(ol_amount) DESC,
     o_entry_d;
+LOG:  join order: [ "customer" ][ local partition join "oorder" ][ local partition join "order_line" ]
  c_last | o_id |        o_entry_d         | o_ol_cnt |  sum
 ---------------------------------------------------------------------
  John   |   10 | Fri Oct 17 00:00:00 2008 |        1 | 10.00
@@ -808,6 +828,7 @@ WHERE (     ol_i_id = i_id
         AND ol_quantity <= 10
         AND i_price BETWEEN 1 AND 400000
         AND ol_w_id IN (1,5,3));
+LOG:  join order: [ "order_line" ][ reference join "item" ]
  revenue
 ---------------------------------------------------------------------
     7.00
@@ -837,6 +858,7 @@ WHERE su_suppkey in
   AND su_nationkey = n_nationkey
   AND n_name = 'Germany'
 ORDER BY su_name;
+LOG:  join order: [ "stock" ][ reference join "item" ][ dual partition join "order_line" ]
           su_name          | su_address
 ---------------------------------------------------------------------
  abc                       | def
@@ -895,9 +917,132 @@ WHERE substr(c_phone,1,1) in ('1','2','3','4','5','6','7')
                     AND o_d_id = c_d_id)
 GROUP BY substr(c_state,1,1)
 ORDER BY substr(c_state,1,1);
+LOG:  join order: [ "customer" ]
  country | numcust | totacctbal
 ---------------------------------------------------------------------
 (0 rows)
+
+-- There are some queries that have specific interactions with single repartition.
+-- Here we test Q7-Q9 with single repartition enabled
+SET citus.enable_single_hash_repartition_joins TO on;
+-- Query 7
+SELECT
+    su_nationkey as supp_nation,
+    substr(c_state,1,1) as cust_nation,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as revenue
+FROM
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2
+WHERE ol_supply_w_id = s_w_id
+  AND ol_i_id = s_i_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND su_nationkey = n1.n_nationkey
+  AND ascii(substr(c_state,1,1)) = n2.n_nationkey
+  AND (
+        (n1.n_name = 'Germany' AND n2.n_name = 'Cambodia')
+        OR (n1.n_name = 'Cambodia' AND n2.n_name = 'Germany')
+    )
+  AND ol_delivery_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+GROUP BY
+    su_nationkey,
+    substr(c_state,1,1),
+    extract(year from o_entry_d)
+ORDER BY
+    su_nationkey,
+    cust_nation,
+    l_year;
+LOG:  join order: [ "order_line" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "nation" ][ reference join "supplier" ][ single hash partition join "stock" ]
+ supp_nation | cust_nation | l_year | revenue
+---------------------------------------------------------------------
+           9 | C           |   2008 |    3.00
+(1 row)
+
+-- Query 8
+SELECT
+    extract(year from o_entry_d) as l_year,
+    sum(case when n2.n_name = 'Germany' then ol_amount else 0 end) / sum(ol_amount) as mkt_share
+FROM
+    item,
+    supplier,
+    stock,
+    order_line,
+    oorder,
+    customer,
+    nation n1,
+    nation n2,
+    region
+WHERE i_id = s_i_id
+  AND ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id),10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND c_id = o_c_id
+  AND c_w_id = o_w_id
+  AND c_d_id = o_d_id
+  AND n1.n_nationkey = ascii(substr(c_state,1,1))
+  AND n1.n_regionkey = r_regionkey
+  AND ol_i_id < 1000
+  AND r_name = 'Europe'
+  AND su_nationkey = n2.n_nationkey
+  AND o_entry_d BETWEEN '2007-01-02 00:00:00.000000' AND '2012-01-02 00:00:00.000000'
+  AND i_data LIKE '%b'
+  AND i_id = ol_i_id
+GROUP BY extract(YEAR FROM o_entry_d)
+ORDER BY l_year;
+LOG:  join order: [ "order_line" ][ reference join "item" ][ local partition join "oorder" ][ local partition join "customer" ][ reference join "nation" ][ reference join "region" ][ single hash partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
+ l_year |       mkt_share
+---------------------------------------------------------------------
+   2008 | 0.50000000000000000000
+(1 row)
+
+-- Query 9
+SELECT
+    n_name,
+    extract(year from o_entry_d) as l_year,
+    sum(ol_amount) as sum_profit
+FROM
+    item,
+    stock,
+    supplier,
+    order_line,
+    oorder,
+    nation
+WHERE ol_i_id = s_i_id
+  AND ol_supply_w_id = s_w_id
+  AND mod((s_w_id * s_i_id), 10000) = su_suppkey
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_o_id = o_id
+  AND ol_i_id = i_id
+  AND su_nationkey = n_nationkey
+  AND i_data LIKE '%b' -- this used to be %BB but that will not work with our small dataset
+GROUP BY
+    n_name,
+    extract(YEAR FROM o_entry_d)
+ORDER BY
+    n_name,
+    l_year DESC;
+LOG:  join order: [ "order_line" ][ reference join "item" ][ local partition join "oorder" ][ single hash partition join "stock" ][ reference join "supplier" ][ reference join "nation" ]
+          n_name           | l_year | sum_profit
+---------------------------------------------------------------------
+ Germany                   |   2008 |       3.00
+ The Netherlands           |   2008 |       2.00
+ United States             |   2008 |       1.00
+(3 rows)
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA chbenchmark_all_queries CASCADE;

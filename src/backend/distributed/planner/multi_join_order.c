@@ -82,7 +82,7 @@ static JoinOrderNode * CartesianProductReferenceJoin(JoinOrderNode *joinNode,
 													 JoinType joinType);
 static JoinOrderNode * LocalJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
 								 List *applicableJoinClauses, JoinType joinType);
-static bool JoinOnColumns(Var *currentPartitioncolumn, Var *candidatePartitionColumn,
+static bool JoinOnColumns(List *currentPartitionColumnList, Var *candidatePartitionColumn,
 						  List *joinClauseList);
 static JoinOrderNode * SinglePartitionJoin(JoinOrderNode *joinNode,
 										   TableEntry *candidateTable,
@@ -96,9 +96,9 @@ static JoinOrderNode * CartesianProduct(JoinOrderNode *joinNode,
 										TableEntry *candidateTable,
 										List *applicableJoinClauses,
 										JoinType joinType);
-static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType
-										 joinRuleType, Var *partitionColumn,
-										 char partitionMethod,
+static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry,
+										 JoinRuleType joinRuleType,
+										 List *partitionColumnList, char partitionMethod,
 										 TableEntry *anchorTable);
 
 
@@ -214,9 +214,10 @@ ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex)
  * JoinOnColumns determines whether two columns are joined by a given join clause list.
  */
 static bool
-JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
+JoinOnColumns(List *currentPartitionColumnList, Var *candidateColumn,
+			  List *joinClauseList)
 {
-	if (currentColumn == NULL || candidateColumn == NULL)
+	if (candidateColumn == NULL || list_length(currentPartitionColumnList) == 0)
 	{
 		/*
 		 * LocalJoin can only be happening if we have both a current column and a target
@@ -225,31 +226,35 @@ JoinOnColumns(Var *currentColumn, Var *candidateColumn, List *joinClauseList)
 		return false;
 	}
 
-	Node *joinClause = NULL;
-	foreach_ptr(joinClause, joinClauseList)
+	Var *currentColumn = NULL;
+	foreach_ptr(currentColumn, currentPartitionColumnList)
 	{
-		if (!NodeIsEqualsOpExpr(joinClause))
+		Node *joinClause = NULL;
+		foreach_ptr(joinClause, joinClauseList)
 		{
-			continue;
-		}
-		OpExpr *joinClauseOpExpr = castNode(OpExpr, joinClause);
-		Var *leftColumn = LeftColumnOrNULL(joinClauseOpExpr);
-		Var *rightColumn = RightColumnOrNULL(joinClauseOpExpr);
+			if (!NodeIsEqualsOpExpr(joinClause))
+			{
+				continue;
+			}
+			OpExpr *joinClauseOpExpr = castNode(OpExpr, joinClause);
+			Var *leftColumn = LeftColumnOrNULL(joinClauseOpExpr);
+			Var *rightColumn = RightColumnOrNULL(joinClauseOpExpr);
 
-		/*
-		 * Check if both join columns and both partition key columns match, since the
-		 * current and candidate column's can't be NULL we know they won't match if either
-		 * of the columns resolved to NULL above.
-		 */
-		if (equal(leftColumn, currentColumn) &&
-			equal(rightColumn, candidateColumn))
-		{
-			return true;
-		}
-		if (equal(leftColumn, candidateColumn) &&
-			equal(rightColumn, currentColumn))
-		{
-			return true;
+			/*
+			 * Check if both join columns and both partition key columns match, since the
+			 * current and candidate column's can't be NULL we know they won't match if either
+			 * of the columns resolved to NULL above.
+			 */
+			if (equal(leftColumn, currentColumn) &&
+				equal(rightColumn, candidateColumn))
+			{
+				return true;
+			}
+			if (equal(leftColumn, candidateColumn) &&
+				equal(rightColumn, currentColumn))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -343,7 +348,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
 	char firstPartitionMethod = PartitionMethod(firstRelationId);
 
 	JoinOrderNode *firstJoinNode = MakeJoinOrderNode(firstTable, firstJoinRule,
-													 firstPartitionColumn,
+													 list_make1(firstPartitionColumn),
 													 firstPartitionMethod,
 													 firstTable);
 
@@ -825,7 +830,7 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 	return MakeJoinOrderNode(candidateTable, REFERENCE_JOIN,
-							 currentJoinNode->partitionColumn,
+							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
 							 currentJoinNode->anchorTable);
 }
@@ -876,7 +881,7 @@ CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candid
 		return NULL;
 	}
 	return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT_REFERENCE_JOIN,
-							 currentJoinNode->partitionColumn,
+							 currentJoinNode->partitionColumnList,
 							 currentJoinNode->partitionMethod,
 							 currentJoinNode->anchorTable);
 }
@@ -901,7 +906,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
 	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
-	Var *currentPartitionColumn = currentJoinNode->partitionColumn;
+	List *currentPartitionColumnList = currentJoinNode->partitionColumnList;
 	char candidatePartitionMethod = PartitionMethod(relationId);
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
@@ -921,7 +926,7 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	bool joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
+	bool joinOnPartitionColumns = JoinOnColumns(currentPartitionColumnList,
 												candidatePartitionColumn,
 												applicableJoinClauses);
 	if (!joinOnPartitionColumns)
@@ -938,8 +943,17 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
+	/*
+	 * Since we are applying a local join to the candidate table we need to keep track of
+	 * the partition column of the candidate table on the MultiJoinNode. This will allow
+	 * subsequent joins colocated with this candidate table to correctly be recognized as
+	 * a local join as well.
+	 */
+	currentPartitionColumnList = list_append_unique(currentPartitionColumnList,
+													candidatePartitionColumn);
+
 	JoinOrderNode *nextJoinNode = MakeJoinOrderNode(candidateTable, LOCAL_PARTITION_JOIN,
-													currentPartitionColumn,
+													currentPartitionColumnList,
 													currentPartitionMethod,
 													currentAnchorTable);
 
@@ -959,7 +973,7 @@ static JoinOrderNode *
 SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 					List *applicableJoinClauses, JoinType joinType)
 {
-	Var *currentPartitionColumn = currentJoinNode->partitionColumn;
+	List *currentPartitionColumnList = currentJoinNode->partitionColumnList;
 	char currentPartitionMethod = currentJoinNode->partitionMethod;
 	TableEntry *currentAnchorTable = currentJoinNode->anchorTable;
 	JoinRuleType currentJoinRuleType = currentJoinNode->joinRuleType;
@@ -987,7 +1001,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	OpExpr *joinClause =
-		SinglePartitionJoinClause(currentPartitionColumn, applicableJoinClauses);
+		SinglePartitionJoinClause(currentPartitionColumnList, applicableJoinClauses);
 	if (joinClause != NULL)
 	{
 		if (currentPartitionMethod == DISTRIBUTE_BY_HASH)
@@ -1002,14 +1016,14 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 			}
 
 			return MakeJoinOrderNode(candidateTable, SINGLE_HASH_PARTITION_JOIN,
-									 currentPartitionColumn,
+									 currentPartitionColumnList,
 									 currentPartitionMethod,
 									 currentAnchorTable);
 		}
 		else
 		{
 			return MakeJoinOrderNode(candidateTable, SINGLE_RANGE_PARTITION_JOIN,
-									 currentPartitionColumn,
+									 currentPartitionColumnList,
 									 currentPartitionMethod,
 									 currentAnchorTable);
 		}
@@ -1018,7 +1032,13 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
 	if (candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
-		joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
+		/*
+		 * Create a new unique list (set) with the partition column of the candidate table
+		 * to check if a single repartition join will work for this table. When it works
+		 * the set is retained on the MultiJoinNode for later local join verification.
+		 */
+		List *candidatePartitionColumnList = list_make1(candidatePartitionColumn);
+		joinClause = SinglePartitionJoinClause(candidatePartitionColumnList,
 											   applicableJoinClauses);
 		if (joinClause != NULL)
 		{
@@ -1035,7 +1055,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 				return MakeJoinOrderNode(candidateTable,
 										 SINGLE_HASH_PARTITION_JOIN,
-										 candidatePartitionColumn,
+										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
 										 candidateTable);
 			}
@@ -1043,7 +1063,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 			{
 				return MakeJoinOrderNode(candidateTable,
 										 SINGLE_RANGE_PARTITION_JOIN,
-										 candidatePartitionColumn,
+										 candidatePartitionColumnList,
 										 candidatePartitionMethod,
 										 candidateTable);
 			}
@@ -1060,45 +1080,50 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
  * clause exists, the function returns NULL.
  */
 OpExpr *
-SinglePartitionJoinClause(Var *partitionColumn, List *applicableJoinClauses)
+SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses)
 {
-	if (partitionColumn == NULL)
+	if (list_length(partitionColumnList) == 0)
 	{
 		return NULL;
 	}
 
-	Node *applicableJoinClause = NULL;
-	foreach_ptr(applicableJoinClause, applicableJoinClauses)
+	Var *partitionColumn = NULL;
+	foreach_ptr(partitionColumn, partitionColumnList)
 	{
-		if (!NodeIsEqualsOpExpr(applicableJoinClause))
+		Node *applicableJoinClause = NULL;
+		foreach_ptr(applicableJoinClause, applicableJoinClauses)
 		{
-			continue;
-		}
-		OpExpr *applicableJoinOpExpr = castNode(OpExpr, applicableJoinClause);
-		Var *leftColumn = LeftColumnOrNULL(applicableJoinOpExpr);
-		Var *rightColumn = RightColumnOrNULL(applicableJoinOpExpr);
-		if (leftColumn == NULL || rightColumn == NULL)
-		{
-			/* not a simple partition column join */
-			continue;
-		}
-
-
-		/*
-		 * We first check if partition column matches either of the join columns
-		 * and if it does, we then check if the join column types match. If the
-		 * types are different, we will use different hash functions for the two
-		 * column types, and will incorrectly repartition the data.
-		 */
-		if (equal(leftColumn, partitionColumn) || equal(rightColumn, partitionColumn))
-		{
-			if (leftColumn->vartype == rightColumn->vartype)
+			if (!NodeIsEqualsOpExpr(applicableJoinClause))
 			{
-				return applicableJoinOpExpr;
+				continue;
 			}
-			else
+			OpExpr *applicableJoinOpExpr = castNode(OpExpr, applicableJoinClause);
+			Var *leftColumn = LeftColumnOrNULL(applicableJoinOpExpr);
+			Var *rightColumn = RightColumnOrNULL(applicableJoinOpExpr);
+			if (leftColumn == NULL || rightColumn == NULL)
 			{
-				ereport(DEBUG1, (errmsg("single partition column types do not match")));
+				/* not a simple partition column join */
+				continue;
+			}
+
+
+			/*
+			 * We first check if partition column matches either of the join columns
+			 * and if it does, we then check if the join column types match. If the
+			 * types are different, we will use different hash functions for the two
+			 * column types, and will incorrectly repartition the data.
+			 */
+			if (equal(leftColumn, partitionColumn) || equal(rightColumn, partitionColumn))
+			{
+				if (leftColumn->vartype == rightColumn->vartype)
+				{
+					return applicableJoinOpExpr;
+				}
+				else
+				{
+					ereport(DEBUG1, (errmsg("single partition column types do not "
+											"match")));
+				}
 			}
 		}
 	}
@@ -1124,7 +1149,7 @@ DualPartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		/* because of the dual partition, anchor table and partition column get lost */
 		return MakeJoinOrderNode(candidateTable,
 								 DUAL_PARTITION_JOIN,
-								 NULL,
+								 NIL,
 								 REDISTRIBUTE_BY_HASH,
 								 NULL);
 	}
@@ -1185,7 +1210,7 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	{
 		/* Because of the cartesian product, anchor table information got lost */
 		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,
-								 currentJoinNode->partitionColumn,
+								 currentJoinNode->partitionColumnList,
 								 currentJoinNode->partitionMethod,
 								 NULL);
 	}
@@ -1197,13 +1222,14 @@ CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 /* Constructs and returns a join-order node with the given arguments */
 JoinOrderNode *
 MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
-				  Var *partitionColumn, char partitionMethod, TableEntry *anchorTable)
+				  List *partitionColumnList, char partitionMethod,
+				  TableEntry *anchorTable)
 {
 	JoinOrderNode *joinOrderNode = palloc0(sizeof(JoinOrderNode));
 	joinOrderNode->tableEntry = tableEntry;
 	joinOrderNode->joinRuleType = joinRuleType;
 	joinOrderNode->joinType = JOIN_INNER;
-	joinOrderNode->partitionColumn = partitionColumn;
+	joinOrderNode->partitionColumnList = partitionColumnList;
 	joinOrderNode->partitionMethod = partitionMethod;
 	joinOrderNode->joinClauseList = NIL;
 	joinOrderNode->anchorTable = anchorTable;

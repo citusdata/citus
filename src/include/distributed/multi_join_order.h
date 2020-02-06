@@ -70,7 +70,13 @@ typedef struct JoinOrderNode
 	TableEntry *tableEntry;     /* this node's relation and range table id */
 	JoinRuleType joinRuleType;  /* not relevant for the first table */
 	JoinType joinType;          /* not relevant for the first table */
-	Var *partitionColumn;       /* not relevant for the first table */
+
+	/*
+	 * We keep track of all unique partition columns in the relation to correctly find
+	 * join clauses that can be applied locally.
+	 */
+	List *partitionColumnList;
+
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
 	TableEntry *anchorTable;
@@ -92,7 +98,7 @@ extern List * ApplicableJoinClauses(List *leftTableIdList, uint32 rightTableId,
 extern bool NodeIsEqualsOpExpr(Node *node);
 extern bool IsSupportedReferenceJoin(JoinType joinType, bool leftIsReferenceTable,
 									 bool rightIsReferenceTable);
-extern OpExpr * SinglePartitionJoinClause(Var *partitionColumn,
+extern OpExpr * SinglePartitionJoinClause(List *partitionColumnList,
 										  List *applicableJoinClauses);
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
 extern Var * LeftColumnOrNULL(OpExpr *joinClause);
