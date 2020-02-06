@@ -942,6 +942,12 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
+	/*
+	 * Since we are applying a local join to the candidate table we need to keep track of
+	 * the partition column of the candidate table on the MultiJoinNode. This will allow
+	 * subsequent joins colocated with this candidate table to correctly be recognized as
+	 * a local join as well.
+	 */
 	currentPartitionColumns = list_append_unique(currentPartitionColumns,
 												 candidatePartitionColumn);
 
@@ -1025,6 +1031,11 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
 	if (candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
+		/*
+		 * Create a new unique list (set) with the partition column of the candidate table
+		 * to check if a single repartition join will work for this table. When it works
+		 * the set is retained on the MultiJoinNode for later local join verification.
+		 */
 		List *candidatePartitionColumns = list_make1(candidatePartitionColumn);
 		joinClause = SinglePartitionJoinClause(candidatePartitionColumns,
 											   applicableJoinClauses);
