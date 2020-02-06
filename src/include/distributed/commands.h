@@ -37,8 +37,6 @@
  */
 typedef struct DistributeObjectOps
 {
-	NodeTag statementTag;
-	ObjectType subObjectType;
 	char * (*deparse)(Node *);
 	void (*qualify)(Node *);
 	List * (*preprocess)(Node *, const char *);
@@ -46,21 +44,78 @@ typedef struct DistributeObjectOps
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
 
+typedef struct DistributedObjectOpsContainer
+{
+	NodeTag type;
+
+	/*
+	 * Nested information is only set for statements that can operate on multiple
+	 * different objects like ALTER ... SET SCHEMA. The object type is encoded in a field
+	 * in the statement.
+	 *
+	 * bool nested
+	 *     signals this container describes a nested tyoe
+	 * size_t nestedOffset
+	 *     the offest of the ObjectType field within the statement
+	 * ObjectType nestedType
+	 *     the object type the DistributedObjectOps of this container operates on
+	 */
+	bool nested;
+	size_t nestedOffset;
+	ObjectType nestedType;
+
+	DistributeObjectOps *ops;
+} DistributedObjectOpsContainer;
+
 /* Marco for registering a DistributedObjectOps struct */
 /* works for mac */
-#define REGISTER_DISTRIBUTED_OPERATION(_ops) \
-	DistributeObjectOps *p_ ## _ops __attribute__((section("__DATA,dist_object_ops"))) = \
-		&_ops
+
+/*
+ * This is some crazy magic that helps produce __BASE__247
+ * Vanilla interpolation of __BASE__##__LINE__ would produce __BASE____LINE__
+ * I still can't figure out why it works, but it has to do with macro resolution ordering
+ */
+#define PP_CAT3(a, b, c) PP_CAT3_I(a, b, c)
+#define PP_CAT3_I(a, b, c) PP_CAT_II(~, a ## b ## c)
+#define PP_CAT(a, b) PP_CAT_I(a, b)
+#define PP_CAT_I(a, b) PP_CAT_II(~, a ## b)
+#define PP_CAT_II(p, res) res
+
+#define REGISTER_SECTION_POINTER(section_name, ptr) \
+	void *PP_CAT(section_name, __COUNTER__) \
+	__attribute__((section("__DATA," # section_name))) \
+		= ptr \
 
 #define SECTION_ARRAY(_type, _section) \
 	extern _type __start_ ## _section[] __asm("section$start$__DATA$" # _section); \
 	extern _type __stop_ ## _section[] __asm("section$end$__DATA$" # _section); \
 	_type *_section ## _array = __start_ ## _section;
 
-#define TESTMACRO(_section) "section$end$__DATA$" # _section
-
 #define SECTION_SIZE(sect) \
 	((size_t) ((__stop_ ## sect - __start_ ## sect)))
+
+#define REGISTER_DISTRIBUTED_OPERATION(stmt, opsvar) \
+	static DistributedObjectOpsContainer PP_CAT(opscontainer, opsvar) = { \
+		.type = T_ ## stmt, \
+		.ops = &opsvar, \
+	}; \
+	REGISTER_SECTION_POINTER(opscontainer, &PP_CAT(opscontainer, opsvar))
+
+#define REGISTER_DISTRIBUTED_OPERATION_NESTED(stmt, objectVarName, objtype, opsvar) \
+	static DistributedObjectOpsContainer PP_CAT3(opscontainer_, stmt, objtype) = { \
+		.type = T_ ## stmt, \
+		.nested = true, \
+		.nestedOffset = offsetof(stmt, objectVarName), \
+		.nestedType = objtype, \
+		.ops = &opsvar, \
+	}; \
+	REGISTER_SECTION_POINTER(opscontainer, &PP_CAT3(opscontainer_, stmt, objtype))
+
+#define REGISTER_DISTRIBUTED_OPERATION_NESTED_NEW(stmt, objectVarName, objtype) \
+	static DistributeObjectOps PP_CAT3(distops, stmt, objtype); \
+	REGISTER_DISTRIBUTED_OPERATION_NESTED(stmt, objectVarName, objtype, \
+										  PP_CAT3(distops, stmt, objtype)); \
+	static DistributeObjectOps PP_CAT3(distops, stmt, objtype) =
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
@@ -151,11 +206,6 @@ extern List * PreprocessAlterFunctionDependsStmt(Node *stmt,
 												 const char *queryString);
 extern ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
-
-
-/* grant.c - forward declarations */
-extern List * PreprocessGrantStmt(Node *node, const char *queryString);
-
 
 /* index.c - forward declarations */
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
