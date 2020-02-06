@@ -30,7 +30,7 @@ DeparseTreeNode(Node *stmt)
 
 	if (!ops->deparse)
 	{
-		ereport(ERROR, (errmsg("unsupported statement for deparsing")));
+		ereport(ERROR, (errmsg("unsupported statement for deparsing: %d", stmt->type)));
 	}
 
 	return ops->deparse(stmt);

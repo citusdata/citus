@@ -22,13 +22,18 @@ static DistributeObjectOps NoDistributeOps = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+
 static DistributeObjectOps Aggregate_AlterObjectSchema = {
+	.statementTag = T_AlterObjectSchemaStmt,
+	.subObjectType = OBJECT_AGGREGATE,
+
 	.deparse = DeparseAlterFunctionSchemaStmt,
 	.qualify = QualifyAlterFunctionSchemaStmt,
 	.preprocess = PreprocessAlterFunctionSchemaStmt,
 	.postprocess = PostprocessAlterFunctionSchemaStmt,
 	.address = AlterFunctionSchemaStmtObjectAddress,
 };
+
 static DistributeObjectOps Aggregate_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
 	.qualify = QualifyAlterFunctionOwnerStmt,
@@ -57,97 +62,150 @@ static DistributeObjectOps Aggregate_Rename = {
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
 };
+
 static DistributeObjectOps Any_AlterEnum = {
+	.statementTag = T_AlterEnumStmt,
+
 	.deparse = DeparseAlterEnumStmt,
 	.qualify = QualifyAlterEnumStmt,
 	.preprocess = PreprocessAlterEnumStmt,
 	.postprocess = PostprocessAlterEnumStmt,
 	.address = AlterEnumStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterEnum);
+
 static DistributeObjectOps Any_AlterExtension = {
+	.statementTag = T_AlterExtensionStmt,
+
 	.deparse = DeparseAlterExtensionStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterExtensionUpdateStmt,
 	.postprocess = NULL,
 	.address = AlterExtensionUpdateStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterExtension);
+
 static DistributeObjectOps Any_AlterExtensionContents = {
+	.statementTag = T_AlterExtensionContentsStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterExtensionContentsStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterExtensionContents);
+
 static DistributeObjectOps Any_AlterFunction = {
+	.statementTag = T_AlterFunctionStmt,
+
 	.deparse = DeparseAlterFunctionStmt,
 	.qualify = QualifyAlterFunctionStmt,
 	.preprocess = PreprocessAlterFunctionStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterFunction);
+
 static DistributeObjectOps Any_AlterPolicy = {
+	.statementTag = T_AlterPolicyStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterPolicyStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterPolicy);
+
 static DistributeObjectOps Any_AlterRole = {
+	.statementTag = T_AlterRoleStmt,
+
 	.deparse = DeparseAlterRoleStmt,
 	.qualify = NULL,
 	.preprocess = NULL,
 	.postprocess = PostprocessAlterRoleStmt,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterRole);
+
 static DistributeObjectOps Any_AlterTableMoveAll = {
+	.statementTag = T_AlterTableMoveAllStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterTableMoveAllStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_AlterTableMoveAll);
+
 static DistributeObjectOps Any_Cluster = {
+	.statementTag = T_ClusterStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessClusterStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_Cluster);
+
 static DistributeObjectOps Any_CompositeType = {
+	.statementTag = T_CompositeTypeStmt,
+
 	.deparse = DeparseCompositeTypeStmt,
 	.qualify = QualifyCompositeTypeStmt,
 	.preprocess = PreprocessCompositeTypeStmt,
 	.postprocess = PostprocessCompositeTypeStmt,
 	.address = CompositeTypeStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_CompositeType);
+
 static DistributeObjectOps Any_CreateEnum = {
+	.statementTag = T_CreateEnumStmt,
+
 	.deparse = DeparseCreateEnumStmt,
 	.qualify = QualifyCreateEnumStmt,
 	.preprocess = PreprocessCreateEnumStmt,
 	.postprocess = PostprocessCreateEnumStmt,
 	.address = CreateEnumStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_CreateEnum);
+
 static DistributeObjectOps Any_CreateExtension = {
+	.statementTag = T_CreateExtensionStmt,
+
 	.deparse = DeparseCreateExtensionStmt,
 	.qualify = NULL,
 	.preprocess = NULL,
 	.postprocess = PostprocessCreateExtensionStmt,
 	.address = CreateExtensionStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_CreateExtension);
+
 static DistributeObjectOps Any_CreateFunction = {
+	.statementTag = T_CreateFunctionStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessCreateFunctionStmt,
 	.postprocess = PostprocessCreateFunctionStmt,
 	.address = CreateFunctionStmtObjectAddress,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_CreateFunction);
+
 static DistributeObjectOps Any_CreatePolicy = {
+	.statementTag = T_CreatePolicyStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessCreatePolicyStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_CreatePolicy);
+
 static DistributeObjectOps Any_Grant = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -155,20 +213,29 @@ static DistributeObjectOps Any_Grant = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+
 static DistributeObjectOps Any_Index = {
+	.statementTag = T_IndexStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessIndexStmt,
 	.postprocess = PostprocessIndexStmt,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_Index);
+
 static DistributeObjectOps Any_Reindex = {
+	.statementTag = T_ReindexStmt,
+
 	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessReindexStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
+REGISTER_DISTRIBUTED_OPERATION(Any_Reindex);
+
 static DistributeObjectOps Any_Rename = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -436,6 +503,8 @@ static DistributeObjectOps Type_Rename = {
 	.address = RenameTypeStmtObjectAddress,
 };
 
+/* linker provided pointers */
+SECTION_ARRAY(DistributeObjectOps *, dist_object_ops);
 
 /*
  * GetDistributeObjectOps looks up the DistributeObjectOps which handles the node.
@@ -445,28 +514,20 @@ static DistributeObjectOps Type_Rename = {
 const DistributeObjectOps *
 GetDistributeObjectOps(Node *node)
 {
+	int i = 0;
+	size_t sz = SECTION_SIZE(dist_object_ops);
+	for (i = 0; i < sz; i++)
+	{
+		DistributeObjectOps *ops = dist_object_ops_array[i];
+		if (node->type == ops->statementTag)
+		{
+			return ops;
+		}
+	}
+
+	/* multi level statements */
 	switch (nodeTag(node))
 	{
-		case T_AlterEnumStmt:
-		{
-			return &Any_AlterEnum;
-		}
-
-		case T_AlterExtensionStmt:
-		{
-			return &Any_AlterExtension;
-		}
-
-		case T_AlterExtensionContentsStmt:
-		{
-			return &Any_AlterExtensionContents;
-		}
-
-		case T_AlterFunctionStmt:
-		{
-			return &Any_AlterFunction;
-		}
-
 		case T_AlterObjectDependsStmt:
 		{
 			AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -588,16 +649,6 @@ GetDistributeObjectOps(Node *node)
 			}
 		}
 
-		case T_AlterPolicyStmt:
-		{
-			return &Any_AlterPolicy;
-		}
-
-		case T_AlterRoleStmt:
-		{
-			return &Any_AlterRole;
-		}
-
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
@@ -628,41 +679,6 @@ GetDistributeObjectOps(Node *node)
 					return &NoDistributeOps;
 				}
 			}
-		}
-
-		case T_AlterTableMoveAllStmt:
-		{
-			return &Any_AlterTableMoveAll;
-		}
-
-		case T_ClusterStmt:
-		{
-			return &Any_Cluster;
-		}
-
-		case T_CompositeTypeStmt:
-		{
-			return &Any_CompositeType;
-		}
-
-		case T_CreateEnumStmt:
-		{
-			return &Any_CreateEnum;
-		}
-
-		case T_CreateExtensionStmt:
-		{
-			return &Any_CreateExtension;
-		}
-
-		case T_CreateFunctionStmt:
-		{
-			return &Any_CreateFunction;
-		}
-
-		case T_CreatePolicyStmt:
-		{
-			return &Any_CreatePolicy;
 		}
 
 		case T_DefineStmt:
@@ -769,16 +785,6 @@ GetDistributeObjectOps(Node *node)
 					return &Any_Grant;
 				}
 			}
-		}
-
-		case T_IndexStmt:
-		{
-			return &Any_Index;
-		}
-
-		case T_ReindexStmt:
-		{
-			return &Any_Reindex;
 		}
 
 		case T_RenameStmt:

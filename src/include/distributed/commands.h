@@ -37,12 +37,30 @@
  */
 typedef struct DistributeObjectOps
 {
+	NodeTag statementTag;
+	ObjectType subObjectType;
 	char * (*deparse)(Node *);
 	void (*qualify)(Node *);
 	List * (*preprocess)(Node *, const char *);
 	List * (*postprocess)(Node *, const char *);
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
+
+/* Marco for registering a DistributedObjectOps struct */
+/* works for mac */
+#define REGISTER_DISTRIBUTED_OPERATION(_ops) \
+	DistributeObjectOps *p_ ## _ops __attribute__((section("__DATA,dist_object_ops"))) = \
+		&_ops
+
+#define SECTION_ARRAY(_type, _section) \
+	extern _type __start_ ## _section[] __asm("section$start$__DATA$" # _section); \
+	extern _type __stop_ ## _section[] __asm("section$end$__DATA$" # _section); \
+	_type *_section ## _array = __start_ ## _section;
+
+#define TESTMACRO(_section) "section$end$__DATA$" # _section
+
+#define SECTION_SIZE(sect) \
+	((size_t) ((__stop_ ## sect - __start_ ## sect)))
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
