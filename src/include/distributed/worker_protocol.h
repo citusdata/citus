@@ -17,6 +17,7 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -138,7 +139,7 @@ extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionLi
 extern CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);
 extern DestReceiver * CreateFileDestReceiver(char *filePath,
 											 MemoryContext tupleContext,
-											 bool binaryCopyFormat);
+											 IntermediateResultFormat format);
 extern void FileDestReceiverStats(DestReceiver *dest,
 								  uint64 *rowsSent,
 								  uint64 *bytesSent);
