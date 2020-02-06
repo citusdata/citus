@@ -1627,7 +1627,7 @@ CheckAvailableVersion(int elevel)
 
 /*
  * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the
- * extension's current version from the pg_extemsion catalog table. If they
+ * extension's current version from the pg_extension catalog table. If they
  * are not compatible, this function logs an error with the specified elevel,
  * otherwise it returns true.
  */
@@ -1651,6 +1651,26 @@ CheckInstalledVersion(int elevel)
 	}
 
 	return true;
+}
+
+
+/*
+ * InstalledAndAvailableVersionsSame compares extension's available version and
+ * its current version from the pg_extension catalog table. If they are not same
+ * returns false, otherwise returns true.
+ */
+bool
+InstalledAndAvailableVersionsSame()
+{
+	char *installedVersion = InstalledExtensionVersion();
+	char *availableVersion = AvailableExtensionVersion();
+
+	if (strncmp(installedVersion, availableVersion, NAMEDATALEN) == 0)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -1904,7 +1924,7 @@ CitusCatalogNamespaceId(void)
 }
 
 
-/* return oid of pg_dist_shard relation */
+/* return oid of pg_dist_object relation */
 Oid
 DistObjectRelationId(void)
 {

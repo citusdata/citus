@@ -140,9 +140,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
-	bool checkCreateAlterExtensionVersion = IsCreateAlterExtensionUpdateCitusStmt(
+	bool isCreateAlterExtensionUpdateCitusStmt = IsCreateAlterExtensionUpdateCitusStmt(
 		parsetree);
-	if (EnableVersionChecks && checkCreateAlterExtensionVersion)
+	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
 	}
@@ -466,8 +466,33 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			activeDropSchemaOrDBs++;
 		}
 
+		/*
+		 * Check if we are running ALTER EXTENSION citus UPDATE (TO "<version>") command and
+		 * the available version is different than the current version of Citus. In this case,
+		 * ALTER EXTENSION citus UPDATE command can actually update Citus to a new version.
+		 */
+		bool isAlterExtensionUpdateCitusStmt = isCreateAlterExtensionUpdateCitusStmt &&
+											   IsA(parsetree, AlterExtensionStmt);
+
+		bool citusCanBeUpdatedToAvailableVersion = false;
+
+		if (isAlterExtensionUpdateCitusStmt)
+		{
+			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
+		}
+
 		standard_ProcessUtility(pstmt, queryString, context,
 								params, queryEnv, dest, completionTag);
+
+		/*
+		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
+		 * to mark existing objects as distributed depending on the "version" parameter if
+		 * specified in "ALTER EXTENSION citus UPDATE" command
+		 */
+		if (isAlterExtensionUpdateCitusStmt && citusCanBeUpdatedToAvailableVersion)
+		{
+			PostprocessAlterExtensionCitusUpdateStmt(parsetree);
+		}
 
 		/*
 		 * Postgres added the following CommandCounterIncrement as a patch in:

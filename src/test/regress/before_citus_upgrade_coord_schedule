@@ -1,3 +1,4 @@
 # this schedule is to be run on only coordinators
 
 test: upgrade_basic_before
+test: upgrade_pg_dist_object_test_before
