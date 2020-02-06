@@ -71,8 +71,7 @@ typedef struct RemoteFileDestReceiver
 	FileCompat fileCompat;
 
 	/* state on how to copy out data types */
-	CopyOutState copyOutState;
-	FmgrInfo *columnOutputFunctions;
+	StringInfo buffer;
 
 	/* number of tuples sent */
 	uint64 tuplesSent;
@@ -99,6 +98,9 @@ static uint64 FetchRemoteIntermediateResult(MultiConnection *connection, char *r
 static CopyStatus CopyDataFromConnection(MultiConnection *connection,
 										 FileCompat *fileCompat,
 										 uint64 *bytesReceived);
+static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
+								 bool datumTypeByValue, int datumTypeLength,
+								 char datumTypeAlign);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
@@ -234,28 +236,13 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	const char *resultId = resultDest->resultId;
 
-	const char *delimiterCharacter = "\t";
-	const char *nullPrintCharacter = "\\N";
-
 	List *initialNodeList = resultDest->initialNodeList;
 	ListCell *initialNodeCell = NULL;
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 
 	resultDest->tupleDescriptor = inputTupleDescriptor;
-
-	/* define how tuples will be serialised */
-	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
-	copyOutState->delim = (char *) delimiterCharacter;
-	copyOutState->null_print = (char *) nullPrintCharacter;
-	copyOutState->null_print_client = (char *) nullPrintCharacter;
-	copyOutState->binary = CanUseBinaryCopyFormat(inputTupleDescriptor);
-	copyOutState->fe_msgbuf = makeStringInfo();
-	copyOutState->rowcontext = GetPerTupleMemoryContext(resultDest->executorState);
-	resultDest->copyOutState = copyOutState;
-
-	resultDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
-															  copyOutState->binary);
+	resultDest->buffer = makeStringInfo();
 
 	if (resultDest->writeLocalFile)
 	{
@@ -325,19 +312,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		PQclear(result);
 	}
 
-	if (copyOutState->binary)
-	{
-		/* send headers when using binary encoding */
-		resetStringInfo(copyOutState->fe_msgbuf);
-		AppendCopyBinaryHeaders(copyOutState);
-		BroadcastCopyData(copyOutState->fe_msgbuf, connectionList);
-
-		if (resultDest->writeLocalFile)
-		{
-			WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
-		}
-	}
-
 	resultDest->connectionList = connectionList;
 }
 
@@ -371,10 +345,8 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	TupleDesc tupleDescriptor = resultDest->tupleDescriptor;
 
 	List *connectionList = resultDest->connectionList;
-	CopyOutState copyOutState = resultDest->copyOutState;
-	FmgrInfo *columnOutputFunctions = resultDest->columnOutputFunctions;
 
-	StringInfo copyData = copyOutState->fe_msgbuf;
+	StringInfo buffer = resultDest->buffer;
 
 	EState *executorState = resultDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -385,19 +357,56 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	resetStringInfo(copyData);
+	/* place holder for tuple size so we fill it later */
+	int sizePos = buffer->len;
+	int size = 0;
+	appendBinaryStringInfo(buffer, (char *) &size, sizeof(size));
 
-	/* construct row in COPY format */
-	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-					  copyOutState, columnOutputFunctions, NULL);
-
-	/* send row to nodes */
-	BroadcastCopyData(copyData, connectionList);
-
-	/* write to local file (if applicable) */
-	if (resultDest->writeLocalFile)
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts;)
 	{
-		WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
+		unsigned char bitarray = 0;
+		for (int bitIndex = 0; bitIndex < 8 && columnIndex < tupleDescriptor->natts;
+			 bitIndex++, columnIndex++)
+		{
+			if (columnNulls[columnIndex])
+			{
+				bitarray |= (1 << bitIndex);
+			}
+		}
+
+		appendBinaryStringInfo(buffer, (char *) &bitarray, 1);
+	}
+
+	/* serialize tuple ... */
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		if (columnNulls[columnIndex])
+		{
+			continue;
+		}
+
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
+		SerializeSingleDatum(buffer, columnValues[columnIndex],
+							 attributeForm->attbyval, attributeForm->attlen,
+							 attributeForm->attalign);
+	}
+
+	/* fill in the correct size */
+	size = buffer->len - sizePos - sizeof(size);
+	memcpy(buffer->data + sizePos, &size, sizeof(size));
+
+	if (buffer->len > 4096)
+	{
+		/* send row to nodes */
+		BroadcastCopyData(buffer, connectionList);
+
+		/* write to local file (if applicable) */
+		if (resultDest->writeLocalFile)
+		{
+			WriteToLocalFile(buffer, &resultDest->fileCompat);
+		}
+
+		resetStringInfo(buffer);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -438,19 +447,20 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
 
 	List *connectionList = resultDest->connectionList;
-	CopyOutState copyOutState = resultDest->copyOutState;
+	StringInfo buffer = resultDest->buffer;
 
-	if (copyOutState->binary)
+	if (buffer->len > 0)
 	{
-		/* send footers when using binary encoding */
-		resetStringInfo(copyOutState->fe_msgbuf);
-		AppendCopyBinaryFooters(copyOutState);
-		BroadcastCopyData(copyOutState->fe_msgbuf, connectionList);
+		/* send row to nodes */
+		BroadcastCopyData(buffer, connectionList);
 
+		/* write to local file (if applicable) */
 		if (resultDest->writeLocalFile)
 		{
-			WriteToLocalFile(copyOutState->fe_msgbuf, &resultDest->fileCompat);
+			WriteToLocalFile(buffer, &resultDest->fileCompat);
 		}
+
+		resetStringInfo(buffer);
 	}
 
 	/* close the COPY input */
@@ -500,16 +510,6 @@ static void
 RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
-
-	if (resultDest->copyOutState)
-	{
-		pfree(resultDest->copyOutState);
-	}
-
-	if (resultDest->columnOutputFunctions)
-	{
-		pfree(resultDest->columnOutputFunctions);
-	}
 
 	pfree(resultDest);
 }
@@ -1007,4 +1007,43 @@ CopyDataFromConnection(MultiConnection *connection, FileCompat *fileCompat,
 
 		return CLIENT_COPY_FAILED;
 	}
+}
+
+
+/*
+ * SerializeSingleDatum serializes the given datum value and appends it to the
+ * provided string info buffer.
+ *
+ * (taken from cstore_fdw)
+ */
+static void
+SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
+					 int datumTypeLength, char datumTypeAlign)
+{
+	uint32 datumLength = att_addlength_datum(0, datumTypeLength, datum);
+	uint32 datumLengthAligned = att_align_nominal(datumLength, datumTypeAlign);
+
+	enlargeStringInfo(datumBuffer, datumBuffer->len + datumLengthAligned + 1);
+
+	char *currentDatumDataPointer = datumBuffer->data + datumBuffer->len;
+	memset(currentDatumDataPointer, 0, datumLengthAligned);
+
+	if (datumTypeLength > 0)
+	{
+		if (datumTypeByValue)
+		{
+			store_att_byval(currentDatumDataPointer, datum, datumTypeLength);
+		}
+		else
+		{
+			memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumTypeLength);
+		}
+	}
+	else
+	{
+		Assert(!datumTypeByValue);
+		memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumLength);
+	}
+
+	datumBuffer->len += datumLengthAligned;
 }

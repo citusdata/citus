@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "miscadmin.h"
+#include "pgstat.h"
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
@@ -30,6 +31,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
+#include "distributed/transmit.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
@@ -66,7 +68,6 @@ int ExecutorLevel = 0;
 
 
 /* local function forward declarations */
-static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
 
@@ -273,48 +274,75 @@ void
 ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescriptor,
 					   Tuplestorestate *tupstore)
 {
-	/*
-	 * Trick BeginCopyFrom into using our tuple descriptor by pretending it belongs
-	 * to a relation.
-	 */
-	Relation stubRelation = StubRelation(tupleDescriptor);
-
 	EState *executorState = CreateExecutorState();
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
-	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
 
 	int columnCount = tupleDescriptor->natts;
 	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
 	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
-	List *copyOptions = NIL;
+	const int fileFlags = (O_RDONLY | PG_BINARY);
+	const int fileMode = 0;
+	StringInfo buffer = makeStringInfo();
 
-	int location = -1; /* "unknown" token location */
-	DefElem *copyOption = makeDefElem("format", (Node *) makeString(copyFormat),
-									  location);
-	copyOptions = lappend(copyOptions, copyOption);
+	/* we currently do not check if the caller has permissions for this file */
+	File fileDesc = FileOpenForTransmit(fileName, fileFlags, fileMode);
+	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
 
-	CopyState copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-										NULL, copyOptions);
+	int tupleSize = 0;
 
-	while (true)
+	while (FileReadCompat(&fileCompat, (char *) &tupleSize, sizeof(tupleSize),
+						  PG_WAIT_IO) == sizeof(tupleSize))
 	{
 		ResetPerTupleExprContext(executorState);
 		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-											   columnValues, columnNulls);
-		if (!nextRowFound)
+		enlargeStringInfo(buffer, tupleSize);
+		FileReadCompat(&fileCompat, buffer->data, tupleSize, PG_WAIT_IO);
+		uint32 currentDatumDataOffset = 0;
+
+		for (int columnIndex = 0; columnIndex < tupleDescriptor->natts;)
 		{
-			MemoryContextSwitchTo(oldContext);
-			break;
+			unsigned char bitarray = buffer->data[currentDatumDataOffset++];
+			for (int bitIndex = 0; bitIndex < 8 && columnIndex < tupleDescriptor->natts;
+				 bitIndex++, columnIndex++)
+			{
+				if (bitarray && (1 << bitIndex))
+				{
+					columnNulls[columnIndex] = true;
+				}
+				else
+				{
+					columnNulls[columnIndex] = false;
+				}
+			}
+		}
+
+		for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+		{
+			if (columnNulls[columnIndex])
+			{
+				continue;
+			}
+
+			Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
+			char *currentDatumDataPointer = buffer->data + currentDatumDataOffset;
+
+			columnValues[columnIndex] = fetch_att(currentDatumDataPointer,
+												  attributeForm->attbyval,
+												  attributeForm->attlen);
+
+			currentDatumDataOffset = att_addlength_datum(currentDatumDataOffset,
+														 attributeForm->attlen,
+														 currentDatumDataPointer);
+			currentDatumDataOffset = att_align_nominal(currentDatumDataOffset,
+													   attributeForm->attalign);
 		}
 
 		tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
 		MemoryContextSwitchTo(oldContext);
 	}
 
-	EndCopyFrom(copyState);
 	pfree(columnValues);
 	pfree(columnNulls);
 }
@@ -416,24 +444,6 @@ SortTupleStore(CitusScanState *scanState)
 
 	/* terminate the sort, clear unnecessary resources */
 	tuplesort_end(tuplesortstate);
-}
-
-
-/*
- * StubRelation creates a stub Relation from the given tuple descriptor.
- * To be able to use copy.c, we need a Relation descriptor. As there is no
- * relation corresponding to the data loaded from workers, we need to fake one.
- * We just need the bare minimal set of fields accessed by BeginCopyFrom().
- */
-static Relation
-StubRelation(TupleDesc tupleDescriptor)
-{
-	Relation stubRelation = palloc0(sizeof(RelationData));
-	stubRelation->rd_att = tupleDescriptor;
-	stubRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
-	stubRelation->rd_rel->relkind = RELKIND_RELATION;
-
-	return stubRelation;
 }
 
 
