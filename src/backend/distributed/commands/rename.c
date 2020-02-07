@@ -154,30 +154,3 @@ ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
 							   "currently unsupported")));
 	}
 }
-
-
-/*
- * PreprocessRenameAttributeStmt called for RenameStmt's that are targetting an attribute eg.
- * type attributes. Based on the relation type the attribute gets renamed it dispatches to
- * a specialized implementation if present, otherwise return an empty list for its DDLJobs
- */
-List *
-PreprocessRenameAttributeStmt(Node *node, const char *queryString)
-{
-	RenameStmt *stmt = castNode(RenameStmt, node);
-	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
-
-	switch (stmt->relationType)
-	{
-		case OBJECT_TYPE:
-		{
-			return PreprocessRenameTypeAttributeStmt(node, queryString);
-		}
-
-		default:
-		{
-			/* unsupported relation for attribute rename, do nothing */
-			return NIL;
-		}
-	}
-}

@@ -44,26 +44,16 @@ typedef struct DistributeObjectOps
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
 
+typedef struct DistributedObjectOpsContainerNestedInfo
+{
+	size_t offset;
+	ObjectType type;
+} DistributedObjectOpsContainerNestedInfo;
+
 typedef struct DistributedObjectOpsContainer
 {
 	NodeTag type;
-
-	/*
-	 * Nested information is only set for statements that can operate on multiple
-	 * different objects like ALTER ... SET SCHEMA. The object type is encoded in a field
-	 * in the statement.
-	 *
-	 * bool nested
-	 *     signals this container describes a nested tyoe
-	 * size_t nestedOffset
-	 *     the offest of the ObjectType field within the statement
-	 * ObjectType nestedType
-	 *     the object type the DistributedObjectOps of this container operates on
-	 */
-	bool nested;
-	size_t nestedOffset;
-	ObjectType nestedType;
-
+	DistributedObjectOpsContainerNestedInfo *nestedInfo;
 	DistributeObjectOps *ops;
 } DistributedObjectOpsContainer;
 
@@ -97,18 +87,36 @@ typedef struct DistributedObjectOpsContainer
 	((size_t) ((__stop_ ## sect - __start_ ## sect)))
 
 #define REGISTER_DISTRIBUTED_OPERATION(stmt, opsvar) \
-	static DistributedObjectOpsContainer PP_CAT(opscontainer, opsvar) = { \
+	static DistributedObjectOpsContainer PP_CAT(opscontainer_, stmt) = { \
 		.type = T_ ## stmt, \
 		.ops = &opsvar, \
 	}; \
-	REGISTER_SECTION_POINTER(opscontainer, PP_CAT(opscontainer, opsvar))
+	REGISTER_SECTION_POINTER(opscontainer, PP_CAT(opscontainer_, stmt))
 
 #define REGISTER_DISTRIBUTED_OPERATION_NESTED(stmt, objectVarName, objtype, opsvar) \
+	static DistributedObjectOpsContainerNestedInfo \
+	PP_CAT3(opscontainer_info, stmt, objtype)[] = { \
+		{ offsetof(stmt, objectVarName), objtype }, \
+		{ 0 } \
+	}; \
 	static DistributedObjectOpsContainer PP_CAT3(opscontainer_, stmt, objtype) = { \
 		.type = T_ ## stmt, \
-		.nested = true, \
-		.nestedOffset = offsetof(stmt, objectVarName), \
-		.nestedType = objtype, \
+		.nestedInfo = &PP_CAT3(opscontainer_info, stmt, objtype)[0], \
+		.ops = &opsvar, \
+	}; \
+	REGISTER_SECTION_POINTER(opscontainer, PP_CAT3(opscontainer_, stmt, objtype))
+
+#define REGISTER_DISTRIBUTED_OPERATION_NESTED2(stmt, objectVarName1, objtype1, \
+											   objectVarName2, objtype2, opsvar) \
+	static DistributedObjectOpsContainerNestedInfo \
+	PP_CAT3(opscontainer_info, stmt, objtype)[] = { \
+		{ offsetof(stmt, objectVarName1), objtype1 }, \
+		{ offsetof(stmt, objectVarName2), objtype2 }, \
+		{ 0 } \
+	}; \
+	static DistributedObjectOpsContainer PP_CAT3(opscontainer_, stmt, objtype) = { \
+		.type = T_ ## stmt, \
+		.nestedInfo = &PP_CAT3(opscontainer_info, stmt, objtype)[0], \
 		.ops = &opsvar, \
 	}; \
 	REGISTER_SECTION_POINTER(opscontainer, PP_CAT3(opscontainer_, stmt, objtype))
@@ -178,7 +186,6 @@ extern void DropPolicyEventExtendNames(DropStmt *stmt, const char *schemaName, u
 
 /* rename.c - forward declarations*/
 extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
-extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString);
 
 
 /* role.c - forward declarations*/
@@ -214,11 +221,8 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 extern void PostprocessTruncateStatement(TruncateStmt *truncateStatement);
 
 /* type.c - forward declarations */
-extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryString);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
 
-extern ObjectAddress RenameTypeAttributeStmtObjectAddress(Node *stmt,
-														  bool missing_ok);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
 

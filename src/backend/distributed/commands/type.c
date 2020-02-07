@@ -158,6 +158,18 @@ static DistributeObjectOps Type_Rename = {
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TYPE, Type_Rename);
 
+static List * PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString);
+static ObjectAddress RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Type_Rename_Attribute = {
+	.deparse = DeparseRenameAttributeStmt,
+	.qualify = QualifyRenameAttributeStmt,
+	.preprocess = PreprocessRenameTypeAttributeStmt,
+	.postprocess = NULL,
+	.address = RenameTypeAttributeStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED2(RenameStmt, renameType, OBJECT_ATTRIBUTE,
+									   relationType, OBJECT_TYPE, Type_Rename_Attribute);
+
 static List * PreprocessCompositeTypeStmt(Node *node, const char *queryString);
 static List * PostprocessCompositeTypeStmt(Node *node, const char *queryString);
 static ObjectAddress CompositeTypeStmtObjectAddress(Node *node, bool missing_ok);
@@ -638,7 +650,7 @@ PreprocessRenameTypeStmt(Node *node, const char *queryString)
  * For distributed types we apply the attribute renames directly on all the workers to
  * keep the type in sync across the cluster.
  */
-List *
+static List *
 PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -1075,7 +1087,7 @@ AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * changed as Attributes are not distributed on their own but as a side effect of the
  * whole type distribution.
  */
-ObjectAddress
+static ObjectAddress
 RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);

@@ -15,6 +15,10 @@
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 
+static bool MatchOnAllNestedObjectTypes(Node *node,
+										DistributedObjectOpsContainerNestedInfo *
+										nestedInfo);
+
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -22,17 +26,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.postprocess = NULL,
 	.address = NULL,
 };
-
-/* TODO this is a 2 level nested statement which we do not currently support */
-static DistributeObjectOps Attribute_Rename = {
-	.deparse = DeparseRenameAttributeStmt,
-	.qualify = QualifyRenameAttributeStmt,
-	.preprocess = PreprocessRenameAttributeStmt,
-	.postprocess = NULL,
-	.address = RenameAttributeStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_ATTRIBUTE,
-									  Attribute_Rename);
 
 /* linker provided pointers */
 SECTION_ARRAY(DistributedObjectOpsContainer *, opscontainer);
@@ -50,20 +43,9 @@ GetDistributeObjectOps(Node *node)
 	for (i = 0; i < sz; i++)
 	{
 		DistributedObjectOpsContainer *container = opscontainer_array[i];
-		if (node->type == container->type)
+		if (node->type == container->type &&
+			MatchOnAllNestedObjectTypes(node, container->nestedInfo))
 		{
-			if (container->nested)
-			{
-				/* nested types are not perse a match */
-				ObjectType nestedType = *((ObjectType *) (((char *) node) +
-														  container->nestedOffset));
-				if (container->nestedType != nestedType)
-				{
-					/* nested types do not match, skip this entry */
-					continue;
-				}
-			}
-
 			/* this DistributedObjectOps is a match for the current statement */
 			return container->ops;
 		}
@@ -71,4 +53,32 @@ GetDistributeObjectOps(Node *node)
 
 	/* no DistributedObjectOps linked for this statement type */
 	return &NoDistributeOps;
+}
+
+
+static bool
+MatchOnAllNestedObjectTypes(Node *node,
+							DistributedObjectOpsContainerNestedInfo *nestedInfo)
+{
+	if (nestedInfo == NULL)
+	{
+		/* No nested information, matching by convention  */
+		return true;
+	}
+
+	/*
+	 * Iterate till you find the last entry { 0 }. For convenience it is the only one with
+	 * offset 0
+	 */
+	for (; nestedInfo->offset != 0; ++nestedInfo)
+	{
+		ObjectType nestedType = *((ObjectType *) (((char *) node) + nestedInfo->offset));
+		if (nestedInfo->type != nestedType)
+		{
+			/* nested object type is not matching*/
+			return false;
+		}
+	}
+
+	return true;
 }

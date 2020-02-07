@@ -76,7 +76,6 @@ extern void QualifyAlterTypeSchemaStmt(Node *stmt);
 extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
-extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
 
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(Node *stmt);

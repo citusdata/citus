@@ -37,28 +37,6 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 }
 
 
-ObjectAddress
-RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
-{
-	RenameStmt *stmt = castNode(RenameStmt, node);
-	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
-
-	switch (stmt->relationType)
-	{
-		case OBJECT_TYPE:
-		{
-			return RenameTypeAttributeStmtObjectAddress(node, missing_ok);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("unsupported alter rename attribute statement to get "
-								   "object address for")));
-		}
-	}
-}
-
-
 /*
  * AlterExtensionStmtObjectAddress finds the ObjectAddress for the extension described
  * by the AlterExtensionStmt. If missing_ok is false, then this function throws an
