@@ -23,15 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_AlterPolicy = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterPolicyStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterPolicyStmt, Any_AlterPolicy);
-
 static DistributeObjectOps Any_AlterRole = {
 	.deparse = DeparseAlterRoleStmt,
 	.qualify = NULL,
@@ -58,15 +49,6 @@ static DistributeObjectOps Any_Cluster = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
-
-static DistributeObjectOps Any_CreatePolicy = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessCreatePolicyStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(CreatePolicyStmt, Any_CreatePolicy);
 
 static DistributeObjectOps Any_Index = {
 	.deparse = NULL,
@@ -190,15 +172,6 @@ static DistributeObjectOps Index_Drop = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_INDEX, Index_Drop);
-
-static DistributeObjectOps Policy_Drop = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessDropPolicyStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_POLICY, Policy_Drop);
 
 static DistributeObjectOps Schema_Drop = {
 	.deparse = NULL,

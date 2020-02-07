@@ -16,6 +16,36 @@
 #include "distributed/metadata_cache.h"
 #include "utils/builtins.h"
 
+/* DistributeObjectOps */
+static List * PreprocessCreatePolicyStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_CreatePolicy = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessCreatePolicyStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(CreatePolicyStmt, Any_CreatePolicy);
+
+static List * PreprocessAlterPolicyStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_AlterPolicy = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterPolicyStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterPolicyStmt, Any_AlterPolicy);
+
+static List * PreprocessDropPolicyStmt(Node *node, const char *queryString);
+static DistributeObjectOps Policy_Drop = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessDropPolicyStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_POLICY, Policy_Drop);
 
 /* placeholder for CreatePolicyCommands */
 List *
@@ -27,7 +57,7 @@ CreatePolicyCommands(Oid relationId)
 
 
 /* placeholder for PreprocessCreatePolicyStmt */
-List *
+static List *
 PreprocessCreatePolicyStmt(Node *node, const char *queryString)
 {
 	CreatePolicyStmt *stmt = castNode(CreatePolicyStmt, node);
@@ -47,7 +77,7 @@ PreprocessCreatePolicyStmt(Node *node, const char *queryString)
 
 
 /* placeholder for PreprocessAlterPolicyStmt */
-List *
+static List *
 PreprocessAlterPolicyStmt(Node *node, const char *queryString)
 {
 	/* placeholder for future implementation */
@@ -78,7 +108,7 @@ ErrorIfUnsupportedPolicyExpr(Node *expr)
 
 
 /* placeholder for PreprocessDropPolicyStmt */
-List *
+static List *
 PreprocessDropPolicyStmt(Node *node, const char *queryString)
 {
 	/* placeholder for future implementation */
