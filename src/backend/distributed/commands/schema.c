@@ -36,11 +36,33 @@
 static List * FilterDistributedSchemas(List *schemas);
 
 
+/* DistributeObjectOps */
+static List * PreprocessDropSchemaStmt(Node *node, const char *queryString);
+static DistributeObjectOps Schema_Drop = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessDropSchemaStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_SCHEMA, Schema_Drop);
+
+static List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString);
+static DistributeObjectOps Schema_Grant = {
+	.deparse = DeparseGrantOnSchemaStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessGrantOnSchemaStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(GrantStmt, objtype, OBJECT_SCHEMA, Schema_Grant);
+
+
 /*
  * PreprocessDropSchemaStmt invalidates the foreign key cache if any table created
  * under dropped schema involved in any foreign key relationship.
  */
-List *
+static List *
 PreprocessDropSchemaStmt(Node *node, const char *queryString)
 {
 	DropStmt *dropStatement = castNode(DropStmt, node);
@@ -119,7 +141,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
  * In this stage we can prepare the commands that need to be run on all workers to grant
  * on schemas. Only grant statements for distributed schema are propagated.
  */
-List *
+static List *
 PreprocessGrantOnSchemaStmt(Node *node, const char *queryString)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);

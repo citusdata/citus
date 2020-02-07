@@ -99,24 +99,6 @@ static DistributeObjectOps Collation_Rename = {
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
 									  Collation_Rename);
 
-static DistributeObjectOps Schema_Drop = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessDropSchemaStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_SCHEMA, Schema_Drop);
-
-static DistributeObjectOps Schema_Grant = {
-	.deparse = DeparseGrantOnSchemaStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessGrantOnSchemaStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(GrantStmt, objtype, OBJECT_SCHEMA, Schema_Grant);
-
 /* linker provided pointers */
 SECTION_ARRAY(DistributedObjectOpsContainer *, opscontainer);
 

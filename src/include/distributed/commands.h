@@ -197,14 +197,6 @@ extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString)
 extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
 
 
-/* schema.c - forward declarations */
-extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
-									   const char *queryString);
-extern List * PreprocessAlterObjectSchemaStmt(Node *alterObjectSchemaStmt,
-											  const char *alterObjectSchemaCommand);
-extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString);
-
-
 /* sequence.c - forward declarations */
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
