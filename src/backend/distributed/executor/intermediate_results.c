@@ -53,9 +53,6 @@ typedef struct RemoteFileDestReceiver
 
 	char *resultId;
 
-	/* descriptor of the tuples that are sent to the worker */
-	TupleDesc tupleDescriptor;
-
 	/* EState for per-tuple memory allocation */
 	EState *executorState;
 
@@ -71,7 +68,7 @@ typedef struct RemoteFileDestReceiver
 	FileCompat fileCompat;
 
 	/* state on how to copy out data types */
-	StringInfo buffer;
+	IntermediateResultEncoder *encoder;
 
 	/* number of tuples sent */
 	uint64 tuplesSent;
@@ -91,16 +88,15 @@ static void RemoteFileDestReceiverDestroy(DestReceiver *destReceiver);
 
 static char * IntermediateResultsDirectory(void);
 static void ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
-												  char *copyFormat,
+												  IntermediateResultFormat format,
 												  Datum *resultIdArray,
 												  int resultCount);
 static uint64 FetchRemoteIntermediateResult(MultiConnection *connection, char *resultId);
 static CopyStatus CopyDataFromConnection(MultiConnection *connection,
 										 FileCompat *fileCompat,
 										 uint64 *bytesReceived);
-static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
-								 bool datumTypeByValue, int datumTypeLength,
-								 char datumTypeAlign);
+static IntermediateResultFormat ParseIntermediateResultFormatLabel(char *formatString);
+
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(read_intermediate_result);
@@ -241,8 +237,8 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 
-	resultDest->tupleDescriptor = inputTupleDescriptor;
-	resultDest->buffer = makeStringInfo();
+	resultDest->encoder = IntermediateResultEncoderCreate(inputTupleDescriptor,
+														  TUPLE_DUMP_FORMAT);
 
 	if (resultDest->writeLocalFile)
 	{
@@ -342,11 +338,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) dest;
 
-	TupleDesc tupleDescriptor = resultDest->tupleDescriptor;
-
 	List *connectionList = resultDest->connectionList;
-
-	StringInfo buffer = resultDest->buffer;
 
 	EState *executorState = resultDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -357,44 +349,9 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	/* place holder for tuple size so we fill it later */
-	int sizePos = buffer->len;
-	int size = 0;
-	appendBinaryStringInfo(buffer, (char *) &size, sizeof(size));
+	IntermediateResultEncoderReceive(resultDest->encoder, columnValues, columnNulls);
 
-	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts;)
-	{
-		unsigned char bitarray = 0;
-		for (int bitIndex = 0; bitIndex < 8 && columnIndex < tupleDescriptor->natts;
-			 bitIndex++, columnIndex++)
-		{
-			if (columnNulls[columnIndex])
-			{
-				bitarray |= (1 << bitIndex);
-			}
-		}
-
-		appendBinaryStringInfo(buffer, (char *) &bitarray, 1);
-	}
-
-	/* serialize tuple ... */
-	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
-	{
-		if (columnNulls[columnIndex])
-		{
-			continue;
-		}
-
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
-		SerializeSingleDatum(buffer, columnValues[columnIndex],
-							 attributeForm->attbyval, attributeForm->attlen,
-							 attributeForm->attalign);
-	}
-
-	/* fill in the correct size */
-	size = buffer->len - sizePos - sizeof(size);
-	memcpy(buffer->data + sizePos, &size, sizeof(size));
-
+	StringInfo buffer = resultDest->encoder->outputBuffer;
 	if (buffer->len > 8192)
 	{
 		/* send row to nodes */
@@ -445,10 +402,11 @@ static void
 RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
-
 	List *connectionList = resultDest->connectionList;
-	StringInfo buffer = resultDest->buffer;
 
+	IntermediateResultEncoderDone(resultDest->encoder);
+
+	StringInfo buffer = resultDest->encoder->outputBuffer;
 	if (buffer->len > 0)
 	{
 		/* send row to nodes */
@@ -713,13 +671,14 @@ Datum
 read_intermediate_result(PG_FUNCTION_ARGS)
 {
 	Datum resultId = PG_GETARG_DATUM(0);
-	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
-	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
-	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
+	Datum formatOidDatum = PG_GETARG_DATUM(1);
+	Datum formatLabelDatum = DirectFunctionCall1(enum_out, formatOidDatum);
+	char *formatLabel = DatumGetCString(formatLabelDatum);
+	IntermediateResultFormat format = ParseIntermediateResultFormatLabel(formatLabel);
 
 	CheckCitusVersion(ERROR);
 
-	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel, &resultId, 1);
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, format, &resultId, 1);
 
 	PG_RETURN_DATUM(0);
 }
@@ -738,8 +697,9 @@ read_intermediate_result_array(PG_FUNCTION_ARGS)
 	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
 
-	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
-	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
+	Datum formatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
+	char *formatLabel = DatumGetCString(formatLabelDatum);
+	IntermediateResultFormat format = ParseIntermediateResultFormatLabel(formatLabel);
 
 	CheckCitusVersion(ERROR);
 
@@ -747,7 +707,7 @@ read_intermediate_result_array(PG_FUNCTION_ARGS)
 										   resultIdObject));
 	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
 
-	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel,
+	ReadIntermediateResultsIntoFuncOutput(fcinfo, format,
 										  resultIdArray, resultCount);
 
 	PG_RETURN_DATUM(0);
@@ -760,7 +720,8 @@ read_intermediate_result_array(PG_FUNCTION_ARGS)
  * don't exist.
  */
 static void
-ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
+ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo,
+									  IntermediateResultFormat format,
 									  Datum *resultIdArray, int resultCount)
 {
 	TupleDesc tupleDescriptor = NULL;
@@ -779,7 +740,7 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 							errmsg("result \"%s\" does not exist", resultId)));
 		}
 
-		ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor, tupleStore);
+		ReadFileIntoTupleStore(resultFileName, format, tupleDescriptor, tupleStore);
 	}
 
 	tuplestore_donestoring(tupleStore);
@@ -1010,39 +971,23 @@ CopyDataFromConnection(MultiConnection *connection, FileCompat *fileCompat,
 }
 
 
-/*
- * SerializeSingleDatum serializes the given datum value and appends it to the
- * provided string info buffer.
- *
- * (taken from cstore_fdw)
- */
-static void
-SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
-					 int datumTypeLength, char datumTypeAlign)
+static IntermediateResultFormat
+ParseIntermediateResultFormatLabel(char *formatString)
 {
-	uint32 datumLength = att_addlength_datum(0, datumTypeLength, datum);
-	uint32 datumLengthAligned = att_align_nominal(datumLength, datumTypeAlign);
-
-	enlargeStringInfo(datumBuffer, datumBuffer->len + datumLengthAligned + 1);
-
-	char *currentDatumDataPointer = datumBuffer->data + datumBuffer->len;
-
-	if (datumTypeLength > 0)
+	if (strncmp(formatString, "text", NAMEDATALEN) == 0 ||
+		strncmp(formatString, "csv", NAMEDATALEN) == 0)
 	{
-		if (datumTypeByValue)
-		{
-			store_att_byval(currentDatumDataPointer, datum, datumTypeLength);
-		}
-		else
-		{
-			memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumTypeLength);
-		}
+		return TEXT_COPY_FORMAT;
 	}
-	else
+	else if (strncmp(formatString, "binary", NAMEDATALEN) == 0)
 	{
-		Assert(!datumTypeByValue);
-		memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumLength);
+		return BINARY_COPY_FORMAT;
+	}
+	else if (strncmp(formatString, "datum", NAMEDATALEN) == 0)
+	{
+		return TUPLE_DUMP_FORMAT;
 	}
 
-	datumBuffer->len += datumLengthAligned;
+	ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("Invalid intermediate result format: %s", formatString)));
 }

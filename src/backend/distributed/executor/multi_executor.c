@@ -22,6 +22,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
@@ -237,7 +238,7 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 	ListCell *workerTaskCell = NULL;
 	bool randomAccess = true;
 	bool interTransactions = false;
-	char *copyFormat = "text";
+	IntermediateResultFormat format = TEXT_COPY_FORMAT;
 
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
 
@@ -247,7 +248,7 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 
 	if (BinaryMasterCopyFormat)
 	{
-		copyFormat = "binary";
+		format = BINARY_COPY_FORMAT;
 	}
 
 	foreach(workerTaskCell, workerTaskList)
@@ -257,94 +258,11 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
 		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
-		ReadFileIntoTupleStore(taskFilename->data, copyFormat, tupleDescriptor,
+		ReadFileIntoTupleStore(taskFilename->data, format, tupleDescriptor,
 							   citusScanState->tuplestorestate);
 	}
 
 	tuplestore_donestoring(citusScanState->tuplestorestate);
-}
-
-
-/*
- * ReadFileIntoTupleStore parses the records in a COPY-formatted file according
- * according to the given tuple descriptor and stores the records in a tuple
- * store.
- */
-void
-ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescriptor,
-					   Tuplestorestate *tupstore)
-{
-	EState *executorState = CreateExecutorState();
-	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
-
-	int columnCount = tupleDescriptor->natts;
-	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
-	bool *columnNulls = palloc0(columnCount * sizeof(bool));
-
-	const int fileFlags = (O_RDONLY | PG_BINARY);
-	const int fileMode = 0;
-	StringInfo buffer = makeStringInfo();
-
-	/* we currently do not check if the caller has permissions for this file */
-	File fileDesc = FileOpenForTransmit(fileName, fileFlags, fileMode);
-	FileCompat fileCompat = FileCompatFromFileStart(fileDesc);
-
-	int tupleSize = 0;
-
-	while (FileReadCompat(&fileCompat, (char *) &tupleSize, sizeof(tupleSize),
-						  PG_WAIT_IO) == sizeof(tupleSize))
-	{
-		ResetPerTupleExprContext(executorState);
-		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-		enlargeStringInfo(buffer, tupleSize);
-		FileReadCompat(&fileCompat, buffer->data, tupleSize, PG_WAIT_IO);
-		uint32 currentDatumDataOffset = 0;
-
-		for (int columnIndex = 0; columnIndex < tupleDescriptor->natts;)
-		{
-			unsigned char bitarray = buffer->data[currentDatumDataOffset++];
-			for (int bitIndex = 0; bitIndex < 8 && columnIndex < tupleDescriptor->natts;
-				 bitIndex++, columnIndex++)
-			{
-				if (bitarray & (1 << bitIndex))
-				{
-					columnNulls[columnIndex] = true;
-				}
-				else
-				{
-					columnNulls[columnIndex] = false;
-				}
-			}
-		}
-
-		for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
-		{
-			if (columnNulls[columnIndex])
-			{
-				continue;
-			}
-
-			Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
-			char *currentDatumDataPointer = buffer->data + currentDatumDataOffset;
-
-			columnValues[columnIndex] = fetch_att(currentDatumDataPointer,
-												  attributeForm->attbyval,
-												  attributeForm->attlen);
-
-			currentDatumDataOffset = att_addlength_datum(currentDatumDataOffset,
-														 attributeForm->attlen,
-														 currentDatumDataPointer);
-			currentDatumDataOffset = att_align_nominal(currentDatumDataOffset,
-													   attributeForm->attalign);
-		}
-
-		tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
-		MemoryContextSwitchTo(oldContext);
-	}
-
-	pfree(columnValues);
-	pfree(columnNulls);
 }
 
 

@@ -48,6 +48,23 @@ typedef struct DistributedResultFragment
 } DistributedResultFragment;
 
 
+typedef enum IntermediateResultFormat
+{
+	TEXT_COPY_FORMAT,
+	BINARY_COPY_FORMAT,
+	TUPLE_DUMP_FORMAT
+} IntermediateResultFormat;
+
+typedef struct IntermediateResultEncoder
+{
+	IntermediateResultFormat format;
+	TupleDesc tupleDescriptor;
+	StringInfo outputBuffer;
+
+	void *private;
+} IntermediateResultEncoder;
+
+
 /* intermediate_results.c */
 extern DestReceiver * CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 												   List *initialNodeList, bool
@@ -58,6 +75,17 @@ extern void RemoveIntermediateResultsDirectory(void);
 extern int64 IntermediateResultSize(char *resultId);
 extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
+
+/* encoding intermediate result files */
+extern IntermediateResultEncoder * IntermediateResultEncoderCreate(TupleDesc tupleDesc,
+																   IntermediateResultFormat
+																   format);
+extern void IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
+											 Datum *values, bool *nulls);
+extern void IntermediateResultEncoderDone(IntermediateResultEncoder *encoder);
+extern void ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
+								   TupleDesc tupleDescriptor, Tuplestorestate *tupstore);
+
 
 /* distributed_intermediate_results.c */
 extern List ** RedistributeTaskListResults(char *resultIdPrefix,
