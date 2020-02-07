@@ -187,27 +187,9 @@ extern List * PostprocessCreateFunctionStmt(Node *stmt,
 											const char *queryString);
 extern ObjectAddress CreateFunctionStmtObjectAddress(Node *stmt,
 													 bool missing_ok);
-extern ObjectAddress DefineAggregateStmtObjectAddress(Node *stmt,
-													  bool missing_ok);
 extern List * PreprocessAlterFunctionStmt(Node *stmt, const char *queryString);
 extern ObjectAddress AlterFunctionStmtObjectAddress(Node *stmt,
 													bool missing_ok);
-extern List * PreprocessRenameFunctionStmt(Node *stmt, const char *queryString);
-extern ObjectAddress RenameFunctionStmtObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern List * PreprocessAlterFunctionOwnerStmt(Node *stmt, const char *queryString);
-extern ObjectAddress AlterFunctionOwnerObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern List * PreprocessAlterFunctionSchemaStmt(Node *stmt, const char *queryString);
-extern ObjectAddress AlterFunctionSchemaStmtObjectAddress(Node *stmt,
-														  bool missing_ok);
-extern List * PostprocessAlterFunctionSchemaStmt(Node *stmt,
-												 const char *queryString);
-extern List * PreprocessDropFunctionStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterFunctionDependsStmt(Node *stmt,
-												 const char *queryString);
-extern ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
 
 /* index.c - forward declarations */
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);

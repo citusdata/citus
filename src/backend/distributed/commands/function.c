@@ -87,6 +87,106 @@ static char * quote_qualified_func_name(Oid funcOid);
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
+/* DistributeObjectOps*/
+static List * PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString);
+static ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Function_AlterObjectDepends = {
+	.deparse = DeparseAlterFunctionDependsStmt,
+	.qualify = QualifyAlterFunctionDependsStmt,
+	.preprocess = PreprocessAlterFunctionDependsStmt,
+	.postprocess = NULL,
+	.address = AlterFunctionDependsStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectDependsStmt, objectType, OBJECT_FUNCTION,
+									  Function_AlterObjectDepends);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectDependsStmt, objectType,
+									  OBJECT_PROCEDURE, Function_AlterObjectDepends);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectDependsStmt, objectType, OBJECT_ROUTINE,
+									  Function_AlterObjectDepends);
+
+static List * PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString);
+static List * PostprocessAlterFunctionSchemaStmt(Node *node, const char *queryString);
+static ObjectAddress AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Function_AlterObjectSchema = {
+	.deparse = DeparseAlterFunctionSchemaStmt,
+	.qualify = QualifyAlterFunctionSchemaStmt,
+	.preprocess = PreprocessAlterFunctionSchemaStmt,
+	.postprocess = PostprocessAlterFunctionSchemaStmt,
+	.address = AlterFunctionSchemaStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_AGGREGATE,
+									  Function_AlterObjectSchema);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_FUNCTION,
+									  Function_AlterObjectSchema);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_PROCEDURE,
+									  Function_AlterObjectSchema);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_ROUTINE,
+									  Function_AlterObjectSchema);
+
+static List * PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString);
+static ObjectAddress AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Function_AlterOwner = {
+	.deparse = DeparseAlterFunctionOwnerStmt,
+	.qualify = QualifyAlterFunctionOwnerStmt,
+	.preprocess = PreprocessAlterFunctionOwnerStmt,
+	.postprocess = NULL,
+	.address = AlterFunctionOwnerObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_AGGREGATE,
+									  Function_AlterOwner);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_FUNCTION,
+									  Function_AlterOwner);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_PROCEDURE,
+									  Function_AlterOwner);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_ROUTINE,
+									  Function_AlterOwner);
+
+static ObjectAddress DefineAggregateStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Aggregate_Define = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = NULL,
+	.address = DefineAggregateStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DefineStmt, kind,
+									  OBJECT_AGGREGATE, Aggregate_Define);
+
+static List * PreprocessDropFunctionStmt(Node *node, const char *queryString);
+static DistributeObjectOps Function_Drop = {
+	.deparse = DeparseDropFunctionStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropFunctionStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_AGGREGATE,
+									  Function_Drop);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_FUNCTION,
+									  Function_Drop);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_PROCEDURE,
+									  Function_Drop);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_ROUTINE,
+									  Function_Drop);
+
+
+static List * PreprocessRenameFunctionStmt(Node *node, const char *queryString);
+static ObjectAddress RenameFunctionStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Function_Rename = {
+	.deparse = DeparseRenameFunctionStmt,
+	.qualify = QualifyRenameFunctionStmt,
+	.preprocess = PreprocessRenameFunctionStmt,
+	.postprocess = NULL,
+	.address = RenameFunctionStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_AGGREGATE,
+									  Function_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_FUNCTION,
+									  Function_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_PROCEDURE,
+									  Function_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_ROUTINE,
+									  Function_Rename);
 
 /*
  * create_distributed_function gets a function or procedure name with their list of
@@ -1238,7 +1338,7 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
  *
  * objectId in the address can be invalid if missing_ok was set to true.
  */
-ObjectAddress
+static ObjectAddress
 DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -1298,7 +1398,7 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString)
  * check if it is distributed. If so the rename is executed on all the workers to keep the
  * types in sync across the cluster.
  */
-List *
+static List *
 PreprocessRenameFunctionStmt(Node *node, const char *queryString)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -1329,7 +1429,7 @@ PreprocessRenameFunctionStmt(Node *node, const char *queryString)
  *
  * In this stage we can prepare the commands that need to be run on all workers.
  */
-List *
+static List *
 PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1361,7 +1461,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
  * If the function for which the owner is changed is distributed we execute the change on
  * all the workers to keep the type in sync across the cluster.
  */
-List *
+static List *
 PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -1395,7 +1495,7 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
  * to only keep the distributed functions for deletion on the workers. Non-distributed
  * functions will still be dropped locally but not on the workers.
  */
-List *
+static List *
 PreprocessDropFunctionStmt(Node *node, const char *queryString)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
@@ -1501,7 +1601,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
  * objects will change significantly which could cause issues adding new workers. Hence we
  * don't allow this dependency to be created.
  */
-List *
+static List *
 PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -1550,7 +1650,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString)
  * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
  * missing_ok is set to false the lookup will raise an error.
  */
-ObjectAddress
+static ObjectAddress
 AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -1566,7 +1666,7 @@ AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
  * we can now use the new dependencies of the function to ensure all its dependencies
  * exist on the workers before we apply the commands remotely.
  */
-List *
+static List *
 PostprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1602,7 +1702,7 @@ AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
  * subject of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -1615,7 +1715,7 @@ RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
  * subject of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -1633,7 +1733,7 @@ AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
  * the new schema. Errors if missing_ok is false and the type cannot be found in either of
  * the schemas.
  */
-ObjectAddress
+static ObjectAddress
 AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
