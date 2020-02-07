@@ -23,15 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_AlterTableMoveAll = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterTableMoveAllStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterTableMoveAllStmt, Any_AlterTableMoveAll);
-
 static DistributeObjectOps Any_Cluster = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -135,26 +126,6 @@ static DistributeObjectOps Collation_Rename = {
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
 									  Collation_Rename);
 
-static DistributeObjectOps ForeignTable_AlterTable = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterTableStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_FOREIGN_TABLE,
-									  ForeignTable_AlterTable);
-
-static DistributeObjectOps Index_AlterTable = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterTableStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_INDEX,
-									  Index_AlterTable);
-
 static DistributeObjectOps Index_Drop = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -181,35 +152,6 @@ static DistributeObjectOps Schema_Grant = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(GrantStmt, objtype, OBJECT_SCHEMA, Schema_Grant);
-
-static DistributeObjectOps Table_AlterTable = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterTableStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_TABLE,
-									  Table_AlterTable);
-
-static DistributeObjectOps Table_AlterObjectSchema = {
-	.deparse = DeparseAlterTableSchemaStmt,
-	.qualify = QualifyAlterTableSchemaStmt,
-	.preprocess = PreprocessAlterTableSchemaStmt,
-	.postprocess = PostprocessAlterTableSchemaStmt,
-	.address = AlterTableSchemaStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_TABLE,
-									  Table_AlterObjectSchema);
-
-static DistributeObjectOps Table_Drop = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessDropTableStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_TABLE, Table_Drop);
 
 /* linker provided pointers */
 SECTION_ARRAY(DistributedObjectOpsContainer *, opscontainer);

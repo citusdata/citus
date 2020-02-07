@@ -226,16 +226,11 @@ extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStm
 
 
 /* table.c - forward declarations */
-extern List * PreprocessDropTableStmt(Node *stmt, const char *queryString);
 extern List * PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 													const char *queryString);
 extern List * PostprocessAlterTableStmtAttachPartition(
 	AlterTableStmt *alterTableStatement,
 	const char *queryString);
-extern List * PostprocessAlterTableSchemaStmt(Node *node, const char *queryString);
-extern List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand);
-extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString);
-extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString);
 extern Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 										  const char *alterTableCommand);
 extern bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
@@ -245,9 +240,6 @@ extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *c
 												Constraint *constraint);
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 Var *distributionColumn, uint32 colocationId);
-extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
-													   bool missing_ok);
-
 
 /* truncate.c - forward declarations */
 extern void PostprocessTruncateStatement(TruncateStmt *truncateStatement);

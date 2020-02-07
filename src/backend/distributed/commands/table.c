@@ -53,6 +53,56 @@ static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableS
  */
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
 
+/* DistributeObjectOps */
+static List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_AlterTableMoveAll = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterTableMoveAllStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterTableMoveAllStmt, Any_AlterTableMoveAll);
+
+static List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString);
+static List * PostprocessAlterTableSchemaStmt(Node *node, const char *queryString);
+static ObjectAddress AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Table_AlterObjectSchema = {
+	.deparse = DeparseAlterTableSchemaStmt,
+	.qualify = QualifyAlterTableSchemaStmt,
+	.preprocess = PreprocessAlterTableSchemaStmt,
+	.postprocess = PostprocessAlterTableSchemaStmt,
+	.address = AlterTableSchemaStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_TABLE,
+									  Table_AlterObjectSchema);
+
+static List * PreprocessAlterTableStmt(Node *node, const char *alterTableCommand);
+static DistributeObjectOps Table_AlterTable = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterTableStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_TABLE,
+									  Table_AlterTable);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_FOREIGN_TABLE,
+									  Table_AlterTable);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterTableStmt, relkind, OBJECT_INDEX,
+									  Table_AlterTable);
+
+static List * PreprocessDropTableStmt(Node *node, const char *queryString);
+static DistributeObjectOps Table_Drop = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessDropTableStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_TABLE, Table_Drop);
+
+
 /*
  * PreprocessDropTableStmt processes DROP TABLE commands for partitioned tables.
  * If we are trying to DROP partitioned tables, we first need to go to MX nodes
@@ -63,7 +113,7 @@ static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *comma
  * Postgres catalogs via performDeletion function, thus we need to be cautious
  * about not processing same DROP command twice.
  */
-List *
+static List *
 PreprocessDropTableStmt(Node *node, const char *queryString)
 {
 	DropStmt *dropTableStatement = castNode(DropStmt, node);
@@ -258,7 +308,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
  * can now use the new dependencies of the table to ensure all its dependencies exist on
  * the workers before we apply the commands remotely.
  */
-List *
+static List *
 PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -285,7 +335,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
-List *
+static List *
 PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 {
 	AlterTableStmt *alterTableStatement = castNode(AlterTableStmt, node);
@@ -490,7 +540,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
  * AlterTableMoveAllStmt. At the moment we do not support this functionality in
  * the distributed environment. We warn out here.
  */
-List *
+static List *
 PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
 {
 	ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
@@ -508,7 +558,7 @@ PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
  *
  * In this stage we can prepare the commands that will alter the schemas of the shards.
  */
-List *
+static List *
 PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1462,7 +1512,7 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
  * new schema. Errors if missing_ok is false and the table cannot be found in either of the
  * schemas.
  */
-ObjectAddress
+static ObjectAddress
 AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
