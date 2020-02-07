@@ -188,7 +188,6 @@ extern void DropPolicyEventExtendNames(DropStmt *stmt, const char *schemaName, u
 
 
 /* rename.c - forward declarations*/
-extern List * PreprocessRenameStmt(Node *renameStmt, const char *renameCommand);
 extern void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString);
 

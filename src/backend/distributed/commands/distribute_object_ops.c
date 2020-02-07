@@ -23,21 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_Rename = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessRenameStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TABLE, Any_Rename);
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_FOREIGN_TABLE,
-									  Any_Rename);
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLUMN, Any_Rename);
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TABCONSTRAINT,
-									  Any_Rename);
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_INDEX, Any_Rename);
-
 /* TODO this is a 2 level nested statement which we do not currently support */
 static DistributeObjectOps Attribute_Rename = {
 	.deparse = DeparseRenameAttributeStmt,

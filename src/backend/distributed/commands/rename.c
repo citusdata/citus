@@ -18,6 +18,23 @@
 #include "nodes/parsenodes.h"
 
 
+/* DistributeObjectOps */
+static List * PreprocessRenameStmt(Node *node, const char *renameCommand);
+static DistributeObjectOps Any_Rename = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessRenameStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TABLE, Any_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_FOREIGN_TABLE,
+									  Any_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLUMN, Any_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_TABCONSTRAINT,
+									  Any_Rename);
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_INDEX, Any_Rename);
+
 /*
  * PreprocessRenameStmt first determines whether a given rename statement involves
  * a distributed table. If so (and if it is supported, i.e. renames a column),
@@ -25,7 +42,7 @@
  * portion of DDL execution before returning that DDLJob in a List. If no dis-
  * tributed table is involved, this function returns NIL.
  */
-List *
+static List *
 PreprocessRenameStmt(Node *node, const char *renameCommand)
 {
 	RenameStmt *renameStmt = castNode(RenameStmt, node);
