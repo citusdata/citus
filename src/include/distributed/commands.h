@@ -121,9 +121,6 @@ typedef struct DistributedObjectOpsContainer
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
-/* cluster.c - forward declarations */
-extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
-
 
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);

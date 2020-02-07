@@ -14,9 +14,18 @@
 #include "distributed/commands.h"
 #include "distributed/metadata_cache.h"
 
+static List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
+static DistributeObjectOps Any_Cluster = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessClusterStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
 
 /* placeholder for PreprocessClusterStmt */
-List *
+static List *
 PreprocessClusterStmt(Node *node, const char *clusterCommand)
 {
 	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);

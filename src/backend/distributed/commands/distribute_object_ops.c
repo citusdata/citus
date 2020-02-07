@@ -23,15 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_Cluster = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessClusterStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
-
 static DistributeObjectOps Any_Index = {
 	.deparse = NULL,
 	.qualify = NULL,
