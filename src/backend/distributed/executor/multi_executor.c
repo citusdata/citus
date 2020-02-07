@@ -307,7 +307,7 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 			for (int bitIndex = 0; bitIndex < 8 && columnIndex < tupleDescriptor->natts;
 				 bitIndex++, columnIndex++)
 			{
-				if (bitarray && (1 << bitIndex))
+				if (bitarray & (1 << bitIndex))
 				{
 					columnNulls[columnIndex] = true;
 				}

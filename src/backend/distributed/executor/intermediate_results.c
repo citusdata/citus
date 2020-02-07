@@ -395,7 +395,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	size = buffer->len - sizePos - sizeof(size);
 	memcpy(buffer->data + sizePos, &size, sizeof(size));
 
-	if (buffer->len > 4096)
+	if (buffer->len > 8192)
 	{
 		/* send row to nodes */
 		BroadcastCopyData(buffer, connectionList);
@@ -1026,7 +1026,6 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
 	enlargeStringInfo(datumBuffer, datumBuffer->len + datumLengthAligned + 1);
 
 	char *currentDatumDataPointer = datumBuffer->data + datumBuffer->len;
-	memset(currentDatumDataPointer, 0, datumLengthAligned);
 
 	if (datumTypeLength > 0)
 	{
