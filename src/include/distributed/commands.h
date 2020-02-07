@@ -166,14 +166,6 @@ extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 /* index.c - forward declarations */
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
-extern List * PreprocessIndexStmt(Node *createIndexStatement,
-								  const char *createIndexCommand);
-extern List * PreprocessReindexStmt(Node *ReindexStatement,
-									const char *ReindexCommand);
-extern List * PreprocessDropIndexStmt(Node *dropIndexStatement,
-									  const char *dropIndexCommand);
-extern List * PostprocessIndexStmt(Node *node,
-								   const char *queryString);
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 
 /* objectaddress.c - forward declarations */

@@ -23,24 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_Index = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessIndexStmt,
-	.postprocess = PostprocessIndexStmt,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(IndexStmt, Any_Index);
-
-static DistributeObjectOps Any_Reindex = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessReindexStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(ReindexStmt, Any_Reindex);
-
 static DistributeObjectOps Any_Rename = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -116,15 +98,6 @@ static DistributeObjectOps Collation_Rename = {
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
 									  Collation_Rename);
-
-static DistributeObjectOps Index_Drop = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessDropIndexStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_INDEX, Index_Drop);
 
 static DistributeObjectOps Schema_Drop = {
 	.deparse = NULL,

@@ -51,6 +51,38 @@ static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 
+/* DistributeObjectOps */
+static List * PreprocessIndexStmt(Node *node, const char *createIndexCommand);
+static List * PostprocessIndexStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_Index = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessIndexStmt,
+	.postprocess = PostprocessIndexStmt,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(IndexStmt, Any_Index);
+
+static List * PreprocessReindexStmt(Node *node, const char *reindexCommand);
+static DistributeObjectOps Any_Reindex = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessReindexStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(ReindexStmt, Any_Reindex);
+
+static List * PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand);
+static DistributeObjectOps Index_Drop = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessDropIndexStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_INDEX, Index_Drop);
+
 
 /*
  * This struct defines the state for the callback for drop statements.
@@ -104,7 +136,7 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
-List *
+static List *
 PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 {
 	IndexStmt *createIndexStatement = castNode(IndexStmt, node);
@@ -196,7 +228,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
-List *
+static List *
 PreprocessReindexStmt(Node *node, const char *reindexCommand)
 {
 	ReindexStmt *reindexStatement = castNode(ReindexStmt, node);
@@ -304,7 +336,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
-List *
+static List *
 PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 {
 	DropStmt *dropIndexStatement = castNode(DropStmt, node);
@@ -393,7 +425,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
  * state if an error is raised, otherwise a sub-sequent change to valid will be
  * committed.
  */
-List *
+static List *
 PostprocessIndexStmt(Node *node, const char *queryString)
 {
 	IndexStmt *indexStmt = castNode(IndexStmt, node);
