@@ -167,16 +167,6 @@ extern bool TableReferencing(Oid relationId);
 extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
 
 
-/* function.c - forward declarations */
-extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString);
-extern List * PostprocessCreateFunctionStmt(Node *stmt,
-											const char *queryString);
-extern ObjectAddress CreateFunctionStmtObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern List * PreprocessAlterFunctionStmt(Node *stmt, const char *queryString);
-extern ObjectAddress AlterFunctionStmtObjectAddress(Node *stmt,
-													bool missing_ok);
-
 /* index.c - forward declarations */
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PreprocessIndexStmt(Node *createIndexStatement,

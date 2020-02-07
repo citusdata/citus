@@ -88,6 +88,29 @@ static char * quote_qualified_func_name(Oid funcOid);
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
 /* DistributeObjectOps*/
+static List * PreprocessCreateFunctionStmt(Node *node, const char *queryString);
+static List * PostprocessCreateFunctionStmt(Node *node, const char *queryString);
+static ObjectAddress CreateFunctionStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_CreateFunction = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateFunctionStmt,
+	.postprocess = PostprocessCreateFunctionStmt,
+	.address = CreateFunctionStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(CreateFunctionStmt, Any_CreateFunction);
+
+static List * PreprocessAlterFunctionStmt(Node *node, const char *queryString);
+static ObjectAddress AlterFunctionStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_AlterFunction = {
+	.deparse = DeparseAlterFunctionStmt,
+	.qualify = QualifyAlterFunctionStmt,
+	.preprocess = PreprocessAlterFunctionStmt,
+	.postprocess = NULL,
+	.address = AlterFunctionStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterFunctionStmt, Any_AlterFunction);
+
 static List * PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString);
 static ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok);
 static DistributeObjectOps Function_AlterObjectDepends = {
@@ -1250,7 +1273,7 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
  * Instead we do our basic housekeeping where we make sure we are on the coordinator and
  * can propagate the function in sequential mode.
  */
-List *
+static List *
 PreprocessCreateFunctionStmt(Node *node, const char *queryString)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
@@ -1279,7 +1302,7 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString)
  * Besides creating the plan we also make sure all (new) dependencies of the function are
  * created on all nodes.
  */
-List *
+static List *
 PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
@@ -1306,7 +1329,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
  * normal postgres error for unfound functions.
  */
-ObjectAddress
+static ObjectAddress
 CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
@@ -1364,7 +1387,7 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
  * plan the jobs to be executed on the workers for functions that have been distributed in
  * the cluster.
  */
-List *
+static List *
 PreprocessAlterFunctionStmt(Node *node, const char *queryString)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
@@ -1690,7 +1713,7 @@ PostprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
  * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the function/procedure that was the target of the statement.
  */
-ObjectAddress
+static ObjectAddress
 AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);

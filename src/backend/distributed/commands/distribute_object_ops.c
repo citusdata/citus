@@ -23,15 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_AlterFunction = {
-	.deparse = DeparseAlterFunctionStmt,
-	.qualify = QualifyAlterFunctionStmt,
-	.preprocess = PreprocessAlterFunctionStmt,
-	.postprocess = NULL,
-	.address = AlterFunctionStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterFunctionStmt, Any_AlterFunction);
-
 static DistributeObjectOps Any_AlterPolicy = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -67,15 +58,6 @@ static DistributeObjectOps Any_Cluster = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
-
-static DistributeObjectOps Any_CreateFunction = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessCreateFunctionStmt,
-	.postprocess = PostprocessCreateFunctionStmt,
-	.address = CreateFunctionStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(CreateFunctionStmt, Any_CreateFunction);
 
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
