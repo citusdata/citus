@@ -23,24 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_AlterExtension = {
-	.deparse = DeparseAlterExtensionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterExtensionUpdateStmt,
-	.postprocess = NULL,
-	.address = AlterExtensionUpdateStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterExtensionStmt, Any_AlterExtension);
-
-static DistributeObjectOps Any_AlterExtensionContents = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterExtensionContentsStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterExtensionContentsStmt, Any_AlterExtensionContents);
-
 static DistributeObjectOps Any_AlterFunction = {
 	.deparse = DeparseAlterFunctionStmt,
 	.qualify = QualifyAlterFunctionStmt,
@@ -85,15 +67,6 @@ static DistributeObjectOps Any_Cluster = {
 	.address = NULL,
 };
 REGISTER_DISTRIBUTED_OPERATION(ClusterStmt, Any_Cluster);
-
-static DistributeObjectOps Any_CreateExtension = {
-	.deparse = DeparseCreateExtensionStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessCreateExtensionStmt,
-	.address = CreateExtensionStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION(CreateExtensionStmt, Any_CreateExtension);
 
 static DistributeObjectOps Any_CreateFunction = {
 	.deparse = NULL,
@@ -206,26 +179,6 @@ static DistributeObjectOps Collation_Rename = {
 };
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
 									  Collation_Rename);
-
-static DistributeObjectOps Extension_AlterObjectSchema = {
-	.deparse = DeparseAlterExtensionSchemaStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessAlterExtensionSchemaStmt,
-	.postprocess = PostprocessAlterExtensionSchemaStmt,
-	.address = AlterExtensionSchemaStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_EXTENSION,
-									  Extension_AlterObjectSchema);
-
-static DistributeObjectOps Extension_Drop = {
-	.deparse = DeparseDropExtensionStmt,
-	.qualify = NULL,
-	.preprocess = PreprocessDropExtensionStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_EXTENSION,
-									  Extension_Drop);
 
 static DistributeObjectOps ForeignTable_AlterTable = {
 	.deparse = NULL,

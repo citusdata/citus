@@ -148,21 +148,7 @@ extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString
 /* extension.c - forward declarations */
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
-extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);
-extern List * PreprocessDropExtensionStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterExtensionSchemaStmt(Node *stmt,
-												 const char *queryString);
-extern List * PostprocessAlterExtensionSchemaStmt(Node *stmt,
-												  const char *queryString);
-extern List * PreprocessAlterExtensionUpdateStmt(Node *stmt,
-												 const char *queryString);
-extern List * PreprocessAlterExtensionContentsStmt(Node *node,
-												   const char *queryString);
 extern List * CreateExtensionDDLCommand(const ObjectAddress *extensionAddress);
-extern ObjectAddress AlterExtensionSchemaStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
-extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
 
 
 /* foreign_constraint.c - forward declarations */
@@ -204,7 +190,6 @@ extern List * PostprocessIndexStmt(Node *node,
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 
 /* objectaddress.c - forward declarations */
-extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
 extern ObjectAddress AlterExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
 
 

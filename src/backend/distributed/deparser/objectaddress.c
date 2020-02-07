@@ -60,38 +60,6 @@ RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
 
 
 /*
- * CreateExtensionStmtObjectAddress finds the ObjectAddress for the extension described
- * by the CreateExtensionStmt. If missing_ok is false, then this function throws an
- * error if the extension does not exist.
- *
- * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
- * to true.
- */
-ObjectAddress
-CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
-{
-	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
-	ObjectAddress address = { 0 };
-
-	const char *extensionName = stmt->extname;
-
-	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
-
-	/* if we couldn't find the extension, error if missing_ok is false */
-	if (!missing_ok && extensionoid == InvalidOid)
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
-						errmsg("extension \"%s\" does not exist",
-							   extensionName)));
-	}
-
-	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
-
-	return address;
-}
-
-
-/*
  * AlterExtensionStmtObjectAddress finds the ObjectAddress for the extension described
  * by the AlterExtensionStmt. If missing_ok is false, then this function throws an
  * error if the extension is not created before.

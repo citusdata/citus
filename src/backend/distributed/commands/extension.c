@@ -39,6 +39,63 @@ static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
 
 
+/* DistributeObjectOps */
+static List * PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString);
+static ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_AlterExtension = {
+	.deparse = DeparseAlterExtensionStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterExtensionUpdateStmt,
+	.postprocess = NULL,
+	.address = AlterExtensionUpdateStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterExtensionStmt, Any_AlterExtension);
+
+static List * PreprocessAlterExtensionContentsStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_AlterExtensionContents = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterExtensionContentsStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterExtensionContentsStmt, Any_AlterExtensionContents);
+
+static List * PostprocessCreateExtensionStmt(Node *node, const char *queryString);
+static ObjectAddress CreateExtensionStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Any_CreateExtension = {
+	.deparse = DeparseCreateExtensionStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessCreateExtensionStmt,
+	.address = CreateExtensionStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION(CreateExtensionStmt, Any_CreateExtension);
+
+static List * PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString);
+static List * PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString);
+static ObjectAddress AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Extension_AlterObjectSchema = {
+	.deparse = DeparseAlterExtensionSchemaStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterExtensionSchemaStmt,
+	.postprocess = PostprocessAlterExtensionSchemaStmt,
+	.address = AlterExtensionSchemaStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_EXTENSION,
+									  Extension_AlterObjectSchema);
+
+static List * PreprocessDropExtensionStmt(Node *node, const char *queryString);
+static DistributeObjectOps Extension_Drop = {
+	.deparse = DeparseDropExtensionStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropExtensionStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_EXTENSION,
+									  Extension_Drop);
+
 /*
  * ErrorIfUnstableCreateOrAlterExtensionStmt compares CITUS_EXTENSIONVERSION
  * and version given CREATE/ALTER EXTENSION statement will create/update to. If
@@ -124,7 +181,7 @@ ExtractNewExtensionVersion(Node *parseTree)
  * created, we can mark it as distributed to make sure that its
  * dependencies exist on all nodes.
  */
-List *
+static List *
 PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 {
 	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
@@ -232,7 +289,7 @@ AddSchemaFieldIfMissing(CreateExtensionStmt *createExtensionStmt)
  * If no extensions in the drop list are distributed, then no calls will
  * be made to the workers.
  */
-List *
+static List *
 PreprocessDropExtensionStmt(Node *node, const char *queryString)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
@@ -384,7 +441,7 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 /*
  * PreprocessAlterExtensionSchemaStmt is invoked for alter extension set schema statements.
  */
-List *
+static List *
 PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
 	if (!ShouldPropagateExtensionCommand(node))
@@ -429,7 +486,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
  * locally, we can now use the new dependencies (schema) of the extension to ensure
  * all its dependencies exist on the workers before we apply the commands remotely.
  */
-List *
+static List *
 PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
 	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
@@ -449,7 +506,7 @@ PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 /*
  * PreprocessAlterExtensionUpdateStmt is invoked for alter extension update statements.
  */
-List *
+static List *
 PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 {
 	AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, node);
@@ -494,7 +551,7 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 /*
  * PreprocessAlterExtensionContentsStmt issues a notice. It does not propagate.
  */
-List *
+static List *
 PreprocessAlterExtensionContentsStmt(Node *node, const char *queryString)
 {
 	ereport(NOTICE, (errmsg(
@@ -741,7 +798,7 @@ RecreateExtensionStmt(Oid extensionOid)
  * AlterExtensionSchemaStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -769,7 +826,7 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * AlterExtensionUpdateStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
@@ -786,6 +843,38 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
+
+	return address;
+}
+
+
+/*
+ * CreateExtensionStmtObjectAddress finds the ObjectAddress for the extension described
+ * by the CreateExtensionStmt. If missing_ok is false, then this function throws an
+ * error if the extension does not exist.
+ *
+ * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
+ * to true.
+ */
+static ObjectAddress
+CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
+{
+	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
+	ObjectAddress address = { 0 };
+
+	const char *extensionName = stmt->extname;
+
+	Oid extensionoid = get_extension_oid(extensionName, missing_ok);
+
+	/* if we couldn't find the extension, error if missing_ok is false */
+	if (!missing_ok && extensionoid == InvalidOid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("extension \"%s\" does not exist",
+							   extensionName)));
+	}
+
+	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
 
 	return address;
 }
