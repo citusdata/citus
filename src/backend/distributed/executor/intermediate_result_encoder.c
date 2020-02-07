@@ -45,6 +45,12 @@
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
 								 char datumTypeAlign);
+static void ReadDatumFileIntoTupleStore(char *fileName, TupleDesc tupleDescriptor,
+										Tuplestorestate *tupstore);
+static void CopyFileIntoTupleStore(char *fileName, char *copyFormat,
+								   TupleDesc tupleDescriptor,
+								   Tuplestorestate *tupstore);
+static Relation StubRelation(TupleDesc tupleDescriptor);
 
 IntermediateResultEncoder *
 IntermediateResultEncoderCreate(TupleDesc tupleDesc, IntermediateResultFormat format)
@@ -150,14 +156,30 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
 }
 
 
+void
+ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
+					   TupleDesc tupleDescriptor, Tuplestorestate *tupstore)
+{
+	if (format == TUPLE_DUMP_FORMAT)
+	{
+		ReadDatumFileIntoTupleStore(fileName, tupleDescriptor, tupstore);
+	}
+	else
+	{
+		char *copyFormat = format == TEXT_COPY_FORMAT ? "text" : "binary";
+		CopyFileIntoTupleStore(fileName, copyFormat, tupleDescriptor, tupstore);
+	}
+}
+
+
 /*
  * ReadFileIntoTupleStore parses the records in a COPY-formatted file according
  * according to the given tuple descriptor and stores the records in a tuple
  * store.
  */
-void
-ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
-					   TupleDesc tupleDescriptor, Tuplestorestate *tupstore)
+static void
+ReadDatumFileIntoTupleStore(char *fileName, TupleDesc tupleDescriptor,
+							Tuplestorestate *tupstore)
 {
 	EState *executorState = CreateExecutorState();
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -230,4 +252,79 @@ ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
 
 	pfree(columnValues);
 	pfree(columnNulls);
+}
+
+
+/*
+ * ReadFileIntoTupleStore parses the records in a COPY-formatted file according
+ * according to the given tuple descriptor and stores the records in a tuple
+ * store.
+ */
+static void
+CopyFileIntoTupleStore(char *fileName, char *copyFormat,
+					   TupleDesc tupleDescriptor,
+					   Tuplestorestate *tupstore)
+{
+	/*
+	 * Trick BeginCopyFrom into using our tuple descriptor by pretending it belongs
+	 * to a relation.
+	 */
+	Relation stubRelation = StubRelation(tupleDescriptor);
+
+	EState *executorState = CreateExecutorState();
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
+
+	int columnCount = tupleDescriptor->natts;
+	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
+	bool *columnNulls = palloc0(columnCount * sizeof(bool));
+
+	List *copyOptions = NIL;
+
+	int location = -1; /* "unknown" token location */
+	DefElem *copyOption = makeDefElem("format", (Node *) makeString(copyFormat),
+									  location);
+	copyOptions = lappend(copyOptions, copyOption);
+
+	CopyState copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
+										NULL, copyOptions);
+
+	while (true)
+	{
+		ResetPerTupleExprContext(executorState);
+		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
+											   columnValues, columnNulls);
+		if (!nextRowFound)
+		{
+			MemoryContextSwitchTo(oldContext);
+			break;
+		}
+
+		tuplestore_putvalues(tupstore, tupleDescriptor, columnValues, columnNulls);
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	EndCopyFrom(copyState);
+	pfree(columnValues);
+	pfree(columnNulls);
+}
+
+
+/*
+ * StubRelation creates a stub Relation from the given tuple descriptor.
+ * To be able to use copy.c, we need a Relation descriptor. As there is no
+ * relation corresponding to the data loaded from workers, we need to fake one.
+ * We just need the bare minimal set of fields accessed by BeginCopyFrom().
+ */
+static Relation
+StubRelation(TupleDesc tupleDescriptor)
+{
+	Relation stubRelation = palloc0(sizeof(RelationData));
+	stubRelation->rd_att = tupleDescriptor;
+	stubRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
+	stubRelation->rd_rel->relkind = RELKIND_RELATION;
+
+	return stubRelation;
 }
