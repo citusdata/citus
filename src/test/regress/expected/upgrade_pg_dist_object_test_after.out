@@ -1,0 +1,33 @@
+-- drop objects from previous test (uprade_basic_after.sql) for a clean test
+-- drop upgrade_basic schema and switch back to public schema
+SET search_path to public;
+DROP SCHEMA upgrade_basic CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to table upgrade_basic.t
+drop cascades to table upgrade_basic.tp
+drop cascades to table upgrade_basic.t_ab
+drop cascades to table upgrade_basic.t2
+drop cascades to table upgrade_basic.r
+drop cascades to table upgrade_basic.tr
+drop cascades to table upgrade_basic.t_append
+-- as we updated citus to available version,
+--   "isn" extension
+--   "new_schema" schema
+--   "public" schema
+--   "fooschema" schema
+--   "footype" type (under schema 'fooschema')
+ -- will now be marked as distributed
+ -- but,
+ --   "seg" extension
+ -- will not be marked as distributed
+-- see underlying objects
+SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
+      type      | object_names | object_args
+---------------------------------------------------------------------
+  extension      | {isn}               | {}
+  schema         | {fooschema}         | {}
+  schema         | {new_schema}        | {}
+  schema         | {public}            | {}
+  type           | {fooschema.footype} | {}
+ (5 rows)
+

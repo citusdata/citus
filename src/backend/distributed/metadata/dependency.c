@@ -20,6 +20,7 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_type.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "utils/fmgroids.h"
@@ -72,6 +73,33 @@ static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 Form_pg_depend pg_depend);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										const ObjectAddress *target);
+
+
+/*
+ * GetUniqueDependenciesList takes a list of object addresses and returns a new list
+ * of ObjectAddesses whose elements are unique.
+ */
+List *
+GetUniqueDependenciesList(List *objectAddressesList)
+{
+	ObjectAddressCollector objectAddressCollector = { 0 };
+	InitObjectAddressCollector(&objectAddressCollector);
+
+	ObjectAddress *objectAddress = NULL;
+
+	foreach_ptr(objectAddress, objectAddressesList)
+	{
+		if (IsObjectAddressCollected(objectAddress, &objectAddressCollector))
+		{
+			/* skip objects that are already collected */
+			continue;
+		}
+
+		CollectObjectAddress(&objectAddressCollector, objectAddress);
+	}
+
+	return objectAddressCollector.dependencyList;
+}
 
 
 /*

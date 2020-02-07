@@ -136,6 +136,45 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 
 /*
+ * GetDistributableDependenciesForObject finds all the dependencies that Citus
+ * can distribute and returns those dependencies regardless of their existency
+ * on nodes.
+ */
+List *
+GetDistributableDependenciesForObject(const ObjectAddress *target)
+{
+	/* local variables to work with dependencies */
+	List *distributableDependencies = NIL;
+	ListCell *dependencyCell = NULL;
+
+	/* collect all dependencies in creation order */
+	List *dependencies = GetDependenciesForObject(target);
+
+	/* filter the ones that can be distributed */
+	foreach(dependencyCell, dependencies)
+	{
+		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
+
+		/*
+		 * TODO: maybe we can optimize the logic applied in below line. Actually we
+		 * do not need to create ddl commands as we are not ensuring their existence
+		 * in nodes, but we utilize logic it follows to choose the objects that could
+		 * be distributed
+		 */
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+
+		/* create a new list with dependencies that actually created commands */
+		if (list_length(dependencyCommands) > 0)
+		{
+			distributableDependencies = lappend(distributableDependencies, dependency);
+		}
+	}
+
+	return distributableDependencies;
+}
+
+
+/*
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */

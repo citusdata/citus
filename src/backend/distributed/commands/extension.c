@@ -17,7 +17,9 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
@@ -32,6 +34,7 @@ static char * ExtractNewExtensionVersion(Node *parseTree);
 static void AddSchemaFieldIfMissing(CreateExtensionStmt *stmt);
 static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
+static void MarkExistingObjectDependenciesDistributedIfSupported(void);
 static void EnsureSequentialModeForExtensionDDL(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsDropCitusStmt(Node *parseTree);
@@ -453,6 +456,7 @@ List *
 PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 {
 	AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, node);
+
 	if (!ShouldPropagateExtensionCommand((Node *) alterExtensionStmt))
 	{
 		return NIL;
@@ -488,6 +492,112 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
+}
+
+
+/*
+ * PostprocessAlterExtensionCitusUpdateStmt is called after ALTER EXTENSION
+ * citus UPDATE command is executed by standard utility hook.
+ *
+ * Actually, we do not need such a post process function for ALTER EXTENSION
+ * UPDATE commands unless the extension is Citus itself. This is because we
+ * need to mark existing objects that are not included in distributed object
+ * infrastructure in older versions of Citus (but now should be) as distributed
+ * if we really updated Citus to the available version successfully via standard
+ * utility hook.
+ */
+void
+PostprocessAlterExtensionCitusUpdateStmt(Node *node)
+{
+	/*
+	 * We should not postprocess this command in workers as they do not keep track
+	 * of citus.pg_dist_object.
+	 */
+	if (!IsCoordinator())
+	{
+		return;
+	}
+
+	bool citusIsUpdatedToLatestVersion = InstalledAndAvailableVersionsSame();
+
+	/*
+	 * Knowing that Citus version was different than the available version before
+	 * standard process utility runs ALTER EXTENSION command, we perform post
+	 * process operations if Citus is updated to that available version
+	 */
+	if (!citusIsUpdatedToLatestVersion)
+	{
+		return;
+	}
+
+	/*
+	 * Finally, mark existing objects that are not included in distributed object
+	 * infrastructure in older versions of Citus (but now should be) as distributed
+	 */
+	MarkExistingObjectDependenciesDistributedIfSupported();
+}
+
+
+/*
+ * MarkAllExistingObjectsDistributed marks all objects that could be distributed by
+ * resolving dependencies of "existing distributed tables" and "already distributed
+ * objects" to introduce the objects created in older versions of Citus to distributed
+ * object infrastructure as well.
+ *
+ * Note that this function is not responsible for ensuring if dependencies exist on
+ * nodes and satisfying these dependendencies if not exists, which is already done by
+ * EnsureDependenciesExistOnAllNodes on demand. Hence, this function is just designed
+ * to be used when "ALTER EXTENSION citus UPDATE" is executed.
+ * This is because we want to add existing objects that would have already been in
+ * pg_dist_object if we had created them in new version of Citus to pg_dist_object.
+ */
+static void
+MarkExistingObjectDependenciesDistributedIfSupported()
+{
+	ListCell *listCell = NULL;
+
+	/* resulting object addresses to be marked as distributed */
+	List *resultingObjectAddresses = NIL;
+
+	/* resolve dependencies of distributed tables */
+	List *distributedTableOidList = DistTableOidList();
+
+	foreach(listCell, distributedTableOidList)
+	{
+		Oid distributedTableOid = lfirst_oid(listCell);
+
+		ObjectAddress tableAddress = { 0 };
+		ObjectAddressSet(tableAddress, RelationRelationId, distributedTableOid);
+
+		List *distributableDependencyObjectAddresses =
+			GetDistributableDependenciesForObject(&tableAddress);
+
+		resultingObjectAddresses = list_concat(resultingObjectAddresses,
+											   distributableDependencyObjectAddresses);
+	}
+
+	/* resolve dependencies of the objects in pg_dist_object*/
+	List *distributedObjectAddressList = GetDistributedObjectAddressList();
+
+	foreach(listCell, distributedObjectAddressList)
+	{
+		ObjectAddress *distributedObjectAddress = (ObjectAddress *) lfirst(listCell);
+
+		List *distributableDependencyObjectAddresses =
+			GetDistributableDependenciesForObject(distributedObjectAddress);
+
+		resultingObjectAddresses = list_concat(resultingObjectAddresses,
+											   distributableDependencyObjectAddresses);
+	}
+
+	/* remove duplicates from object addresses list for efficiency */
+	List *uniqueObjectAddresses = GetUniqueDependenciesList(resultingObjectAddresses);
+
+	foreach(listCell, uniqueObjectAddresses)
+	{
+		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(listCell);
+		MarkObjectDistributed(objectAddress);
+	}
 }
 
 
