@@ -37,12 +37,23 @@ static DefElem * makeDefElemInt(char *name, int value);
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
 
+/* DistributeObjectOps */
+static List * PostprocessAlterRoleStmt(Node *node, const char *queryString);
+static DistributeObjectOps Any_AlterRole = {
+	.deparse = DeparseAlterRoleStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessAlterRoleStmt,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION(AlterRoleStmt, Any_AlterRole);
+
 /*
  * PostprocessAlterRoleStmt actually creates the plan we need to execute for alter
  * role statement. We need to do it this way because we need to use the encrypted
  * password, which is, in some cases, created at standardProcessUtility.
  */
-List *
+static List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);

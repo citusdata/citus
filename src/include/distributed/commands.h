@@ -205,7 +205,6 @@ extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString)
 
 
 /* role.c - forward declarations*/
-extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
 
 

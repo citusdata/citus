@@ -23,15 +23,6 @@ static DistributeObjectOps NoDistributeOps = {
 	.address = NULL,
 };
 
-static DistributeObjectOps Any_AlterRole = {
-	.deparse = DeparseAlterRoleStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessAlterRoleStmt,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION(AlterRoleStmt, Any_AlterRole);
-
 static DistributeObjectOps Any_AlterTableMoveAll = {
 	.deparse = NULL,
 	.qualify = NULL,
