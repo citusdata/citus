@@ -129,18 +129,7 @@ extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *d
 /* collation.c - forward declarations */
 extern char * CreateCollationDDL(Oid collationId);
 extern List * CreateCollationDDLsIdempotent(Oid collationId);
-extern ObjectAddress AlterCollationOwnerObjectAddress(Node *stmt, bool missing_ok);
-extern List * PreprocessDropCollationStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterCollationOwnerStmt(Node *stmt, const char *queryString);
-extern List * PreprocessAlterCollationSchemaStmt(Node *stmt, const char *queryString);
-extern List * PreprocessRenameCollationStmt(Node *stmt, const char *queryString);
-extern ObjectAddress RenameCollationStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
-extern List * PostprocessAlterCollationSchemaStmt(Node *stmt, const char *queryString);
 extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
-extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
-extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
 /* extension.c - forward declarations */
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);

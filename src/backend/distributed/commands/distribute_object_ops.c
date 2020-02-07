@@ -34,56 +34,6 @@ static DistributeObjectOps Attribute_Rename = {
 REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_ATTRIBUTE,
 									  Attribute_Rename);
 
-static DistributeObjectOps Collation_AlterObjectSchema = {
-	.deparse = DeparseAlterCollationSchemaStmt,
-	.qualify = QualifyAlterCollationSchemaStmt,
-	.preprocess = PreprocessAlterCollationSchemaStmt,
-	.postprocess = PostprocessAlterCollationSchemaStmt,
-	.address = AlterCollationSchemaStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_COLLATION,
-									  Collation_AlterObjectSchema);
-
-static DistributeObjectOps Collation_AlterOwner = {
-	.deparse = DeparseAlterCollationOwnerStmt,
-	.qualify = QualifyAlterCollationOwnerStmt,
-	.preprocess = PreprocessAlterCollationOwnerStmt,
-	.postprocess = NULL,
-	.address = AlterCollationOwnerObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_COLLATION,
-									  Collation_AlterOwner);
-
-static DistributeObjectOps Collation_Define = {
-	.deparse = NULL,
-	.qualify = NULL,
-	.preprocess = NULL,
-	.postprocess = PostprocessDefineCollationStmt,
-	.address = DefineCollationStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DefineStmt, kind, OBJECT_COLLATION,
-									  Collation_Define);
-
-static DistributeObjectOps Collation_Drop = {
-	.deparse = DeparseDropCollationStmt,
-	.qualify = QualifyDropCollationStmt,
-	.preprocess = PreprocessDropCollationStmt,
-	.postprocess = NULL,
-	.address = NULL,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_COLLATION,
-									  Collation_Drop);
-
-static DistributeObjectOps Collation_Rename = {
-	.deparse = DeparseRenameCollationStmt,
-	.qualify = QualifyRenameCollationStmt,
-	.preprocess = PreprocessRenameCollationStmt,
-	.postprocess = NULL,
-	.address = RenameCollationStmtObjectAddress,
-};
-REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
-									  Collation_Rename);
-
 /* linker provided pointers */
 SECTION_ARRAY(DistributedObjectOpsContainer *, opscontainer);
 

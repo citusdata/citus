@@ -38,6 +38,67 @@ static List * FilterNameListForDistributedCollations(List *objects, bool missing
 static void EnsureSequentialModeForCollationDDL(void);
 
 
+/* DistributeObjectOps */
+static List * PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString);
+static List * PostprocessAlterCollationSchemaStmt(Node *node, const char *queryString);
+static ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Collation_AlterObjectSchema = {
+	.deparse = DeparseAlterCollationSchemaStmt,
+	.qualify = QualifyAlterCollationSchemaStmt,
+	.preprocess = PreprocessAlterCollationSchemaStmt,
+	.postprocess = PostprocessAlterCollationSchemaStmt,
+	.address = AlterCollationSchemaStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterObjectSchemaStmt, objectType, OBJECT_COLLATION,
+									  Collation_AlterObjectSchema);
+static List * PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString);
+static ObjectAddress AlterCollationOwnerObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Collation_AlterOwner = {
+	.deparse = DeparseAlterCollationOwnerStmt,
+	.qualify = QualifyAlterCollationOwnerStmt,
+	.preprocess = PreprocessAlterCollationOwnerStmt,
+	.postprocess = NULL,
+	.address = AlterCollationOwnerObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(AlterOwnerStmt, objectType, OBJECT_COLLATION,
+									  Collation_AlterOwner);
+
+static List * PostprocessDefineCollationStmt(Node *node, const char *queryString);
+static ObjectAddress DefineCollationStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Collation_Define = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessDefineCollationStmt,
+	.address = DefineCollationStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DefineStmt, kind, OBJECT_COLLATION,
+									  Collation_Define);
+
+static List * PreprocessDropCollationStmt(Node *node, const char *queryString);
+static DistributeObjectOps Collation_Drop = {
+	.deparse = DeparseDropCollationStmt,
+	.qualify = QualifyDropCollationStmt,
+	.preprocess = PreprocessDropCollationStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(DropStmt, removeType, OBJECT_COLLATION,
+									  Collation_Drop);
+
+static List * PreprocessRenameCollationStmt(Node *node, const char *queryString);
+static ObjectAddress RenameCollationStmtObjectAddress(Node *node, bool missing_ok);
+static DistributeObjectOps Collation_Rename = {
+	.deparse = DeparseRenameCollationStmt,
+	.qualify = QualifyRenameCollationStmt,
+	.preprocess = PreprocessRenameCollationStmt,
+	.postprocess = NULL,
+	.address = RenameCollationStmtObjectAddress,
+};
+REGISTER_DISTRIBUTED_OPERATION_NESTED(RenameStmt, renameType, OBJECT_COLLATION,
+									  Collation_Rename);
+
+
 /*
  * GetCreateCollationDDLInternal returns a CREATE COLLATE sql string for the
  * given collationId.
@@ -163,7 +224,7 @@ CreateCollationDDLsIdempotent(Oid collationId)
 }
 
 
-ObjectAddress
+static ObjectAddress
 AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -218,7 +279,7 @@ FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 }
 
 
-List *
+static List *
 PreprocessDropCollationStmt(Node *node, const char *queryString)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
@@ -288,7 +349,7 @@ PreprocessDropCollationStmt(Node *node, const char *queryString)
  * If the type for which the owner is changed is distributed we execute the change on all
  * the workers to keep the type in sync across the cluster.
  */
-List *
+static List *
 PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -322,7 +383,7 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
  * used to check if the collation is distributed. If the collation is distributed the rename is
  * executed on all the workers to keep the collation in sync across the cluster.
  */
-List *
+static List *
 PreprocessRenameCollationStmt(Node *node, const char *queryString)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -355,7 +416,7 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString)
  *
  * In this stage we can prepare the commands that need to be run on all workers.
  */
-List *
+static List *
 PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -387,7 +448,7 @@ PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
  * can now use the new dependencies of the type to ensure all its dependencies exist on
  * the workers before we apply the commands remotely.
  */
-List *
+static List *
 PostprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -410,7 +471,7 @@ PostprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
  * RenameCollationStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+static ObjectAddress
 RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -433,7 +494,7 @@ RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress
+static ObjectAddress
 AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -555,7 +616,7 @@ GenerateBackupNameForCollationCollision(const ObjectAddress *address)
 }
 
 
-ObjectAddress
+static ObjectAddress
 DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -576,7 +637,7 @@ DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
  * created, we can mark it as distributed to make sure that its
  * dependencies exist on all nodes.
  */
-List *
+static List *
 PostprocessDefineCollationStmt(Node *node, const char *queryString)
 {
 	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
