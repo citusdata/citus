@@ -31,6 +31,7 @@
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
+#include "mb/pg_wchar.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
@@ -55,22 +56,42 @@ static void ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
 static Relation StubRelation(TupleDesc tupleDescriptor);
 
 IntermediateResultEncoder *
-IntermediateResultEncoderCreate(TupleDesc tupleDesc, IntermediateResultFormat format)
+IntermediateResultEncoderCreate(TupleDesc tupleDesc,
+								IntermediateResultFormat format,
+								MemoryContext tupleContext)
 {
 	IntermediateResultEncoder *encoder = palloc0(sizeof(IntermediateResultEncoder));
 	encoder->format = format;
-	encoder->tupleDescriptor = tupleDesc;
+	encoder->tupleDescriptor = CreateTupleDescCopy(tupleDesc);
 	encoder->outputBuffer = makeStringInfo();
 
 	if (format == TEXT_COPY_FORMAT || format == BINARY_COPY_FORMAT)
 	{
+		int fileEncoding = pg_get_client_encoding();
+		int databaseEncoding = GetDatabaseEncoding();
+		int databaseEncodingMaxLength = pg_database_encoding_max_length();
+
+		char *nullPrint = "\\N";
+		int nullPrintLen = strlen(nullPrint);
+		char *nullPrintClient = pg_server_to_any(nullPrint, nullPrintLen, fileEncoding);
+
 		CopyOutState copyOutState = palloc0(sizeof(CopyOutStateData));
 		copyOutState->delim = "\t";
-		copyOutState->null_print = "\\N";
-		copyOutState->null_print_client = "\\N";
+		copyOutState->null_print = nullPrint;
+		copyOutState->null_print_client = nullPrintClient;
 		copyOutState->binary = (format == BINARY_COPY_FORMAT);
 		copyOutState->fe_msgbuf = encoder->outputBuffer;
-		copyOutState->rowcontext = CurrentMemoryContext; /* todo */
+		copyOutState->rowcontext = tupleContext;
+
+		if (PG_ENCODING_IS_CLIENT_ONLY(fileEncoding))
+		{
+			ereport(ERROR, (errmsg("cannot repartition into encoding caller cannot "
+								"receive")));
+		}
+
+		/* set up transcoding information and default text output characters */
+		copyOutState->need_transcoding = (fileEncoding != databaseEncoding) ||
+										 (databaseEncodingMaxLength > 1);
 
 		encoder->copyOutState = copyOutState;
 		encoder->columnOutputFunctions =
@@ -160,6 +181,21 @@ IntermediateResultEncoderDone(IntermediateResultEncoder *encoder)
 		{
 			AppendCopyBinaryFooters(copyOutState);
 		}
+	}
+}
+
+
+void
+IntermediateResultEncoderDestroy(IntermediateResultEncoder *encoder)
+{
+	if (encoder->copyOutState)
+	{
+		pfree(encoder->copyOutState);
+	}
+
+	if (encoder->columnOutputFunctions)
+	{
+		pfree(encoder->columnOutputFunctions);
 	}
 }
 

@@ -236,10 +236,11 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	ListCell *initialNodeCell = NULL;
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
-
+	MemoryContext tupleContext = GetPerTupleMemoryContext(resultDest->executorState);
 	IntermediateResultFormat format = ResultFileFormatForTupleDesc(inputTupleDescriptor);
+
 	resultDest->encoder = IntermediateResultEncoderCreate(inputTupleDescriptor,
-														  format);
+														  format, tupleContext);
 
 	if (resultDest->writeLocalFile)
 	{
@@ -469,6 +470,8 @@ static void
 RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
+
+	IntermediateResultEncoderDestroy(resultDest->encoder);
 
 	pfree(resultDest);
 }

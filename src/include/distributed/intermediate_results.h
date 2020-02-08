@@ -81,10 +81,12 @@ extern char * CreateIntermediateResultsDirectory(void);
 /* encoding intermediate result files */
 extern IntermediateResultEncoder * IntermediateResultEncoderCreate(TupleDesc tupleDesc,
 																   IntermediateResultFormat
-																   format);
+																   format, MemoryContext
+																   tupleContext);
 extern void IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 											 Datum *values, bool *nulls);
 extern void IntermediateResultEncoderDone(IntermediateResultEncoder *encoder);
+extern void IntermediateResultEncoderDestroy(IntermediateResultEncoder *encoder);
 extern void ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
 								   TupleDesc tupleDescriptor, Tuplestorestate *tupstore);
 extern IntermediateResultFormat ResultFileFormatForTupleDesc(TupleDesc tupleDesc);
