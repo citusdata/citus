@@ -18,8 +18,12 @@ FROM
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -52,9 +56,13 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 DEBUG:  pruning merge fetch taskId 1
@@ -77,8 +85,12 @@ FROM
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx

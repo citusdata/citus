@@ -65,6 +65,10 @@ GROUP BY
 ORDER BY
 	l_partkey, o_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 DEBUG:  generated sql query for task 1
@@ -73,6 +77,8 @@ DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290001 lineitem JOIN orders_290003 orders ON ((lineitem.l_orderkey OPERATOR(pg_catalog.=) orders.o_orderkey))) WHERE ((lineitem.l_partkey OPERATOR(pg_catalog.<) 1000) AND (orders.o_totalprice OPERATOR(pg_catalog.>) 10.0))"
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  generated sql query for task 2
@@ -85,6 +91,8 @@ DEBUG:  pruning merge fetch taskId 3
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
@@ -157,12 +165,16 @@ GROUP BY
 ORDER BY
 	l_partkey, o_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290000 lineitem WHERE (l_quantity OPERATOR(pg_catalog.<) 5.0)"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290001 lineitem WHERE (l_quantity OPERATOR(pg_catalog.<) 5.0)"
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE (o_totalprice OPERATOR(pg_catalog.<>) 4.0)"
 DEBUG:  generated sql query for task 2
@@ -231,12 +243,16 @@ GROUP BY
 ORDER BY
 	o_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
@@ -307,12 +323,16 @@ GROUP BY
 ORDER BY
 	o_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
@@ -381,12 +401,16 @@ GROUP BY
 ORDER BY
 	o_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290000 lineitem WHERE true"
 DEBUG:  generated sql query for task 2
 DETAIL:  query string: "SELECT l_suppkey FROM lineitem_290001 lineitem WHERE true"
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 2
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_290002 orders WHERE true"
 DEBUG:  generated sql query for task 2
@@ -452,7 +476,13 @@ select  s_i_id
     group by s_i_id, s_w_id, s_quantity
     having   s_quantity > random()
 ;
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT s_i_id, s_w_id, s_quantity FROM stock_690004 stock WHERE true"
 DEBUG:  generated sql query for task 2
@@ -465,6 +495,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT ol_i_id FROM order_line_690000 order_line WHERE true"
 DEBUG:  generated sql query for task 2
