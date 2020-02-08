@@ -237,8 +237,9 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
 
+	IntermediateResultFormat format = ResultFileFormatForTupleDesc(inputTupleDescriptor);
 	resultDest->encoder = IntermediateResultEncoderCreate(inputTupleDescriptor,
-														  TUPLE_DUMP_FORMAT);
+														  format);
 
 	if (resultDest->writeLocalFile)
 	{

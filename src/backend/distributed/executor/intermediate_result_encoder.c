@@ -42,14 +42,16 @@
 #include "utils/syscache.h"
 
 
+static void DatumFileEncoderReceive(IntermediateResultEncoder *encoder,
+									Datum *values, bool *nulls);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
 								 char datumTypeAlign);
 static void ReadDatumFileIntoTupleStore(char *fileName, TupleDesc tupleDescriptor,
 										Tuplestorestate *tupstore);
-static void CopyFileIntoTupleStore(char *fileName, char *copyFormat,
-								   TupleDesc tupleDescriptor,
-								   Tuplestorestate *tupstore);
+static void ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
+									   TupleDesc tupleDescriptor,
+									   Tuplestorestate *tupstore);
 static Relation StubRelation(TupleDesc tupleDescriptor);
 
 IntermediateResultEncoder *
@@ -60,6 +62,26 @@ IntermediateResultEncoderCreate(TupleDesc tupleDesc, IntermediateResultFormat fo
 	encoder->tupleDescriptor = tupleDesc;
 	encoder->outputBuffer = makeStringInfo();
 
+	if (format == TEXT_COPY_FORMAT || format == BINARY_COPY_FORMAT)
+	{
+		CopyOutState copyOutState = palloc0(sizeof(CopyOutStateData));
+		copyOutState->delim = "\t";
+		copyOutState->null_print = "\\N";
+		copyOutState->null_print_client = "\\N";
+		copyOutState->binary = (format == BINARY_COPY_FORMAT);
+		copyOutState->fe_msgbuf = encoder->outputBuffer;
+		copyOutState->rowcontext = CurrentMemoryContext; /* todo */
+
+		encoder->copyOutState = copyOutState;
+		encoder->columnOutputFunctions =
+			ColumnOutputFunctions(tupleDesc, copyOutState->binary);
+
+		if (copyOutState->binary)
+		{
+			AppendCopyBinaryHeaders(copyOutState);
+		}
+	}
+
 	return encoder;
 }
 
@@ -67,6 +89,22 @@ IntermediateResultEncoderCreate(TupleDesc tupleDesc, IntermediateResultFormat fo
 void
 IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 								 Datum *values, bool *nulls)
+{
+	if (encoder->format == TUPLE_DUMP_FORMAT)
+	{
+		DatumFileEncoderReceive(encoder, values, nulls);
+	}
+	else
+	{
+		AppendCopyRowData(values, nulls, encoder->tupleDescriptor,
+						  encoder->copyOutState, encoder->columnOutputFunctions, NULL);
+	}
+}
+
+
+static void
+DatumFileEncoderReceive(IntermediateResultEncoder *encoder,
+						Datum *values, bool *nulls)
 {
 	StringInfo buffer = encoder->outputBuffer;
 	TupleDesc tupleDescriptor = encoder->tupleDescriptor;
@@ -114,7 +152,15 @@ IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 void
 IntermediateResultEncoderDone(IntermediateResultEncoder *encoder)
 {
-	/* todo */
+	if (encoder->format == TEXT_COPY_FORMAT ||
+		encoder->format == BINARY_COPY_FORMAT)
+	{
+		CopyOutState copyOutState = encoder->copyOutState;
+		if (copyOutState->binary)
+		{
+			AppendCopyBinaryFooters(copyOutState);
+		}
+	}
 }
 
 
@@ -166,8 +212,8 @@ ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
 	}
 	else
 	{
-		char *copyFormat = format == TEXT_COPY_FORMAT ? "text" : "binary";
-		CopyFileIntoTupleStore(fileName, copyFormat, tupleDescriptor, tupstore);
+		char *copyFormat = (format == TEXT_COPY_FORMAT) ? "text" : "binary";
+		ReadCopyFileIntoTupleStore(fileName, copyFormat, tupleDescriptor, tupstore);
 	}
 }
 
@@ -261,9 +307,9 @@ ReadDatumFileIntoTupleStore(char *fileName, TupleDesc tupleDescriptor,
  * store.
  */
 static void
-CopyFileIntoTupleStore(char *fileName, char *copyFormat,
-					   TupleDesc tupleDescriptor,
-					   Tuplestorestate *tupstore)
+ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
+						   TupleDesc tupleDescriptor,
+						   Tuplestorestate *tupstore)
 {
 	/*
 	 * Trick BeginCopyFrom into using our tuple descriptor by pretending it belongs
@@ -327,4 +373,18 @@ StubRelation(TupleDesc tupleDescriptor)
 	stubRelation->rd_rel->relkind = RELKIND_RELATION;
 
 	return stubRelation;
+}
+
+
+IntermediateResultFormat
+ResultFileFormatForTupleDesc(TupleDesc tupleDesc)
+{
+	if (CanUseBinaryCopyFormat(tupleDesc))
+	{
+		return BINARY_COPY_FORMAT;
+	}
+	else
+	{
+		return TEXT_COPY_FORMAT;
+	}
 }

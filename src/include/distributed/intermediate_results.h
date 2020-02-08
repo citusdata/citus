@@ -61,7 +61,9 @@ typedef struct IntermediateResultEncoder
 	TupleDesc tupleDescriptor;
 	StringInfo outputBuffer;
 
-	void *private;
+	/* used when format is *_COPY_FORMAT */
+	CopyOutState copyOutState;
+	FmgrInfo *columnOutputFunctions;
 } IntermediateResultEncoder;
 
 
@@ -85,7 +87,7 @@ extern void IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 extern void IntermediateResultEncoderDone(IntermediateResultEncoder *encoder);
 extern void ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
 								   TupleDesc tupleDescriptor, Tuplestorestate *tupstore);
-
+extern IntermediateResultFormat ResultFileFormatForTupleDesc(TupleDesc tupleDesc);
 
 /* distributed_intermediate_results.c */
 extern List ** RedistributeTaskListResults(char *resultIdPrefix,
