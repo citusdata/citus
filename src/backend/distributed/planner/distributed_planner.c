@@ -1431,7 +1431,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	List *columnNameList = NIL;
 
 	/* we will have custom scan range table entry as the first one in the list */
-	int customScanRangeTableIndex = INDEX_VAR;
+	int customScanRangeTableIndex = 1;
 
 	/* build a targetlist to read from the custom scan output */
 	foreach(targetEntryCell, localPlan->planTree->targetlist)
@@ -1473,7 +1473,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	}
 
 	customScan->scan.plan.targetlist = targetList;
-	customScan->custom_scan_tlist = targetList;
+//	customScan->custom_scan_tlist = copyObject(localPlan->planTree->targetlist);
 //
 //	PlannerGlobal *glob = makeNode(PlannerGlobal);
 //	PlannerInfo *root = makeNode(PlannerInfo);

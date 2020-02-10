@@ -16,8 +16,13 @@
 
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
-#include "nodes/pathnodes.h"
 #include "nodes/plannodes.h"
+
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
+#include "nodes/relation.h"
+#endif
 
 
 /* Function declarations for building local plans on the master node */

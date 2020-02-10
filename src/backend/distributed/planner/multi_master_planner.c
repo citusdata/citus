@@ -222,10 +222,11 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	 * list for alias creation we make a copy here.
 	 * TODO might be able to prevent the copy if we can move the alias creation before the standard planner
 	 */
-	List *masterTargetListCopy = copyObject(masterTargetList);
-	remoteScan->custom_scan_tlist = masterTargetListCopy;
-	remoteScan->scan.plan.targetlist = masterTargetListCopy;
+//	List *masterTargetListCopy = copyObject(masterTargetList);
+	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
+	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
 
+//	set_plan_references(root, (Plan *)remoteScan);
 	/* This code should not be re-entrant */
 	PlannedStmt *standardStmt = NULL;
 	PG_TRY();
