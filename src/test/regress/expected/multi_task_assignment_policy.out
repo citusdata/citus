@@ -75,8 +75,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -87,8 +87,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -101,8 +101,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -113,8 +113,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 

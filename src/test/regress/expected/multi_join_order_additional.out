@@ -78,7 +78,7 @@ DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                              QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=18)
    explain statements for distributed queries are not enabled
 (2 rows)
 
@@ -92,8 +92,8 @@ EXPLAIN SELECT count(*) FROM lineitem, orders
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -105,8 +105,8 @@ EXPLAIN SELECT count(*) FROM orders, lineitem_hash
 LOG:  join order: [ "orders" ][ single range partition join "lineitem_hash" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -116,8 +116,8 @@ EXPLAIN SELECT count(*) FROM orders_hash, lineitem_hash
 LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -127,8 +127,8 @@ EXPLAIN SELECT count(*) FROM customer_hash, nation
 LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -139,8 +139,8 @@ EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer_append" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -151,8 +151,8 @@ EXPLAIN SELECT count(*) FROM orders, customer_hash
 LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -163,8 +163,8 @@ EXPLAIN SELECT count(*) FROM orders_hash, customer_append
 LOG:  join order: [ "orders_hash" ][ single range partition join "customer_append" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -187,8 +187,8 @@ JOIN (
 LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ local partition join "users_table" ][ local partition join "events_table" ]
                                 QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=8)
          explain statements for distributed queries are not enabled
 (3 rows)
 

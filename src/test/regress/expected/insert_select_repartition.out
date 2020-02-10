@@ -563,7 +563,7 @@ EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
    INSERT/SELECT method: repartition
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task

@@ -36,10 +36,10 @@ ORDER BY avg(value_1) DESC
 LIMIT 1;
                                                         QUERY PLAN
 ---------------------------------------------------------------------
- Limit  (cost=0.00..0.00 rows=0 width=0)
-   ->  Sort  (cost=0.00..0.00 rows=0 width=0)
+ Limit  (cost=0.01..0.02 rows=1 width=36)
+   ->  Sort  (cost=0.01..0.02 rows=0 width=36)
          Sort Key: remote_scan.avg DESC
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=36)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -103,9 +103,9 @@ GROUP BY user_id
 ORDER BY 2  DESC;
                                                QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=0.00..0.00 rows=0 width=0)
+ Sort  (cost=0.01..0.02 rows=0 width=36)
    Sort Key: remote_scan."?column?" DESC
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=36)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task

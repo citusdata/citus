@@ -88,8 +88,8 @@ WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -106,8 +106,8 @@ WHERE
 	t1.id = t2.id AND t1.sum = t3.id;
                               QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate  (cost=0.00..0.02 rows=1 width=8)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=8)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
