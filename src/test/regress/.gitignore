@@ -13,7 +13,7 @@
 
 # Regression test output
 /regression.diffs
-/regression.out
+/regression.out*
 /test_times.log
 
 # Regression test timing

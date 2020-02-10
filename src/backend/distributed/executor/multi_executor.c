@@ -214,7 +214,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		forwardScanDirection = false;
 	}
 
-	TupleTableSlot *resultSlot = scanState->customScanState.ss.ss_ScanTupleSlot;
+	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
 	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
 
 	return resultSlot;

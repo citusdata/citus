@@ -143,8 +143,8 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 #if PG_VERSION_NUM >= 120000
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
 
-	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
-	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
+//	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
+//	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
 #endif
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
@@ -180,29 +180,7 @@ CitusExecScan(CustomScanState *node)
 	}
 
 	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
-
-	if (node->ss.ps.ps_ProjInfo)
-	{
-		ProjectionInfo *projInfo = node->ss.ps.ps_ProjInfo;
-		if (TupIsNull(resultSlot))
-		{
-			return ExecClearTuple(projInfo->pi_state.resultslot);
-			/*nothing more to scan, return emtpy tuple*/
-		}
-		/*
-		 * Form a projection tuple, store it in the result tuple slot
-		 * and return it.
-		 */
-		node->ss.ps.ps_ExprContext->ecxt_scantuple = resultSlot;
-		return ExecProject(node->ss.ps.ps_ProjInfo);
-	}
-	else
-	{
-		/*
-		 * Here, we aren't projecting, so just return scan tuple.
-		 */
-		return resultSlot;
-	}
+	return resultSlot;
 }
 
 
@@ -750,12 +728,12 @@ CitusReScan(CustomScanState *node)
 TupleDesc
 ScanStateGetTupleDescriptor(CitusScanState *scanState)
 {
-	CustomScan *remoteScan = ((CustomScan *)scanState->customScanState.ss.ps.plan);
-	if (remoteScan->custom_scan_tlist)
-	{
-		/* when the custom scan is set use the fields in the custom scan as the tuple descriptor */
-		return ExecTypeFromTL(remoteScan->custom_scan_tlist);
-	}
+//	CustomScan *remoteScan = ((CustomScan *)scanState->customScanState.ss.ps.plan);
+//	if (remoteScan->custom_scan_tlist)
+//	{
+//		/* when the custom scan is set use the fields in the custom scan as the tuple descriptor */
+//		return ExecTypeFromTL(remoteScan->custom_scan_tlist);
+//	}
 
 	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->
 		   tts_tupleDescriptor;
