@@ -450,7 +450,7 @@ BuildLocalWaitGraph(void)
  * In general for the purpose of distributed deadlock detection, we should
  * skip if the process blocked on the locks that may not be part of deadlocks.
  * Those locks are held for a short duration while the relation or the index
- * is actually  extended on the disk and released as soon as the extension is
+ * is actually extended on the disk and released as soon as the extension is
  * done, even before the execution of the command that triggered the extension
  * finishes. Thus, recording such waits on our lock graphs could yield detecting
  * wrong distributed deadlocks.

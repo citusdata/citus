@@ -1544,7 +1544,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 *              SELECT
 	 *                  s1.a AS worker_column_0,
 	 *                  s2.c AS worker_column_1,
-	 *                  s2.b AS as worker_column_2
+	 *                  s2.b AS worker_column_2
 	 *              FROM (some subquery) s1, (some subquery) s2
 	 *              WHERE s1.a = s2.a) worker_subquery
 	 *      GROUP BY worker_column_0
@@ -1712,7 +1712,7 @@ FlattenJoinVarsMutator(Node *node, Query *queryTree)
 				return (Node *) column;
 			}
 
-			/* join RTE does not have and alias defined at this level, deeper look is needed */
+			/* join RTE does not have an alias defined at this level, deeper look is needed */
 			Assert(column->varattno > 0);
 			Node *newColumn = (Node *) list_nth(rte->joinaliasvars, column->varattno - 1);
 			Assert(newColumn != NULL);
@@ -1836,7 +1836,7 @@ UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr, List *target
 		else if (IsA(targetEntry->expr, CoalesceExpr))
 		{
 			/*
-			 * FlattenJoinVars() flattens full oter joins' columns that is
+			 * FlattenJoinVars() flattens full outer joins' columns that is
 			 * in the USING part into COALESCE(left_col, right_col)
 			 */
 

@@ -231,7 +231,7 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
  *   select count(*) from (
  *       select user_id, user_id from users_table
  *   union
- *       select 2, user_id  from users_table) u;
+ *       select 2, user_id from users_table) u;
  *
  * For the above query, although the second item in the target list make this query
  * safe to push down, the function would fail to return true.

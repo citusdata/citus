@@ -305,7 +305,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			 *
 			 * If a transaction started and committed just after we observed the
 			 * set of prepared transactions, and just before we called
-			 * ActiveDistributedTransactionNumbers, then we would see  a recovery
+			 * ActiveDistributedTransactionNumbers, then we would see a recovery
 			 * record without a prepared transaction in pendingTransactionSet,
 			 * but there may be prepared transactions that failed to commit.
 			 * We should not delete the records for those prepared transactions,

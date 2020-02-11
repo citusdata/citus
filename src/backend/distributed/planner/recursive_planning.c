@@ -896,7 +896,7 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 
 		/*
 		 * Citus can pushdown this subquery, no need to recursively
-		 * plan which is much expensive than pushdown.
+		 * plan which is much more expensive than pushdown.
 		 */
 		return false;
 	}
@@ -1565,7 +1565,7 @@ BuildSubPlanResultQuery(List *targetEntryList, List *columnAliasList, char *resu
 
 
 /*
- * BuildSubPlanResultQuery returns a query of the form:
+ * BuildReadIntermediateResultsArrayQuery returns a query of the form:
  *
  * SELECT
  *   <target list>

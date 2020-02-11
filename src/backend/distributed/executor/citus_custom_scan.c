@@ -265,7 +265,7 @@ CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate, i
 		EState *executorState = planState->state;
 		ResetExecutionParameters(executorState);
 
-		/* we're done,  we don't want to evaluate functions for SELECT queries */
+		/* we're done, we don't want to evaluate functions for SELECT queries */
 		return;
 	}
 	else if (jobQuery->commandType == CMD_SELECT && workerJob->deferredPruning)
@@ -274,7 +274,7 @@ CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate, i
 		 * Evaluate parameters, because the parameters are only avaliable on the
 		 * coordinator and are required for pruning.
 		 *
-		 * But, we don't  want to evaluate functions for read-only queries on the
+		 * But, we don't want to evaluate functions for read-only queries on the
 		 * coordinator as the volatile functions could yield different
 		 * results per shard (also per row) and could have side-effects.
 		 *
