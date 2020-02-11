@@ -417,8 +417,7 @@ static void
 WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat)
 {
 	int bytesWritten = FileWriteCompat(fileCompat, copyData->data,
-									   copyData->len,
-									   PG_WAIT_IO);
+									   copyData->len, PG_WAIT_IO);
 	if (bytesWritten < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
@@ -593,9 +592,8 @@ QueryResultFileName(const char *resultId)
 {
 	StringInfo resultFileName = makeStringInfo();
 	const char *resultDirectory = IntermediateResultsDirectory();
-	char *checkChar = (char *) resultId;
 
-	for (; *checkChar; checkChar++)
+	for (const char *checkChar = resultId; *checkChar; checkChar++)
 	{
 		if (!((*checkChar >= 'a' && *checkChar <= 'z') ||
 			  (*checkChar >= 'A' && *checkChar <= 'Z') ||

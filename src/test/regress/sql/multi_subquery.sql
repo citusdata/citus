@@ -632,6 +632,11 @@ JOIN cte_1 ON a = max::text
 GROUP BY a HAVING a = (SELECT a)
 ORDER BY 1;
 
+-- https://github.com/citusdata/citus/issues/3432
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type > avg((SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+ORDER BY 1;
+
 -- Simple join subquery pushdown
 SELECT
 	avg(array_length(events, 1)) AS event_average
