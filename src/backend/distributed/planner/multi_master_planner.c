@@ -51,6 +51,9 @@
 static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
+static PlannedStmt *BuildSelectStatementViaStdPlanner(Query *masterQuery,
+													  List *masterTargetList,
+													  CustomScan *remoteScan);
 static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
 static bool HasDistinctOrOrderByAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
@@ -85,10 +88,18 @@ MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
 
-	PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList,
-														 remoteScan);
+	if (UseStdPlanner)
+	{
+		return BuildSelectStatementViaStdPlanner(masterQuery, masterTargetList,
+												 remoteScan);
+	}
+	else
+	{
+		PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList,
+															 remoteScan);
+		return masterSelectPlan;
+	}
 
-	return masterSelectPlan;
 }
 
 
@@ -190,6 +201,7 @@ CitusCustomScanPathReparameterize(PlannerInfo *root,
 	return NIL;
 }
 
+
 /*
  * BuildSelectStatement builds the final select statement to run on the master
  * node, before returning results to the user. The function first gets the custom
@@ -199,8 +211,6 @@ CitusCustomScanPathReparameterize(PlannerInfo *root,
 static PlannedStmt *
 BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
-
-
 	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
 	Agg *aggregationPlan = NULL;
@@ -211,81 +221,6 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
 	PlannerInfo *root = makeNode(PlannerInfo);
-	root->parse = masterQuery;
-	root->glob = glob;
-	root->query_level = 1;
-	root->planner_cxt = CurrentMemoryContext;
-	root->wt_param_id = -1;
-
-	/*
-	 * the standard planner will scribble on the target list, since we need the target
-	 * list for alias creation we make a copy here.
-	 * TODO might be able to prevent the copy if we can move the alias creation before the standard planner
-	 */
-//	List *masterTargetListCopy = copyObject(masterTargetList);
-	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
-	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
-
-	Node *havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
-	havingQual = SS_replace_correlation_vars(root, havingQual);
-	masterQuery->havingQual = havingQual;
-//	set_plan_references(root, (Plan *)remoteScan);
-	/* This code should not be re-entrant */
-	PlannedStmt *standardStmt = NULL;
-	PG_TRY();
-	{
-		Assert(ReplaceCitusExtraDataContainer == false);
-		Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
-		ReplaceCitusExtraDataContainer = true;
-		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
-
-		standardStmt = standard_planner(masterQuery, 0, NULL);
-
-		ReplaceCitusExtraDataContainer = false;
-		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
-	}
-	PG_CATCH();
-	{
-		ReplaceCitusExtraDataContainer = false;
-		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-
-	Assert(standardStmt != NULL);
-
-	SS_attach_initplans(root, standardStmt->planTree);
-	standardStmt->paramExecTypes = root->glob->paramExecTypes;
-	standardStmt->subplans = root->glob->subplans;
-
-	/*
-	 * TODO; with the final targetlist set we can set the plan references, might need to
-	 * be moved inside replace_function_scan_with_remote_scan
-	 */
-//	set_plan_references(root, (Plan *)remoteScan);
-	{
-		/*
-		 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
-		 */
-		foreach_ptr(targetEntry, masterTargetList)
-		{
-			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
-		}
-
-		RangeTblEntry *customScanRangeTableEntry = linitial(standardStmt->rtable);
-		customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
-		columnNameList = NIL;
-	}
-
-	pprint(standardStmt);
-	if (UseStdPlanner)
-	{
-		return standardStmt;
-	}
-
-	/* reset state */
-	glob = makeNode(PlannerGlobal);
-	root = makeNode(PlannerInfo);
 	root->parse = masterQuery;
 	root->glob = glob;
 	root->query_level = 1;
@@ -416,8 +351,85 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	RangeTblEntry *customScanRangeTableEntry = linitial(selectStatement->rtable);
 	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
 
-	pprint(selectStatement);
 	return selectStatement;
+}
+
+
+static PlannedStmt *
+BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
+								  CustomScan *remoteScan)
+{
+	PlannerGlobal *glob = makeNode(PlannerGlobal);
+	PlannerInfo *root = makeNode(PlannerInfo);
+	root->parse = masterQuery;
+	root->glob = glob;
+	root->query_level = 1;
+	root->planner_cxt = CurrentMemoryContext;
+	root->wt_param_id = -1;
+
+	/* reset state */
+	glob = makeNode(PlannerGlobal);
+	root = makeNode(PlannerInfo);
+	root->parse = masterQuery;
+	root->glob = glob;
+	root->query_level = 1;
+	root->planner_cxt = CurrentMemoryContext;
+	root->wt_param_id = -1;
+	/*
+	 * the standard planner will scribble on the target list, since we need the target
+	 * list for alias creation we make a copy here.
+	 * TODO might be able to prevent the copy if we can move the alias creation before the standard planner
+	 */
+
+	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
+	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
+
+	Node *havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
+	havingQual = SS_replace_correlation_vars(root, havingQual);
+	masterQuery->havingQual = havingQual;
+
+	/* This code should not be re-entrant */
+	PlannedStmt *standardStmt = NULL;
+	PG_TRY();
+			{
+				Assert(ReplaceCitusExtraDataContainer == false);
+				Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
+				ReplaceCitusExtraDataContainer = true;
+				ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
+
+				standardStmt = standard_planner(masterQuery, 0, NULL);
+
+				ReplaceCitusExtraDataContainer = false;
+				ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+			}
+		PG_CATCH();
+			{
+				ReplaceCitusExtraDataContainer = false;
+				ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+				PG_RE_THROW();
+			}
+	PG_END_TRY();
+
+	Assert(standardStmt != NULL);
+
+	SS_attach_initplans(root, standardStmt->planTree);
+	standardStmt->paramExecTypes = root->glob->paramExecTypes;
+	standardStmt->subplans = root->glob->subplans;
+
+	List *columnNameList = NIL;
+	TargetEntry *targetEntry = NULL;
+	/*
+	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
+	 */
+	foreach_ptr(targetEntry, masterTargetList)
+	{
+		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+	}
+
+	RangeTblEntry *customScanRangeTableEntry = linitial(standardStmt->rtable);
+	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
+
+	return standardStmt;
 }
 
 

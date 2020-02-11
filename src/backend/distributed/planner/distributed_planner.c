@@ -1473,16 +1473,6 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	}
 
 	customScan->scan.plan.targetlist = targetList;
-//	customScan->custom_scan_tlist = copyObject(localPlan->planTree->targetlist);
-//
-//	PlannerGlobal *glob = makeNode(PlannerGlobal);
-//	PlannerInfo *root = makeNode(PlannerInfo);
-//	root->parse = NULL;
-//	root->glob = glob;
-//	root->query_level = 1;
-//	root->planner_cxt = CurrentMemoryContext;
-//	root->wt_param_id = -1;
-//	set_plan_references(root, (Plan *) customScan);
 
 	PlannedStmt *routerPlan = makeNode(PlannedStmt);
 	routerPlan->planTree = (Plan *) customScan;
