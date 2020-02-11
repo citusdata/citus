@@ -47,7 +47,7 @@ static List * UnionRelationRestrictionLists(List *firstRelationList,
 ColocatedJoinChecker
 CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restrictionContext)
 {
-	ColocatedJoinChecker colocatedJoinChecker;
+	ColocatedJoinChecker colocatedJoinChecker = { 0 };
 
 	Query *anchorSubquery = NULL;
 
