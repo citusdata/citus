@@ -951,7 +951,7 @@ TargetEntryList(List *expressionList)
 
 
 /*
- * AddAnyValueAggregates wraps all vars that do not apear in the GROUP BY
+ * AddAnyValueAggregates wraps all vars that do not appear in the GROUP BY
  * clause or are inside an aggregate function in an any_value aggregate
  * function. This is needed for repartition joins because primary keys are not
  * present on intermediate tables.
@@ -4871,7 +4871,7 @@ TaskListAppendUnique(List *list, Task *task)
 
 
 /*
- * TaskListConcatUnique append to list1 each member of list2  that isn't
+ * TaskListConcatUnique append to list1 each member of list2 that isn't
  * already in list1. Whether an element is already a member of the list
  * is determined via TaskListMember().
  */

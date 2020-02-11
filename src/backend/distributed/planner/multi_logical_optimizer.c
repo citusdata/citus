@@ -2432,8 +2432,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		 * We converted the having expression to a list in subquery pushdown
 		 * planner. However, this query cannot be parsed as it is in the worker.
 		 * We should convert this back to being explicit for worker query
-		 * so that it can be parsed when it hits to the standard planner in
-		 * worker.
+		 * so that it can be parsed when it hits the standard planner in worker.
 		 */
 		if (IsA(originalHavingQual, List))
 		{
@@ -4085,7 +4084,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 	/*
 	 * We currently don't support finding partition keys in the subqueries
-	 * that references from outer subqueries. For example, in corrolated
+	 * that reference outer subqueries. For example, in corrolated
 	 * subqueries in WHERE clause, we don't support use of partition keys
 	 * in the subquery that is referred from the outer query.
 	 */

@@ -147,7 +147,7 @@ PartiallyEvaluateExpression(Node *expression,
 
 
 /*
- * ShouldEvaluateFunctionWithMasterContext is a helper function  which is used to
+ * ShouldEvaluateFunctionWithMasterContext is a helper function which is used to
  * decide whether the function/expression should be evaluated with the input
  * masterEvaluationContext.
  */

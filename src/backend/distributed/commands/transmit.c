@@ -140,8 +140,8 @@ FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 {
 	struct stat fileStat;
 
-	int fileStated = stat(filename, &fileStat);
-	if (fileStated >= 0)
+	int statOK = stat(filename, &fileStat);
+	if (statOK >= 0)
 	{
 		if (S_ISDIR(fileStat.st_mode))
 		{

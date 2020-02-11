@@ -130,7 +130,7 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
 /*
  * MultiLogicalPlanCreate takes in both the original query and its corresponding modified
  * query tree yield by the standard planner. It uses helper functions to create logical
- * plan and adds a root node to top of it. The  original query is only used for subquery
+ * plan and adds a root node to top of it. The original query is only used for subquery
  * pushdown planning.
  *
  * We also pass queryTree and plannerRestrictionContext to the planner. They
@@ -334,14 +334,14 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 
 /*
- * AllTargetExpressionsAreColumnReferences returns true if non of the
+ * AllTargetExpressionsAreColumnReferences returns true if none of the
  * elements in the target entry list belong to an outer query (for
  * example the query is a sublink and references to another query
  * in the from list).
  *
- * The function also returns true if any of the  target entries is not
+ * The function also returns true if any of the target entries is not
  * a column itself. This might be too restrictive, but, given that we're
- * handling a very specific type of queries, that seems acceptable for now.
+ * handling very specific type of queries, that seems acceptable for now.
  */
 static bool
 AllTargetExpressionsAreColumnReferences(List *targetEntryList)

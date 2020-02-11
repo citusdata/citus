@@ -722,8 +722,8 @@ CitusRemoveDirectory(const char *filename)
 		struct stat fileStat;
 		int removed = 0;
 
-		int fileStated = stat(filename, &fileStat);
-		if (fileStated < 0)
+		int statOK = stat(filename, &fileStat);
+		if (statOK < 0)
 		{
 			if (errno == ENOENT)
 			{

@@ -226,7 +226,7 @@ CheckForDistributedDeadlocks(void)
  * transaction node and checks for a cycle (i.e., the node can be reached again
  * while traversing the graph).
  *
- * Finding a cycle  indicates a distributed deadlock and the function returns
+ * Finding a cycle indicates a distributed deadlock and the function returns
  * true on that case. Also, the deadlockPath is filled with the transaction
  * nodes that form the cycle.
  */

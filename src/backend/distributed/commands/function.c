@@ -123,8 +123,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(1))
 	{
 		/*
-		 * Using the  default value, so distribute the function but do not set
-		 * the  distribution argument.
+		 * Using the default value, so distribute the function but do not set
+		 * the distribution argument.
 		 */
 		distributionArgumentName = NULL;
 	}
