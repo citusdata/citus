@@ -335,7 +335,7 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
 	char rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
 
-	/* if both shards are  the same, return true */
+	/* if both shards are the same, return true */
 	if (leftShardInterval->shardId == rightShardInterval->shardId)
 	{
 		return true;

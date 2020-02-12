@@ -1139,7 +1139,7 @@ RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 			 * may still prefer to write locally.
 			 *
 			 * If any of the subplansInHaving is used in other parts of the query,
-			 * we'll later merge it those subPlans and send it to remote.
+			 * we'll later merge those subPlans and send to remote.
 			 */
 			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
 		}

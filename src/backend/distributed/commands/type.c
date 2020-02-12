@@ -833,7 +833,7 @@ CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
 
 /*
  * CreateEnumStmtObjectAddress finds the ObjectAddress for the enum type described by the
- * CreateEnumStmt. If missing_ok is false this function throws an error if the  type does
+ * CreateEnumStmt. If missing_ok is false this function throws an error if the type does
  * not exist.
  *
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
@@ -854,7 +854,7 @@ CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
 
 /*
  * AlterTypeStmtObjectAddress finds the ObjectAddress for the type described by the ALTER
- * TYPE statement. If missing_ok is false this function throws an error if the  type does
+ * TYPE statement. If missing_ok is false this function throws an error if the type does
  * not exist.
  *
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set

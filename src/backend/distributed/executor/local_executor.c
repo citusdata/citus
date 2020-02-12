@@ -265,7 +265,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		if (list_length(task->taskPlacementList) == 1)
 		{
 			/*
-			 * At this point, the task has a single placement (e.g,. anchor shard  is
+			 * At this point, the task has a single placement (e.g,. anchor shard is
 			 * distributed table's shard). So, it is either added to local or remote
 			 * taskList.
 			 */

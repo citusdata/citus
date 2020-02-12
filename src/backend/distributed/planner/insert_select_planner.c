@@ -492,7 +492,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	}
 
 	/*
-	 * We also need to add  shard interval range to the subquery in case
+	 * We also need to add shard interval range to the subquery in case
 	 * the partition qual not distributed all tables such as some
 	 * subqueries in WHERE clause.
 	 *
