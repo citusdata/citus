@@ -37,7 +37,7 @@
  * same connection since it may hold relevant locks or have uncommitted
  * writes. In that case we "assign" the task to a connection by adding
  * it to the task queue of specific connection (in
- * AssignTasksToConnections). Otherwise we consider the task unassigned
+ * AssignTasksToConnectionsOrWorkerPool ). Otherwise we consider the task unassigned
  * and add it to the task queue of a worker pool, which means that it
  * can be executed over any connection in the pool.
  *
@@ -576,7 +576,7 @@ static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
 static bool TaskListRequires2PC(List *taskList);
 static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
-static void AssignTasksToConnections(DistributedExecution *execution);
+static void AssignTasksToConnectionsOrWorkerPool (DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool UseConnectionPerPlacement(void);
 static PlacementExecutionOrder ExecutionOrderForTask(RowModifyLevel modLevel, Task *task);
@@ -1583,13 +1583,13 @@ UnclaimAllSessionConnections(List *sessionList)
 
 
 /*
- * AssignTasksToConnections goes through the list of tasks to determine whether any
+ * AssignTasksToConnectionsOrWorkerPool  goes through the list of tasks to determine whether any
  * task placements need to be assigned to particular connections because of preceding
  * operations in the transaction. It then adds those connections to the pool and adds
  * the task placement executions to the assigned task queue of the connection.
  */
 static void
-AssignTasksToConnections(DistributedExecution *execution)
+AssignTasksToConnectionsOrWorkerPool (DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->tasksToExecute;
@@ -2005,7 +2005,7 @@ RunDistributedExecution(DistributedExecution *execution)
 {
 	WaitEvent *events = NULL;
 
-	AssignTasksToConnections(execution);
+	AssignTasksToConnectionsOrWorkerPool (execution);
 
 	PG_TRY();
 	{
