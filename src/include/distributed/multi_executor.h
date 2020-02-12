@@ -95,6 +95,8 @@ extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *worker
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
 								   tupleDescriptor, Tuplestorestate *tupstore);
 extern Query * ParseQueryString(const char *queryString, Oid *paramOids, int numParams);
+extern Query * RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString,
+								   Oid *paramOids, int numParams);
 extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo
 											   params,
 											   DestReceiver *dest);
