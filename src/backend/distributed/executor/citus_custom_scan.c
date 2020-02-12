@@ -146,6 +146,8 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	/* testing for a non empty scan tuple descriptor which asusmes the custom scan tlist had been set. this allows for custom projectections*/
 	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
 	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
+
+	node->ss.ps.qual = ExecInitQual(node->ss.ps.plan->qual, (PlanState *) node);
 #endif
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
@@ -180,29 +182,64 @@ CitusExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
+	ExprState *qual = node->ss.ps.qual;
+	ProjectionInfo *projInfo = node->ss.ps.ps_ProjInfo;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
 
-	if (node->ss.ps.ps_ProjInfo)
+	if (!qual && !projInfo)
 	{
-		ProjectionInfo *projInfo = node->ss.ps.ps_ProjInfo;
-		if (TupIsNull(resultSlot))
-		{
-			return ExecClearTuple(projInfo->pi_state.resultslot);
-			/*nothing more to scan, return emtpy tuple*/
-		}
-		/*
-		 * Form a projection tuple, store it in the result tuple slot
-		 * and return it.
-		 */
-		node->ss.ps.ps_ExprContext->ecxt_scantuple = resultSlot;
-		return ExecProject(node->ss.ps.ps_ProjInfo);
+		/* no quals, nor projections return directly from the tuple store. */
+		return ReturnTupleFromTuplestore(scanState);
 	}
-	else
+
+
+	for (;;)
 	{
 		/*
-		 * Here, we aren't projecting, so just return scan tuple.
+		 * Reset per-tuple memory context to free any expression evaluation
+		 * storage allocated in the previous tuple cycle.
 		 */
-		return resultSlot;
+		ResetExprContext(econtext);
+
+		TupleTableSlot *slot = ReturnTupleFromTuplestore(scanState);
+
+		if (TupIsNull(slot))
+		{
+			if (projInfo)
+				return ExecClearTuple(projInfo->pi_state.resultslot);
+			else
+				return slot;
+		}
+
+		/*
+		 * place the current tuple into the expr context
+		 */
+		econtext->ecxt_scantuple = slot;
+
+		if (!ExecQual(qual, econtext))
+		{
+			InstrCountFiltered1(node, 1);
+			continue;
+		}
+
+		/*
+			 * Found a satisfactory scan tuple.
+			 */
+		if (projInfo)
+		{
+			/*
+			 * Form a projection tuple, store it in the result tuple slot
+			 * and return it.
+			 */
+			return ExecProject(projInfo);
+		}
+		else
+		{
+			/*
+			 * Here, we aren't projecting, so just return scan tuple.
+			 */
+			return slot;
+		}
 	}
 }
 

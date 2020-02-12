@@ -189,6 +189,14 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 						List *custom_plans)
 {
 	CitusCustomScanPath *citusPath = (CitusCustomScanPath *) best_path;
+
+	/* clauses might have been added by the planner, need to add them to our scan */
+	RestrictInfo *restrictInfo = NULL;
+	List **quals = &citusPath->remoteScan->scan.plan.qual;
+	foreach_ptr(restrictInfo, clauses)
+	{
+		*quals = lappend(*quals, restrictInfo->clause);
+	}
 	return (Plan *) citusPath->remoteScan;
 }
 

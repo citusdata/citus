@@ -197,6 +197,13 @@ CitusExecutorRun(QueryDesc *queryDesc,
 TupleTableSlot *
 ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
+	/*
+	 * If there is a very selective qual on the Citus Scan node we might block interupts
+	 * for a longer time, therefore we check interupts on every retreive from the tuple
+	 * store inline with other scan nodes that read from 'source' data.
+	 */
+	CHECK_FOR_INTERRUPTS();
+
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 	bool forwardScanDirection = true;
 
