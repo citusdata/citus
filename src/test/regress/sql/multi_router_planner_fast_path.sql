@@ -666,6 +666,25 @@ EXECUTE author_articles(1);
 EXECUTE author_articles(1);
 EXECUTE author_articles(1);
 
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+EXECUTE author_articles(NULL);
+
+PREPARE author_articles_update(int) AS
+	UPDATE articles_hash SET title = 'test' WHERE author_id = $1;
+
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+EXECUTE author_articles_update(NULL);
+
 -- queries inside plpgsql functions could be router plannable
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE

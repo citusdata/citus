@@ -201,7 +201,7 @@ test: multi_transaction_recovery
 # multi_router_planner creates hash partitioned tables.
 # ---------
 test: multi_copy fast_path_router_modify
-test: multi_router_planner multi_router_planner_fast_path
+test: multi_router_planner multi_router_planner_fast_path null_parameters
 
 # ----------
 # multi_large_shardid loads more lineitem data using high shard identifiers
