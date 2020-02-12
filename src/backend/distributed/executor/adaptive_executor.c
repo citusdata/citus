@@ -618,6 +618,7 @@ static bool HasDependentJobs(Job *mainJob);
 static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
+static int GetEventSetSize(List *sessionList);
 
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
@@ -2007,8 +2008,7 @@ RunDistributedExecution(DistributedExecution *execution)
 	{
 		bool cancellationReceived = false;
 
-		/* additional 2 is for postmaster and latch */
-		int eventSetSize = list_length(execution->sessionList) + 2;
+		int eventSetSize = GetEventSetSize(execution->sessionList);
 
 		/* always (re)build the wait event set the first time */
 		execution->connectionSetChanged = true;
@@ -2045,7 +2045,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
 
 				/* recalculate (and allocate) since the sessions have changed */
-				eventSetSize = list_length(execution->sessionList) + 2;
+				eventSetSize = GetEventSetSize(execution->sessionList);
 
 				events = palloc0(eventSetSize * sizeof(WaitEvent));
 
@@ -3766,7 +3766,7 @@ static WaitEventSet *
 BuildWaitEventSet(List *sessionList)
 {
 	/* additional 2 is for postmaster and latch */
-	int eventSetSize = list_length(sessionList) + 2;
+	int eventSetSize = GetEventSetSize(sessionList);
 
 	WaitEventSet *waitEventSet =
 		CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
@@ -3804,6 +3804,17 @@ BuildWaitEventSet(List *sessionList)
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 
 	return waitEventSet;
+}
+
+
+/*
+ * GetEventSetSize returns the event set size.
+ */
+static int
+GetEventSetSize(List *sessionList)
+{
+	/* additional 2 is for postmaster and latch */
+	return list_length(sessionList) + 2;
 }
 
 
