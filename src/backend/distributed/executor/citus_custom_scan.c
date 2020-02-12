@@ -144,7 +144,8 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
 
 	/* testing for a non empty scan tuple descriptor which asusmes the custom scan tlist had been set. this allows for custom projectections*/
-	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
+	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc,
+						  &TTSOpsMinimalTuple);
 	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
 
 	node->ss.ps.qual = ExecInitQual(node->ss.ps.plan->qual, (PlanState *) node);
@@ -206,9 +207,13 @@ CitusExecScan(CustomScanState *node)
 		if (TupIsNull(slot))
 		{
 			if (projInfo)
+			{
 				return ExecClearTuple(projInfo->pi_state.resultslot);
+			}
 			else
+			{
 				return slot;
+			}
 		}
 
 		/*
@@ -223,8 +228,8 @@ CitusExecScan(CustomScanState *node)
 		}
 
 		/*
-			 * Found a satisfactory scan tuple.
-			 */
+		 * Found a satisfactory scan tuple.
+		 */
 		if (projInfo)
 		{
 			/*
@@ -788,12 +793,16 @@ CitusReScan(CustomScanState *node)
 TupleDesc
 ScanStateGetTupleDescriptor(CitusScanState *scanState)
 {
-	CustomScan *remoteScan = ((CustomScan *)scanState->customScanState.ss.ps.plan);
-    if (remoteScan->custom_scan_tlist)
-    {
-        /* when the custom scan is set use the fields in the custom scan as the tuple descriptor */
-        return ExecTypeFromTL(remoteScan->custom_scan_tlist);
-    }
+	CustomScan *remoteScan = ((CustomScan *) scanState->customScanState.ss.ps.plan);
+	if (remoteScan->custom_scan_tlist)
+	{
+		/* when the custom scan is set use the fields in the custom scan as the tuple descriptor */
+#if PG_VERSION_NUM < 120000
+		return ExecTypeFromTL(remoteScan->custom_scan_tlist, true);
+#else
+		return ExecTypeFromTL(remoteScan->custom_scan_tlist);
+#endif
+	}
 	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->
 		   tts_tupleDescriptor;
 }

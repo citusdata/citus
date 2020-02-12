@@ -1418,7 +1418,7 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 }
 
 
-static List*
+static List *
 makeTargetListFromCustomScanList(List *custom_scan_tlist)
 {
 	List *targetList = NIL;
@@ -1432,14 +1432,13 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 		 */
 		Var *newVar = makeVarFromTargetEntry(INDEX_VAR, targetEntry);
 		TargetEntry *newTargetEntry = makeTargetEntry((Expr *) newVar, resno,
-													 targetEntry->resname,
-													 targetEntry->resjunk);
+													  targetEntry->resname,
+													  targetEntry->resjunk);
 		targetList = lappend(targetList, newTargetEntry);
 		resno++;
 	}
 	return targetList;
 }
-
 
 
 /*
@@ -1476,9 +1475,11 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		}
 
 		/* build target entry pointing to remote scan range table entry */
-		Var *newVarCustomScanTlist = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+		Var *newVarCustomScanTlist = makeVarFromTargetEntry(customScanRangeTableIndex,
+															targetEntry);
 
-		if (newVarCustomScanTlist->vartype == RECORDOID || newVarCustomScanTlist->vartype == RECORDARRAYOID)
+		if (newVarCustomScanTlist->vartype == RECORDOID ||
+			newVarCustomScanTlist->vartype == RECORDARRAYOID)
 		{
 			/*
 			 * Add the anonymous composite type to the type cache and store
@@ -1497,7 +1498,8 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		columnNameList = lappend(columnNameList, columnName);
 	}
 
-	customScan->scan.plan.targetlist = makeTargetListFromCustomScanList(custom_scan_tlist);
+	customScan->scan.plan.targetlist = makeTargetListFromCustomScanList(
+		custom_scan_tlist);
 	customScan->custom_scan_tlist = custom_scan_tlist;
 
 	PlannedStmt *routerPlan = makeNode(PlannedStmt);

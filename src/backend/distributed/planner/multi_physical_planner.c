@@ -112,11 +112,11 @@ static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJo
 static int ExtractRangeTableId(Node *node);
 static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
 						   List *dependentJobList, List **columnNames, List **columnVars);
-static RangeTblEntry *DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
-											 List *tableIdList, List *funcColumnNames,
-											 List *funcColumnTypes,
-											 List *funcColumnTypeMods,
-											 List *funcCollations);
+static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
+											  List *tableIdList, List *funcColumnNames,
+											  List *funcColumnTypes,
+											  List *funcColumnTypeMods,
+											  List *funcCollations);
 
 static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
@@ -1239,7 +1239,16 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 			foreach_ptr(targetEntry, dependentTargetList)
 			{
 				Node *expr = (Node *) targetEntry->expr;
-				funcColumnNames = lappend(funcColumnNames, makeString(targetEntry->resname));
+
+				/* TODO figure out why this became a problem now */
+				char *name = targetEntry->resname;
+				if (name == NULL)
+				{
+					name = pstrdup("unnamed");
+				}
+
+				funcColumnNames = lappend(funcColumnNames, makeString(name));
+
 				funcColumnTypes = lappend_oid(funcColumnTypes, exprType(expr));
 				funcColumnTypeMods = lappend_int(funcColumnTypeMods, exprTypmod(expr));
 				funcCollations = lappend_oid(funcCollations, exprCollation(expr));

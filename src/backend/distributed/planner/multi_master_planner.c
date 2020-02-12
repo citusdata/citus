@@ -51,9 +51,9 @@
 static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
-static PlannedStmt *BuildSelectStatementViaStdPlanner(Query *masterQuery,
-													  List *masterTargetList,
-													  CustomScan *remoteScan);
+static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
+													   List *masterTargetList,
+													   CustomScan *remoteScan);
 static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
 static bool HasDistinctOrOrderByAggregate(Query *masterQuery);
 static bool UseGroupAggregateWithHLL(Query *masterQuery);
@@ -95,11 +95,11 @@ MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 	}
 	else
 	{
-		PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList,
+		PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery,
+															 masterTargetList,
 															 remoteScan);
 		return masterSelectPlan;
 	}
-
 }
 
 
@@ -383,6 +383,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	root->query_level = 1;
 	root->planner_cxt = CurrentMemoryContext;
 	root->wt_param_id = -1;
+
 	/*
 	 * the standard planner will scribble on the target list, since we need the target
 	 * list for alias creation we make a copy here.
@@ -426,6 +427,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 
 	List *columnNameList = NIL;
 	TargetEntry *targetEntry = NULL;
+
 	/*
 	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
 	 */
