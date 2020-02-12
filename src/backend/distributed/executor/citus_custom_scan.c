@@ -144,18 +144,8 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
 
 	/* testing for a non empty scan tuple descriptor which asusmes the custom scan tlist had been set. this allows for custom projectections*/
-	CustomScan *remoteScan = ((CustomScan *)scanState->customScanState.ss.ps.plan);
-	if (remoteScan->custom_scan_tlist != NULL)
-	{
-		ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
-		ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
-	}
-	else
-	{
-		node->ss.ps.scandesc = ExecTypeFromTL(remoteScan->scan.plan.targetlist);
-		ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
-		ExecAssignScanProjectionInfoWithVarno(&node->ss, 1);
-	}
+	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc, &TTSOpsMinimalTuple);
+	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
 #endif
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;

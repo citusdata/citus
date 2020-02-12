@@ -24,6 +24,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -1417,6 +1418,30 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 }
 
 
+static List*
+makeTargetListFromCustomScanList(List *custom_scan_tlist)
+{
+	List *targetList = NIL;
+	TargetEntry *targetEntry = NULL;
+	int resno = 1;
+	foreach_ptr(targetEntry, custom_scan_tlist)
+	{
+		/*
+		 * INDEX_VAR is used to reference back to the TargetEntry in custom_scan_tlist by
+		 * its resno (index)
+		 */
+		Var *newVar = makeVarFromTargetEntry(INDEX_VAR, targetEntry);
+		TargetEntry *newTargetEntry = makeTargetEntry((Expr *) newVar, resno,
+													 targetEntry->resname,
+													 targetEntry->resjunk);
+		targetList = lappend(targetList, newTargetEntry);
+		resno++;
+	}
+	return targetList;
+}
+
+
+
 /*
  * FinalizeRouterPlan gets a CustomScan node which already wrapped distributed
  * part of a router plan and sets it as the direct child of the router plan
@@ -1427,11 +1452,11 @@ static PlannedStmt *
 FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 {
 	ListCell *targetEntryCell = NULL;
-	List *targetList = NIL;
+	List *custom_scan_tlist = NIL;
 	List *columnNameList = NIL;
 
 	/* we will have custom scan range table entry as the first one in the list */
-	int customScanRangeTableIndex = 1;
+	const int customScanRangeTableIndex = 1;
 
 	/* build a targetlist to read from the custom scan output */
 	foreach(targetEntryCell, localPlan->planTree->targetlist)
@@ -1451,9 +1476,9 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 		}
 
 		/* build target entry pointing to remote scan range table entry */
-		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+		Var *newVarCustomScanTlist = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 
-		if (newVar->vartype == RECORDOID || newVar->vartype == RECORDARRAYOID)
+		if (newVarCustomScanTlist->vartype == RECORDOID || newVarCustomScanTlist->vartype == RECORDARRAYOID)
 		{
 			/*
 			 * Add the anonymous composite type to the type cache and store
@@ -1461,18 +1486,19 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 			 * TupleDesc used by the executor, which uses it to parse the
 			 * query results from the workers in BuildTupleFromCStrings.
 			 */
-			newVar->vartypmod = BlessRecordExpression(targetEntry->expr);
+			newVarCustomScanTlist->vartypmod = BlessRecordExpression(targetEntry->expr);
 		}
 
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(targetEntry);
-		newTargetEntry->expr = (Expr *) newVar;
-		targetList = lappend(targetList, newTargetEntry);
+		newTargetEntry->expr = (Expr *) newVarCustomScanTlist;
+		custom_scan_tlist = lappend(custom_scan_tlist, newTargetEntry);
 
 		Value *columnName = makeString(targetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
 	}
 
-	customScan->scan.plan.targetlist = targetList;
+	customScan->scan.plan.targetlist = makeTargetListFromCustomScanList(custom_scan_tlist);
+	customScan->custom_scan_tlist = custom_scan_tlist;
 
 	PlannedStmt *routerPlan = makeNode(PlannedStmt);
 	routerPlan->planTree = (Plan *) customScan;

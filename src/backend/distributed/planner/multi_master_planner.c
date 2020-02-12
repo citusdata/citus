@@ -596,7 +596,7 @@ BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	Agg *aggregatePlan = makeAggNode(groupColumnList, (List *) havingQual,
+	Agg *aggregatePlan = makeAggNode(groupColumnList, make_ands_implicit(havingQual),
 									 aggregateStrategy, aggregateTargetList, subPlan);
 
 	/* just for reproducible costs between different PostgreSQL versions */
