@@ -619,6 +619,7 @@ static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
 static int GetEventSetSize(List *sessionList);
+static int UpdateWaitEventSet(DistributedExecution *execution);
 
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
@@ -2015,7 +2016,6 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
-			int eventIndex = 0;
 			long timeout = NextEventTimeout(execution);
 
 			WorkerPool *workerPool = NULL;
@@ -2026,12 +2026,6 @@ RunDistributedExecution(DistributedExecution *execution)
 
 			if (execution->connectionSetChanged)
 			{
-				if (execution->waitEventSet != NULL)
-				{
-					FreeWaitEventSet(execution->waitEventSet);
-					execution->waitEventSet = NULL;
-				}
-
 				if (events != NULL)
 				{
 					/*
@@ -2041,16 +2035,9 @@ RunDistributedExecution(DistributedExecution *execution)
 					pfree(events);
 					events = NULL;
 				}
-
-				execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
-
-				/* recalculate (and allocate) since the sessions have changed */
-				eventSetSize = GetEventSetSize(execution->sessionList);
+				eventSetSize = UpdateWaitEventSet(execution);
 
 				events = palloc0(eventSetSize * sizeof(WaitEvent));
-
-				execution->connectionSetChanged = false;
-				execution->waitFlagsChanged = false;
 			}
 			else if (execution->waitFlagsChanged)
 			{
@@ -2061,6 +2048,8 @@ RunDistributedExecution(DistributedExecution *execution)
 			/* wait for I/O events */
 			int eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 											  eventSetSize, WAIT_EVENT_CLIENT_READ);
+
+			int eventIndex = 0;
 
 			/* process I/O events */
 			for (; eventIndex < eventCount; eventIndex++)
@@ -2138,6 +2127,29 @@ RunDistributedExecution(DistributedExecution *execution)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * UpdateWaitEventSet updates the waitEventSet for the distributed execution.
+ * This happens when the connection set for the distributed execution is changed,
+ * which means that we need to update which connections we wait on for events.
+ * It returns the new event set size.
+ */
+static int
+UpdateWaitEventSet(DistributedExecution *execution)
+{
+	if (execution->waitEventSet != NULL)
+	{
+		FreeWaitEventSet(execution->waitEventSet);
+		execution->waitEventSet = NULL;
+	}
+
+	execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
+	execution->connectionSetChanged = false;
+	execution->waitFlagsChanged = false;
+
+	return GetEventSetSize(execution->sessionList);
 }
 
 
