@@ -391,23 +391,23 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	/* This code should not be re-entrant */
 	PlannedStmt *standardStmt = NULL;
 	PG_TRY();
-			{
-				Assert(ReplaceCitusExtraDataContainer == false);
-				Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
-				ReplaceCitusExtraDataContainer = true;
-				ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
+	{
+		Assert(ReplaceCitusExtraDataContainer == false);
+		Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
+		ReplaceCitusExtraDataContainer = true;
+		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
 
-				standardStmt = standard_planner(masterQuery, 0, NULL);
+		standardStmt = standard_planner(masterQuery, 0, NULL);
 
-				ReplaceCitusExtraDataContainer = false;
-				ReplaceCitusExtraDataContainerWithCustomScan = NULL;
-			}
-		PG_CATCH();
-			{
-				ReplaceCitusExtraDataContainer = false;
-				ReplaceCitusExtraDataContainerWithCustomScan = NULL;
-				PG_RE_THROW();
-			}
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+	}
+	PG_CATCH();
+	{
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+		PG_RE_THROW();
+	}
 	PG_END_TRY();
 
 	Assert(standardStmt != NULL);
