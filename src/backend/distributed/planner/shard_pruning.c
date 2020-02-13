@@ -7,8 +7,8 @@
  * need to be queried to find rows matching the expression in a query.
  *
  * In PruneShards we first make a compact representation of the given
- * query logical tree. This tree represent boolean operators and its
- * associated valid constrainst (expression nodes) and whether boolean
+ * query logical tree. This tree represents boolean operators and its
+ * associated valid constraints (expression nodes) and whether boolean
  * operator has associated unknown constraints. This allows essentially
  * unknown constraints to be replaced by a simple placeholder flag.
  *
@@ -17,7 +17,7 @@
  * 1. AND(hash_col IN (1,2), OR(X, X))
  * 2. AND(hash_col IN (1,2), OR(X))
  * 3. AND(hash_col IN (1,2), X)
- * Where X represents any (set of) unrecognized unprunable constraint(s).
+ * Where X represents any set of unrecognized unprunable constraint(s).
  *
  * Above allows the following pruning machinery to understand that
  * the target shard is determined solely by constraint: hash_col IN (1,2).
@@ -38,7 +38,7 @@
  * expressions. While (P OR Q) AND (R OR S) is logically equivalent to (P AND
  * R) OR (P AND S) OR (Q AND R) OR (Q AND S), in our implementation it becomes
  * P OR Q OR R OR S. This is acceptable since this will always result in a
- * superset of shards.  If this proves to be a issue in practice, a more
+ * superset of shards. If this proves to be a issue in practice, a more
  * complete algorithm could be implemented.
  *
  * We then evaluate each non-partial pruning instance in the disjunction
@@ -93,6 +93,7 @@
 #include "utils/memutils.h"
 #include "utils/ruleutils.h"
 
+
 /*
  * Tree node for compact representation of the given query logical tree.
  * Represent a single boolean operator node and its associated
@@ -101,7 +102,7 @@
 typedef struct PruningTreeNode
 {
 	/* Indicates is this AND/OR boolean operator */
-	bool isAnd;
+	BoolExprType boolop;
 
 	/* Does this boolean operator have unknown/unprunable constraint(s) */
 	bool hasInvalidConstraints;
@@ -109,10 +110,7 @@ typedef struct PruningTreeNode
 	/* List of recognized valid prunable constraints of this boolean opearator */
 	List *validConstraints;
 
-	/*
-	 * Child boolean operators.
-	 * Parent is always different boolean operator from its children.
-	 */
+	/* Child boolean producing operators. Parents are always different from their children */
 	List *childBooleanNodes;
 } PruningTreeNode;
 
@@ -140,8 +138,8 @@ typedef struct PruningInstance
 	bool evaluatesToFalse;
 
 	/*
-	 * Constraints on the partition column value.  If multiple values are
-	 * found the more restrictive one should be stored here.  Even in case of
+	 * Constraints on the partition column value. If multiple values are
+	 * found the more restrictive one should be stored here. Even for
 	 * a hash-partitioned table, actual column-values are stored here, *not*
 	 * hashed values.
 	 */
@@ -168,15 +166,15 @@ typedef struct PruningInstance
 	/*
 	 * When OR clauses are found, the non-ORed part (think of a < 3 AND (a > 5
 	 * OR a > 7)) of the expression is stored in one PruningInstance which is
-	 * then copied for the ORed expressions.  The original is marked as
-	 * isPartial, to avoid it being used for pruning.
+	 * then copied for the ORed expressions. The original is marked as
+	 * isPartial, to avoid being used for pruning.
 	 */
 	bool isPartial;
 } PruningInstance;
 
 
 /*
- * Partial instances that need to be finished building.  This is used to
+ * Partial instances that need to be finished building. This is used to
  * collect all ANDed restrictions, before looking into ORed expressions.
  */
 typedef struct PendingPruningInstance
@@ -274,32 +272,13 @@ static int LowerShardBoundary(Datum partitionColumnValue,
 							  ShardInterval **shardIntervalCache,
 							  int shardCount, FunctionCallInfo compareFunction,
 							  bool includeMax);
-static inline PruningTreeNode * CreatePruningNode(bool isAnd);
-static inline OpExpr * SAORestrictionArrayEqualityOp(
-	ScalarArrayOpExpr *arrayOperatorExpression,
-	Var *partitionColumn);
-static inline void DebugLogNode(char *fmt, Node *node, List *deparseCtx);
+static PruningTreeNode * CreatePruningNode(BoolExprType boolop);
+static OpExpr * SAORestrictionArrayEqualityOp(ScalarArrayOpExpr *arrayOperatorExpression,
+											  Var *partitionColumn);
+static void DebugLogNode(char *fmt, Node *node, List *deparseCtx);
+static void DebugLogPruningInstance(PruningInstance *pruning, List *deparseCtx);
+static int ConstraintCount(PruningTreeNode *node);
 
-#define AndBooleanNode() (CreatePruningNode(true))
-#define OrBooleanNode() (CreatePruningNode(false))
-#define IsAndOp(node) ((node)->isAnd)
-#define IsOrOp(node) (!(node)->isAnd)
-#define ConstraintCount(node) \
-	(list_length((node)->childBooleanNodes) + \
-	 list_length((node)->validConstraints) + \
-	 ((node)->hasInvalidConstraints ? 1 : 0))
-
-#define DebugLogPruningInstance(prune, deparseCtx) \
-	DebugLogNode("constraint value: %s, ", \
-				 (Node *) (prune)->equalConsts, (deparseCtx)); \
-	DebugLogNode("constraint (lt) value: %s, ", \
-				 (Node *) (prune)->lessConsts, (deparseCtx)); \
-	DebugLogNode("constraint (lteq) value: %s, ", \
-				 (Node *) (prune)->lessEqualConsts, (deparseCtx)); \
-	DebugLogNode("constraint (gt) value: %s, ", \
-				 (Node *) (prune)->greaterConsts, (deparseCtx)); \
-	DebugLogNode("constraint (gteq) value: %s, ", \
-				 (Node *) (prune)->greaterEqualConsts, (deparseCtx));
 
 /*
  * PruneShards returns all shards from a distributed table that cannot be
@@ -378,7 +357,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 							   "a partition column comparator")));
 	}
 
-	PruningTreeNode *tree = AndBooleanNode();
+	PruningTreeNode *tree = CreatePruningNode(AND_EXPR);
 
 	PruningTreeBuildContext treeBuildContext = { 0 };
 	treeBuildContext.current = tree;
@@ -393,7 +372,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	/* Figure out what we can prune on */
 	PrunableExpressions(tree, &context);
 
-	List *debugLoggedPruningInstances = NULL;
+	List *debugLoggedPruningInstances = NIL;
 
 	/*
 	 * Prune using each of the PrunableInstances we found, and OR results
@@ -414,7 +393,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 		/*
 		 * If the current instance has no prunable expressions, we'll have to
-		 * return all shards.  No point in continuing pruning in that case.
+		 * return all shards. No point in continuing pruning in that case.
 		 */
 		if (!prune->hasValidConstraint)
 		{
@@ -485,7 +464,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 	if (IsLoggableLevel(DEBUG3))
 	{
-		if (foundRestriction && debugLoggedPruningInstances)
+		if (foundRestriction && debugLoggedPruningInstances != NIL)
 		{
 			List *deparseCtx = deparse_context_for("unknown", relationId);
 			foreach(pruneCell, debugLoggedPruningInstances)
@@ -524,7 +503,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 
 /*
- * Check whether node is a valid constraint for pruning
+ * IsValidConditionNode checks whether node is a valid constraint for pruning.
  */
 static bool
 IsValidConditionNode(Node *node, Var *partitionColumn)
@@ -550,12 +529,7 @@ IsValidConditionNode(Node *node, Var *partitionColumn)
 	else if (IsA(node, ScalarArrayOpExpr))
 	{
 		ScalarArrayOpExpr *arrayOperatorExpression = (ScalarArrayOpExpr *) node;
-		if (SAORestrictions(arrayOperatorExpression, partitionColumn, NULL))
-		{
-			return true;
-		}
-
-		return false;
+		return SAORestrictions(arrayOperatorExpression, partitionColumn, NULL);
 	}
 	else
 	{
@@ -565,7 +539,7 @@ IsValidConditionNode(Node *node, Var *partitionColumn)
 
 
 /*
- * Build a logical tree of valid constraints and invalid constaints for pruning.
+ * BuildPruningTree builds a logical tree of constraints for pruning.
  */
 static bool
 BuildPruningTree(Node *node, PruningTreeBuildContext *context)
@@ -582,15 +556,14 @@ BuildPruningTree(Node *node, PruningTreeBuildContext *context)
 	else if (IsA(node, BoolExpr))
 	{
 		BoolExpr *boolExpr = (BoolExpr *) node;
-		bool isAnded = boolExpr->boolop == AND_EXPR;
 
 		if (boolExpr->boolop == NOT_EXPR)
 		{
 			return false;
 		}
-		else if (context->current->isAnd != isAnded)
+		else if (context->current->boolop != boolExpr->boolop)
 		{
-			PruningTreeNode *child = CreatePruningNode(isAnded);
+			PruningTreeNode *child = CreatePruningNode(boolExpr->boolop);
 
 			context->current->childBooleanNodes = lappend(
 				context->current->childBooleanNodes, child);
@@ -624,14 +597,12 @@ BuildPruningTree(Node *node, PruningTreeBuildContext *context)
 
 
 /*
- * Simplifies the logical tree of valid and invalid constraints for pruning.
+ * SimplifyPruningTree reduces logical tree of valid and invalid constraints for pruning.
  * The goal is to remove any node having just a single constraint associated with it.
  * This constraint is assigned to the parent logical node.
- * Removal of nodes is done by traversing from tree leafs upward.
  *
- * For example logical tree of
- * AND(hash_col = 1, OR(X)) gets simplified into AND(hash_col = 1, X)
- * Where X is any unknown condition.
+ * For example 'AND(hash_col = 1, OR(X))' gets simplified to 'AND(hash_col = 1, X)',
+ * where X is any unknown condition.
  */
 static void
 SimplifyPruningTree(PruningTreeNode *node, PruningTreeNode *parent)
@@ -649,11 +620,11 @@ SimplifyPruningTree(PruningTreeNode *node, PruningTreeNode *parent)
 	if (!parent)
 	{
 		/* Root is always ANDed expressions */
-		Assert(IsAndOp(node));
+		Assert(node->boolop == AND_EXPR);
 		return;
 	}
 
-	/* Boolean operator with just a single (regocnized/unknown) constraints gets simplified */
+	/* Boolean operator with single (recognized/unknown) constraint gets simplified */
 	if (ConstraintCount(node) <= 1)
 	{
 		parent->validConstraints = list_concat(parent->validConstraints,
@@ -704,19 +675,19 @@ static void
 PrunableExpressions(PruningTreeNode *tree, ClauseWalkerContext *context)
 {
 	/*
-	 * Build initial list of prunable expressions.  As long as only,
+	 * Build initial list of prunable expressions. As long as only,
 	 * implicitly or explicitly, ANDed expressions are found, this perform a
-	 * depth-first search.  When an ORed expression is found, the current
+	 * depth-first search. When an ORed expression is found, the current
 	 * PruningInstance is added to context->pruningInstances (once for each
 	 * ORed expression), then the tree-traversal is continued without
-	 * recursing.  Once at the top-level again, we'll process all pending
+	 * recursing. Once at the top-level again, we'll process all pending
 	 * expressions - that allows us to find all ANDed expressions, before
 	 * recursing into an ORed expression.
 	 */
 	PrunableExpressionsWalker(tree, context);
 
 	/*
-	 * Process all pending instances.  While processing, new ones might be
+	 * Process all pending instances. While processing, new ones might be
 	 * added to the list, so don't use foreach().
 	 *
 	 * Check the places in PruningInstanceWalker that push onto
@@ -756,15 +727,15 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 		return;
 	}
 
-	if (IsOrOp(node))
+	if (node->boolop == OR_EXPR)
 	{
 		/*
-		 * "Queue" partial pruning instances.  This is used to convert
+		 * "Queue" partial pruning instances. This is used to convert
 		 * expressions like (A AND (B OR C) AND D) into (A AND B AND D),
-		 * (A AND C AND D), with A, B, C, D being restrictions.  When the
+		 * (A AND C AND D), with A, B, C, D being restrictions. When the
 		 * OR is encountered, a reference to the partially built
 		 * PruningInstance (containing A at this point), is added to
-		 * context->pendingInstances once for B and once for C.  Once a
+		 * context->pendingInstances once for B and once for C. Once a
 		 * full tree-walk completed, PrunableExpressions() will complete
 		 * the pending instances, which'll now also know about restriction
 		 * D, by calling PrunableExpressionsWalker() once for B and once
@@ -773,7 +744,7 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 
 		if (node->hasInvalidConstraints)
 		{
-			PruningTreeNode *child = AndBooleanNode();
+			PruningTreeNode *child = CreatePruningNode(AND_EXPR);
 			child->hasInvalidConstraints = true;
 
 			AddNewConjuction(context, child);
@@ -783,7 +754,7 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 		{
 			Node *constraint = (Node *) lfirst(cell);
 
-			PruningTreeNode *child = AndBooleanNode();
+			PruningTreeNode *child = CreatePruningNode(AND_EXPR);
 			child->validConstraints = list_make1(constraint);
 
 			AddNewConjuction(context, child);
@@ -792,14 +763,14 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 		foreach(cell, node->childBooleanNodes)
 		{
 			PruningTreeNode *child = (PruningTreeNode *) lfirst(cell);
-			Assert(IsAndOp(child));
+			Assert(child->boolop == AND_EXPR);
 			AddNewConjuction(context, child);
 		}
 
 		return;
 	}
 
-	Assert(IsAndOp(node));
+	Assert(node->boolop == AND_EXPR);
 
 	foreach(cell, node->validConstraints)
 	{
@@ -881,14 +852,14 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 	foreach(cell, node->childBooleanNodes)
 	{
 		PruningTreeNode *child = (PruningTreeNode *) lfirst(cell);
-		Assert(IsOrOp(child));
+		Assert(child->boolop == OR_EXPR);
 		PrunableExpressionsWalker(child, context);
 	}
 }
 
 
 /*
- * Check whether expression is a valid comparison of a var to a constant.
+ * VarConstOpExprClause check whether an expression is a valid comparison of a Var to a Const.
  * Also obtaining the var with constant when valid.
  */
 static bool
@@ -946,21 +917,20 @@ AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 										ScalarArrayOpExpr *arrayOperatorExpression)
 {
 	List *restrictions = NULL;
-	if (SAORestrictions(arrayOperatorExpression, context->partitionColumn, &restrictions))
-	{
-		PruningTreeNode *node = OrBooleanNode();
-		node->validConstraints = restrictions;
-		AddNewConjuction(context, node);
-	}
-	else
-	{
-		Assert(false);
-	}
+	bool validSAORestriction PG_USED_FOR_ASSERTS_ONLY =
+		SAORestrictions(arrayOperatorExpression, context->partitionColumn, &restrictions);
+
+	Assert(validSAORestriction);
+
+	PruningTreeNode *node = CreatePruningNode(OR_EXPR);
+	node->validConstraints = restrictions;
+	AddNewConjuction(context, node);
 }
 
 
 /*
- * Check whether SAO constraint is valid. Also obtaining the built equality restrictions.
+ * SAORestrictions checks whether an SAO constraint is valid.
+ * Also obtains equality restrictions.
  */
 static bool
 SAORestrictions(ScalarArrayOpExpr *arrayOperatorExpression, Var *partitionColumn,
@@ -977,11 +947,12 @@ SAORestrictions(ScalarArrayOpExpr *arrayOperatorExpression, Var *partitionColumn
 		equal(strippedLeftOpExpression, partitionColumn) &&
 		IsA(arrayArgument, Const))
 	{
+		Const *arrayConst = (Const *) arrayArgument;
 		int16 typlen = 0;
 		bool typbyval = false;
 		char typalign = '\0';
 		Datum arrayElement = 0;
-		Datum inArray = ((Const *) arrayArgument)->constvalue;
+		Datum inArray = arrayConst->constvalue;
 		bool isNull = false;
 		bool foundValid = false;
 
@@ -991,7 +962,7 @@ SAORestrictions(ScalarArrayOpExpr *arrayOperatorExpression, Var *partitionColumn
 			return false;
 		}
 
-		ArrayType *array = DatumGetArrayTypeP(((Const *) arrayArgument)->constvalue);
+		ArrayType *array = DatumGetArrayTypeP(arrayConst->constvalue);
 
 		/* get the necessary information from array type to iterate over it */
 		Oid elementType = ARR_ELEMTYPE(array);
@@ -1018,8 +989,8 @@ SAORestrictions(ScalarArrayOpExpr *arrayOperatorExpression, Var *partitionColumn
 			if (requestedRestrictions)
 			{
 				Const *constElement = makeConst(elementType, -1,
-												DEFAULT_COLLATION_OID, typlen,
-												arrayElement,
+												arrayConst->constcollid,
+												typlen, arrayElement,
 												isNull, typbyval);
 
 				/* build partcol = arrayelem operator */
@@ -1058,7 +1029,7 @@ AddNewConjuction(ClauseWalkerContext *context, PruningTreeNode *node)
 
 	/*
 	 * Signal that this instance is not to be used for pruning on
-	 * its own.  Once the pending instance is processed, it'll be
+	 * its own. Once the pending instance is processed, it'll be
 	 * used.
 	 */
 	instance->instance->isPartial = true;
@@ -1067,7 +1038,8 @@ AddNewConjuction(ClauseWalkerContext *context, PruningTreeNode *node)
 
 
 /*
- * Check whether operator clause is valid restriction for partition column.
+ * IsValidPartitionKeyRestriction check whether an operator clause is
+ * a valid restriction for comparing to a partition column.
  */
 static bool
 IsValidPartitionKeyRestriction(OpExpr *opClause)
@@ -1216,11 +1188,12 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 
 
 /*
- * Sometimes PostgreSQL chooses to try to wrap our Var in a coercion rather
- * than the Const; to deal with this, we strip the coercions from both and
- * manually coerce the Const into the type of our partition column. It is
- * conceivable that in some instances, this may not be possible; in those cases
- * we will simply fail to prune partitions based on this clause.
+ * TransformPartitionRestrictionValue works around how PostgreSQL sometimes
+ * chooses to try to wrap our Var in a coercion rather than the Const.
+ * To deal with this, we strip coercions from both and manually coerce
+ * the Const into the type of our partition column.
+ * It is conceivable that in some instances this may not be possible,
+ * in those cases we will simply fail to prune partitions based on this clause.
  */
 static Const *
 TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue)
@@ -1255,7 +1228,7 @@ TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue
 
 
 /*
- * Check whether operator clause is valid restriction for hashed column.
+ * IsValidHashRestriction checks whether an operator clause is a valid restriction for hashed column.
  */
 static bool
 IsValidHashRestriction(OpExpr *opClause)
@@ -1293,11 +1266,11 @@ AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 	Assert(IsValidHashRestriction(opClause));
 
 	/*
-	 * Ladidadida, dirty hackety hack.  We only add such
+	 * Ladidadida, dirty hackety hack. We only add such
 	 * constraints (in ShardIntervalOpExpressions()) to select a
-	 * shard based on its exact boundaries.  For efficient binary
+	 * shard based on its exact boundaries. For efficient binary
 	 * search it's better to simply use one representative value
-	 * to look up the shard.  In practice, this is sufficient for
+	 * to look up the shard. In practice, this is sufficient for
 	 * now.
 	 */
 	PruningInstance *prune = context->currentPruningInstance;
@@ -1394,7 +1367,7 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	/*
 	 * For an equal constraints, if there's no overlapping shards (always the
 	 * case for hash and range partitioning, sometimes for append), can
-	 * perform binary search for the right interval.  That's usually the
+	 * perform binary search for the right interval. That's usually the
 	 * fastest, so try that first.
 	 */
 	if (prune->equalConsts &&
@@ -1414,7 +1387,7 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 
 	/*
 	 * If the hash value we're looking for is known, we can search for the
-	 * interval directly.  That's fast and should only ever be the case for a
+	 * interval directly. That's fast and should only ever be the case for a
 	 * hash-partitioned table.
 	 */
 	if (prune->hashedEqualConsts)
@@ -1435,7 +1408,7 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 		{
 			/*
 			 * equalConst based pruning above yielded a different shard than
-			 * pruning based on pre-hashed equality.  This is useful in case
+			 * pruning based on pre-hashed equality. This is useful in case
 			 * of INSERT ... SELECT, where both can occur together (one via
 			 * join/colocation, the other via a plain equality restriction).
 			 */
@@ -1824,8 +1797,7 @@ ExhaustivePrune(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 
 
 /*
- * ExhaustivePruneOne returns true if curInterval is pruned away, false
- * otherwise.
+ * ExhaustivePruneOne returns whether curInterval is pruned away.
  */
 static bool
 ExhaustivePruneOne(ShardInterval *curInterval,
@@ -1912,11 +1884,11 @@ ExhaustivePruneOne(ShardInterval *curInterval,
 /*
  * Helper for creating a node for pruning tree
  */
-static inline PruningTreeNode *
-CreatePruningNode(bool isAnd)
+static PruningTreeNode *
+CreatePruningNode(BoolExprType boolop)
 {
 	PruningTreeNode *node = palloc0(sizeof(PruningTreeNode));
-	node->isAnd = isAnd;
+	node->boolop = boolop;
 	node->childBooleanNodes = NULL;
 	node->validConstraints = NULL;
 	node->hasInvalidConstraints = false;
@@ -1925,9 +1897,10 @@ CreatePruningNode(bool isAnd)
 
 
 /*
- * Create equality operator for a single element of scalar array constraint.
+ * SAORestrictionArrayEqualityOp creates an equality operator
+ * for a single element of a scalar array constraint.
  */
-static inline OpExpr *
+static OpExpr *
 SAORestrictionArrayEqualityOp(ScalarArrayOpExpr *arrayOperatorExpression,
 							  Var *partitionColumn)
 {
@@ -1944,16 +1917,45 @@ SAORestrictionArrayEqualityOp(ScalarArrayOpExpr *arrayOperatorExpression,
 
 
 /*
- * Debug helper for logging expression nodes
+ * DebugLogNode is a helper for logging expression nodes.
  */
-static inline void
+static void
 DebugLogNode(char *fmt, Node *node, List *deparseCtx)
 {
-	if (!node)
+	if (node != NULL)
 	{
-		return;
+		char *deparsed = deparse_expression(node, deparseCtx, false, false);
+		ereport(DEBUG3, (errmsg(fmt, deparsed)));
 	}
+}
 
-	char *deparsed = deparse_expression(node, deparseCtx, false, false);
-	ereport(DEBUG3, (errmsg(fmt, deparsed)));
+
+/*
+ * DebugLogPruningInstance is a helper for logging purning constraints.
+ */
+static void
+DebugLogPruningInstance(PruningInstance *pruning, List *deparseCtx)
+{
+	DebugLogNode("constraint value: %s",
+				 (Node *) pruning->equalConsts, deparseCtx);
+	DebugLogNode("constraint (lt) value: %s", \
+				 (Node *) pruning->lessConsts, deparseCtx);
+	DebugLogNode("constraint (lteq) value: %s", \
+				 (Node *) pruning->lessEqualConsts, deparseCtx);
+	DebugLogNode("constraint (gt) value: %s", \
+				 (Node *) pruning->greaterConsts, deparseCtx);
+	DebugLogNode("constraint (gteq) value: %s",
+				 (Node *) pruning->greaterEqualConsts, deparseCtx);
+}
+
+
+/*
+ * ConstraintCount returns how many arguments this node is taking.
+ */
+static int
+ConstraintCount(PruningTreeNode *node)
+{
+	return list_length(node->childBooleanNodes) +
+		   list_length(node->validConstraints) +
+		   (node->hasInvalidConstraints ? 1 : 0);
 }
