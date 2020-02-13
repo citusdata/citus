@@ -99,6 +99,13 @@ static DistributeObjectOps Any_AlterRole = {
 	.postprocess = PostprocessAlterRoleStmt,
 	.address = NULL,
 };
+static DistributeObjectOps Any_AlterRoleSet = {
+	.deparse = DeparseAlterRoleSetStmt,
+	.qualify = QualifyAlterRoleSetStmt,
+	.preprocess = PreprocessAlterRoleSetStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
 static DistributeObjectOps Any_AlterTableMoveAll = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -596,6 +603,11 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterRoleStmt:
 		{
 			return &Any_AlterRole;
+		}
+
+		case T_AlterRoleSetStmt:
+		{
+			return &Any_AlterRoleSet;
 		}
 
 		case T_AlterTableStmt:

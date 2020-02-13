@@ -20,6 +20,7 @@
 #include "utils/builtins.h"
 
 static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
+static void AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt);
 
 
 /*
@@ -34,6 +35,23 @@ DeparseAlterRoleStmt(Node *node)
 	initStringInfo(&buf);
 
 	AppendAlterRoleStmt(&buf, stmt);
+
+	return buf.data;
+}
+
+
+/*
+ * DeparseAlterRoleSetStmt builds and returns a string representing of the
+ * AlterRoleSetStmt for application on a remote server.
+ */
+char *
+DeparseAlterRoleSetStmt(Node *node)
+{
+	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendAlterRoleSetStmt(&buf, stmt);
 
 	return buf.data;
 }
@@ -137,4 +155,46 @@ AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt)
 																			option->arg)));
 		}
 	}
+}
+
+
+/*
+ * AppendAlterRoleStmt generates the string representation of the
+ * AlterRoleStmt and appends it to the buffer.
+ */
+static void
+AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt)
+{
+	RoleSpec *role = stmt->role;
+	const char *roleSpecStr = NULL;
+
+	if (role == NULL)
+	{
+		/*
+		 * If all roles are be affected, role field is left blank in an
+		 * AlterRoleSetStmt.
+		 */
+		roleSpecStr = "ALL";
+	}
+	else
+	{
+		/*
+		 * If the role_specification used is CURRENT_USER or SESSION_USER,
+		 * it will be converted to thats roles role name.
+		 *
+		 * We also set withQuoteIdentifier parameter to true. Since the
+		 * roleSpecStr will be used in a query, the quotes are needed.
+		 */
+		roleSpecStr = RoleSpecString(role, true);
+	}
+
+	appendStringInfo(buf, "ALTER ROLE %s", roleSpecStr);
+
+	if (stmt->database != NULL)
+	{
+		appendStringInfo(buf, " IN DATABASE %s", quote_identifier(stmt->database));
+	}
+
+	VariableSetStmt *setStmt = castNode(VariableSetStmt, stmt->setstmt);
+	AppendVariableSet(buf, setStmt);
 }

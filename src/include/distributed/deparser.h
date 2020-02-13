@@ -87,6 +87,8 @@ extern char * DeparseAlterFunctionSchemaStmt(Node *stmt);
 extern char * DeparseAlterFunctionOwnerStmt(Node *stmt);
 extern char * DeparseAlterFunctionDependsStmt(Node *stmt);
 
+extern void AppendVariableSet(StringInfo buf, VariableSetStmt *setStmt);
+
 extern void QualifyAlterFunctionStmt(Node *stmt);
 extern void QualifyRenameFunctionStmt(Node *stmt);
 extern void QualifyAlterFunctionSchemaStmt(Node *stmt);
@@ -95,6 +97,10 @@ extern void QualifyAlterFunctionDependsStmt(Node *stmt);
 
 /* forward declarations for deparse_role_stmts.c */
 extern char * DeparseAlterRoleStmt(Node *stmt);
+extern char * DeparseAlterRoleSetStmt(Node *stmt);
+
+extern Node * MakeSetStatementArgument(char *configurationName, char *configurationValue);
+extern void QualifyAlterRoleSetStmt(Node *stmt);
 
 /* forward declarations for deparse_extension_stmts.c */
 extern DefElem * GetExtensionOption(List *extensionOptions,

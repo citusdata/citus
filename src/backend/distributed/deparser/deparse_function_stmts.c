@@ -278,6 +278,16 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 {
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, def->arg);
 
+	AppendVariableSet(buf, setStmt);
+}
+
+
+/*
+ * AppendVariableSet appends a string representing the VariableSetStmt to a buffer
+ */
+void
+AppendVariableSet(StringInfo buf, VariableSetStmt *setStmt)
+{
 	switch (setStmt->kind)
 	{
 		case VAR_SET_VALUE:

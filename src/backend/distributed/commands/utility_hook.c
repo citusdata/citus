@@ -555,18 +555,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 		}
 
-		if (IsA(parsetree, AlterRoleSetStmt) && EnableAlterRolePropagation)
-		{
-			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
-									"distributed databases"),
-
-							 errdetail(
-								 "Citus does not propagate ALTER ROLE ... SET/RESET "
-								 "commands to workers"),
-
-							 errhint("You can manually alter roles on workers.")));
-		}
-
 		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
 			OBJECT_ROLE && EnableAlterRolePropagation)
 		{
