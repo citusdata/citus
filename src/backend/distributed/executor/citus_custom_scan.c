@@ -793,18 +793,7 @@ CitusReScan(CustomScanState *node)
 TupleDesc
 ScanStateGetTupleDescriptor(CitusScanState *scanState)
 {
-	CustomScan *remoteScan = ((CustomScan *) scanState->customScanState.ss.ps.plan);
-	if (remoteScan->custom_scan_tlist)
-	{
-		/* when the custom scan is set use the fields in the custom scan as the tuple descriptor */
-#if PG_VERSION_NUM < 120000
-		return ExecTypeFromTL(remoteScan->custom_scan_tlist, true);
-#else
-		return ExecTypeFromTL(remoteScan->custom_scan_tlist);
-#endif
-	}
-	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->
-		   tts_tupleDescriptor;
+	return scanState->customScanState.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
 }
 
 
