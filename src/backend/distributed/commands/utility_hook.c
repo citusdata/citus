@@ -715,8 +715,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
 		}
 
-		/* use adaptive executor when enabled */
-		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
+		/* local execution is not implemented for this code path */
+		bool tryLocalExecution = false;
+
+		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList, localExecutionSupported);
 	}
 	else
 	{
@@ -727,8 +729,11 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
+			/* local execution is not implemented for this code path */
+			bool tryLocalExecution = false;
+
+			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList,
+												 localExecutionSupported);
 
 			if (shouldSyncMetadata)
 			{
