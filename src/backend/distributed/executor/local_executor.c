@@ -3,7 +3,7 @@
  *
  * The scope of the local execution is locally executing the queries on the
  * shards. In other words, local execution does not deal with any local tables
- * that are not shards on the node that the query is being executed. In that sense,
+ * that are not on shards on the node that the query is being executed. In that sense,
  * the local executor is only triggered if the node has both the metadata and the
  * shards (e.g., only Citus MX worker nodes).
  *
@@ -14,7 +14,7 @@
  * The local executor is an extension of the adaptive executor. So, the executor uses
  * adaptive executor's custom scan nodes.
  *
- * One thing to note that Citus MX is only supported with replication factor = 1, so
+ * One thing to note is that Citus MX is only supported with replication factor = 1, so
  * keep that in mind while continuing the comments below.
  *
  * On the high level, there are 3 slightly different ways of utilizing local execution:
@@ -26,14 +26,14 @@
  *      without going to the network at all.
  *
  *      Even if there is a transaction block (or recursively planned CTEs), as long
- *      as the queries hit the shards on the same, the local execution will kick in.
+ *      as the queries hit the shards on the same node, the local execution will kick in.
  *
  * (2) Execution of local single queries and remote multi-shard queries
  *
  *      The rule is simple. If a transaction block starts with a local query execution,
  *      all the other queries in the same transaction block that touch any local shard
  *      have to use the local execution. Although this sounds restrictive, we prefer to
- *      implement in this way, otherwise we'd end-up with as complex scenarious as we
+ *      implement it in this way, otherwise we'd end-up with as complex scenarios as we
  *      have in the connection managements due to foreign keys.
  *
  *      See the following example:
@@ -56,17 +56,18 @@
  *		Note that for read-only queries, after the local execution, there is no need to
  *		kick in adaptive executor.
  *
- *  There are also few limitations/trade-offs that is worth mentioning. First, the
- *  local execution on multiple shards might be slow because the execution has to
- *  happen one task at a time (e.g., no parallelism). Second, if a transaction
- *  block/CTE starts with a multi-shard command, we do not use local query execution
+ *  There are also a few limitations/trade-offs that are worth mentioning.
+ *  - The local execution on multiple shards might be slow because the execution has to
+ *  happen one task at a time (e.g., no parallelism).
+ *  - If a transaction block/CTE starts with a multi-shard command, we do not use local query execution
  *  since local execution is sequential. Basically, we do not want to lose parallelism
- *  across local tasks by switching to local execution. Third, the local execution
- *  currently only supports queries. In other words, any utility commands like TRUNCATE,
+ *  across local tasks by switching to local execution.
+ *  - The local execution currently only supports queries. In other words, any utility commands like TRUNCATE,
  *  fails if the command is executed after a local execution inside a transaction block.
- *  Forth, the local execution cannot be mixed with the executors other than adaptive,
- *  namely task-tracker executor. Finally, related with the previous item, COPY command
- *  cannot be mixed with local execution in a transaction. The implication of that any
+ *  - The local execution cannot be mixed with the executors other than adaptive,
+ *  namely task-tracker executor.
+ *  - Related with the previous item, COPY command
+ *  cannot be mixed with local execution in a transaction. The implication of that is any
  *  part of INSERT..SELECT via coordinator cannot happen via the local execution.
  */
 #include "postgres.h"
