@@ -937,10 +937,15 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	ParamListInfo paramListInfo = NULL;
 
 	/*
-	 * The code-paths that rely on this function do not know how to execute
-	 * commands locally.
+	 * If current transaction accessed local placements and task list includes
+	 * tasks that should be executed locally (accessing any of the local placements),
+	 * then we should error out as it would cause inconsistencies across the
+	 * remote connection and local execution.
 	 */
-	ErrorIfTransactionAccessedPlacementsLocally();
+	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(taskList))
+	{
+		ErrorIfTransactionAccessedPlacementsLocally();
+	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{

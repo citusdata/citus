@@ -608,6 +608,27 @@ ShouldExecuteTasksLocally(List *taskList)
 
 
 /*
+ * AnyTaskAccessesLocalNode returns true if a task within the task list accesses
+ * to the local node.
+ */
+bool
+AnyTaskAccessesLocalNode(List *taskList)
+{
+	Task *task = NULL;
+
+	foreach_ptr(task, taskList)
+	{
+		if (TaskAccessesLocalNode(task))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * TaskAccessesLocalNode returns true if any placements of the task reside on
  * the node that we're executing the query.
  */
