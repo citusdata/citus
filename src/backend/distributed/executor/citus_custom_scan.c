@@ -545,8 +545,8 @@ HandleDeferredShardPruningForFastPathQueries(DistributedPlan *distributedPlan)
 	bool isMultiShardQuery = false;
 	List *shardIntervalList =
 		TargetShardIntervalForFastPathQuery(workerJob->jobQuery,
-											&workerJob->partitionKeyValue,
-											&isMultiShardQuery, NULL);
+											&isMultiShardQuery, NULL,
+											&workerJob->partitionKeyValue);
 
 	/*
 	 * A fast-path router query can only yield multiple shards when the parameter

@@ -77,9 +77,9 @@ extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 extern uint64 GetAnchorShardId(List *relationShardList);
 extern List * TargetShardIntervalForFastPathQuery(Query *query,
-												  Const **partitionValueConst,
 												  bool *isMultiShardQuery,
-												  Const *distributionKeyValue);
+												  Const *inputDistributionKeyValue,
+												  Const **outGoingPartitionValueConst);
 extern void GenerateSingleShardRouterTaskList(Job *job,
 											  List *relationShardList,
 											  List *placementList, uint64 shardId);

@@ -2091,8 +2091,9 @@ PlanRouterQuery(Query *originalQuery,
 			plannerRestrictionContext->fastPathRestrictionContext->distributionKeyValue;
 
 		List *shardIntervalList =
-			TargetShardIntervalForFastPathQuery(originalQuery, partitionValueConst,
-												&isMultiShardQuery, distributionKeyValue);
+			TargetShardIntervalForFastPathQuery(originalQuery, &isMultiShardQuery,
+												distributionKeyValue,
+												partitionValueConst);
 
 		/*
 		 * This could only happen when there is a parameter on the distribution key.
@@ -2375,25 +2376,32 @@ GetAnchorShardId(List *prunedShardIntervalListList)
  * one list of a a one shard interval (see FastPathRouterQuery()
  * for the detail).
  *
- * Also set the outgoing partition column value if requested via
- * partitionValueConst
+ * If the caller requested the distributionKey value that this function
+ * yields, set outputPartitionValueConst.
  */
 List *
-TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
-									bool *isMultiShardQuery, Const *distributionKeyValue)
+TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
+									Const *inputDistributionKeyValue,
+									Const **outputPartitionValueConst)
 {
 	Oid relationId = ExtractFirstDistributedTableId(query);
 
-	if (distributionKeyValue)
+	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	{
+		/* we don't need to do shard pruning for reference tables */
+		return list_make1(LoadShardIntervalList(relationId));
+	}
+
+	if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
 	{
 		DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
 		ShardInterval *shardInterval =
-			FindShardInterval(distributionKeyValue->constvalue, cache);
+			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
 
-		if (partitionValueConst != NULL)
+		if (outputPartitionValueConst != NULL)
 		{
 			/* set the outgoing partition column value if requested */
-			*partitionValueConst = distributionKeyValue;
+			*outputPartitionValueConst = inputDistributionKeyValue;
 		}
 		List *shardIntervalList = list_make1(shardInterval);
 
@@ -2402,10 +2410,24 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 
 	Node *quals = query->jointree->quals;
 	int relationIndex = 1;
-	Const *queryPartitionValueConst = NULL;
+
+	/*
+	 * We couldn't do the shard pruning based on inputDistributionKeyValue as it might
+	 * be passed as NULL. Still, we can search the quals for distribution key.
+	 */
+	Const *distributionKeyValueInQuals = NULL;
 	List *prunedShardIntervalList =
 		PruneShards(relationId, relationIndex, make_ands_implicit((Expr *) quals),
-					&queryPartitionValueConst);
+					&distributionKeyValueInQuals);
+
+	if (!distributionKeyValueInQuals || distributionKeyValueInQuals->constisnull)
+	{
+		/*
+		 * If the distribution key equals to NULL, we prefer to treat it as a zero shard
+		 * query as it cannot return any rows.
+		 */
+		return NIL;
+	}
 
 	/* we're only expecting single shard from a single table */
 	Node *distKey PG_USED_FOR_ASSERTS_ONLY = NULL;
@@ -2416,10 +2438,10 @@ TargetShardIntervalForFastPathQuery(Query *query, Const **partitionValueConst,
 		*isMultiShardQuery = true;
 	}
 	else if (list_length(prunedShardIntervalList) == 1 &&
-			 partitionValueConst != NULL)
+			 outputPartitionValueConst != NULL)
 	{
 		/* set the outgoing partition column value if requested */
-		*partitionValueConst = queryPartitionValueConst;
+		*outputPartitionValueConst = distributionKeyValueInQuals;
 	}
 
 	return list_make1(prunedShardIntervalList);

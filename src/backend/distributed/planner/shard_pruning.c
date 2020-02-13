@@ -749,11 +749,19 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 															constantClause);
 		if (constantClause == NULL)
 		{
-			/* couldn't coerce value, so we note this as a restriction we don't grok */
+			/* couldn't coerce value, so we save it in otherRestrictions */
 			prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
 
 			return;
 		}
+	}
+
+	if (constantClause->constisnull)
+	{
+		/* we cannot do pruning for NULL values, so we save it in otherRestrictions */
+		prune->otherRestrictions = lappend(prune->otherRestrictions, opClause);
+
+		return;
 	}
 
 	/* at this point, we'd better be able to pass binary Datums to comparison functions */

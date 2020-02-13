@@ -1636,6 +1636,68 @@ DEBUG:  Plan is router executable
  41 |         1 | aznavour     |      11814
 (5 rows)
 
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+EXECUTE author_articles(NULL);
+ id | author_id | title | word_count
+---------------------------------------------------------------------
+(0 rows)
+
+PREPARE author_articles_update(int) AS
+	UPDATE articles_hash SET title = 'test' WHERE author_id = $1;
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+EXECUTE author_articles_update(NULL);
 -- queries inside plpgsql functions could be router plannable
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
