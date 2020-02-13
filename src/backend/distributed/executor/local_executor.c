@@ -150,8 +150,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 * during execution. Record it to apply the restrictions related to
 		 * local execution.
 		 */
-		if (!TransactionAccessedLocalPlacement &&
-			task->anchorShardId != INVALID_SHARD_ID)
+		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
 			TransactionAccessedLocalPlacement = true;
 		}
