@@ -183,69 +183,7 @@ CitusExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	ExprState *qual = node->ss.ps.qual;
-	ProjectionInfo *projInfo = node->ss.ps.ps_ProjInfo;
-	ExprContext *econtext = node->ss.ps.ps_ExprContext;
-
-	if (!qual && !projInfo)
-	{
-		/* no quals, nor projections return directly from the tuple store. */
-		return ReturnTupleFromTuplestore(scanState);
-	}
-
-
-	for (;;)
-	{
-		/*
-		 * Reset per-tuple memory context to free any expression evaluation
-		 * storage allocated in the previous tuple cycle.
-		 */
-		ResetExprContext(econtext);
-
-		TupleTableSlot *slot = ReturnTupleFromTuplestore(scanState);
-
-		if (TupIsNull(slot))
-		{
-			if (projInfo)
-			{
-				return ExecClearTuple(projInfo->pi_state.resultslot);
-			}
-			else
-			{
-				return slot;
-			}
-		}
-
-		/*
-		 * place the current tuple into the expr context
-		 */
-		econtext->ecxt_scantuple = slot;
-
-		if (!ExecQual(qual, econtext))
-		{
-			InstrCountFiltered1(node, 1);
-			continue;
-		}
-
-		/*
-		 * Found a satisfactory scan tuple.
-		 */
-		if (projInfo)
-		{
-			/*
-			 * Form a projection tuple, store it in the result tuple slot
-			 * and return it.
-			 */
-			return ExecProject(projInfo);
-		}
-		else
-		{
-			/*
-			 * Here, we aren't projecting, so just return scan tuple.
-			 */
-			return slot;
-		}
-	}
+	return ReturnTupleFromTuplestore(scanState);
 }
 
 

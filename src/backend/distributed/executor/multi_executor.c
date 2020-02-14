@@ -197,13 +197,6 @@ CitusExecutorRun(QueryDesc *queryDesc,
 TupleTableSlot *
 ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
-	/*
-	 * If there is a very selective qual on the Citus Scan node we might block interupts
-	 * for a longer time, therefore we check interupts on every retreive from the tuple
-	 * store inline with other scan nodes that read from 'source' data.
-	 */
-	CHECK_FOR_INTERRUPTS();
-
 	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 	bool forwardScanDirection = true;
 
@@ -221,10 +214,77 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		forwardScanDirection = false;
 	}
 
-	TupleTableSlot *resultSlot = scanState->customScanState.ss.ss_ScanTupleSlot;
-	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
+	ExprState *qual = scanState->customScanState.ss.ps.qual;
+	ProjectionInfo *projInfo = scanState->customScanState.ss.ps.ps_ProjInfo;
+	ExprContext *econtext = scanState->customScanState.ss.ps.ps_ExprContext;
 
-	return resultSlot;
+	if (!qual && !projInfo)
+	{
+		/* no quals, nor projections return directly from the tuple store. */
+		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
+		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
+		return slot;
+	}
+
+	for (;;)
+	{
+		/*
+		 * If there is a very selective qual on the Citus Scan node we might block
+		 * interupts for a longer time if we would not check for interrupts in this loop
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * Reset per-tuple memory context to free any expression evaluation
+		 * storage allocated in the previous tuple cycle.
+		 */
+		ResetExprContext(econtext);
+
+		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
+		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
+
+		if (TupIsNull(slot))
+		{
+			if (projInfo)
+			{
+				return ExecClearTuple(projInfo->pi_state.resultslot);
+			}
+			else
+			{
+				return slot;
+			}
+		}
+
+		/*
+		 * place the current tuple into the expr context
+		 */
+		econtext->ecxt_scantuple = slot;
+
+		if (!ExecQual(qual, econtext))
+		{
+			InstrCountFiltered1(scanState, 1);
+			continue;
+		}
+
+		/*
+		 * Found a satisfactory scan tuple.
+		 */
+		if (projInfo)
+		{
+			/*
+			 * Form a projection tuple, store it in the result tuple slot
+			 * and return it.
+			 */
+			return ExecProject(projInfo);
+		}
+		else
+		{
+			/*
+			 * Here, we aren't projecting, so just return scan tuple.
+			 */
+			return slot;
+		}
+	}
 }
 
 
