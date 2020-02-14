@@ -412,7 +412,6 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	DistTableCacheEntry *sourceTableEntry = DistributedTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
 
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{
@@ -444,6 +443,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	 * If the types are the same, we're good. If not, we still check if there
 	 * is any coercion path between the types.
 	 */
+	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
 	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{

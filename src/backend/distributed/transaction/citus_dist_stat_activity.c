@@ -543,6 +543,11 @@ ReplaceInitiatorNodeIdentifier(int initiator_node_identifier,
 
 		/* a query should run on an existing node */
 		Assert(nodeExists);
+		if (initiatorWorkerNode == NULL)
+		{
+			ereport(ERROR, (errmsg("no primary node found for group %d",
+								   initiator_node_identifier)));
+		}
 		citusDistStat->master_query_host_name =
 			cstring_to_text(initiatorWorkerNode->workerName);
 		citusDistStat->master_query_host_port = initiatorWorkerNode->workerPort;

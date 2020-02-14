@@ -980,6 +980,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 													boundParams);
+	Assert(originalQuery != NULL);
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
@@ -1034,6 +1035,9 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		/* recurse into CreateDistributedPlan with subqueries/CTEs replaced */
 		distributedPlan = CreateDistributedPlan(planId, originalQuery, query, NULL, false,
 												plannerRestrictionContext);
+
+		/* distributedPlan cannot be null since hasUnresolvedParams argument was false */
+		Assert(distributedPlan != NULL);
 		distributedPlan->subPlanList = subPlanList;
 
 		FinalizeDistributedPlan(distributedPlan, originalQuery);

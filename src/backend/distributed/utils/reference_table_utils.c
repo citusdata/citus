@@ -277,10 +277,8 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
 
 	List *shardPlacementList = ShardPlacementList(shardId);
-	bool missingWorkerOk = true;
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																 nodeName, nodePort,
-																 missingWorkerOk);
+																 nodeName, nodePort);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
 	/*

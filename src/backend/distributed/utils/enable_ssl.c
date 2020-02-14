@@ -191,7 +191,7 @@ ShouldUseAutoSSL(void)
 	const char *sslmode = NULL;
 	sslmode = GetConnParam("sslmode");
 
-	if (strcmp(sslmode, "require") == 0)
+	if (sslmode != NULL && strcmp(sslmode, "require") == 0)
 	{
 		return true;
 	}

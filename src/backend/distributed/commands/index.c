@@ -793,7 +793,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
-		Var *partitionKey = DistPartitionKey(relationId);
 		char partitionMethod = PartitionMethod(relationId);
 		ListCell *indexParameterCell = NULL;
 		bool indexContainsPartitionColumn = false;
@@ -814,6 +813,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 								   "is currently unsupported")));
 		}
 
+		Var *partitionKey = ForceDistPartitionKey(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
 		foreach(indexParameterCell, indexParameterList)
 		{

@@ -326,6 +326,7 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 			continue;
 		}
 
+		Assert(varToBeAdded != NULL);
 		AddToAttributeEquivalenceClass(&attributeEquivalence, relationPlannerRoot,
 									   varToBeAdded);
 	}
@@ -409,7 +410,7 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
 		return NULL;
 	}
 
-	Var *relationPartitionKey = DistPartitionKey(relationOid);
+	Var *relationPartitionKey = ForceDistPartitionKey(relationOid);
 
 	List *translaterVars = targetAppendRelInfo->translated_vars;
 	foreach(translatedVarCell, translaterVars)

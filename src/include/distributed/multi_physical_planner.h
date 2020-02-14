@@ -438,6 +438,7 @@ extern OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
  */
 extern Node * BuildBaseConstraint(Var *column);
 extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval);
+extern bool BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand);
 extern bool SimpleOpExpression(Expr *clause);
 extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
 
