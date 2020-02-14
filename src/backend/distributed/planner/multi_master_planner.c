@@ -40,6 +40,7 @@
 #else
 #include "optimizer/var.h"
 #endif
+#include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -393,9 +394,8 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
 	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
 
-	Node *havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
-	havingQual = SS_replace_correlation_vars(root, havingQual);
-	masterQuery->havingQual = havingQual;
+	/* probably want to do this where we add sublinks to the master plan */
+	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
 
 	/* This code should not be re-entrant */
 	PlannedStmt *standardStmt = NULL;
@@ -420,10 +420,6 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	PG_END_TRY();
 
 	Assert(standardStmt != NULL);
-
-	SS_attach_initplans(root, standardStmt->planTree);
-	standardStmt->paramExecTypes = root->glob->paramExecTypes;
-	standardStmt->subplans = root->glob->subplans;
 
 	List *columnNameList = NIL;
 	TargetEntry *targetEntry = NULL;

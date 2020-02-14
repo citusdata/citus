@@ -811,6 +811,31 @@ IsReadIntermediateResultArrayFunction(Node *node)
 }
 
 
+static bool
+IsCitusExtraDataContainerFunc(Node *node)
+{
+	return IsFunctionWithOid(node, CitusExtraDataContainerFuncId());
+}
+
+
+bool
+IsCitusExtraDataContainerRelation(RangeTblEntry *rte)
+{
+	if (rte->rtekind != RTE_FUNCTION || list_length(rte->functions) != 1)
+	{
+		/* avoid more expensive checks below for non-functions */
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG5))
+	{
+		return false;
+	}
+
+	return FindNodeCheck((Node *) rte->functions, IsCitusExtraDataContainerFunc);
+}
+
+
 /*
  * IsFunctionWithOid determines whether a given node is a function call
  * to the read_intermediate_result function.
