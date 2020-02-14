@@ -506,14 +506,16 @@ if ($followercluster)
 }
 
 # Create new data directories, copy workers for speed
-system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
+# --allow-group-access is used to ensure we set permissions on private keys
+# correctly
+system(catfile("$bindir", "initdb"), ("--nosync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
     or die "Could not create $MASTERDIR data directory";
 
 if ($usingWindows)
 {
 	for my $port (@workerPorts)
 	{
-		system(catfile("$bindir", "initdb"), ("--nosync", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
+		system(catfile("$bindir", "initdb"), ("--nosync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
 		    or die "Could not create worker data directory";
 	}
 }
