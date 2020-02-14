@@ -166,6 +166,11 @@ begin
     -- reset stats snapshot so we can test again
     perform pg_stat_clear_snapshot();
 
+    -- fail if we reach the end of this loop
+    if i = 100 then
+        raise 'Waited too long for analyze/vacuum';
+    end if;
+
   end loop;
 
   -- report time waited in postmaster log (where it won't change test output)
@@ -177,7 +182,7 @@ $$ language plpgsql;
 \c - - - :worker_2_port
 CREATE MATERIALIZED VIEW prevcounts AS
 SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
-WHERE relname='dustbunnies_990001';
+WHERE relname='dustbunnies_990002';
 -- create function that sleeps until those counters increment
 create function wait_for_stats() returns void as $$
 declare
@@ -191,12 +196,12 @@ begin
     -- check to see if analyze has been updated
     SELECT (st.analyze_count >= pc.analyze_count + 1) INTO analyze_updated
       FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990001' AND cl.relname='dustbunnies_990001';
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
 
      -- check to see if vacuum has been updated
     SELECT (st.vacuum_count >= pc.vacuum_count + 1) INTO vacuum_updated
       FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990001' AND cl.relname='dustbunnies_990001';
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
 
     exit when analyze_updated or vacuum_updated;
 
@@ -205,6 +210,11 @@ begin
 
     -- reset stats snapshot so we can test again
     perform pg_stat_clear_snapshot();
+
+    -- fail if we reach the end of this loop
+    if i = 100 then
+        raise 'Waited too long for analyze/vacuum';
+    end if;
 
   end loop;
 
@@ -273,6 +283,10 @@ ANALYZE dustbunnies (name);
 \c - - - :worker_1_port
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
+
+REFRESH MATERIALIZED VIEW prevcounts;
+\c - - - :worker_2_port
+REFRESH MATERIALIZED VIEW prevcounts;
 
 \c - - - :master_port
 -- verify warning for unqualified VACUUM
