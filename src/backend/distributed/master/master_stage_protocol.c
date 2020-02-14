@@ -123,7 +123,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
-		bool cstoreTable = cstoreTable = CStoreTable(relationId);
+		bool cstoreTable = CStoreTable(relationId);
 		if (cstoreTable)
 		{
 			storageType = SHARD_STORAGE_COLUMNAR;

@@ -7,6 +7,10 @@
  *-------------------------------------------------------------------------
  */
 
+#ifndef CITUS_FUNCTION_UTILS_H
+#define CITUS_FUNCTION_UTILS_H
+
+#include "postgres.h"
 
 #include "nodes/execnodes.h"
 
@@ -18,3 +22,5 @@ extern Oid FunctionOidExtended(const char *schemaName, const char *functionName,
 							   argumentCount, bool missingOK);
 extern ReturnSetInfo * FunctionCallGetTupleStore1(PGFunction function, Oid functionId,
 												  Datum argument);
+
+#endif /* CITUS_FUNCTION_UTILS_H */
