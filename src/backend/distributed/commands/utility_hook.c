@@ -632,12 +632,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}
-
-	/*
-	 * Ensure value is valid, we can't do some checks during CREATE
-	 * EXTENSION. This is important to register some invalidation callbacks.
-	 */
-	CitusHasBeenLoaded();
 }
 
 
