@@ -611,7 +611,7 @@ LocalNodeCitusDistStat(const char *statQuery, const char *hostname, int port)
 	 */
 	oldContext = MemoryContextSwitchTo(upperContext);
 
-	for (uint32 rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
+	for (uint64 rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
 	{
 		TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
 
