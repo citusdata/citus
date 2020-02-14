@@ -367,7 +367,7 @@ select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) o
  floor |       corr
 ---------------------------------------------------------------------
      0 |
-     1 | 0.991808518376741
+     1 | 0.991808518376742
      2 |                 1
      4 |
        |
@@ -376,7 +376,7 @@ select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) o
 select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) having corr(valf + val, val) < 1 order by 1;
  floor |       corr
 ---------------------------------------------------------------------
-     1 | 0.991808518376741
+     1 | 0.991808518376742
      2 |                 1
 (2 rows)
 

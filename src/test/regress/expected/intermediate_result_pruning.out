@@ -747,8 +747,9 @@ DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 ROLLBACK;
 -- test with INSERT SELECT via coordinator
 -- INSERT .. SELECT via coordinator that doesn't have any intermediate results
+-- We use offset 1 to make sure the result needs to be pulled to the coordinator, offset 0 would be optimized away
 INSERT INTO table_1
-	SELECT * FROM table_2 OFFSET 0;
+	SELECT * FROM table_2 OFFSET 1;
 DEBUG:  OFFSET clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- INSERT .. SELECT via coordinator which has intermediate result,

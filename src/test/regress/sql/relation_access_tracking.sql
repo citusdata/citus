@@ -234,7 +234,8 @@ ROLLBACK;
 
 -- coordinator INSERT .. SELECT
 BEGIN;
-	INSERT INTO table_2 SELECT * FROM table_1 OFFSET 0;
+    -- We use offset 1 to make sure the result needs to be pulled to the coordinator, offset 0 would be optimized away
+	INSERT INTO table_2 SELECT * FROM table_1 OFFSET 1;
 	SELECT * FROM relation_acesses WHERE table_name IN ('table_1', 'table_2')  ORDER BY 1;
 ROLLBACK;
 
