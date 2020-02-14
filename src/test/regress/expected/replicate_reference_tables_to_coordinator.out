@@ -344,6 +344,7 @@ $Q$);
 -- verify that we can drop columns from reference tables replicated to the coordinator
 -- see https://github.com/citusdata/citus/issues/3279
 ALTER TABLE squares DROP COLUMN b;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (8000000, 'replicate_ref_to_coordinator', 'ALTER TABLE squares DROP COLUMN b;')
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
