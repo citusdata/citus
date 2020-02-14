@@ -1,3 +1,7 @@
+### citus v9.2.1 (February 14, 2020) ###
+
+* Fixes a bug that could cause crashes if distribution key is NULL
+
 ### citus v9.2.0 (February 10, 2020) ###
 
 * Adds support for `INSERT...SELECT` queries with re-partitioning
