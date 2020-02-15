@@ -274,4 +274,12 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE NOT (o_orderkey = 2 AND o_orderkey = 3);
 
+-- Check that subquery NOT is pruned when ANDed to a valid constraint
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey IN (1,2) AND o_custkey NOT IN (SELECT o_custkey FROM orders_hash_partitioned WHERE o_orderkey = 1);
+
+-- Check that subquery NOT is unpruned when ORed to a valid constraint
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey IN (1,2) OR o_custkey NOT IN (SELECT o_custkey FROM orders_hash_partitioned WHERE o_orderkey = 3);
+
 SET client_min_messages TO DEFAULT;

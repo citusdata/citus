@@ -560,9 +560,11 @@ BuildPruningTree(Node *node, PruningTreeBuildContext *context)
 		if (boolExpr->boolop == NOT_EXPR)
 		{
 			/*
-			 * We should not encounter NOT_EXPR nodes.
+			 * With Var-Const conditions we should not encounter NOT_EXPR nodes.
 			 * Postgres standard planner applies De Morgan's laws to remove them.
-			 * But if we encounter one, we treat it as invalid constraint for pruning.
+			 * We still encounter them with subqueries inside NOT, for example with:
+			 * WHERE id NOT IN (SELECT id FROM something).
+			 * We treat these as invalid constraints for pruning when we encounter them.
 			 */
 			context->current->hasInvalidConstraints = true;
 
