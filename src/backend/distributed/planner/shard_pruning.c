@@ -559,6 +559,13 @@ BuildPruningTree(Node *node, PruningTreeBuildContext *context)
 
 		if (boolExpr->boolop == NOT_EXPR)
 		{
+			/*
+			 * We should not encounter NOT_EXPR nodes.
+			 * Postgres standard planner applies De Morgan's laws to remove them.
+			 * But if we encounter one, we treat it as invalid constraint for pruning.
+			 */
+			context->current->hasInvalidConstraints = true;
+
 			return false;
 		}
 		else if (context->current->boolop != boolExpr->boolop)

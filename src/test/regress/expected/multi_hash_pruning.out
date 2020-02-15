@@ -995,4 +995,65 @@ DEBUG:  assigned task to node localhost:xxxxx
      4
 (1 row)
 
+-- Check that NOT is handled with NEQs ORed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey != 2 OR o_orderkey != 3);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Check that NOT is handled with EQs ORed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey = 2 OR o_orderkey = 3);
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- Check that NOT is handled with NEQs ANDed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey != 2 AND o_orderkey != 3);
+DEBUG:  constraint value: 2
+DEBUG:  constraint value: 3
+DEBUG:  shard count: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  constraint value: 2
+DEBUG:  constraint value: 3
+DEBUG:  shard count: 2
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- Check that NOT is handled with EQs ANDed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey = 2 AND o_orderkey = 3);
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 4
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
 SET client_min_messages TO DEFAULT;

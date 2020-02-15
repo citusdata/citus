@@ -258,4 +258,20 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey IS NOT NULL;
 
+-- Check that NOT is handled with NEQs ORed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey != 2 OR o_orderkey != 3);
+
+-- Check that NOT is handled with EQs ORed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey = 2 OR o_orderkey = 3);
+
+-- Check that NOT is handled with NEQs ANDed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey != 2 AND o_orderkey != 3);
+
+-- Check that NOT is handled with EQs ANDed
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE NOT (o_orderkey = 2 AND o_orderkey = 3);
+
 SET client_min_messages TO DEFAULT;

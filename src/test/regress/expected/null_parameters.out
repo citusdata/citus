@@ -1429,6 +1429,9 @@ DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
 PREPARE null_update_on_text_param_and_in_2(text) AS UPDATE text_dist_column SET value = '' WHERE key IN ($1, 'test');
 EXECUTE null_update_on_text_param_and_in_2(NULL);
 DEBUG:  Creating router plan
