@@ -617,16 +617,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.use_std_planner",
-		gettext_noop(""),
-		NULL,
-		&UseStdPlanner,
-		true,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",
 		gettext_noop("Sets the time to wait between recovering 2PCs."),

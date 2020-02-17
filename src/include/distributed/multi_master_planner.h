@@ -34,7 +34,6 @@ extern Path * CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInf
 extern PlannedStmt * MasterNodeSelectPlan(struct DistributedPlan *distributedPlan,
 										  struct CustomScan *dataScan);
 extern Unique * make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
-extern bool UseStdPlanner;
 extern bool ReplaceCitusExtraDataContainer;
 extern CustomScan *ReplaceCitusExtraDataContainerWithCustomScan;
 
