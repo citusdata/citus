@@ -242,8 +242,6 @@ LockAcquireHelperMain(Datum main_arg)
 
 	while (ShouldAcquireLock(100))
 	{
-		int row = 0;
-
 		elog(LOG, "canceling competing backends for backend %d", backendPid);
 
 		/*
@@ -261,7 +259,7 @@ LockAcquireHelperMain(Datum main_arg)
 
 		if (spiStatus == SPI_OK_SELECT)
 		{
-			for (row = 0; row < SPI_processed; row++)
+			for (uint64 row = 0; row < SPI_processed; row++)
 			{
 				bool isnull = false;
 

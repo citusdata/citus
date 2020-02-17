@@ -76,7 +76,7 @@ InitConnParams()
 void
 ResetConnParams()
 {
-	for (Index paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
+	for (Size paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
 	{
 		free((void *) ConnParams.keywords[paramIdx]);
 		free((void *) ConnParams.values[paramIdx]);
@@ -135,7 +135,6 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 			  Size whitelistLength, char **errorMsg)
 {
 	PQconninfoOption *option = NULL;
-	Index whitelistIdx PG_USED_FOR_ASSERTS_ONLY = 0;
 	char *errorMsgString = NULL;
 
 	/*
@@ -174,7 +173,7 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 #ifdef USE_ASSERT_CHECKING
 
 	/* verify that the whitelist is in ascending order */
-	for (whitelistIdx = 1; whitelistIdx < whitelistLength; whitelistIdx++)
+	for (Size whitelistIdx = 1; whitelistIdx < whitelistLength; whitelistIdx++)
 	{
 		const char *prev = whitelist[whitelistIdx - 1];
 		const char *curr = whitelist[whitelistIdx];
@@ -290,7 +289,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	pg_ltoa(key->port, nodePortString); /* populate node port string with port */
 
 	/* first step: copy global parameters to beginning of array */
-	for (Index paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
+	for (Size paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
 	{
 		/* copy the keyword&value pointers to the new array */
 		connKeywords[paramIndex] = ConnParams.keywords[paramIndex];
@@ -328,7 +327,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 const char *
 GetConnParam(const char *keyword)
 {
-	for (Index i = 0; i < ConnParams.size; i++)
+	for (Size i = 0; i < ConnParams.size; i++)
 	{
 		if (strcmp(keyword, ConnParams.keywords[i]) == 0)
 		{
