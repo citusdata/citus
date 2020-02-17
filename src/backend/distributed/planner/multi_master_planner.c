@@ -368,27 +368,9 @@ static PlannedStmt *
 BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 								  CustomScan *remoteScan)
 {
-	PlannerGlobal *glob = makeNode(PlannerGlobal);
-	PlannerInfo *root = makeNode(PlannerInfo);
-	root->parse = masterQuery;
-	root->glob = glob;
-	root->query_level = 1;
-	root->planner_cxt = CurrentMemoryContext;
-	root->wt_param_id = -1;
-
-	/* reset state */
-	glob = makeNode(PlannerGlobal);
-	root = makeNode(PlannerInfo);
-	root->parse = masterQuery;
-	root->glob = glob;
-	root->query_level = 1;
-	root->planner_cxt = CurrentMemoryContext;
-	root->wt_param_id = -1;
-
 	/*
 	 * the standard planner will scribble on the target list, since we need the target
 	 * list for alias creation we make a copy here.
-	 * TODO might be able to prevent the copy if we can move the alias creation before the standard planner
 	 */
 
 	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
