@@ -347,10 +347,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	List *columnNameList = NIL;
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
 
-	EState *executorState = NULL;
-	MemoryContext executorTupleContext = NULL;
-	ExprContext *executorExpressionContext = NULL;
-
 	char partitionMethod = 0;
 	bool stopOnFailure = false;
 
@@ -398,9 +394,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		columnNameList = lappend(columnNameList, columnName);
 	}
 
-	executorState = CreateExecutorState();
-	executorTupleContext = GetPerTupleMemoryContext(executorState);
-	executorExpressionContext = GetPerTupleExprContext(executorState);
+	EState *executorState = CreateExecutorState();
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
 
 	partitionMethod = PartitionMethod(tableId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
@@ -458,12 +454,12 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	errorCallback.callback = CopyFromErrorCallback;
 	errorCallback.arg = (void *) copyState;
 	errorCallback.previous = error_context_stack;
-	error_context_stack = &errorCallback;
 
 	while (true)
 	{
 		ResetPerTupleExprContext(executorState);
 
+		error_context_stack = &errorCallback;
 		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
@@ -473,12 +469,14 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		if (!nextRowFound)
 		{
 			MemoryContextSwitchTo(oldContext);
+			error_context_stack = errorCallback.previous;
 			break;
 		}
 
 		CHECK_FOR_INTERRUPTS();
 
 		MemoryContextSwitchTo(oldContext);
+		error_context_stack = errorCallback.previous;
 
 		dest->receiveSlot(tupleTableSlot, dest);
 
