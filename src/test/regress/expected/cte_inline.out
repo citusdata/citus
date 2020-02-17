@@ -988,13 +988,13 @@ GROUP BY
 	key
 HAVING
 	(count(*) > (SELECT max FROM cte_1))
-ORDER BY 2, 1 DESC
+ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT max(key) AS max FROM cte_inline.test_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, count(*) AS count FROM cte_inline.test_table GROUP BY key HAVING (count(*) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_1)) ORDER BY (count(*)), key DESC LIMIT 5
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, count(*) AS count FROM cte_inline.test_table GROUP BY key HAVING (count(*) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_1)) ORDER BY (count(*)) DESC, key DESC LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
  key | count
 ---------------------------------------------------------------------

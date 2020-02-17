@@ -473,7 +473,7 @@ GROUP BY
 	key
 HAVING
 	(count(*) > (SELECT max FROM cte_1))
-ORDER BY 2, 1 DESC
+ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 
 -- cte used in ORDER BY just works fine

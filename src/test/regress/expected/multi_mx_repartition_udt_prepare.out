@@ -167,9 +167,9 @@ EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
     WHERE repartition_udt.pk > 1;
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
-                              QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=136)
+ Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=136)
    Task Count: 4
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob
