@@ -47,7 +47,7 @@ SET citus.log_local_commands to on;
 -- hence below two blocks should fail
 
 BEGIN;
-    select count(*) from source_table WHERE a = 1;    
+    select count(*) from source_table WHERE a = 1;
     insert into target_table SELECT a*2 FROM source_table;
 ROLLBACK;
 

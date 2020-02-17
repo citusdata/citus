@@ -51,7 +51,7 @@ test: multi_row_insert
 test: insert_select_connection_leak
 
 # ---------
-# at the end of the regression tests regaring recursively planned modifications
+# at the end of the regression tests regarding recursively planned modifications
 # ensure that we don't leak any intermediate results
 # This test should not run in parallel with any other tests
 # ---------
@@ -282,6 +282,7 @@ test: multi_reference_table
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
+test: local_shard_utility_command_execution
 
 test: remove_coordinator
 
