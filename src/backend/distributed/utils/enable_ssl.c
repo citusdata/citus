@@ -392,7 +392,14 @@ StoreCertificate(EVP_PKEY *privateKey, X509 *certificate)
 
 
 	/* Open the private key file and write the private key in PEM format to it */
-	FILE *privateKeyFile = fopen(privateKeyFilename, "wb");
+	int privateKeyFileDescriptor = open(privateKeyFilename, O_WRONLY | O_CREAT, 0600);
+	if (privateKeyFileDescriptor == -1)
+	{
+		ereport(ERROR, (errmsg("unable to open private key file '%s' for writing",
+							   privateKeyFilename)));
+	}
+
+	FILE *privateKeyFile = fdopen(privateKeyFileDescriptor, "wb");
 	if (!privateKeyFile)
 	{
 		ereport(ERROR, (errmsg("unable to open private key file '%s' for writing",
@@ -407,8 +414,15 @@ StoreCertificate(EVP_PKEY *privateKey, X509 *certificate)
 		ereport(ERROR, (errmsg("unable to store private key")));
 	}
 
+	int certificateFileDescriptor = open(certificateFilename, O_WRONLY | O_CREAT, 0600);
+	if (certificateFileDescriptor == -1)
+	{
+		ereport(ERROR, (errmsg("unable to open private key file '%s' for writing",
+							   privateKeyFilename)));
+	}
+
 	/* Open the certificate file and write the certificate in the PEM format to it */
-	FILE *certificateFile = fopen(certificateFilename, "wb");
+	FILE *certificateFile = fdopen(certificateFileDescriptor, "wb");
 	if (!certificateFile)
 	{
 		ereport(ERROR, (errmsg("unable to open certificate file '%s' for writing",
