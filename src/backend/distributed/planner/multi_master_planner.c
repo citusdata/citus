@@ -175,6 +175,7 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	path->custom_path.path.parent = relOptInfo;
 
 	/* TODO come up with reasonable row counts */
+	path->custom_path.path.rows = 100000;
 	path->remoteScan = remoteScan;
 
 	return (Path *) path;

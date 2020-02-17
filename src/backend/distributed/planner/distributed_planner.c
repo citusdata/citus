@@ -1819,14 +1819,9 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		Path *path = CreateCitusCustomScanPath(root, relOptInfo, restrictionIndex, rte,
 											   ReplaceCitusExtraDataContainerWithCustomScan);
 
-		/* reset path info that was already gathered */
-		relOptInfo->pathlist = NIL;
-		relOptInfo->cheapest_startup_path = NULL;
-		relOptInfo->cheapest_total_path = NULL;
-		relOptInfo->cheapest_unique_path = NULL;
-
-		/* add our new path*/
-		add_path(relOptInfo, path);
+		/* replace all paths with our custom scan and recalculate cheapest */
+		relOptInfo->pathlist = list_make1(path);
+		set_cheapest(relOptInfo);
 
 		return;
 	}
