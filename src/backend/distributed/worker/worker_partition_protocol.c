@@ -936,7 +936,7 @@ FilterAndPartitionTable(const char *filterQuery,
 
 	while (SPI_processed > 0)
 	{
-		for (int rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
+		for (uint64 rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
 		{
 			HeapTuple row = SPI_tuptable->vals[rowIndex];
 			TupleDesc rowDescriptor = SPI_tuptable->tupdesc;

@@ -1397,7 +1397,11 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 		 *
 		 * We will iterate over Tuple Description attributes. i.e (c1 int, c2 text)
 		 */
-		for (targetColumnIndex = 0; targetColumnIndex < tupleDesc->natts;
+		if (tupleDesc->natts > MaxAttrNumber)
+		{
+			ereport(ERROR, (errmsg("bad number of tuple descriptor attributes")));
+		}
+		for (targetColumnIndex = 0; targetColumnIndex < (AttrNumber) tupleDesc->natts;
 			 targetColumnIndex++)
 		{
 			FormData_pg_attribute *attribute = TupleDescAttr(tupleDesc,
