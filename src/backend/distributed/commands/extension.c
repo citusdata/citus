@@ -171,6 +171,9 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	 */
 	AddSchemaFieldIfMissing(stmt);
 
+	/* always send commands with IF NOT EXISTS */
+	stmt->if_not_exists = true;
+
 	const char *createExtensionStmtSql = DeparseTreeNode(node);
 
 	/*

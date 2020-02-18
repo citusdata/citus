@@ -13,14 +13,17 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
+#include "commands/defrem.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
-#include "nodes/pg_list.h"
 #include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 
 /* Local functions forward declarations for helper functions */
 static void AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *stmt);
+static void AppendCreateExtensionStmtOptions(StringInfo buf, List *options);
 static void AppendDropExtensionStmt(StringInfo buf, DropStmt *stmt);
 static void AppendExtensionNameList(StringInfo buf, List *objects);
 static void AppendAlterExtensionSchemaStmt(StringInfo buf,
@@ -86,54 +89,72 @@ DeparseCreateExtensionStmt(Node *node)
 static void
 AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *createExtensionStmt)
 {
-	List *optionsList = createExtensionStmt->options;
+	appendStringInfoString(buf, "CREATE EXTENSION ");
 
-	const char *extensionName = createExtensionStmt->extname;
-	extensionName = quote_identifier(extensionName);
-
-	/*
-	 * We fetch "new_version", "schema" and "cascade" options from
-	 * optionList as we will append "IF NOT EXISTS" clause regardless of
-	 * statement's content before propagating it to worker nodes.
-	 * We also do not care old_version for now.
-	 */
-	Value *schemaNameValue = GetExtensionOption(optionsList, "schema");
-
-	/* these can be NULL hence check before fetching the stored value */
-	Value *newVersionValue = GetExtensionOption(optionsList, "new_version");
-	Value *cascadeValue = GetExtensionOption(optionsList, "cascade");
-
-	/*
-	 * We do not check for if schemaName is NULL as we append it in deparse
-	 * logic if it is not specified.
-	 */
-	const char *schemaName = strVal(schemaNameValue);
-	schemaName = quote_identifier(schemaName);
-
-	appendStringInfo(buf, "CREATE EXTENSION IF NOT EXISTS %s WITH SCHEMA %s",
-					 extensionName, schemaName);
-
-	/* "new_version" may not be specified in CreateExtensionStmt */
-	if (newVersionValue)
+	if (createExtensionStmt->if_not_exists)
 	{
-		const char *newVersion = strVal(newVersionValue);
-		newVersion = quote_identifier(newVersion);
-
-		appendStringInfo(buf, " VERSION %s", newVersion);
+		appendStringInfoString(buf, "IF NOT EXISTS ");
 	}
 
-	/* "cascade" may not be specified in CreateExtensionStmt */
-	if (cascadeValue)
-	{
-		bool cascade = intVal(cascadeValue);
+	/*
+	 * Up until here we have been ending the statement in a space, which makes it possible
+	 * to just append the quoted extname. From here onwards we will not have the string
+	 * ending in a space so appends should begin with a whitespace.
+	 */
+	appendStringInfoString(buf, quote_identifier(createExtensionStmt->extname));
+	AppendCreateExtensionStmtOptions(buf, createExtensionStmt->options);
+	appendStringInfoString(buf, ";");
+}
 
-		if (cascade)
+
+/*
+ * AppendCreateExtensionStmtOptions takes the option list of a CreateExtensionStmt and
+ * loops over the options to add them to the statement we are building.
+ *
+ * An error will be thrown if we run into an unsupported option, comparable to how
+ * postgres gives an error when parsing this list.
+ */
+static void
+AppendCreateExtensionStmtOptions(StringInfo buf, List *options)
+{
+	if (list_length(options) > 0)
+	{
+		/* only append WITH if we actual will add options to the statement */
+		appendStringInfoString(buf, " WITH");
+	}
+
+	/* Add the options to the statement */
+	DefElem *defElem = NULL;
+	foreach_ptr(defElem, options)
+	{
+		if (strcmp(defElem->defname, "schema") == 0)
 		{
-			appendStringInfoString(buf, " CASCADE");
+			const char *schemaName = defGetString(defElem);
+			appendStringInfo(buf, " SCHEMA  %s", quote_identifier(schemaName));
+		}
+		else if (strcmp(defElem->defname, "new_version") == 0)
+		{
+			const char *newVersion = defGetString(defElem);
+			appendStringInfo(buf, " VERSION %s", quote_identifier(newVersion));
+		}
+		else if (strcmp(defElem->defname, "old_version") == 0)
+		{
+			const char *oldVersion = defGetString(defElem);
+			appendStringInfo(buf, " FROM %s", quote_identifier(oldVersion));
+		}
+		else if (strcmp(defElem->defname, "cascade") == 0)
+		{
+			bool cascade = defGetBoolean(defElem);
+			if (cascade)
+			{
+				appendStringInfoString(buf, " CASCADE");
+			}
+		}
+		else
+		{
+			elog(ERROR, "unrecognized option: %s", defElem->defname);
 		}
 	}
-
-	appendStringInfoString(buf, " ;");
 }
 
 
