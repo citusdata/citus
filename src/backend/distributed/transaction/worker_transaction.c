@@ -46,7 +46,6 @@ static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
 												char *superuser);
 
-
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
  * 2PC.
@@ -326,6 +325,61 @@ SendCommandToMetadataWorkersParams(const char *command,
 	SendCommandToWorkersParamsInternal(WORKERS_WITH_METADATA, command, user,
 									   parameterCount, parameterTypes,
 									   parameterValues);
+}
+
+
+/*
+ * SendCommandToWorkersOptionalInParallel sends the given command to workers in parallel.
+ * It does error if there is a problem while sending the query, but it doesn't error
+ * if there is a problem while executing the query.
+ */
+void
+SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
+									   char *command,
+									   const char *user)
+{
+	List *connectionList = NIL;
+	ListCell *connectionCell = NULL;
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	ListCell *workerNodeCell = NULL;
+
+
+	/* open connections in parallel */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		int32 connectionFlags = 0;
+
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  user, NULL);
+		connectionList = lappend(connectionList, connection);
+	}
+
+	/* finish opening connections */
+	FinishConnectionListEstablishment(connectionList);
+
+	RemoteTransactionsBeginIfNecessary(connectionList);
+
+	/* send commands in parallel */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		SendRemoteCommand(connection, command);
+	}
+
+	/* get results */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		PGresult *result = GetRemoteCommandResult(connection, true);
+		PQclear(result);
+		ForgetResults(connection);
+	}
 }
 
 

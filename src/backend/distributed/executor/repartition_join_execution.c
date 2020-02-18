@@ -167,9 +167,8 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 void
 DoRepartitionCleanup(List *jobIds)
 {
-	SendOptionalCommandListToAllWorkers(list_make1(GenerateDeleteJobsCommand(
-													   jobIds)),
-										CitusExtensionOwnerName());
+	SendCommandToWorkersOptionalInParallel(ALL_WORKERS, GenerateDeleteJobsCommand(jobIds),
+										   CitusExtensionOwnerName());
 }
 
 
