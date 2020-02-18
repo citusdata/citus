@@ -347,7 +347,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * we need to set the parsetree here already as we copy and replace the original
 		 * parsetree during ddl propagation. In reality we need to refactor the code above
 		 * to not juggle copy the parsetree and leak it to a potential cache above the
-		 * utillity hook.
+		 * utility hook.
 		 */
 		pstmt->utilityStmt = parsetree;
 	}

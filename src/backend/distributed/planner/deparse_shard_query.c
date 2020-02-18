@@ -224,7 +224,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 	/*
 	 * Search for the restrictions associated with the RTE. There better be
-	 * some, otherwise this query wouldn't be elegible as a router query.
+	 * some, otherwise this query wouldn't be eligible as a router query.
 	 *
 	 * FIXME: We should probably use a hashtable here, to do efficient
 	 * lookup.
@@ -299,7 +299,7 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 
 	/*
 	 * Search for the restrictions associated with the RTE. There better be
-	 * some, otherwise this query wouldn't be elegible as a router query.
+	 * some, otherwise this query wouldn't be eligible as a router query.
 	 *
 	 * FIXME: We should probably use a hashtable here, to do efficient
 	 * lookup.

@@ -12,7 +12,7 @@
  *
  * We also used a hacky solution for picking relations as the anchor range
  * table entries. The hack is that we wrap them into a subquery. This is only
- * necessary since some of the attribute equivalance checks are based on
+ * necessary since some of the attribute equivalence checks are based on
  * queries rather than range table entries.
  *
  * Copyright (c) Citus Data, Inc.
@@ -135,7 +135,7 @@ AnchorRte(Query *subquery)
 		 * distributed table and doesn't have a set operation.
 		 *
 		 * TODO: The set operation restriction might sound weird, but, the restriction
-		 * equivalance generation functions ignore set operations. We should
+		 * equivalence generation functions ignore set operations. We should
 		 * integrate the logic in SafeToPushdownUnionSubquery() to
 		 * GenerateAllAttributeEquivalences() such that the latter becomes aware of
 		 * the set operations.
@@ -179,7 +179,7 @@ bool
 SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 {
 	List *anchorRelationRestrictionList = checker->anchorRelationRestrictionList;
-	List *anchorAttributeEquivalances = checker->anchorAttributeEquivalences;
+	List *anchorAttributeEquivalences = checker->anchorAttributeEquivalences;
 
 	PlannerRestrictionContext *restrictionContext = checker->subqueryPlannerRestriction;
 	PlannerRestrictionContext *filteredPlannerContext =
@@ -211,10 +211,10 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 									  filteredRestrictionList);
 
 	/*
-	 * We already have the attributeEquivalances, thus, only need to prepare
+	 * We already have the attributeEquivalences, thus, only need to prepare
 	 * the planner restrictions with unioned relations for our purpose of
 	 * distribution key equality. Note that we don't need to calculate the
-	 * join restrictions, we're already relying on the attributeEquivalances
+	 * join restrictions, we're already relying on the attributeEquivalences
 	 * provided by the context.
 	 */
 	RelationRestrictionContext *unionedRelationRestrictionContext = palloc0(
@@ -227,9 +227,9 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	unionedPlannerRestrictionContext->relationRestrictionContext =
 		unionedRelationRestrictionContext;
 
-	if (!RestrictionEquivalenceForPartitionKeysViaEquivalances(
+	if (!RestrictionEquivalenceForPartitionKeysViaEquivalences(
 			unionedPlannerRestrictionContext,
-			anchorAttributeEquivalances))
+			anchorAttributeEquivalences))
 	{
 		return false;
 	}

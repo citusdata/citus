@@ -23,7 +23,7 @@ extern bool SafeToPushdownUnionSubquery(PlannerRestrictionContext *
 extern bool ContainsUnionSubquery(Query *queryTree);
 extern bool RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 												   plannerRestrictionContext);
-bool RestrictionEquivalenceForPartitionKeysViaEquivalances(PlannerRestrictionContext *
+bool RestrictionEquivalenceForPartitionKeysViaEquivalences(PlannerRestrictionContext *
 														   plannerRestrictionContext,
 														   List *
 														   allAttributeEquivalenceList);
