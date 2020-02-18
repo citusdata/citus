@@ -168,7 +168,7 @@ typedef struct ClauseWalkerContext
 	 */
 	List *pendingInstances;
 
-	/* PruningInstance currently being built, all elegible constraints are added here */
+	/* PruningInstance currently being built, all eligible constraints are added here */
 	PruningInstance *currentPruningInstance;
 
 	/*

@@ -1729,7 +1729,7 @@ multi_join_restriction_hook(PlannerInfo *root,
 {
 	/*
 	 * Use a memory context that's guaranteed to live long enough, could be
-	 * called in a more shorted lived one (e.g. with GEQO).
+	 * called in a more shortly lived one (e.g. with GEQO).
 	 */
 	PlannerRestrictionContext *plannerRestrictionContext =
 		CurrentPlannerRestrictionContext();
@@ -1790,7 +1790,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 
 	/*
 	 * Use a memory context that's guaranteed to live long enough, could be
-	 * called in a more shorted lived one (e.g. with GEQO).
+	 * called in a more shortly lived one (e.g. with GEQO).
 	 */
 	PlannerRestrictionContext *plannerRestrictionContext =
 		CurrentPlannerRestrictionContext();
