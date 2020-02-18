@@ -72,10 +72,10 @@ PG_FUNCTION_INFO_V1(citus_extradata_container);
  * will not be handled by out/readfuncs.c. For the current uses that's ok.
  */
 void
-SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
-					 char *fragmentSchemaName, char *fragmentTableName,
-					 List *tableIdList, List *funcColumnNames, List *funcColumnTypes,
-					 List *funcColumnTypeMods, List *funcCollations)
+SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind, char *fragmentSchemaName,
+					 char *fragmentTableName, List *tableIdList, List *funcColumnNames,
+					 List *funcColumnTypes, List *funcColumnTypeMods,
+					 List *funcCollations)
 {
 	Assert(rte->eref);
 

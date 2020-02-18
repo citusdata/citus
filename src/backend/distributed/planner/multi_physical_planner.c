@@ -879,9 +879,9 @@ DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList
 	rangeTableEntry->eref = makeNode(Alias);
 	rangeTableEntry->eref->colnames = columnList;
 
-	SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_REMOTE_QUERY, NULL, NULL,
-						 tableIdList, funcColumnNames, funcColumnTypes,
-						 funcColumnTypeMods, funcCollations);
+	SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_REMOTE_QUERY, NULL, NULL, tableIdList,
+						 funcColumnNames, funcColumnTypes, funcColumnTypeMods,
+						 funcCollations);
 
 	return rangeTableEntry;
 }
