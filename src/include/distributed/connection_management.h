@@ -14,6 +14,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/remote_transaction.h"
 #include "lib/ilist.h"
+#include "portability/instr_time.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
@@ -227,12 +228,14 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-extern long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 
 /* dealing with notice handler */
 extern void SetCitusNoticeProcessor(MultiConnection *connection);
 extern char * TrimLogLevel(const char *message);
 extern void UnsetCitusNoticeLevel(void);
 
+/* time utilities */
+extern double MillisecondsPassedSince(instr_time moment);
+extern long MillisecondsToTimeout(instr_time start, long msAfterStart);
 
 #endif /* CONNECTION_MANAGMENT_H */
