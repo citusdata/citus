@@ -245,6 +245,11 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 
 		if (TupIsNull(slot))
 		{
+			/*
+			 * When the tuple is null we have reached the end of the tuplestore. We will
+			 * return a null tuple, however, depending on the existence of a projection we
+			 * need to either return the scan tuple or the projected tuple.
+			 */
 			if (projInfo)
 			{
 				return ExecClearTuple(projInfo->pi_state.resultslot);
@@ -255,33 +260,28 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 			}
 		}
 
-		/*
-		 * place the current tuple into the expr context
-		 */
+		/* place the current tuple into the expr context */
 		econtext->ecxt_scantuple = slot;
 
 		if (!ExecQual(qual, econtext))
 		{
+			/* skip nodes that do not satisfy the qual (filter) */
 			InstrCountFiltered1(scanState, 1);
 			continue;
 		}
 
-		/*
-		 * Found a satisfactory scan tuple.
-		 */
+		/* found a satisfactory scan tuple */
 		if (projInfo)
 		{
 			/*
-			 * Form a projection tuple, store it in the result tuple slot
-			 * and return it.
+			 * Form a projection tuple, store it in the result tuple slot and return it.
+			 * ExecProj works on the ecxt_scantuple on the context stored earlier.
 			 */
 			return ExecProject(projInfo);
 		}
 		else
 		{
-			/*
-			 * Here, we aren't projecting, so just return scan tuple.
-			 */
+			/* Here, we aren't projecting, so just return scan tuple */
 			return slot;
 		}
 	}

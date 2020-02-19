@@ -845,8 +845,8 @@ BaseRangeTableList(MultiNode *multiNode)
 				rangeTableEntry->alias = multiTable->alias;
 				rangeTableEntry->relid = multiTable->relationId;
 				SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_RELATION, NULL, NULL,
-									 list_make1_int(multiTable->rangeTableId), NIL, NIL,
-									 NIL, NIL);
+									 list_make1_int(multiTable->rangeTableId),
+									 NIL, NIL, NIL, NIL);
 
 				baseRangeTableList = lappend(baseRangeTableList, rangeTableEntry);
 			}
@@ -1235,6 +1235,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 			List *funcColumnTypes = NIL;
 			List *funcColumnTypeMods = NIL;
 			List *funcCollations = NIL;
+
 			TargetEntry *targetEntry = NULL;
 			foreach_ptr(targetEntry, dependentTargetList)
 			{

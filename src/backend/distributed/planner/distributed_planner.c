@@ -1813,8 +1813,9 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		/*
 		 * We got here by planning the query part that needs to be executed on the query
 		 * coordinator node.
-		 * We are looking for an occurance of the citus_extra_datacontainer function
-		 * encoding the remote scan we plan to execute here.
+		 * We have verified the occurrence of the citus_extra_datacontainer function
+		 * encoding the remote scan we plan to execute here. We will replace all paths
+		 * with a path describing our custom scan.
 		 */
 		Path *path = CreateCitusCustomScanPath(root, relOptInfo, restrictionIndex, rte,
 											   ReplaceCitusExtraDataContainerWithCustomScan);

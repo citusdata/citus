@@ -141,9 +141,19 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 
 #if PG_VERSION_NUM >= 120000
+
+	/*
+	 * Since we are using a tuplestore we cannot use the virtual tuples postgres had
+	 * already setup on the CustomScan. Instead we need to reinitialize the tuples as
+	 * minimal.
+	 *
+	 * During initialization postgres also created the projection information and the
+	 * quals, but both are 'compiled' to be executed on virtual tuples. Since we replaced
+	 * the tuples with minimal tuples we also compile both the projection and the quals
+	 * on to these 'new' tuples.
+	 */
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
 
-	/* testing for a non empty scan tuple descriptor which asusmes the custom scan tlist had been set. this allows for custom projectections*/
 	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc,
 						  &TTSOpsMinimalTuple);
 	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
