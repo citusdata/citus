@@ -77,8 +77,8 @@ typedef struct MaintenanceDaemonDBData
 
 	/* information: which user to use */
 	Oid userOid;
-	bool daemonStarted;
 	pid_t workerPid;
+	bool daemonStarted;
 	bool triggerMetadataSync;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
@@ -102,6 +102,7 @@ static HTAB *MaintenanceDaemonDBHash;
 
 static volatile sig_atomic_t got_SIGHUP = false;
 
+static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
 static size_t MaintenanceDaemonShmemSize(void);
 static void MaintenanceDaemonShmemInit(void);
@@ -154,11 +155,17 @@ InitializeMaintenanceDaemonBackend(void)
 		ereport(ERROR, (errmsg("ran out of database slots")));
 	}
 
+	/* maintenance daemon can ignore itself */
+	if (dbData->workerPid == MyProcPid)
+	{
+		LWLockRelease(&MaintenanceDaemonControl->lock);
+		return;
+	}
+
 	if (!found || !dbData->daemonStarted)
 	{
 		BackgroundWorker worker;
 		BackgroundWorkerHandle *handle = NULL;
-		int pid = 0;
 
 		dbData->userOid = extensionOwner;
 
@@ -173,13 +180,11 @@ InitializeMaintenanceDaemonBackend(void)
 
 		/*
 		 * No point in getting started before able to run query, but we do
-		 * want to get started on Hot-Stanby standbys.
+		 * want to get started on Hot-Standby.
 		 */
 		worker.bgw_start_time = BgWorkerStart_ConsistentState;
 
-		/*
-		 * Restart after a bit after errors, but don't bog the system.
-		 */
+		/* Restart after a bit after errors, but don't bog the system. */
 		worker.bgw_restart_time = 5;
 		sprintf(worker.bgw_library_name, "citus");
 		sprintf(worker.bgw_function_name, "CitusMaintenanceDaemonMain");
@@ -198,7 +203,10 @@ InitializeMaintenanceDaemonBackend(void)
 		dbData->triggerMetadataSync = false;
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 
+		pid_t pid;
 		WaitForBackgroundWorkerStartup(handle, &pid);
+
+		pfree(handle);
 	}
 	else
 	{
@@ -245,13 +253,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
 													HASH_FIND, NULL);
-	if (!myDbData)
+	if (!myDbData || myDbData->workerPid != 0)
 	{
 		/*
 		 * When the database crashes, background workers are restarted, but
 		 * the state in shared memory is lost. In that case, we exit and
 		 * wait for a session to call InitializeMaintenanceDaemonBackend
 		 * to properly add it to the hash.
+		 * Alternatively, don't continue if another worker exists.
 		 */
 		proc_exit(0);
 	}
@@ -260,7 +269,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	myDbData->workerPid = MyProcPid;
 
 	/* wire up signals */
-	pqsignal(SIGTERM, die);
+	pqsignal(SIGTERM, MaintenanceDaemonSigTermHandler);
 	pqsignal(SIGHUP, MaintenanceDaemonSigHupHandler);
 	BackgroundWorkerUnblockSignals();
 
@@ -299,6 +308,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		bool foundDeadlock = false;
 
 		CHECK_FOR_INTERRUPTS();
+
+		Assert(myDbData->workerPid == MyProcPid);
 
 		/*
 		 * XXX: Each task should clear the metadata cache before every iteration
@@ -530,6 +541,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				 */
 				LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 				myDbData->daemonStarted = false;
+				myDbData->workerPid = 0;
 				LWLockRelease(&MaintenanceDaemonControl->lock);
 
 				/* return code of 1 requests worker restart */
@@ -630,6 +642,14 @@ MaintenanceDaemonShmemInit(void)
 }
 
 
+/* MaintenanceDaemonSigTermHandler calls proc_exit(0) */
+static void
+MaintenanceDaemonSigTermHandler(SIGNAL_ARGS)
+{
+	proc_exit(0);
+}
+
+
 /*
  * MaintenanceDaemonSigHupHandler set a flag to re-read config file at next
  * convenient time.
@@ -709,6 +729,7 @@ StopMaintenanceDaemon(Oid databaseId)
 		MaintenanceDaemonDBHash,
 		&databaseId,
 		HASH_REMOVE, &found);
+
 	if (found)
 	{
 		workerPid = dbData->workerPid;

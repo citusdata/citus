@@ -452,6 +452,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
+	if (IsDropCitusStmt(parsetree))
+	{
+		StopMaintenanceDaemon(MyDatabaseId);
+	}
+
 	pstmt->utilityStmt = parsetree;
 
 	PG_TRY();
@@ -633,11 +638,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}
 
-	/*
-	 * Ensure value is valid, we can't do some checks during CREATE
-	 * EXTENSION. This is important to register some invalidation callbacks.
-	 */
-	CitusHasBeenLoaded();
+	if (!IsDropCitusStmt(parsetree) && !IsA(parsetree, DropdbStmt))
+	{
+		/*
+		 * Ensure value is valid, we can't do some checks during CREATE
+		 * EXTENSION. This is important to register some invalidation callbacks.
+		 */
+		CitusHasBeenLoaded();
+	}
 }
 
 
