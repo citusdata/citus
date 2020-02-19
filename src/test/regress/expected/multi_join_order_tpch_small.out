@@ -6,7 +6,8 @@ SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 -- Query #6 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
 	lineitem
@@ -16,15 +17,16 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                                 QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=250.00..250.01 rows=1 width=32)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=32)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
 	o_orderdate,
@@ -49,16 +51,17 @@ ORDER BY
 LOG:  join order: [ "orders" ][ reference join "customer" ][ local partition join "lineitem" ]
                                            QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=1010.14..1010.64 rows=200 width=48)
+ Sort
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
-   ->  HashAggregate  (cost=1000.00..1002.50 rows=200 width=48)
+   ->  HashAggregate
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=48)
+         ->  Custom Scan (Citus Adaptive)
                explain statements for distributed queries are not enabled
 (6 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	c_custkey,
 	c_name,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -92,16 +95,17 @@ ORDER BY
 LOG:  join order: [ "orders" ][ reference join "customer" ][ reference join "nation" ][ local partition join "lineitem" ]
                                                                                  QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=2010.14..2010.64 rows=200 width=640)
+ Sort
    Sort Key: (sum(remote_scan.revenue)) DESC
-   ->  HashAggregate  (cost=2000.00..2002.50 rows=200 width=640)
+   ->  HashAggregate
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=640)
+         ->  Custom Scan (Citus Adaptive)
                explain statements for distributed queries are not enabled
 (6 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
 	lineitem,
@@ -131,10 +135,10 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ reference join "part" ]
-                                 QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=250.00..250.01 rows=1 width=32)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=32)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 

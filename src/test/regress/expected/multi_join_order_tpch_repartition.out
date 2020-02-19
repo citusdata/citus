@@ -11,7 +11,8 @@ SET client_min_messages TO LOG;
 -- except that more data has been loaded into customer and part tables. Therefore,
 -- we will apply different distributed join strategies for these queries.
 -- Query #6 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
 	lineitem
@@ -21,15 +22,16 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=250.00..250.01 rows=1 width=32)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=32)
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
 	o_orderdate,
@@ -54,16 +56,17 @@ ORDER BY
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ]
                                            QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=1010.14..1010.64 rows=200 width=48)
+ Sort
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
-   ->  HashAggregate  (cost=1000.00..1002.50 rows=200 width=48)
+   ->  HashAggregate
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
-         ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=48)
+         ->  Custom Scan (Citus Task-Tracker)
                explain statements for distributed queries are not enabled
 (6 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	c_custkey,
 	c_name,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -97,16 +100,17 @@ ORDER BY
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ][ reference join "nation" ]
                                                                                  QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=2010.14..2010.64 rows=200 width=640)
+ Sort
    Sort Key: (sum(remote_scan.revenue)) DESC
-   ->  HashAggregate  (cost=2000.00..2002.50 rows=200 width=640)
+   ->  HashAggregate
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
-         ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=640)
+         ->  Custom Scan (Citus Task-Tracker)
                explain statements for distributed queries are not enabled
 (6 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
 	lineitem,
@@ -136,15 +140,16 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ]
-                                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=250.00..250.01 rows=1 width=32)
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=32)
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 -- Query to test multiple re-partition jobs in a single query
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	l_partkey, count(*)
 FROM
 	lineitem, part_append, orders, customer_append
@@ -155,11 +160,11 @@ WHERE
 GROUP BY
       l_partkey;
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single range partition join "part_append" ][ single range partition join "customer_append" ]
-                                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate  (cost=500.00..503.50 rows=200 width=12)
+ HashAggregate
    Group Key: remote_scan.l_partkey
-   ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=100000 width=12)
+   ->  Custom Scan (Citus Task-Tracker)
          explain statements for distributed queries are not enabled
 (4 rows)
 

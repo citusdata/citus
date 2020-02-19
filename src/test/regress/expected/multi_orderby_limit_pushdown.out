@@ -28,28 +28,28 @@ LIMIT 1;
        1 | 3.2857142857142857
 (1 row)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT user_id, avg(value_1)
 FROM users_table
 GROUP BY user_id
 ORDER BY avg(value_1) DESC
 LIMIT 1;
-                                                        QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
- Limit  (cost=500.00..500.00 rows=1 width=36)
-   ->  Sort  (cost=500.00..750.00 rows=100000 width=36)
+ Limit
+   ->  Sort
          Sort Key: remote_scan.avg DESC
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=36)
+         ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit  (cost=1.53..1.53 rows=1 width=36)
-                           ->  Sort  (cost=1.53..1.53 rows=2 width=36)
+                     ->  Limit
+                           ->  Sort
                                  Sort Key: (avg(value_1)) DESC
-                                 ->  HashAggregate  (cost=1.50..1.52 rows=2 width=36)
+                                 ->  HashAggregate
                                        Group Key: user_id
-                                       ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=8)
+                                       ->  Seq Scan on users_table_1400256 users_table
 (14 rows)
 
 SELECT user_id, avg(value_1) + 1
@@ -96,23 +96,23 @@ ORDER BY 2  DESC;
        1 | 10.2857142857142857
 (6 rows)
 
-EXPLAIN
+EXPLAIN (COSTS OFF)
 SELECT user_id, avg(value_1) + count(value_2)
 FROM users_table
 GROUP BY user_id
 ORDER BY 2  DESC;
-                                               QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=11041.82..11291.82 rows=100000 width=36)
+ Sort
    Sort Key: remote_scan."?column?" DESC
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=36)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate  (cost=1.58..1.61 rows=2 width=36)
+               ->  HashAggregate
                      Group Key: user_id
-                     ->  Seq Scan on users_table_1400256 users_table  (cost=0.00..1.33 rows=33 width=12)
+                     ->  Seq Scan on users_table_1400256 users_table
 (10 rows)
 
 SELECT user_id, avg(value_1) + count(value_2)
