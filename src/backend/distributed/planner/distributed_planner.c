@@ -100,6 +100,8 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
+static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
@@ -1418,6 +1420,110 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 }
 
 
+/*
+ * FinalizeRouterPlan gets a CustomScan node which already wrapped distributed
+ * part of a router plan and sets it as the direct child of the router plan
+ * because we don't run any query on master node for router executable queries.
+ * Here, we also rebuild the column list to read from the remote scan.
+ */
+static PlannedStmt *
+FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
+{
+	List *columnNameList = NIL;
+
+	customScan->custom_scan_tlist =
+		makeCustomScanTargetlistFromExistingTargetList(localPlan->planTree->targetlist);
+	customScan->scan.plan.targetlist =
+		makeTargetListFromCustomScanList(customScan->custom_scan_tlist);
+
+	/* extract the column names from the final targetlist*/
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, customScan->scan.plan.targetlist)
+	{
+		Value *columnName = makeString(targetEntry->resname);
+		columnNameList = lappend(columnNameList, columnName);
+	}
+
+	PlannedStmt *routerPlan = makeNode(PlannedStmt);
+	routerPlan->planTree = (Plan *) customScan;
+
+	RangeTblEntry *remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
+	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
+
+	/* add original range table list for access permission checks */
+	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
+
+	routerPlan->canSetTag = true;
+	routerPlan->relationOids = NIL;
+
+	routerPlan->queryId = localPlan->queryId;
+	routerPlan->utilityStmt = localPlan->utilityStmt;
+	routerPlan->commandType = localPlan->commandType;
+	routerPlan->hasReturning = localPlan->hasReturning;
+
+	return routerPlan;
+}
+
+
+/*
+ * makeCustomScanTargetlistFromExistingTargetList rebuilds the targetlist from the remote
+ * query into a list that can be used as the custom_scan_tlist for our Citus Custom Scan.
+ */
+static List *
+makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist)
+{
+	List *custom_scan_tlist = NIL;
+
+	/* we will have custom scan range table entry as the first one in the list */
+	const int customScanRangeTableIndex = 1;
+
+	/* build a targetlist to read from the custom scan output */
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, existingTargetlist)
+	{
+		Assert(IsA(targetEntry, TargetEntry));
+
+		/*
+		 * This is unlikely to be hit because we would not need resjunk stuff
+		 * at the toplevel of a router query - all things needing it have been
+		 * pushed down.
+		 */
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		/* build target entry pointing to remote scan range table entry */
+		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
+
+		if (newVar->vartype == RECORDOID ||
+			newVar->vartype == RECORDARRAYOID)
+		{
+			/*
+			 * Add the anonymous composite type to the type cache and store
+			 * the key in vartypmod. Eventually this makes its way into the
+			 * TupleDesc used by the executor, which uses it to parse the
+			 * query results from the workers in BuildTupleFromCStrings.
+			 */
+			newVar->vartypmod = BlessRecordExpression(targetEntry->expr);
+		}
+
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(targetEntry);
+		newTargetEntry->expr = (Expr *) newVar;
+		custom_scan_tlist = lappend(custom_scan_tlist, newTargetEntry);
+	}
+
+	return custom_scan_tlist;
+}
+
+
+/*
+ * makeTargetListFromCustomScanList based on a custom_scan_tlist create the target list to
+ * use on the Citus Custom Scan Node. The targetlist differs from the custom_scan_tlist in
+ * a way that the expressions in the targetlist all are references to the index (resno) in
+ * the custom_scan_tlist in their varattno while the varno is replaced with INDEX_VAR
+ * instead of the range table entry index.
+ */
 static List *
 makeTargetListFromCustomScanList(List *custom_scan_tlist)
 {
@@ -1438,88 +1544,6 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 		resno++;
 	}
 	return targetList;
-}
-
-
-/*
- * FinalizeRouterPlan gets a CustomScan node which already wrapped distributed
- * part of a router plan and sets it as the direct child of the router plan
- * because we don't run any query on master node for router executable queries.
- * Here, we also rebuild the column list to read from the remote scan.
- */
-static PlannedStmt *
-FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
-{
-	ListCell *targetEntryCell = NULL;
-	List *custom_scan_tlist = NIL;
-	List *columnNameList = NIL;
-
-	/* we will have custom scan range table entry as the first one in the list */
-	const int customScanRangeTableIndex = 1;
-
-	/* build a targetlist to read from the custom scan output */
-	foreach(targetEntryCell, localPlan->planTree->targetlist)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-
-		Assert(IsA(targetEntry, TargetEntry));
-
-		/*
-		 * This is unlikely to be hit because we would not need resjunk stuff
-		 * at the toplevel of a router query - all things needing it have been
-		 * pushed down.
-		 */
-		if (targetEntry->resjunk)
-		{
-			continue;
-		}
-
-		/* build target entry pointing to remote scan range table entry */
-		Var *newVarCustomScanTlist = makeVarFromTargetEntry(customScanRangeTableIndex,
-															targetEntry);
-
-		if (newVarCustomScanTlist->vartype == RECORDOID ||
-			newVarCustomScanTlist->vartype == RECORDARRAYOID)
-		{
-			/*
-			 * Add the anonymous composite type to the type cache and store
-			 * the key in vartypmod. Eventually this makes its way into the
-			 * TupleDesc used by the executor, which uses it to parse the
-			 * query results from the workers in BuildTupleFromCStrings.
-			 */
-			newVarCustomScanTlist->vartypmod = BlessRecordExpression(targetEntry->expr);
-		}
-
-		TargetEntry *newTargetEntry = flatCopyTargetEntry(targetEntry);
-		newTargetEntry->expr = (Expr *) newVarCustomScanTlist;
-		custom_scan_tlist = lappend(custom_scan_tlist, newTargetEntry);
-
-		Value *columnName = makeString(targetEntry->resname);
-		columnNameList = lappend(columnNameList, columnName);
-	}
-
-	customScan->scan.plan.targetlist = makeTargetListFromCustomScanList(
-		custom_scan_tlist);
-	customScan->custom_scan_tlist = custom_scan_tlist;
-
-	PlannedStmt *routerPlan = makeNode(PlannedStmt);
-	routerPlan->planTree = (Plan *) customScan;
-
-	RangeTblEntry *remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
-	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
-
-	/* add original range table list for access permission checks */
-	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
-
-	routerPlan->canSetTag = true;
-	routerPlan->relationOids = NIL;
-
-	routerPlan->queryId = localPlan->queryId;
-	routerPlan->utilityStmt = localPlan->utilityStmt;
-	routerPlan->commandType = localPlan->commandType;
-	routerPlan->hasReturning = localPlan->hasReturning;
-
-	return routerPlan;
 }
 
 
