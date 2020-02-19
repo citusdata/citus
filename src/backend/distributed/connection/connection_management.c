@@ -29,6 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
+#include "portability/instr_time.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -680,9 +681,9 @@ MultiConnectionStateEventMask(MultiConnectionPollState *connectionState)
 void
 FinishConnectionListEstablishment(List *multiConnectionList)
 {
-	const TimestampTz connectionStart = GetCurrentTimestamp();
-	const TimestampTz deadline = TimestampTzPlusMilliseconds(connectionStart,
-															 NodeConnectionTimeout);
+	instr_time connectionStart;
+	INSTR_TIME_SET_CURRENT(connectionStart);
+
 	List *connectionStates = NULL;
 	ListCell *multiConnectionCell = NULL;
 
@@ -729,7 +730,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 							  ALLOCSET_DEFAULT_SIZES));
 	while (waitCount > 0)
 	{
-		long timeout = DeadlineTimestampTzToTimeout(deadline);
+		long timeout = MillisecondsToTimeout(connectionStart, NodeConnectionTimeout);
 
 		if (waitEventSetRebuild)
 		{
@@ -812,8 +813,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 			 * connectionStart and if passed close all non-finished connections
 			 */
 
-			TimestampTz now = GetCurrentTimestamp();
-			if (TimestampDifferenceExceeds(connectionStart, now, NodeConnectionTimeout))
+			if (MillisecondsPassedSince(connectionStart) >= NodeConnectionTimeout)
 			{
 				/*
 				 * showing as a warning, can't be an error. In some cases queries can
@@ -837,17 +837,28 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 
 
 /*
- * DeadlineTimestampTzToTimeout returns the numer of miliseconds that still need to elapse
- * before the deadline provided as an argument will be reached. The outcome can be used to
+ * MillisecondsPassedSince returns the number of milliseconds elapsed between an
+ * instr_time & the current time.
+ */
+double
+MillisecondsPassedSince(instr_time moment)
+{
+	instr_time timeSinceMoment;
+	INSTR_TIME_SET_CURRENT(timeSinceMoment);
+	INSTR_TIME_SUBTRACT(timeSinceMoment, moment);
+	return INSTR_TIME_GET_MILLISEC(timeSinceMoment);
+}
+
+
+/*
+ * MillisecondsToTimeout returns the numer of milliseconds that still need to elapse
+ * before msAfterStart milliseconds have passed since start. The outcome can be used to
  * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
  */
 long
-DeadlineTimestampTzToTimeout(TimestampTz deadline)
+MillisecondsToTimeout(instr_time start, long msAfterStart)
 {
-	long secs = 0;
-	int microsecs = 0;
-	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &microsecs);
-	return secs * 1000 + microsecs / 1000;
+	return msAfterStart - MillisecondsPassedSince(start);
 }
 
 

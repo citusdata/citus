@@ -212,9 +212,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			es->indent += 3;
 		}
 
-		/* set the planning time to 0 */
-		INSTR_TIME_SET_CURRENT(planduration);
-		INSTR_TIME_SUBTRACT(planduration, planduration);
+		INSTR_TIME_SET_ZERO(planduration);
 
 		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
 

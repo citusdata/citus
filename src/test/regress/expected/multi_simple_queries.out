@@ -542,8 +542,6 @@ DETAIL:  distribution column value: 1
 
 -- copying from a single shard table does not require the master query
 COPY articles_single_shard TO stdout;
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 50	10	anjanette	19519
 SELECT avg(word_count)
 	FROM articles

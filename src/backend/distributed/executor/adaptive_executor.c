@@ -157,6 +157,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "lib/ilist.h"
+#include "portability/instr_time.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/int8.h"
@@ -362,13 +363,13 @@ typedef struct WorkerPool
 	 * We keep this for enforcing the connection timeouts. In our definition, a pool
 	 * starts when the first connection establishment starts.
 	 */
-	TimestampTz poolStartTime;
+	instr_time poolStartTime;
 
 	/* indicates whether to check for the connection timeout */
 	bool checkForPoolTimeout;
 
 	/* last time we opened a connection */
-	TimestampTz lastConnectionOpenTime;
+	instr_time lastConnectionOpenTime;
 
 	/* maximum number of connections we are allowed to open at once */
 	uint32 maxNewConnectionsPerCycle;
@@ -588,7 +589,6 @@ static void ManageWorkerPool(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
 static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
-static long MillisecondsBetweenTimestamps(TimestampTz startTime, TimestampTz endTime);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
 static void RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
@@ -622,6 +622,7 @@ static int GetEventSetSize(List *sessionList);
 static int RebuildWaitEventSet(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
+static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
@@ -1845,7 +1846,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int node
 	workerPool = (WorkerPool *) palloc0(sizeof(WorkerPool));
 	workerPool->nodeName = pstrdup(nodeName);
 	workerPool->nodePort = nodePort;
-	workerPool->poolStartTime = 0;
+	INSTR_TIME_SET_ZERO(workerPool->poolStartTime);
 	workerPool->distributedExecution = execution;
 
 	/* "open" connections aggressively when there are cached connections */
@@ -1905,7 +1906,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	 */
 	if (list_length(workerPool->sessionList) == 0)
 	{
-		workerPool->poolStartTime = GetCurrentTimestamp();
+		INSTR_TIME_SET_CURRENT(workerPool->poolStartTime);
 		workerPool->checkForPoolTimeout = true;
 	}
 
@@ -2243,10 +2244,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 		if (newConnectionCount > 0 && ExecutorSlowStartInterval > 0)
 		{
-			TimestampTz now = GetCurrentTimestamp();
-
-			if (TimestampDifferenceExceeds(workerPool->lastConnectionOpenTime, now,
-										   ExecutorSlowStartInterval))
+			if (MillisecondsPassedSince(workerPool->lastConnectionOpenTime) >=
+				ExecutorSlowStartInterval)
 			{
 				newConnectionCount = Min(newConnectionCount,
 										 workerPool->maxNewConnectionsPerCycle);
@@ -2307,7 +2306,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		ConnectionStateMachine(session);
 	}
 
-	workerPool->lastConnectionOpenTime = GetCurrentTimestamp();
+	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
 	execution->connectionSetChanged = true;
 }
 
@@ -2329,8 +2328,9 @@ static void
 CheckConnectionTimeout(WorkerPool *workerPool)
 {
 	DistributedExecution *execution = workerPool->distributedExecution;
-	TimestampTz poolStartTime = workerPool->poolStartTime;
-	TimestampTz now = GetCurrentTimestamp();
+	instr_time poolStartTime = workerPool->poolStartTime;
+	instr_time now;
+	INSTR_TIME_SET_CURRENT(now);
 
 	int initiatedConnectionCount = list_length(workerPool->sessionList);
 	int activeConnectionCount = workerPool->activeConnectionCount;
@@ -2339,7 +2339,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 	if (initiatedConnectionCount == 0)
 	{
 		/* no connection has been planned for the pool yet */
-		Assert(poolStartTime == 0);
+		Assert(INSTR_TIME_IS_ZERO(poolStartTime));
 		return;
 	}
 
@@ -2354,7 +2354,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 		requiredActiveConnectionCount = initiatedConnectionCount;
 	}
 
-	if (TimestampDifferenceExceeds(poolStartTime, now, NodeConnectionTimeout))
+	if (MillisecondsBetweenTimestamps(poolStartTime, now) >= NodeConnectionTimeout)
 	{
 		if (activeConnectionCount < requiredActiveConnectionCount)
 		{
@@ -2425,7 +2425,8 @@ UsableConnectionCount(WorkerPool *workerPool)
 static long
 NextEventTimeout(DistributedExecution *execution)
 {
-	TimestampTz now = GetCurrentTimestamp();
+	instr_time now;
+	INSTR_TIME_SET_CURRENT(now);
 	long eventTimeout = 1000; /* milliseconds */
 
 	WorkerPool *workerPool = NULL;
@@ -2437,7 +2438,8 @@ NextEventTimeout(DistributedExecution *execution)
 			continue;
 		}
 
-		if (workerPool->poolStartTime != 0 && workerPool->checkForPoolTimeout)
+		if (!INSTR_TIME_IS_ZERO(workerPool->poolStartTime) &&
+			workerPool->checkForPoolTimeout)
 		{
 			long timeSincePoolStartMs =
 				MillisecondsBetweenTimestamps(workerPool->poolStartTime, now);
@@ -2488,14 +2490,10 @@ NextEventTimeout(DistributedExecution *execution)
  * long.
  */
 static long
-MillisecondsBetweenTimestamps(TimestampTz startTime, TimestampTz endTime)
+MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime)
 {
-	long secs = 0;
-	int micros = 0;
-
-	TimestampDifference(startTime, endTime, &secs, &micros);
-
-	return secs * 1000 + micros / 1000;
+	INSTR_TIME_SUBTRACT(endTime, startTime);
+	return INSTR_TIME_GET_MILLISEC(endTime);
 }
 
 
@@ -3427,7 +3425,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 		foreach_ptr(pool, workerList)
 		{
 			/* failed pools or pools without any connection attempts ignored */
-			if (pool->failed || pool->poolStartTime == 0)
+			if (pool->failed || INSTR_TIME_IS_ZERO(pool->poolStartTime))
 			{
 				continue;
 			}
@@ -3436,7 +3434,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 			 * This should give another NodeConnectionTimeout until all
 			 * the necessary connections are established.
 			 */
-			pool->poolStartTime = GetCurrentTimestamp();
+			INSTR_TIME_SET_CURRENT(pool->poolStartTime);
 			pool->checkForPoolTimeout = true;
 		}
 	}

@@ -28,11 +28,13 @@
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "portability/instr_time.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "utils/snapmgr.h"
 
 #include "distributed/citus_acquire_lock.h"
+#include "distributed/connection_management.h"
 #include "distributed/version_compat.h"
 
 /* forward declaration of background worker entrypoint */
@@ -41,7 +43,6 @@ extern void LockAcquireHelperMain(Datum main_arg);
 /* forward declaration of helper functions */
 static void lock_acquire_helper_sigterm(SIGNAL_ARGS);
 static void EnsureStopLockAcquireHelper(void *arg);
-static long DeadlineTimestampTzToTimeout(TimestampTz deadline);
 
 /* LockAcquireHelperArgs contains extra arguments to be used to start the worker */
 typedef struct LockAcquireHelperArgs
@@ -188,9 +189,8 @@ LockAcquireHelperMain(Datum main_arg)
 	StringInfoData sql;
 	LockAcquireHelperArgs *args = (LockAcquireHelperArgs *) MyBgworkerEntry->bgw_extra;
 	long timeout = 0;
-	const TimestampTz connectionStart = GetCurrentTimestamp();
-	const TimestampTz deadline = TimestampTzPlusMilliseconds(connectionStart,
-															 args->lock_cooldown);
+	instr_time connectionStart;
+	INSTR_TIME_SET_CURRENT(connectionStart);
 
 	/* parameters for sql query to be executed */
 	const int paramCount = 1;
@@ -211,7 +211,7 @@ LockAcquireHelperMain(Datum main_arg)
 	 * the lock.
 	 */
 	do {
-		timeout = DeadlineTimestampTzToTimeout(deadline);
+		timeout = MillisecondsToTimeout(connectionStart, args->lock_cooldown);
 	} while (timeout > 0 && ShouldAcquireLock(timeout));
 
 	/* connecting to the database */
@@ -303,19 +303,4 @@ LockAcquireHelperMain(Datum main_arg)
 
 	/* safely got to the end, exit without problem */
 	proc_exit(0);
-}
-
-
-/*
- * DeadlineTimestampTzToTimeout returns the numer of miliseconds that still need to elapse
- * before the deadline provided as an argument will be reached. The outcome can be used to
- * pass to the Wait of an EventSet to make sure it returns after the timeout has passed.
- */
-static long
-DeadlineTimestampTzToTimeout(TimestampTz deadline)
-{
-	long secs = 0;
-	int msecs = 0;
-	TimestampDifference(GetCurrentTimestamp(), deadline, &secs, &msecs);
-	return secs * 1000 + msecs / 1000;
 }

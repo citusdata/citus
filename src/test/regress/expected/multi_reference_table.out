@@ -953,8 +953,8 @@ COPY reference_table_test (value_2, value_3, value_4) FROM STDIN WITH CSV;
 COPY reference_table_test (value_3) FROM STDIN WITH CSV;
 COPY reference_table_test FROM STDIN WITH CSV;
 COPY reference_table_test TO STDOUT WITH CSV;
-1,1,1,Fri Jan 01 00:00:00 2016
-,2,2,Sat Jan 02 00:00:00 2016
+1,1,1,2016-01-01 00:00:00
+,2,2,2016-01-02 00:00:00
 ,,3,
 ,,,
 -- INSERT INTO SELECT among reference tables
