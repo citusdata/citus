@@ -29,10 +29,19 @@ static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
 static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
 									  struct CustomPath *best_path, List *tlist,
 									  List *clauses, List *custom_plans);
-struct List * CitusCustomScanPathReparameterize(PlannerInfo *root,
-												List *custom_private,
-												RelOptInfo *child_rel);
 
+bool ReplaceCitusExtraDataContainer = false;
+CustomScan *ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+
+/*
+ * CitusCustomScanPathMethods defines the methods for a custom path we insert into the
+ * planner during the planning of the query part that will be executed on the node
+ * coordinating the query.
+ */
+static CustomPathMethods CitusCustomScanPathMethods = {
+	.CustomName = "CitusCustomScanPath",
+	.PlanCustomPath = CitusCustomScanPathPlan,
+};
 
 /*
  * MasterNodeSelectPlan takes in a distributed plan and a custom scan node which
@@ -102,15 +111,12 @@ MasterTargetList(List *workerTargetList)
 }
 
 
-bool ReplaceCitusExtraDataContainer = false;
-CustomScan *ReplaceCitusExtraDataContainerWithCustomScan = NULL;
-static CustomPathMethods CitusCustomScanPathMethods = {
-	.CustomName = "CitusCustomScanPath",
-	.PlanCustomPath = CitusCustomScanPathPlan,
-	.ReparameterizeCustomPathByChild = CitusCustomScanPathReparameterize
-};
-
-
+/*
+ * CreateCitusCustomScanPath creates a custom path node that will return the CustomScan if
+ * the path ends up in the best_path during postgres planning. We use this function during
+ * the set relation hook of postgres during the planning of the query part that will be
+ * executed on the query coordinating node.
+ */
 Path *
 CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 						  Index restrictionIndex, RangeTblEntry *rte,
@@ -123,7 +129,18 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	path->custom_path.path.pathtarget = relOptInfo->reltarget;
 	path->custom_path.path.parent = relOptInfo;
 
-	/* TODO come up with reasonable row counts */
+	/*
+	 * The 100k rows we put on the cost of the path is kind of arbitrary and could be
+	 * improved in accuracy to produce better plans.
+	 *
+	 * 100k on the row estimate causes the postgres planner to behave very much like the
+	 * old citus planner in the plans it produces. Namely the old planner had hardcoded
+	 * the use of Hash Aggregates for most of the operations, unless a postgres guc was
+	 * set that would disallow hash aggregates to be used.
+	 *
+	 * Ideally we would be able to provide estimates close to postgres' estimates on the
+	 * workers to let the standard planner choose an optimal solution for the masterQuery.
+	 */
 	path->custom_path.path.rows = 100000;
 	path->remoteScan = remoteScan;
 
@@ -131,6 +148,18 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 }
 
 
+/*
+ * CitusCustomScanPathPlan is called for the CitusCustomScanPath node in the best_path
+ * after the postgres planner has evaluated all possible paths.
+ *
+ * This function returns a Plan node, more specifically the CustomScan Plan node that has
+ * the ability to execute the distributed part of the query.
+ *
+ * When this function is called there is an extra list of clauses passed in that might not
+ * already have been applied to the plan. We add these clauses to the quals this node will
+ * execute. The quals are evaluated before returning the tuples scanned from the workers
+ * to the plan above ours to make sure they do not end up in the final result.
+ */
 static Plan *
 CitusCustomScanPathPlan(PlannerInfo *root,
 						RelOptInfo *rel,
@@ -152,34 +181,32 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 }
 
 
-struct List *
-CitusCustomScanPathReparameterize(PlannerInfo *root,
-								  List *custom_private,
-								  RelOptInfo *child_rel)
-{
-	return NIL;
-}
-
-
+/*
+ * BuildSelectStatementViaStdPlanner creates a PlannedStmt where it combines the
+ * masterQuery and the remoteScan. It utilizes the standard_planner from postgres to
+ * create a plan based on the masterQuery.
+ */
 static PlannedStmt *
 BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 								  CustomScan *remoteScan)
 {
 	/*
-	 * the standard planner will scribble on the target list, since we need the target
-	 * list for alias creation we make a copy here.
+	 * the standard planner will scribble on the target list. Since it is essential to not
+	 * change the custom_scan_tlist we copy the target list before adding them to any.
+	 * The masterTargetList is used in the end to extract the column names to be added to
+	 * the alias we will create for the CustomScan, (expressed as the
+	 * citus_extradata_container function call in the masterQuery).
 	 */
-
 	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
 	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
 
 	/* probably want to do this where we add sublinks to the master plan */
 	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
 
-	/* This code should not be re-entrant */
 	PlannedStmt *standardStmt = NULL;
 	PG_TRY();
 	{
+		/* This code should not be re-entrant, we check via asserts below */
 		Assert(ReplaceCitusExtraDataContainer == false);
 		Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
 		ReplaceCitusExtraDataContainer = true;
@@ -203,9 +230,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	List *columnNameList = NIL;
 	TargetEntry *targetEntry = NULL;
 
-	/*
-	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
-	 */
+	/* extract column names from the masterTargetList */
 	foreach_ptr(targetEntry, masterTargetList)
 	{
 		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
