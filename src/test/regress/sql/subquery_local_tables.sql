@@ -200,5 +200,15 @@ ORDER BY 1;
 
 SET client_min_messages TO DEFAULT;
 
+-- Test https://github.com/citusdata/citus/issues/2717
+create table test_dist (id int, table_name text, column_name text);
+select create_distributed_table('test_dist','id');
+insert into test_dist values (1, 'test_dist', 'table_name');
+with q as (
+    select icl.* from test_dist td
+    join information_schema.columns icl on icl.table_name::text = lower(td.table_name) and icl.column_name::text = lower(td.column_name)
+) select column_name from q;
+
+\set VERBOSITY terse
 DROP SCHEMA subquery_local_tables CASCADE;
 SET search_path TO public;
