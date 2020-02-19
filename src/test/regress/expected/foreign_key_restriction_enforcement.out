@@ -857,6 +857,35 @@ BEGIN;
 NOTICE:  truncate cascades to table "reference_table"
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 ROLLBACK;
+-- case 4.7: SELECT to a dist table is followed by a DROP
+-- DROP following SELECT is important as we error out after
+-- the standart process utility hook drops the table.
+-- That could cause SIGSEGV before the patch.
+-- Below block should "successfully" error out
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table;
+ count
+---------------------------------------------------------------------
+  1001
+(1 row)
+
+	DROP TABLE reference_table CASCADE;
+NOTICE:  drop cascades to constraint fkey on table on_update_fkey_table
+ERROR:  cannot execute DDL on reference relation because there was a parallel SELECT access to distributed relation "on_update_fkey_table" in the same transaction
+ROLLBACK;
+-- case 4.8: Router SELECT to a dist table is followed by a TRUNCATE
+-- No errors expected from below block as SELECT there is a router
+-- query
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+	DROP TABLE reference_table CASCADE;
+NOTICE:  drop cascades to constraint fkey on table on_update_fkey_table
+ROLLBACK;
 RESET client_min_messages;
 \set VERBOSITY default
 -- case 5.1: Parallel UPDATE on distributed table follow by a SELECT

@@ -713,14 +713,37 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		char *conflictingAccessTypeText =
 			PlacementAccessTypeToText(conflictingAccessType);
 
-		ereport(ERROR, (errmsg("cannot execute %s on reference relation \"%s\" because "
-							   "there was a parallel %s access to distributed relation "
-							   "\"%s\" in the same transaction",
-							   accessTypeText, relationName, conflictingAccessTypeText,
-							   conflictingRelationName),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
+		/*
+		 * Relation could already be dropped if the accessType is DDL and the
+		 * command that we were executing were a DROP command. In that case,
+		 * as this function is executed via DROP trigger, standard_ProcessUtility
+		 * had already dropped the table from PostgreSQL's perspective. Hence, it
+		 * returns NULL pointer for the name of the relation.
+		 */
+		if (relationName == NULL)
+		{
+			ereport(ERROR, (errmsg("cannot execute %s on reference relation because "
+								   "there was a parallel %s access to distributed relation "
+								   "\"%s\" in the same transaction",
+								   accessTypeText, conflictingAccessTypeText,
+								   conflictingRelationName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg(
+								"cannot execute %s on reference relation \"%s\" because "
+								"there was a parallel %s access to distributed relation "
+								"\"%s\" in the same transaction",
+								accessTypeText, relationName,
+								conflictingAccessTypeText,
+								conflictingRelationName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
 	}
 	else if (cacheEntry->referencingRelationsViaForeignKey != NIL &&
 			 accessType > PLACEMENT_ACCESS_SELECT)
