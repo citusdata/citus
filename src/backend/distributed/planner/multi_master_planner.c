@@ -14,40 +14,12 @@
 #include "postgres.h"
 
 #include "catalog/pg_type.h"
-#include "commands/extension.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/function_utils.h"
 #include "distributed/listutils.h"
-#include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
-#include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/print.h"
-#include "optimizer/clauses.h"
-#include "optimizer/cost.h"
-#include "optimizer/planmain.h"
 #include "optimizer/planner.h"
-#include "optimizer/tlist.h"
-#include "optimizer/subselect.h"
-#if PG_VERSION_NUM >= 120000
-#include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#endif
 #include "rewrite/rewriteManip.h"
-#include "utils/builtins.h"
-#include "utils/guc.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
-#include "utils/lsyscache.h"
-
 
 static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
