@@ -713,14 +713,37 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		char *conflictingAccessTypeText =
 			PlacementAccessTypeToText(conflictingAccessType);
 
-		ereport(ERROR, (errmsg("cannot execute %s on reference relation \"%s\" because "
-							   "there was a parallel %s access to distributed relation "
-							   "\"%s\" in the same transaction",
-							   accessTypeText, relationName, conflictingAccessTypeText,
-							   conflictingRelationName),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
+		/*
+		 * Relation could already be dropped if the accessType is DDL and the
+		 * command that we were executing were a DROP command. In that case,
+		 * as this function is executed via DROP trigger, standard_ProcessUtility
+		 * had already dropped the table from PostgreSQL's perspective. Hence, it
+		 * returns NULL pointer for the name of the relation.
+		 */
+		if (relationName == NULL)
+		{
+			ereport(ERROR, (errmsg("cannot execute %s on reference table because "
+								   "there was a parallel %s access to distributed table "
+								   "\"%s\" in the same transaction",
+								   accessTypeText, conflictingAccessTypeText,
+								   conflictingRelationName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg(
+								"cannot execute %s on reference table \"%s\" because "
+								"there was a parallel %s access to distributed table "
+								"\"%s\" in the same transaction",
+								accessTypeText, relationName,
+								conflictingAccessTypeText,
+								conflictingRelationName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
 	}
 	else if (cacheEntry->referencingRelationsViaForeignKey != NIL &&
 			 accessType > PLACEMENT_ACCESS_SELECT)
@@ -753,11 +776,11 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 			 */
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
 							 errdetail(
-								 "Reference relation \"%s\" is modified, which might lead "
+								 "Reference table \"%s\" is modified, which might lead "
 								 "to data inconsistencies or distributed deadlocks via "
-								 "parallel accesses to hash distributed relations due to "
+								 "parallel accesses to hash distributed tables due to "
 								 "foreign keys. Any parallel modification to "
-								 "those hash distributed relations in the same "
+								 "those hash distributed tables in the same "
 								 "transaction can only be executed in sequential query "
 								 "execution mode", relationName)));
 
@@ -818,8 +841,8 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 			 * would still use the already opened parallel connections to the workers,
 			 * thus contradicting our purpose of using sequential mode.
 			 */
-			ereport(ERROR, (errmsg("cannot execute parallel %s on relation \"%s\" "
-								   "after %s command on reference relation "
+			ereport(ERROR, (errmsg("cannot execute parallel %s on table \"%s\" "
+								   "after %s command on reference table "
 								   "\"%s\" because there is a foreign key between "
 								   "them and \"%s\" has been accessed in this transaction",
 								   accessTypeText, relationName,
@@ -836,8 +859,8 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 		else
 		{
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-							 errdetail("cannot execute parallel %s on relation \"%s\" "
-									   "after %s command on reference relation "
+							 errdetail("cannot execute parallel %s on table \"%s\" "
+									   "after %s command on reference table "
 									   "\"%s\" because there is a foreign key between "
 									   "them and \"%s\" has been accessed in this transaction",
 									   accessTypeText, relationName,
