@@ -489,6 +489,24 @@ BEGIN;
 	TRUNCATE transitive_reference_table CASCADE;
 ROLLBACK;
 
+-- case 4.7: SELECT to a dist table is followed by a DROP
+-- DROP following SELECT is important as we error out after
+-- the standart process utility hook drops the table.
+-- That could cause SIGSEGV before the patch.
+-- Below block should "successfully" error out
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table;
+	DROP TABLE reference_table CASCADE;
+ROLLBACK;
+
+-- case 4.8: Router SELECT to a dist table is followed by a TRUNCATE
+-- No errors expected from below block as SELECT there is a router
+-- query
+BEGIN;
+	SELECT count(*) FROM on_update_fkey_table WHERE id = 9;
+	DROP TABLE reference_table CASCADE;
+ROLLBACK;
+
 RESET client_min_messages;
 \set VERBOSITY default
 
