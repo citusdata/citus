@@ -722,8 +722,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		 */
 		if (relationName == NULL)
 		{
-			ereport(ERROR, (errmsg("cannot execute %s on reference relation because "
-								   "there was a parallel %s access to distributed relation "
+			ereport(ERROR, (errmsg("cannot execute %s on reference table because "
+								   "there was a parallel %s access to distributed table "
 								   "\"%s\" in the same transaction",
 								   accessTypeText, conflictingAccessTypeText,
 								   conflictingRelationName),
@@ -734,8 +734,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		else
 		{
 			ereport(ERROR, (errmsg(
-								"cannot execute %s on reference relation \"%s\" because "
-								"there was a parallel %s access to distributed relation "
+								"cannot execute %s on reference table \"%s\" because "
+								"there was a parallel %s access to distributed table "
 								"\"%s\" in the same transaction",
 								accessTypeText, relationName,
 								conflictingAccessTypeText,
@@ -776,11 +776,11 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 			 */
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
 							 errdetail(
-								 "Reference relation \"%s\" is modified, which might lead "
+								 "Reference table \"%s\" is modified, which might lead "
 								 "to data inconsistencies or distributed deadlocks via "
-								 "parallel accesses to hash distributed relations due to "
+								 "parallel accesses to hash distributed tables due to "
 								 "foreign keys. Any parallel modification to "
-								 "those hash distributed relations in the same "
+								 "those hash distributed tables in the same "
 								 "transaction can only be executed in sequential query "
 								 "execution mode", relationName)));
 
@@ -841,8 +841,8 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 			 * would still use the already opened parallel connections to the workers,
 			 * thus contradicting our purpose of using sequential mode.
 			 */
-			ereport(ERROR, (errmsg("cannot execute parallel %s on relation \"%s\" "
-								   "after %s command on reference relation "
+			ereport(ERROR, (errmsg("cannot execute parallel %s on table \"%s\" "
+								   "after %s command on reference table "
 								   "\"%s\" because there is a foreign key between "
 								   "them and \"%s\" has been accessed in this transaction",
 								   accessTypeText, relationName,
@@ -859,8 +859,8 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 		else
 		{
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-							 errdetail("cannot execute parallel %s on relation \"%s\" "
-									   "after %s command on reference relation "
+							 errdetail("cannot execute parallel %s on table \"%s\" "
+									   "after %s command on reference table "
 									   "\"%s\" because there is a foreign key between "
 									   "them and \"%s\" has been accessed in this transaction",
 									   accessTypeText, relationName,
