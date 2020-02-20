@@ -45,6 +45,9 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
 												char *superuser);
+static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const
+												 char *user);
+static void GetConnectionsResultsOptional(List *connectionList);
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -89,7 +92,7 @@ void
 SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
 						  const char *command)
 {
-	uint connectionFlags = 0;
+	uint32 connectionFlags = 0;
 
 	UseCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
@@ -338,30 +341,12 @@ SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
 									   char *command,
 									   const char *user)
 {
-	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	ListCell *workerNodeCell = NULL;
 
-
-	/* open connections in parallel */
-	foreach(workerNodeCell, workerNodeList)
-	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-		int32 connectionFlags = 0;
-
-		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  user, NULL);
-		connectionList = lappend(connectionList, connection);
-	}
+	List *connectionList = OpenConnectionsToWorkersInParallel(targetWorkerSet, user);
 
 	/* finish opening connections */
 	FinishConnectionListEstablishment(connectionList);
-
-	RemoteTransactionsBeginIfNecessary(connectionList);
 
 	/* send commands in parallel */
 	foreach(connectionCell, connectionList)
@@ -371,14 +356,58 @@ SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
 		SendRemoteCommand(connection, command);
 	}
 
-	/* get results */
+	GetConnectionsResultsOptional(connectionList);
+}
+
+
+/*
+ * OpenConnectionsToWorkersInParallel opens connections to the given target worker set in parallel,
+ * as the given user.
+ */
+static List *
+OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *user)
+{
+	ListCell *workerNodeCell = NULL;
+	List *connectionList = NIL;
+
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		int32 connectionFlags = OUTSIDE_TRANSACTION;
+
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  user, NULL);
+		connectionList = lappend(connectionList, connection);
+	}
+	return connectionList;
+}
+
+
+/*
+ * GetConnectionsResultsOptional gets remote command results
+ * for the given connections. It doesn't raise any error.
+ */
+static void
+GetConnectionsResultsOptional(List *connectionList)
+{
+	ListCell *connectionCell = NULL;
+
 	foreach(connectionCell, connectionList)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
-		PGresult *result = GetRemoteCommandResult(connection, true);
+		bool raiseInterrupt = false;
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupt);
 		PQclear(result);
-		ForgetResults(connection);
+
+		if (result != NULL && IsResponseOK(result))
+		{
+			ForgetResults(connection);
+		}
 	}
 }
 
