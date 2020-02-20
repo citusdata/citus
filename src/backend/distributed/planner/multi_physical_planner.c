@@ -1241,7 +1241,6 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 			{
 				Node *expr = (Node *) targetEntry->expr;
 
-				/* TODO figure out why this became a problem now */
 				char *name = targetEntry->resname;
 				if (name == NULL)
 				{

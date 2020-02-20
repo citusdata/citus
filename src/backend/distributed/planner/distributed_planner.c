@@ -1496,8 +1496,7 @@ makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist)
 		/* build target entry pointing to remote scan range table entry */
 		Var *newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 
-		if (newVar->vartype == RECORDOID ||
-			newVar->vartype == RECORDARRAYOID)
+		if (newVar->vartype == RECORDOID || newVar->vartype == RECORDARRAYOID)
 		{
 			/*
 			 * Add the anonymous composite type to the type cache and store
