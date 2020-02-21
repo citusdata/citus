@@ -134,7 +134,8 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 
 	if (paramListInfo != NULL)
 	{
-		const char **parameterValues = NULL; /* not used anywhere, so decleare here */
+		/* not used anywhere, so declare here */
+		const char **parameterValues = NULL;
 
 		ExtractParametersForLocalExecution(paramListInfo, &parameterTypes,
 										   &parameterValues);
@@ -229,6 +230,25 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 
 
 /*
+ * LogLocalCommand logs commands executed locally on this node. Although we're
+ * talking about local execution, the function relies on citus.log_remote_commands
+ * GUC. This makes sense because the local execution is still on a shard of a
+ * distributed table, meaning it is part of distributed execution.
+ */
+static void
+LogLocalCommand(Task *task)
+{
+	if (!(LogRemoteCommands || LogLocalCommands))
+	{
+		return;
+	}
+
+	ereport(NOTICE, (errmsg("executing the command locally: %s",
+							ApplyLogRedaction(TaskQueryString(task)))));
+}
+
+
+/*
  * ExtractLocalAndRemoteTasks gets a taskList and generates two
  * task lists namely localTaskList and remoteTaskList. The function goes
  * over the input taskList and puts the tasks that are local to the node
@@ -236,9 +256,9 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
  * the lists could be NIL depending on the input taskList.
  *
  * One slightly different case is modifications to replicated tables
- * (e.g., reference tables) where a single task ends in two seperate tasks
- * and the local task is added to localTaskList and the remanings to the
- * remoteTaskList.
+ * (e.g., reference tables) where a single task ends in two separate tasks
+ * and the local task is added to localTaskList and the remaning ones to
+ * the remoteTaskList.
  */
 void
 ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
@@ -280,8 +300,6 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		}
 		else
 		{
-			Task *remoteTask = NULL;
-
 			/*
 			 * At this point, we're dealing with reference tables or intermediate results
 			 * where the task has placements on both local and remote nodes. We always
@@ -301,7 +319,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			}
 			else
 			{
-				remoteTask = copyObject(task);
+				Task *remoteTask = copyObject(task);
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 
 				*remoteTaskList = lappend(*remoteTaskList, remoteTask);
@@ -353,7 +371,7 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 {
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	DestReceiver *tupleStoreDestReceiever = CreateDestReceiver(DestTuplestore);
+	DestReceiver *tupleStoreDestReceiver = CreateDestReceiver(DestTuplestore);
 	ScanDirection scanDirection = ForwardScanDirection;
 	QueryEnvironment *queryEnv = create_queryEnv();
 	int eflags = 0;
@@ -363,14 +381,14 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
 	 */
-	SetTuplestoreDestReceiverParams(tupleStoreDestReceiever,
+	SetTuplestoreDestReceiverParams(tupleStoreDestReceiver,
 									scanState->tuplestorestate,
 									CurrentMemoryContext, false);
 
 	/* Create a QueryDesc for the query */
 	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
 										   GetActiveSnapshot(), InvalidSnapshot,
-										   tupleStoreDestReceiever, paramListInfo,
+										   tupleStoreDestReceiver, paramListInfo,
 										   queryEnv, 0);
 
 	ExecutorStart(queryDesc, eflags);
@@ -430,6 +448,7 @@ ShouldExecuteTasksLocally(List *taskList)
 	}
 
 	bool singleTask = (list_length(taskList) == 1);
+
 	if (singleTask && TaskAccessesLocalNode((Task *) linitial(taskList)))
 	{
 		/*
@@ -455,7 +474,7 @@ ShouldExecuteTasksLocally(List *taskList)
 	{
 		/*
 		 * For multi-task executions, switching to local execution would likely to
-		 * perform poorly, because we'd lose the parallelizm. Note that the local
+		 * perform poorly, because we'd lose the parallelism. Note that the local
 		 * execution is happening one task at a time (e.g., similar to sequential
 		 * distributed execution).
 		 */
@@ -512,25 +531,6 @@ ErrorIfTransactionAccessedPlacementsLocally(void)
 						errdetail("Some parallel commands cannot be executed if a "
 								  "previous command has already been executed locally")));
 	}
-}
-
-
-/*
- * LogLocalCommand logs commands executed locally on this node. Although we're
- * talking about local execution, the function relies on citus.log_remote_commands GUC.
- * This makes sense because the local execution is still on a shard of a distributed table,
- * meaning it is part of distributed execution.
- */
-static void
-LogLocalCommand(Task *task)
-{
-	if (!(LogRemoteCommands || LogLocalCommands))
-	{
-		return;
-	}
-
-	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(TaskQueryString(task)))));
 }
 
 

@@ -27,7 +27,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-
 static List * TruncateTaskList(Oid relationId);
 
 
@@ -89,29 +88,36 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 static List *
 TruncateTaskList(Oid relationId)
 {
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ListCell *shardIntervalCell = NULL;
+	/* resulting task list */
 	List *taskList = NIL;
+
+	/* enumerate the tasks when putting them to the taskList */
 	int taskId = 1;
 
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *relationName = get_rel_name(relationId);
 
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	ListCell *shardIntervalCell = NULL;
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
+		char *shardRelationName = pstrdup(relationName);
+
+		/* build shard relation name */
+		AppendShardIdToName(&shardRelationName, shardId);
+
+		char *quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
+
 		StringInfo shardQueryString = makeStringInfo();
-		char *shardName = pstrdup(relationName);
-
-		AppendShardIdToName(&shardName, shardId);
-
-		appendStringInfo(shardQueryString, "TRUNCATE TABLE %s CASCADE",
-						 quote_qualified_identifier(schemaName, shardName));
+		appendStringInfo(shardQueryString, "TRUNCATE TABLE %s CASCADE", quotedShardName);
 
 		Task *task = CitusMakeNode(Task);
 		task->jobId = INVALID_JOB_ID;

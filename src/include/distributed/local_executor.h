@@ -20,16 +20,14 @@ extern bool LogLocalCommands;
 extern bool TransactionAccessedLocalPlacement;
 extern bool TransactionConnectedToLocalGroup;
 
+/* extern function declarations */
 extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);
+extern bool AnyTaskAccessesLocalNode(List *taskList);
+extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
-extern void SetTaskQueryAndPlacementList(Task *task, Query *query, List *placementList);
-extern char * TaskQueryString(Task *task);
-extern bool TaskAccessesLocalNode(Task *task);
 extern void DisableLocalExecution(void);
-extern bool AnyTaskAccessesRemoteNode(List *taskList);
-extern bool TaskAccessesLocalNode(Task *task);
 
 #endif /* LOCAL_EXECUTION_H */

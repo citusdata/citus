@@ -37,9 +37,9 @@
  * same connection since it may hold relevant locks or have uncommitted
  * writes. In that case we "assign" the task to a connection by adding
  * it to the task queue of specific connection (in
- * AssignTasksToConnectionsOrWorkerPool ). Otherwise we consider the task unassigned
- * and add it to the task queue of a worker pool, which means that it
- * can be executed over any connection in the pool.
+ * AssignTasksToConnectionsOrWorkerPool ). Otherwise we consider the task
+ * unassigned and add it to the task queue of a worker pool, which means
+ * that it can be executed over any connection in the pool.
  *
  * A task may be executed on multiple placements in case of a reference
  * table or a replicated distributed table. Depending on the type of
@@ -772,7 +772,7 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
 
 	/*
-	 * We're deliberately not setting execution->rowsProceessed here. The main reason
+	 * We're deliberately not setting execution->rowsProcessed here. The main reason
 	 * is that modifications to reference tables would end-up setting it both here
 	 * and in AdaptiveExecutor. Instead, we set executorState here and skip updating it
 	 * for reference table modifications in AdaptiveExecutor.
@@ -884,7 +884,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	ParamListInfo paramListInfo = NULL;
 
 	/*
-	 * The code-paths that rely on this function do not know how execute
+	 * The code-paths that rely on this function do not know how to execute
 	 * commands locally.
 	 */
 	ErrorIfTransactionAccessedPlacementsLocally();
