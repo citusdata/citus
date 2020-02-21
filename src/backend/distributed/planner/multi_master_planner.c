@@ -14,7 +14,9 @@
 #include "postgres.h"
 
 #include "catalog/pg_type.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
@@ -25,6 +27,7 @@ static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
 													   List *masterTargetList,
 													   CustomScan *remoteScan);
+static RangeTblEntry * FindCitusExtradataContainerRTE(Query *masterQuery);
 
 static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
 									  struct CustomPath *best_path, List *tlist,
@@ -203,6 +206,39 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	/* probably want to do this where we add sublinks to the master plan */
 	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
 
+	/*
+	 * We will overwrite the alias of the rangetable which describes the custom scan.
+	 * Idealy we would have set the correct column names and alias on the range table in
+	 * the master query already when we inserted the extra data container. This could be
+	 * improved in the future.
+	 */
+
+	/* find the rangetable entry for the extradata container and overwrite its alias */
+	RangeTblEntry *extradataContainerRTE = FindCitusExtradataContainerRTE(masterQuery);
+	if (extradataContainerRTE != NULL)
+	{
+		/* extract column names from the masterTargetList */
+		List *columnNameList = NIL;
+		TargetEntry *targetEntry = NULL;
+		foreach_ptr(targetEntry, masterTargetList)
+		{
+			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+		}
+		extradataContainerRTE->eref = makeAlias("remote_scan", columnNameList);
+	}
+
+	/*
+	 * Print the masetr query at debug level 4. Since serializing the query is relatively
+	 * cpu intensive we only perform that if we are actually logging DEBUG4.
+	 */
+	const int logMasterQueryLevel = DEBUG4;
+	if (IsLoggableLevel(logMasterQueryLevel))
+	{
+		StringInfo queryString = makeStringInfo();
+		pg_get_query_def(masterQuery, queryString);
+		elog(logMasterQueryLevel, "master query: %s", queryString->data);
+	}
+
 	PlannedStmt *standardStmt = NULL;
 	PG_TRY();
 	{
@@ -226,18 +262,36 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	PG_END_TRY();
 
 	Assert(standardStmt != NULL);
+	return standardStmt;
+}
 
-	List *columnNameList = NIL;
-	TargetEntry *targetEntry = NULL;
 
-	/* extract column names from the masterTargetList */
-	foreach_ptr(targetEntry, masterTargetList)
+/*
+ * Finds the rangetable entry in the query that refers to the citus_extradata_container.
+ * Returns NULL if not found.
+ */
+static RangeTblEntry *
+FindCitusExtradataContainerRTE(Query *masterQuery)
+{
+	RangeTblEntry *rangeTblEntry = NULL;
+	foreach_ptr(rangeTblEntry, masterQuery->rtable)
 	{
-		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+		if (rangeTblEntry->rtekind != RTE_FUNCTION ||
+			list_length(rangeTblEntry->functions) != 1)
+		{
+			continue;
+		}
+
+		/* range table entry is a function, lets confirm it is the function we want */
+		RangeTblFunction *rangeTblFunction = list_nth_node(RangeTblFunction,
+														   rangeTblEntry->functions, 0);
+
+		FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
+		if (funcExpr->funcid == CitusExtraDataContainerFuncId())
+		{
+			return rangeTblEntry;
+		}
 	}
 
-	RangeTblEntry *customScanRangeTableEntry = linitial(standardStmt->rtable);
-	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
-
-	return standardStmt;
+	return NULL;
 }
