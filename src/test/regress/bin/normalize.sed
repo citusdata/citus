@@ -1,6 +1,6 @@
 # Rules to normalize test outputs. Our custom diff tool passes test output
-# of tests in normalized_tests.lst through the substitution rules in this file
-# before doing the actual comparison.
+# of tests through the substitution rules in this file before doing the
+# actual comparison.
 #
 # An example of when this is useful is when an error happens on a different
 # port number, or a different worker shard, or a different placement, etc.
@@ -92,3 +92,6 @@ s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('ins
 # ignore job id in repartitioned insert/select
 s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
 
+# ignore first parameter for citus_extradata_container due to differences between pg11 and pg12
+# can be removed when we remove PG_VERSION_NUM >= 120000
+s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_container\(XXX/g
