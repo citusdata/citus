@@ -137,7 +137,7 @@ AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
-	Assert(stmt->relkind = OBJECT_TYPE);
+	Assert(stmt->relkind == OBJECT_TYPE);
 
 	appendStringInfo(buf, "ALTER TYPE %s", identifier);
 	foreach(cmdCell, stmt->cmds)
