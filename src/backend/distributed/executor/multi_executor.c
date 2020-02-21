@@ -21,6 +21,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
@@ -34,6 +35,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
+#include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
@@ -69,6 +71,9 @@ int ExecutorLevel = 0;
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
+static List * FindCitusCustomScanStates(PlanState *planState);
+static bool CitusCustomScanStateWalker(PlanState *planState,
+									   List **citusCustomScanStates);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -174,6 +179,22 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 		else
 		{
+			/*
+			 * Call PreExecScan for all citus custom scan nodes prior to starting the
+			 * postgres exec scan to give some citus scan nodes some time to initialize
+			 * state that would be too late if it were to initialize when the first tuple
+			 * would need to return.
+			 */
+			List *citusCustomScanStates = FindCitusCustomScanStates(queryDesc->planstate);
+			CitusScanState *citusScanState = NULL;
+			foreach_ptr(citusScanState, citusCustomScanStates)
+			{
+				if (citusScanState->PreExecScan)
+				{
+					citusScanState->PreExecScan(citusScanState);
+				}
+			}
+
 			standard_ExecutorRun(queryDesc, direction, count, execute_once);
 		}
 
@@ -186,6 +207,38 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * FindCitusCustomScanStates returns a list of all citus custom scan states in it.
+ */
+static List *
+FindCitusCustomScanStates(PlanState *planState)
+{
+	List *citusCustomScanStates = NIL;
+	CitusCustomScanStateWalker(planState, &citusCustomScanStates);
+	return citusCustomScanStates;
+}
+
+
+/*
+ * CitusCustomScanStateWalker walks a planState tree structure and adds all
+ * CitusCustomState nodes to the list passed by reference as the second argument.
+ */
+static bool
+CitusCustomScanStateWalker(PlanState *planState, List **citusCustomScanStates)
+{
+	if (IsCitusCustomState(planState))
+	{
+		CitusScanState *css = (CitusScanState *) planState;
+		*citusCustomScanStates = lappend(*citusCustomScanStates, css);
+
+		/* breaks the walking of this tree */
+		return true;
+	}
+	return planstate_tree_walker(planState, CitusCustomScanStateWalker,
+								 citusCustomScanStates);
 }
 
 

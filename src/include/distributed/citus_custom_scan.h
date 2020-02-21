@@ -15,10 +15,13 @@
 #include "executor/execdesc.h"
 #include "nodes/plannodes.h"
 
-
 typedef struct CitusScanState
 {
 	CustomScanState customScanState;  /* underlying custom scan node */
+
+	/* function that gets called before postgres starts its execution */
+	void (*PreExecScan)(struct CitusScanState *scanState);
+
 	DistributedPlan *distributedPlan; /* distributed execution plan */
 	MultiExecutorType executorType;   /* distributed executor type */
 	bool finishedRemoteScan;          /* flag to check if remote scan is finished */

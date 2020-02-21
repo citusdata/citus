@@ -49,6 +49,7 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate,
 													int eflags);
+static void CitusPreExecScan(CitusScanState *scanState);
 static void HandleDeferredShardPruningForFastPathQueries(
 	DistributedPlan *distributedPlan);
 static void HandleDeferredShardPruningForInserts(DistributedPlan *distributedPlan);
@@ -115,6 +116,29 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 
 
 /*
+ * IsCitusCustomState returns if a given PlanState node is a CitusCustomState node.
+ */
+bool
+IsCitusCustomState(PlanState *planState)
+{
+	if (!IsA(planState, CustomScanState))
+	{
+		return false;
+	}
+
+	CustomScanState *css = castNode(CustomScanState, planState);
+	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
+		css->methods == &TaskTrackerCustomExecMethods ||
+		css->methods == &CoordinatorInsertSelectCustomExecMethods)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * Let PostgreSQL know about Citus' custom scan nodes.
  */
 void
@@ -172,6 +196,16 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	CitusBeginScanWithoutCoordinatorProcessing(node, estate, eflags);
+}
+
+
+/*
+ * CitusPreExecScan is called right before postgres' executor starts pulling tuples.
+ */
+static void
+CitusPreExecScan(CitusScanState *scanState)
+{
+	AdaptiveExecutorPreExecutorRun(scanState);
 }
 
 
@@ -611,6 +645,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &AdaptiveExecutorCustomExecMethods;
+	scanState->PreExecScan = &CitusPreExecScan;
 
 	return (Node *) scanState;
 }
