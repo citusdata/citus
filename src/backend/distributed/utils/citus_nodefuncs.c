@@ -364,7 +364,7 @@ EqualUnsupportedCitusNode(const struct ExtensibleNode *a,
 		CopyNode##type, \
 		EqualUnsupportedCitusNode, \
 		Out##type, \
-		Read##type \
+		ReadUnsupportedCitusNode \
 	}
 
 #define DEFINE_NODE_METHODS_NO_READ(type) \
