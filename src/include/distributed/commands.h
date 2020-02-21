@@ -71,6 +71,7 @@ extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_o
 extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
 /* extension.c - forward declarations */
+extern bool IsDropCitusStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);

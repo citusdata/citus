@@ -37,7 +37,6 @@ static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
 static void EnsureSequentialModeForExtensionDDL(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
-static bool IsDropCitusStmt(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
 
@@ -727,7 +726,7 @@ IsCreateAlterExtensionUpdateCitusStmt(Node *parseTree)
  * IsDropCitusStmt iterates the objects to be dropped in a drop statement
  * and try to find citus there.
  */
-static bool
+bool
 IsDropCitusStmt(Node *parseTree)
 {
 	ListCell *objectCell = NULL;

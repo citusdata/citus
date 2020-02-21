@@ -9,8 +9,7 @@
 
 SET citus.next_shard_id TO 580000;
 
-CREATE SCHEMA test;
-
+SELECT $definition$
 CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
     RETURNS pg_stat_activity
     LANGUAGE plpgsql
@@ -18,18 +17,24 @@ AS $$
 DECLARE
    activity record;
 BEGIN
+    DO 'BEGIN END'; -- Force maintenance daemon to start
     LOOP
+        PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
-	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
         IF activity.pid IS NOT NULL THEN
             RETURN activity;
         ELSE
             PERFORM pg_sleep(0.1);
-            PERFORM pg_stat_clear_snapshot();
         END IF ;
     END LOOP;
 END;
 $$;
+$definition$ create_function_test_maintenance_worker
+\gset
+
+CREATE SCHEMA test;
+:create_function_test_maintenance_worker
 
 -- check maintenance daemon is started
 SELECT datname, current_database(),
@@ -207,6 +212,35 @@ ALTER EXTENSION citus UPDATE;
 
 \c - - - :master_port
 
+-- test https://github.com/citusdata/citus/issues/3409
+CREATE USER testuser2 SUPERUSER;
+SET ROLE testuser2;
+DROP EXTENSION Citus;
+-- Loop until we see there's no maintenance daemon running
+DO $$begin
+    for i in 0 .. 100 loop
+        if i = 100 then raise 'Waited too long'; end if;
+        PERFORM pg_stat_clear_snapshot();
+        perform * from pg_stat_activity where application_name = 'Citus Maintenance Daemon';
+        if not found then exit; end if;
+        perform pg_sleep(0.1);
+    end loop;
+end$$;
+SELECT datid, datname, usename FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+CREATE EXTENSION Citus;
+-- Loop until we there's a maintenance daemon running
+DO $$begin
+    for i in 0 .. 100 loop
+        if i = 100 then raise 'Waited too long'; end if;
+        PERFORM pg_stat_clear_snapshot();
+        perform * from pg_stat_activity where application_name = 'Citus Maintenance Daemon';
+        if found then exit; end if;
+        perform pg_sleep(0.1);
+    end loop;
+end$$;
+SELECT datid, datname, usename FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+RESET ROLE;
+
 -- check that maintenance daemon gets (re-)started for the right user
 DROP EXTENSION citus;
 CREATE USER testuser SUPERUSER;
@@ -229,28 +263,9 @@ CREATE DATABASE another;
 CREATE EXTENSION citus;
 
 CREATE SCHEMA test;
+:create_function_test_maintenance_worker
 
-CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
-    RETURNS pg_stat_activity
-    LANGUAGE plpgsql
-AS $$
-DECLARE
-   activity record;
-BEGIN
-    LOOP
-        SELECT * INTO activity FROM pg_stat_activity
-	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
-        IF activity.pid IS NOT NULL THEN
-            RETURN activity;
-        ELSE
-            PERFORM pg_sleep(0.1);
-            PERFORM pg_stat_clear_snapshot();
-        END IF ;
-    END LOOP;
-END;
-$$;
-
--- see that the deamon started
+-- see that the daemon started
 SELECT datname, current_database(),
     usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
@@ -258,13 +273,13 @@ FROM test.maintenance_worker();
 -- Test that database with active worker can be dropped.
 \c regression
 
-CREATE SCHEMA test_deamon;
+CREATE SCHEMA test_daemon;
 
 -- we create a similar function on the regression database
 -- note that this function checks for the existence of the daemon
 -- when not found, returns true else tries for 5 times and
 -- returns false
-CREATE OR REPLACE FUNCTION test_deamon.maintenance_deamon_died(p_dbname text)
+CREATE OR REPLACE FUNCTION test_daemon.maintenance_daemon_died(p_dbname text)
     RETURNS boolean
     LANGUAGE plpgsql
 AS $$
@@ -272,27 +287,25 @@ DECLARE
    activity record;
 BEGIN
     PERFORM pg_stat_clear_snapshot();
-    LOOP
-        SELECT * INTO activity FROM pg_stat_activity
-        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
-        IF activity.pid IS NULL THEN
-            RETURN true;
-        ELSE
-            RETURN false;
-        END IF;
-    END LOOP;
+    SELECT * INTO activity FROM pg_stat_activity
+    WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+    IF activity.pid IS NULL THEN
+        RETURN true;
+    ELSE
+        RETURN false;
+    END IF;
 END;
 $$;
 
--- drop the database and see that the deamon is dead
+-- drop the database and see that the daemon is dead
 DROP DATABASE another;
 SELECT
     *
 FROM
-    test_deamon.maintenance_deamon_died('another');
+    test_daemon.maintenance_daemon_died('another');
 
 -- we don't need the schema and the function anymore
-DROP SCHEMA test_deamon CASCADE;
+DROP SCHEMA test_daemon CASCADE;
 
 
 -- verify citus does not crash while creating a table when run against an older worker
