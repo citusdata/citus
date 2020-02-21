@@ -33,7 +33,12 @@ static bool HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *having
 static bool PartitionColumnInTableList(Var *column, List *tableNodeList);
 static bool ShouldPullDistinctColumn(bool repartitionSubquery,
 									 bool groupedByDisjointPartitionColumn,
-									 bool hasNonPartitionColumnDistinctAgg);
+									 bool hasNonPartitionColumnDistinctAgg,
+									 bool onlyPushableWindowFunctions);
+static bool CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
+										 bool groupedByDisjointPartitionColumn,
+										 bool hasWindowFuncs,
+										 bool onlyPushableWindowFunctions);
 
 
 /*
@@ -42,14 +47,17 @@ static bool ShouldPullDistinctColumn(bool repartitionSubquery,
  * value should be used in a read-only manner.
  */
 ExtendedOpNodeProperties
-BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
-							  pullUpIntermediateRows)
+BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
+							  bool hasNonDistributableAggregates)
 {
 	ExtendedOpNodeProperties extendedOpNodeProperties;
 
 	List *tableNodeList = FindNodesOfType((MultiNode *) extendedOpNode, T_MultiTable);
 	bool groupedByDisjointPartitionColumn =
 		GroupedByPartitionColumn((MultiNode *) extendedOpNode, extendedOpNode);
+
+	bool pullUpIntermediateRows = !groupedByDisjointPartitionColumn &&
+								  hasNonDistributableAggregates;
 
 	bool repartitionSubquery = ExtendedOpNodeContainsRepartitionSubquery(extendedOpNode);
 
@@ -58,16 +66,17 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 	bool hasNonPartitionColumnDistinctAgg =
 		HasNonPartitionColumnDistinctAgg(targetList, havingQual, tableNodeList);
 
-	bool pullDistinctColumns =
-		ShouldPullDistinctColumn(repartitionSubquery, groupedByDisjointPartitionColumn,
-								 hasNonPartitionColumnDistinctAgg);
+	bool pushDownGroupingAndHaving =
+		CanPushDownGroupingAndHaving(pullUpIntermediateRows,
+									 groupedByDisjointPartitionColumn,
+									 extendedOpNode->hasWindowFuncs,
+									 extendedOpNode->onlyPushableWindowFunctions);
 
-	/*
-	 * TODO: Only window functions that can be pushed down reach here, thus,
-	 * using hasWindowFuncs is safe for now. However, this should be fixed
-	 * when we support pull-to-master window functions.
-	 */
-	bool pushDownWindowFunctions = extendedOpNode->hasWindowFuncs;
+	bool pullDistinctColumns =
+		ShouldPullDistinctColumn(repartitionSubquery,
+								 groupedByDisjointPartitionColumn,
+								 hasNonPartitionColumnDistinctAgg,
+								 extendedOpNode->onlyPushableWindowFunctions);
 
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
@@ -75,9 +84,11 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode, bool
 	extendedOpNodeProperties.hasNonPartitionColumnDistinctAgg =
 		hasNonPartitionColumnDistinctAgg;
 	extendedOpNodeProperties.pullDistinctColumns = pullDistinctColumns;
-	extendedOpNodeProperties.pushDownWindowFunctions = pushDownWindowFunctions;
-	extendedOpNodeProperties.pullUpIntermediateRows =
-		!groupedByDisjointPartitionColumn && pullUpIntermediateRows;
+	extendedOpNodeProperties.pullUpIntermediateRows = pullUpIntermediateRows;
+	extendedOpNodeProperties.hasWindowFuncs = extendedOpNode->hasWindowFuncs;
+	extendedOpNodeProperties.onlyPushableWindowFunctions =
+		extendedOpNode->onlyPushableWindowFunctions;
+	extendedOpNodeProperties.pushDownGroupingAndHaving = pushDownGroupingAndHaving;
 
 	return extendedOpNodeProperties;
 }
@@ -309,21 +320,52 @@ PartitionColumnInTableList(Var *column, List *tableNodeList)
 static bool
 ShouldPullDistinctColumn(bool repartitionSubquery,
 						 bool groupedByDisjointPartitionColumn,
-						 bool hasNonPartitionColumnDistinctAgg)
+						 bool hasNonPartitionColumnDistinctAgg,
+						 bool onlyPushableWindowFunctions)
 {
 	if (repartitionSubquery)
 	{
 		return true;
 	}
 
-	if (groupedByDisjointPartitionColumn)
+	/* don't pull distinct columns when it can be pushed down */
+	if (onlyPushableWindowFunctions && groupedByDisjointPartitionColumn)
 	{
 		return false;
 	}
-	else if (!groupedByDisjointPartitionColumn && hasNonPartitionColumnDistinctAgg)
+	else if (hasNonPartitionColumnDistinctAgg)
 	{
 		return true;
 	}
 
 	return false;
+}
+
+
+/*
+ * CanPushDownGroupingAndHaving returns whether GROUP BY & HAVING should be
+ * pushed down to worker.
+ */
+static bool
+CanPushDownGroupingAndHaving(bool pullUpIntermediateRows,
+							 bool groupedByDisjointPartitionColumn,
+							 bool hasWindowFuncs, bool onlyPushableWindowFunctions)
+{
+	/* don't push down if we're pulling up */
+	if (pullUpIntermediateRows)
+	{
+		return false;
+	}
+
+	/*
+	 * If grouped by a partition column we can push down the having qualifier.
+	 *
+	 * When a query with subquery is provided, we can't determine if
+	 * groupedByDisjointPartitionColumn, therefore we also check if there is a
+	 * window function too. If there is a window function we would know that it
+	 * is safe to push down (i.e. it is partitioned on distribution column, and
+	 * if there is a group by, it contains distribution column).
+	 */
+	return groupedByDisjointPartitionColumn ||
+		   (hasWindowFuncs && onlyPushableWindowFunctions);
 }

@@ -136,8 +136,7 @@ ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
 
--- similar query with no distribution column is on the partition by clause
--- is not supported
+-- similar query with no distribution column on the partition by clause
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -270,6 +269,69 @@ WINDOW
 ORDER BY
 	user_id, value_1, 3, 4;
 
+-- repeat above 3 tests without grouping by distribution column
+SELECT
+	value_2,
+	rank() OVER (PARTITION BY value_2 ROWS BETWEEN
+				 UNBOUNDED PRECEDING AND CURRENT ROW),
+	dense_rank() OVER (PARTITION BY value_2 RANGE BETWEEN
+					   UNBOUNDED PRECEDING AND CURRENT ROW),
+	CUME_DIST() OVER (PARTITION BY value_2 RANGE BETWEEN
+					  UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING),
+	PERCENT_RANK() OVER (PARTITION BY value_2 ORDER BY avg(value_1) RANGE BETWEEN
+						 UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING)
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	4 DESC,3 DESC,2 DESC ,1 DESC;
+
+-- test exclude supported
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW),
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+ORDER BY
+	value_2, value_1, 3, 4;
+
+-- test <offset> preceding and <offset> following on RANGE window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER range_window,
+	array_agg(value_1) OVER range_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+WINDOW
+	range_window as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	range_window_exclude as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+
+-- test <offset> preceding and <offset> following on ROW window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER row_window,
+	array_agg(value_1) OVER row_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 and value_2 < 6
+WINDOW
+	row_window as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	row_window_exclude as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+
 -- some tests with GROUP BY, HAVING and LIMIT
 SELECT
 	user_id, sum(event_type) OVER my_win , event_type
@@ -283,6 +345,18 @@ ORDER BY
 	2 DESC, 3 DESC, 1 DESC
 LIMIT
 	5;
+
+-- test PARTITION BY avg(...) ORDER BY avg(...)
+SELECT
+	value_1,
+	avg(value_3),
+	dense_rank() OVER (PARTITION BY avg(value_3) ORDER BY avg(value_2))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	1;
 
 -- Group by has more columns than partition by
 SELECT
@@ -346,6 +420,34 @@ GROUP BY
 ORDER BY
 	3 DESC, 2 DESC, 1 DESC;
 $Q$);
+
+SELECT
+	value_2,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY value_2, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+
+SELECT
+	value_2, user_id,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY user_id, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1, 2
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+
+SELECT user_id, sum(avg(user_id)) OVER ()
+FROM users_table
+GROUP BY user_id
+ORDER BY 1
+LIMIT 10;
 
 SELECT
 	user_id,
@@ -454,3 +556,49 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
+
+-- Grouping can be pushed down with aggregates even when window function can't
+EXPLAIN (COSTS FALSE)
+SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
+FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
+
+-- Window function with inlined CTE
+WITH cte as (
+    SELECT uref.id user_id, events_table.value_2, count(*) c
+    FROM events_table
+    JOIN users_ref_test_table uref ON uref.id = events_table.user_id
+    GROUP BY 1, 2
+)
+SELECT DISTINCT cte.value_2, cte.c, sum(cte.value_2) OVER (PARTITION BY cte.c)
+FROM cte JOIN events_table et ON et.value_2 = cte.value_2 and et.value_2 = cte.c
+ORDER BY 1;
+
+-- There was a strange bug where this wouldn't have window functions being pushed down
+-- Bug dependent on column ordering
+CREATE TABLE daily_uniques (value_2 float, user_id bigint);
+SELECT create_distributed_table('daily_uniques', 'user_id');
+
+EXPLAIN (COSTS FALSE) SELECT
+  user_id,
+  sum(value_2) AS commits,
+  RANK () OVER (
+    PARTITION BY user_id
+    ORDER BY
+      sum(value_2) DESC
+  )
+FROM daily_uniques
+GROUP BY user_id
+HAVING
+  sum(value_2) > 0
+ORDER BY commits DESC
+LIMIT 10;
+
+DROP TABLE daily_uniques;
+
+-- Partition by reference table column joined to distribution column
+SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
+SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk
+FROM events_table
+JOIN users_ref_test_table uref ON uref.id = events_table.user_id) sq
+GROUP BY 1 ORDER BY 1;
+

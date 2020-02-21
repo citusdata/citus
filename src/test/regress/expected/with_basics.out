@@ -461,8 +461,15 @@ ORDER BY
   user_id
 LIMIT
   5;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ user_id
+---------------------------------------------------------------------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 -- Window functions that partition by the distribution column in subqueries in CTEs are ok
 WITH top_users AS
   (SELECT *

@@ -176,9 +176,10 @@ typedef struct MultiExtendedOp
 	Node *limitOffset;
 	Node *havingQual;
 	List *distinctClause;
+	List *windowClause;
 	bool hasDistinctOn;
 	bool hasWindowFuncs;
-	List *windowClause;
+	bool onlyPushableWindowFunctions;
 } MultiExtendedOp;
 
 
@@ -219,7 +220,7 @@ extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 extern MultiProject * MultiProjectNode(List *targetEntryList);
-extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);
+extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree, Query *originalQuery);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
 																		 subqueryTree);
 extern MultiNode * MultiNodeTree(Query *queryTree);

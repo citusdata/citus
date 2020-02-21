@@ -561,7 +561,7 @@ FROM (
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 TRUNCATE agg_results_window;
 
--- lets have some queries that Citus shouldn't push down
+-- test queries where the window function isn't pushed down
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -578,8 +578,6 @@ ORDER BY
 LIMIT
   10;
 
--- user needs to supply partition by which should
--- include the distribution key
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -596,8 +594,6 @@ ORDER BY
 LIMIT
   10;
 
--- user needs to supply partition by which should
--- include the distribution key
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -614,7 +610,6 @@ ORDER BY
 LIMIT
   10;
 
--- w2 should not be pushed down
 INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
@@ -631,7 +626,6 @@ SELECT * FROM
 LIMIT
   10;
 
--- GROUP BY includes the partition key, but not the WINDOW function
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
@@ -648,7 +642,6 @@ FROM
 WHERE
   my_rank > 125;
 
--- GROUP BY includes the partition key, but not the WINDOW function
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
@@ -665,7 +658,6 @@ FROM
 WHERE
   my_rank > 125;
 
--- w2 should not be allowed
 INSERT INTO agg_results_window (user_id, value_2_agg, value_3_agg)
 SELECT * FROM
 (
@@ -680,7 +672,6 @@ SELECT * FROM
   w2 AS (ORDER BY events_table.time)
 ) as foo;
 
--- unsupported window function with an override
 INSERT INTO agg_results_window(user_id, agg_time, value_2_agg)
 SELECT * FROM (
   SELECT
@@ -697,7 +688,6 @@ SELECT * FROM (
       w2 as (PARTITION BY user_id, time)
 ) a;
 
-  -- Subquery in where with unsupported window function
 INSERT INTO agg_results_window(user_id)
 SELECT
   user_id
@@ -716,7 +706,6 @@ WHERE
 GROUP BY
   user_id;
 
--- Aggregate function on distribution column should error out
 INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT
@@ -727,8 +716,6 @@ SELECT * FROM (
     user_id
 ) a;
 
--- UNION with only one subquery which has a partition on non-distribution column should
--- error out
 INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM (

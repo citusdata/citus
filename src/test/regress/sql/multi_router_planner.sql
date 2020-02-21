@@ -572,7 +572,6 @@ SELECT *
 	FROM articles_hash
 	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
 
--- window functions are supported if query is router plannable
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5;
@@ -594,14 +593,15 @@ SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
 	FROM articles_hash
 	WHERE author_id = 1;
 
--- window functions are not supported for not router plannable queries
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
-	WHERE author_id = 1 or author_id = 2;
+	WHERE author_id = 1 or author_id = 2
+    ORDER BY 1;
 
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
-	WHERE author_id = 5 or author_id = 2;
+	WHERE author_id = 5 or author_id = 2
+    ORDER BY 2;
 
 -- where false queries are router plannable
 SELECT *

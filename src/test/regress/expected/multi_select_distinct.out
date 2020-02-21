@@ -1116,18 +1116,18 @@ EXPLAIN (COSTS FALSE)
 SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 	FROM lineitem_hash_part
 	WHERE l_orderkey < 35
-	ORDER BY 1;
+	ORDER BY 1, 2, 3;
  l_orderkey | l_partkey | l_suppkey
 ---------------------------------------------------------------------
-          1 |    155190 |      7706
+          1 |      2132 |      4633
           2 |    106170 |      1191
           3 |      4297 |      1798
           4 |     88035 |      5560
-          5 |    108570 |      8571
+          5 |     37531 |        35
           6 |    139636 |      2150
-          7 |    182052 |      9607
-         32 |     82704 |      7721
-         33 |     61336 |      8855
+          7 |     79251 |      1759
+         32 |      2743 |      7744
+         33 |     33918 |      3919
          34 |     88362 |       871
 (10 rows)
 
@@ -1135,12 +1135,12 @@ EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 		FROM lineitem_hash_part
 		WHERE l_orderkey < 35
-		ORDER BY 1;
+		ORDER BY 1, 2, 3;
                                           QUERY PLAN
 ---------------------------------------------------------------------
  Unique
    ->  Sort
-         Sort Key: remote_scan.l_orderkey
+         Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey, remote_scan.l_suppkey
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
                Tasks Shown: One of 4
@@ -1148,7 +1148,7 @@ EXPLAIN (COSTS FALSE)
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Unique
                            ->  Sort
-                                 Sort Key: l_orderkey
+                                 Sort Key: l_orderkey, l_partkey, l_suppkey
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
                                        Filter: (l_orderkey < 35)
 (13 rows)

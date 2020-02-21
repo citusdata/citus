@@ -667,7 +667,7 @@ DEBUG:  Plan is router executable
  2 | 2
 (2 rows)
 
--- set operations works fine with pushdownable window functions
+-- set operations work fine with pushdownable window functions
 SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY x ORDER BY y DESC)) as foo
 UNION
 SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY x ORDER BY y DESC)) as bar
@@ -686,14 +686,25 @@ DEBUG:  Plan is router executable
  1 | 1 |   1
 (2 rows)
 
--- set operations errors out with non-pushdownable window functions
+-- set operations work fine with non-pushdownable window functions
 SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)) as foo
 UNION
-SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)) as bar;
+SELECT x, y, rnk FROM (SELECT *, rank() OVER my_win as rnk FROM test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)) as bar
+ORDER BY 1 DESC, 2 DESC, 3 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y, rank() OVER my_win AS rnk FROM recursive_union.test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT x, y, rank() OVER my_win AS rnk FROM recursive_union.test WINDOW my_win AS (PARTITION BY y ORDER BY x DESC)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.x, foo.y, foo.rnk FROM (SELECT intermediate_result.x, intermediate_result.y, intermediate_result.rnk FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer, rnk bigint)) foo UNION SELECT bar.x, bar.y, bar.rnk FROM (SELECT intermediate_result.x, intermediate_result.y, intermediate_result.rnk FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer, rnk bigint)) bar ORDER BY 1 DESC, 2 DESC, 3 DESC
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ x | y | rnk
+---------------------------------------------------------------------
+ 2 | 2 |   1
+ 1 | 1 |   1
+(2 rows)
+
 -- other set operations in joins also cannot be pushed down
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries

@@ -747,7 +747,7 @@ RESET citus.subquery_pushdown;
 VACUUM ANALYZE users_table;
 -- explain tests
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
-                                                                 QUERY PLAN
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id
@@ -758,19 +758,17 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: users_table.user_id
-                           ->  Nested Loop
-                                 Join Filter: (users_table.user_id = users_table_1.user_id)
-                                 ->  Sort
-                                       Sort Key: (max(users_table_1."time")) DESC
-                                       ->  HashAggregate
-                                             Group Key: users_table_1.user_id
-                                             Filter: (max(users_table_1."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
-                                             ->  Seq Scan on users_table_1400256 users_table_1
-                                 ->  Seq Scan on users_table_1400256 users_table
-                                       Filter: ((value_1 >= 1) AND (value_1 < 3))
-(21 rows)
+                     ->  Nested Loop
+                           Join Filter: (users_table.user_id = users_table_1.user_id)
+                           ->  Sort
+                                 Sort Key: (max(users_table_1."time")) DESC
+                                 ->  HashAggregate
+                                       Group Key: users_table_1.user_id
+                                       Filter: (max(users_table_1."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
+                                       ->  Seq Scan on users_table_1400256 users_table_1
+                           ->  Seq Scan on users_table_1400256 users_table
+                                 Filter: ((value_1 >= 1) AND (value_1 < 3))
+(19 rows)
 
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (

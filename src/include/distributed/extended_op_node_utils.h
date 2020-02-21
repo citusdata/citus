@@ -27,13 +27,15 @@ typedef struct ExtendedOpNodeProperties
 	bool repartitionSubquery;
 	bool hasNonPartitionColumnDistinctAgg;
 	bool pullDistinctColumns;
-	bool pushDownWindowFunctions;
+	bool hasWindowFuncs;
+	bool onlyPushableWindowFunctions;
 	bool pullUpIntermediateRows;
+	bool pushDownGroupingAndHaving;
 } ExtendedOpNodeProperties;
 
 
 extern ExtendedOpNodeProperties BuildExtendedOpNodeProperties(
-	MultiExtendedOp *extendedOpNode, bool pullUpIntermediateRows);
+	MultiExtendedOp *extendedOpNode, bool hasNonDistributableAggregates);
 
 
 #endif /* EXTENDED_OP_NODE_UTILS_H_ */

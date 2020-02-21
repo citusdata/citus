@@ -2,11 +2,11 @@
 -- test recursive planning functionality with subqueries and CTEs
 -- ===================================================================
 CREATE SCHEMA subquery_deep;
-SET search_path TO subquery_and_ctes, public;
+SET search_path TO subquery_deep, public;
 SET client_min_messages TO DEBUG1;
 -- subquery in FROM -> FROM -> FROM should be replaced due to OFFSET
 -- one level up subquery should be replaced due to GROUP BY on non partition key
--- one level up subquery should be replaced due to LIMUT
+-- one level up subquery should be replaced due to LIMIT
 SELECT
 	DISTINCT user_id
 FROM

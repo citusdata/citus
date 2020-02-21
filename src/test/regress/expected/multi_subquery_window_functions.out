@@ -775,7 +775,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                                                  Output: events_table_1.user_id, events_table_1.value_2
 (62 rows)
 
--- lets have some queries that Citus shouldn't push down
+-- test with window functions which aren't pushed down
 SELECT
    user_id, time, rnk
 FROM
@@ -790,10 +790,20 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- user needs to supply partition by which should
--- include the distribution key
+ user_id |              time               | rnk
+---------------------------------------------------------------------
+       1 | Wed Nov 22 19:07:03.846437 2017 |  24
+       5 | Wed Nov 22 20:45:35.99031 2017  |  23
+       1 | Wed Nov 22 18:49:42.327403 2017 |  23
+       3 | Wed Nov 22 21:12:24.542921 2017 |  22
+       3 | Wed Nov 22 20:23:46.906523 2017 |  22
+       6 | Wed Nov 22 20:36:09.106561 2017 |  21
+       3 | Wed Nov 22 21:26:21.185134 2017 |  21
+       1 | Wed Nov 22 19:03:01.772353 2017 |  21
+       6 | Wed Nov 22 22:44:48.458334 2017 |  20
+       3 | Wed Nov 22 22:05:38.409323 2017 |  20
+(10 rows)
+
 SELECT
    user_id, time, rnk
 FROM
@@ -808,10 +818,20 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- user needs to supply partition by which should
--- include the distribution key
+ user_id |              time               | rnk
+---------------------------------------------------------------------
+       6 | Thu Nov 23 14:00:13.20013 2017  |   1
+       6 | Thu Nov 23 11:16:13.106691 2017 |   1
+       6 | Thu Nov 23 07:27:32.822068 2017 |   1
+       6 | Thu Nov 23 02:06:53.132461 2017 |   1
+       6 | Thu Nov 23 00:45:41.784391 2017 |   1
+       6 | Thu Nov 23 00:01:48.155345 2017 |   1
+       6 | Wed Nov 22 23:15:15.875499 2017 |   1
+       6 | Wed Nov 22 22:44:48.458334 2017 |   1
+       6 | Wed Nov 22 21:17:09.549341 2017 |   1
+       6 | Wed Nov 22 20:36:09.106561 2017 |   1
+(10 rows)
+
 SELECT
    user_id, time, rnk
 FROM
@@ -826,9 +846,20 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- w2 should not be pushed down
+ user_id |              time               | rnk
+---------------------------------------------------------------------
+       3 | Wed Nov 22 18:36:16.372893 2017 | 101
+       1 | Wed Nov 22 18:49:42.327403 2017 | 100
+       4 | Wed Nov 22 19:00:10.396739 2017 |  99
+       1 | Wed Nov 22 19:03:01.772353 2017 |  98
+       1 | Wed Nov 22 19:07:03.846437 2017 |  97
+       2 | Wed Nov 22 20:16:16.614779 2017 |  96
+       3 | Wed Nov 22 20:23:46.906523 2017 |  95
+       6 | Wed Nov 22 20:36:09.106561 2017 |  94
+       5 | Wed Nov 22 20:45:35.99031 2017  |  93
+       1 | Wed Nov 22 20:56:21.122638 2017 |  92
+(10 rows)
+
 SELECT * FROM
 (
   SELECT
@@ -843,9 +874,20 @@ SELECT * FROM
 ) as foo
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- w2 should not be pushed down
+ user_id | lag | rank
+---------------------------------------------------------------------
+       2 |   2 |   73
+       4 |   4 |   70
+       3 |   3 |   69
+       2 |   2 |   55
+       5 |   5 |   53
+       5 |     |   53
+       3 |   3 |   52
+       4 |   4 |   47
+       2 |   2 |   37
+       3 |   3 |   35
+(10 rows)
+
 SELECT * FROM
 (
   SELECT
@@ -862,9 +904,20 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- GROUP BY includes the partition key, but not the WINDOW function
+ user_id | lag | rank
+---------------------------------------------------------------------
+       4 |   4 | 1262
+       3 |   3 | 1245
+       2 |   2 | 1227
+       4 |   4 | 1204
+       4 |     | 1204
+       5 |   5 | 1178
+       5 |   5 | 1152
+       5 |   5 | 1126
+       4 |   4 | 1103
+       2 |   2 | 1085
+(10 rows)
+
 SELECT
    user_id, time, my_rank
 FROM
@@ -883,9 +936,20 @@ ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- GROUP BY includes the partition key, but not the WINDOW function
+ user_id |           time           | my_rank
+---------------------------------------------------------------------
+       4 | Wed Nov 22 00:00:00 2017 |      12
+       6 | Wed Nov 22 00:00:00 2017 |      11
+       5 | Wed Nov 22 00:00:00 2017 |      10
+       6 | Thu Nov 23 00:00:00 2017 |       9
+       3 | Thu Nov 23 00:00:00 2017 |       8
+       1 | Thu Nov 23 00:00:00 2017 |       7
+       1 | Wed Nov 22 00:00:00 2017 |       6
+       2 | Thu Nov 23 00:00:00 2017 |       5
+       4 | Thu Nov 23 00:00:00 2017 |       4
+       2 | Wed Nov 22 00:00:00 2017 |       3
+(10 rows)
+
 SELECT
    user_id, time, my_rank
 FROM
@@ -904,9 +968,20 @@ ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- Overriding window function but not supported
+ user_id |           time           | my_rank
+---------------------------------------------------------------------
+       6 | Thu Nov 23 00:00:00 2017 |       6
+       4 | Wed Nov 22 00:00:00 2017 |       6
+       6 | Wed Nov 22 00:00:00 2017 |       5
+       3 | Thu Nov 23 00:00:00 2017 |       5
+       5 | Wed Nov 22 00:00:00 2017 |       4
+       1 | Thu Nov 23 00:00:00 2017 |       4
+       2 | Thu Nov 23 00:00:00 2017 |       3
+       1 | Wed Nov 22 00:00:00 2017 |       3
+       4 | Thu Nov 23 00:00:00 2017 |       2
+       2 | Wed Nov 22 00:00:00 2017 |       2
+(10 rows)
+
 SELECT * FROM (
   SELECT
     user_id, date_trunc('day', time) as time, sum(rank) OVER w2
@@ -923,9 +998,111 @@ SELECT * FROM (
 ) a
 ORDER BY
 1,2,3;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- Aggregate function on distribution column should error out
+ user_id |           time           | sum
+---------------------------------------------------------------------
+       1 | Wed Nov 22 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Wed Nov 22 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       2 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Wed Nov 22 00:00:00 2017 |   1
+       3 | Wed Nov 22 00:00:00 2017 |   1
+       3 | Wed Nov 22 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       3 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Wed Nov 22 00:00:00 2017 |   1
+       4 | Wed Nov 22 00:00:00 2017 |   1
+       4 | Wed Nov 22 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       4 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Wed Nov 22 00:00:00 2017 |   1
+       5 | Wed Nov 22 00:00:00 2017 |   1
+       5 | Wed Nov 22 00:00:00 2017 |   1
+       5 | Wed Nov 22 00:00:00 2017 |   1
+       5 | Wed Nov 22 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       5 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Wed Nov 22 00:00:00 2017 |   1
+       6 | Wed Nov 22 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+       6 | Thu Nov 23 00:00:00 2017 |   1
+(101 rows)
+
 SELECT * FROM (
   SELECT
     user_id, COUNT(*) OVER (PARTITION BY sum(user_id), MIN(value_2))
@@ -936,8 +1113,16 @@ SELECT * FROM (
 ) a
 ORDER BY
   1 DESC, 2 DESC;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ user_id | count
+---------------------------------------------------------------------
+       6 |     1
+       5 |     1
+       4 |     1
+       3 |     1
+       2 |     1
+       1 |     1
+(6 rows)
+
 -- test with reference table partitioned on only a column from reference table
 SELECT *
 FROM
@@ -951,10 +1136,30 @@ ORDER BY
   1, 2, 3
 LIMIT
   20;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- UNION ALL with only one of them is not partitioned over distribution column which
--- should not be allowed.
+ user_id | it_name | count
+---------------------------------------------------------------------
+       1 | User_1  |   101
+       1 | User_2  |   101
+       1 | User_3  |   101
+       1 | User_4  |   101
+       1 | User_5  |   101
+       1 | User_6  |   101
+       2 | User_1  |   101
+       2 | User_2  |   101
+       2 | User_3  |   101
+       2 | User_4  |   101
+       2 | User_5  |   101
+       2 | User_6  |   101
+       3 | User_1  |   101
+       3 | User_2  |   101
+       3 | User_3  |   101
+       3 | User_4  |   101
+       3 | User_5  |   101
+       3 | User_6  |   101
+       4 | User_1  |   101
+       4 | User_2  |   101
+(20 rows)
+
 SELECT
   max(avg)
 FROM
@@ -974,10 +1179,15 @@ FROM
 GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- UNION with only one subquery which has a partition on non-distribution column should
--- error out
+       max
+---------------------------------------------------------------------
+                5
+ 3.09090909090909
+                3
+                3
+            2.875
+(5 rows)
+
 SELECT *
 FROM (
         ( SELECT user_id,
@@ -1011,6 +1221,13 @@ FROM (
             user_id)) AS ftop
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ user_id | sum
+---------------------------------------------------------------------
+       5 | 298
+       6 | 244
+       1 | 244
+       4 | 235
+       2 | 235
+(5 rows)
+
 DROP VIEW subq;

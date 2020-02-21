@@ -103,17 +103,11 @@ FROM
 DEBUG:  CTE joined_source_table_cte_1 is going to be inlined via distributed planning
 DEBUG:  CTE joined_source_table_cte_2 is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE dest_table_cte: SELECT a FROM public.dest_table
-DEBUG:  generating subplan XXX_1 for CTE dest_table_cte: SELECT a FROM public.dest_table
-DEBUG:  generating subplan XXX_2 for CTE joined_source_table_cte_1: SELECT source_table.b, source_table.a FROM (public.source_table JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte USING (a))
-DEBUG:  generating subplan XXX_3 for CTE joined_source_table_cte_2: SELECT joined_source_table_cte_1.b, joined_source_table_cte_1.a FROM ((SELECT intermediate_result.b, intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(b integer, a integer)) joined_source_table_cte_1 JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte USING (a))
-DEBUG:  generating subplan XXX_4 for subquery SELECT sum(joined_source_table_cte_2.b) OVER (PARTITION BY COALESCE(dest_table_cte.a, NULL::integer)) AS sum FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte JOIN (SELECT intermediate_result.b, intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(b integer, a integer)) joined_source_table_cte_2 USING (a))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) inner_query
-DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  generating subplan XXX_2 for subquery SELECT sum(joined_source_table_cte_2.b) OVER (PARTITION BY COALESCE(dest_table_cte.a, NULL::integer)) AS sum FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte JOIN (SELECT joined_source_table_cte_1.b, joined_source_table_cte_1.a FROM ((SELECT source_table.b, source_table.a FROM (public.source_table JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte_2 USING (a))) joined_source_table_cte_1 JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte_1 USING (a))) joined_source_table_cte_2 USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) inner_query
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
-DEBUG:  Subplan XXX_3 will be written to local file
-DEBUG:  Subplan XXX_4 will be written to local file
  sum
 ---------------------------------------------------------------------
    5
@@ -145,16 +139,11 @@ FROM
 DEBUG:  CTE joined_source_table_cte_1 is going to be inlined via distributed planning
 DEBUG:  CTE joined_source_table_cte_2 is going to be inlined via distributed planning
 DEBUG:  generating subplan XXX_1 for CTE dest_table_cte: SELECT a FROM public.dest_table
-DEBUG:  generating subplan XXX_1 for CTE dest_table_cte: SELECT a FROM public.dest_table
-DEBUG:  generating subplan XXX_2 for CTE joined_source_table_cte_1: SELECT source_table.b, source_table.a FROM (public.source_table JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte USING (a))
-DEBUG:  generating subplan XXX_3 for CTE joined_source_table_cte_2: SELECT joined_source_table_cte_1.b, joined_source_table_cte_1.a FROM ((SELECT intermediate_result.b, intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(b integer, a integer)) joined_source_table_cte_1 JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte USING (a))
-DEBUG:  generating subplan XXX_4 for subquery SELECT sum(joined_source_table_cte_2.b) OVER (PARTITION BY COALESCE(dest_table_cte.a, NULL::integer)) AS sum FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte JOIN (SELECT intermediate_result.b, intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(b integer, a integer)) joined_source_table_cte_2 USING (a))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) inner_query
+DEBUG:  generating subplan XXX_2 for subquery SELECT sum(joined_source_table_cte_2.b) OVER (PARTITION BY COALESCE(dest_table_cte.a, NULL::integer)) AS sum FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte JOIN (SELECT joined_source_table_cte_1.b, joined_source_table_cte_1.a FROM ((SELECT source_table.b, source_table.a FROM (public.source_table JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte_2 USING (a))) joined_source_table_cte_1 JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dest_table_cte_1 USING (a))) joined_source_table_cte_2 USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) inner_query
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_4 will be sent to localhost:xxxxx
  sum
 ---------------------------------------------------------------------
    5

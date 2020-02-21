@@ -9,7 +9,6 @@ AS create_cmd FROM pg_available_extensions()
 WHERE name = 'hll'
 \gset
 :create_cmd;
-ERROR:  extension "hll" already exists
 SET citus.shard_count TO 4;
 set citus.coordinator_aggregation_strategy to 'disabled';
 CREATE TABLE raw_table (day date, user_id int);
@@ -89,17 +88,118 @@ ORDER BY 1;
      7 |              13
 (2 rows)
 
--- These are going to be supported after window function support
 SELECT day, hll_cardinality(hll_union_agg(unique_users) OVER seven_days)
 FROM daily_uniques
-WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING);
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING)
+ORDER BY 1;
+    day     | hll_cardinality
+---------------------------------------------------------------------
+ 05-24-2018 |              19
+ 05-25-2018 |              19
+ 05-26-2018 |              19
+ 05-27-2018 |              19
+ 05-28-2018 |              19
+ 05-29-2018 |              19
+ 05-30-2018 |              19
+ 05-31-2018 |              19
+ 06-01-2018 |              19
+ 06-02-2018 |              19
+ 06-03-2018 |              19
+ 06-04-2018 |              19
+ 06-05-2018 |              19
+ 06-06-2018 |              19
+ 06-07-2018 |              19
+ 06-08-2018 |              19
+ 06-09-2018 |              19
+ 06-10-2018 |              19
+ 06-11-2018 |              19
+ 06-12-2018 |              19
+ 06-13-2018 |              19
+ 06-14-2018 |              19
+ 06-15-2018 |              19
+ 06-16-2018 |              19
+ 06-17-2018 |              19
+ 06-18-2018 |              19
+ 06-19-2018 |              19
+ 06-20-2018 |              19
+ 06-21-2018 |              19
+ 06-22-2018 |              19
+ 06-23-2018 |              19
+ 06-24-2018 |              19
+ 06-25-2018 |              19
+ 06-26-2018 |              19
+ 06-27-2018 |              19
+ 06-28-2018 |              19
+ 06-29-2018 |              19
+ 06-30-2018 |              19
+ 07-01-2018 |              13
+ 07-02-2018 |              13
+ 07-03-2018 |              13
+ 07-04-2018 |              13
+ 07-05-2018 |              13
+ 07-06-2018 |              13
+ 07-07-2018 |              13
+ 07-08-2018 |              13
+ 07-09-2018 |              13
+ 07-10-2018 |              13
+(48 rows)
+
 SELECT day, (hll_cardinality(hll_union_agg(unique_users) OVER two_days)) - hll_cardinality(unique_users) AS lost_uniques
 FROM daily_uniques
-WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING)
+ORDER BY 1;
+    day     | lost_uniques
+---------------------------------------------------------------------
+ 05-24-2018 |            0
+ 05-25-2018 |            0
+ 05-26-2018 |            0
+ 05-27-2018 |            0
+ 05-28-2018 |            0
+ 05-29-2018 |            0
+ 05-30-2018 |            0
+ 05-31-2018 |            0
+ 06-01-2018 |            0
+ 06-02-2018 |            0
+ 06-03-2018 |            0
+ 06-04-2018 |            0
+ 06-05-2018 |            0
+ 06-06-2018 |            0
+ 06-07-2018 |            0
+ 06-08-2018 |            0
+ 06-09-2018 |            0
+ 06-10-2018 |            0
+ 06-11-2018 |            0
+ 06-12-2018 |            0
+ 06-13-2018 |            0
+ 06-14-2018 |            0
+ 06-15-2018 |            0
+ 06-16-2018 |            0
+ 06-17-2018 |            0
+ 06-18-2018 |            0
+ 06-19-2018 |            0
+ 06-20-2018 |            0
+ 06-21-2018 |            0
+ 06-22-2018 |            0
+ 06-23-2018 |            0
+ 06-24-2018 |            0
+ 06-25-2018 |            6
+ 06-26-2018 |            0
+ 06-27-2018 |            0
+ 06-28-2018 |            0
+ 06-29-2018 |            0
+ 06-30-2018 |            0
+ 07-01-2018 |            0
+ 07-02-2018 |            0
+ 07-03-2018 |            0
+ 07-04-2018 |            0
+ 07-05-2018 |            0
+ 07-06-2018 |            0
+ 07-07-2018 |            0
+ 07-08-2018 |            0
+ 07-09-2018 |            0
+ 07-10-2018 |            0
+(48 rows)
+
 -- Test disabling hash_agg on coordinator query
 SET citus.explain_all_tasks to true;
 SET hll.force_groupagg to OFF;
@@ -109,34 +209,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(25 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -145,36 +243,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(27 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with operator on coordinator query
 SET hll.force_groupagg to OFF;
@@ -184,34 +278,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(25 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -220,36 +312,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(27 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with expression on coordinator query
 SET hll.force_groupagg to OFF;
@@ -259,34 +347,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(25 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -295,36 +381,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                                  QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate
-                           Group Key: day
-                           ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(27 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 -- Test disabling hash_agg with having
 SET hll.force_groupagg to OFF;
@@ -334,34 +416,32 @@ SELECT
 FROM
   daily_uniques
 GROUP BY(1);
-                               QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate
-   Group Key: remote_scan.day
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: All
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate
-                     Group Key: day
-                     ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(25 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(23 rows)
 
 SET hll.force_groupagg to ON;
 EXPLAIN(COSTS OFF)
@@ -371,49 +451,36 @@ FROM
   daily_uniques
 GROUP BY(1)
 HAVING hll_cardinality(hll_union_agg(unique_users)) > 1;
-                                                QUERY PLAN
+                                          QUERY PLAN
 ---------------------------------------------------------------------
- GroupAggregate
-   Group Key: remote_scan.day
-   Filter: (hll_cardinality(hll_union_agg(remote_scan.worker_column_3)) > '1'::double precision)
-   ->  Sort
-         Sort Key: remote_scan.day
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  GroupAggregate
-                           Group Key: day
-                           Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
-                           ->  Sort
-                                 Sort Key: day
-                                 ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(40 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  HashAggregate
+               Group Key: day
+               Filter: (hll_cardinality(hll_union_agg(unique_users)) > '1'::double precision)
+               ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(27 rows)
 
 DROP TABLE raw_table;
 DROP TABLE daily_uniques;
@@ -542,35 +609,11 @@ SELECT (topn(topn_union_agg(reviewers), 10)).*
 FROM popular_reviewer
 WHERE day >= '2018-05-24'::date AND day <= '2018-05-31'::date
 ORDER BY 2 DESC, 1;
- item | frequency
----------------------------------------------------------------------
- 1    |      1240
- 2    |      1240
- 0    |       992
- 3    |       992
- 4    |       992
- 5    |       992
- 6    |       992
-(7 rows)
-
+ERROR:  set-valued function called in context that cannot accept a set
 SELECT (topn(topn_add_agg(user_id::text), 10)).*
 FROM customer_reviews
 ORDER BY 2 DESC, 1;
- item | frequency
----------------------------------------------------------------------
- 1    |      7843
- 2    |      7843
- 3    |      6851
- 4    |      6851
- 0    |      5890
- 5    |      5890
- 6    |      5890
- 7    |      1922
- 8    |      1922
- 9    |      1922
-(10 rows)
-
--- The following is going to be supported after window function support
+ERROR:  set-valued function called in context that cannot accept a set
 SELECT day, (topn(agg, 10)).*
 FROM (
 	SELECT day, topn_union_agg(reviewers) OVER seven_days AS agg
@@ -579,14 +622,25 @@ FROM (
 	)a
 ORDER BY 3 DESC, 1, 2
 LIMIT 10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+    day     | item | frequency
+---------------------------------------------------------------------
+ 06-16-2018 | 1    |      1736
+ 06-16-2018 | 2    |      1736
+ 06-17-2018 | 1    |      1736
+ 06-17-2018 | 2    |      1736
+ 06-18-2018 | 1    |      1736
+ 06-18-2018 | 2    |      1736
+ 06-19-2018 | 1    |      1736
+ 06-19-2018 | 2    |      1736
+ 06-20-2018 | 1    |      1736
+ 06-20-2018 | 2    |      1736
+(10 rows)
+
 SELECT day, (topn(topn_add_agg(user_id::text) OVER seven_days, 10)).*
 FROM customer_reviews
 WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING)
 ORDER BY 3 DESC, 1, 2
 LIMIT 10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ERROR:  set-valued function called in context that cannot accept a set
 DROP TABLE customer_reviews;
 DROP TABLE popular_reviewer;
