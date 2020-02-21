@@ -20,6 +20,7 @@
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/planner.h"
 #include "rewrite/rewriteManip.h"
 
@@ -27,7 +28,7 @@ static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
 													   List *masterTargetList,
 													   CustomScan *remoteScan);
-static RangeTblEntry * FindCitusExtradataContainerRTE(Query *masterQuery);
+static bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 
 static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
 									  struct CustomPath *best_path, List *tlist,
@@ -214,7 +215,8 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	 */
 
 	/* find the rangetable entry for the extradata container and overwrite its alias */
-	RangeTblEntry *extradataContainerRTE = FindCitusExtradataContainerRTE(masterQuery);
+	RangeTblEntry *extradataContainerRTE = NULL;
+	FindCitusExtradataContainerRTE((Node *) masterQuery, &extradataContainerRTE);
 	if (extradataContainerRTE != NULL)
 	{
 		/* extract column names from the masterTargetList */
@@ -267,31 +269,46 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 
 
 /*
- * Finds the rangetable entry in the query that refers to the citus_extradata_container.
- * Returns NULL if not found.
+ * Finds the rangetable entry in the query that refers to the citus_extradata_container
+ * and stores the pointer in result.
  */
-static RangeTblEntry *
-FindCitusExtradataContainerRTE(Query *masterQuery)
+static bool
+FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 {
-	RangeTblEntry *rangeTblEntry = NULL;
-	foreach_ptr(rangeTblEntry, masterQuery->rtable)
+	if (node == NULL)
 	{
-		if (rangeTblEntry->rtekind != RTE_FUNCTION ||
-			list_length(rangeTblEntry->functions) != 1)
-		{
-			continue;
-		}
-
-		/* range table entry is a function, lets confirm it is the function we want */
-		RangeTblFunction *rangeTblFunction = list_nth_node(RangeTblFunction,
-														   rangeTblEntry->functions, 0);
-
-		FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
-		if (funcExpr->funcid == CitusExtraDataContainerFuncId())
-		{
-			return rangeTblEntry;
-		}
+		return false;
 	}
 
-	return NULL;
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTblEntry = castNode(RangeTblEntry, node);
+		if (rangeTblEntry->rtekind == RTE_FUNCTION &&
+			list_length(rangeTblEntry->functions) == 1)
+		{
+			RangeTblFunction *rangeTblFunction = (RangeTblFunction *) linitial(
+				rangeTblEntry->functions);
+			FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
+			if (funcExpr->funcid == CitusExtraDataContainerFuncId())
+			{
+				*result = rangeTblEntry;
+				return true;
+			}
+		}
+
+		/* query_tree_walker descends into RTEs */
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+#if PG_VERSION_NUM >= 120000
+		const int flags = QTW_EXAMINE_RTES_BEFORE;
+#else
+		const int flags = QTW_EXAMINE_RTES;
+#endif
+		return query_tree_walker((Query *) node, FindCitusExtradataContainerRTE, result,
+								 flags);
+	}
+
+	return expression_tree_walker(node, FindCitusExtradataContainerRTE, result);
 }
