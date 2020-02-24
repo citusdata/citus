@@ -1700,8 +1700,7 @@ CheckNodeCopyAndSerialization(Node *node)
 {
 #ifdef USE_ASSERT_CHECKING
 	char *out = nodeToString(node);
-	Node *deserializedNode = (Node *) stringToNode(out);
-	Node *nodeCopy = copyObject(deserializedNode);
+	Node *nodeCopy = copyObject(node);
 	char *outCopy = nodeToString(nodeCopy);
 
 	pfree(out);
