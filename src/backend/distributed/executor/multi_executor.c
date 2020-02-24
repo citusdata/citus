@@ -128,9 +128,24 @@ CitusExecutorRun(QueryDesc *queryDesc,
 {
 	DestReceiver *dest = queryDesc->dest;
 
+	/*
+	 * We do some potentially time consuming operations our self now before we hand of
+	 * control to postgres' executor. To make sure that time spent is accurately measured
+	 * we remove the totaltime instrumentation from the queryDesc. Instead we will start
+	 * and stop the instrumentation of the total time and put it back on the queryDesc
+	 * before returning (or rethrowing) from this function.
+	 */
+	Instrumentation *volatile totalTime = queryDesc->totaltime;
+	queryDesc->totaltime = NULL;
+
 	PG_TRY();
 	{
 		ExecutorLevel++;
+
+		if (totalTime)
+		{
+			InstrStartNode(totalTime);
+		}
 
 		if (CitusHasBeenLoaded())
 		{
@@ -179,6 +194,10 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 		else
 		{
+			/* switch into per-query memory context before calling PreExecScan */
+			MemoryContext oldcontext = MemoryContextSwitchTo(
+				queryDesc->estate->es_query_cxt);
+
 			/*
 			 * Call PreExecScan for all citus custom scan nodes prior to starting the
 			 * postgres exec scan to give some citus scan nodes some time to initialize
@@ -195,13 +214,27 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				}
 			}
 
+			/* postgres will switch here again and will restore back on its own */
+			MemoryContextSwitchTo(oldcontext);
+
 			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		}
+
+		if (totalTime)
+		{
+			InstrStopNode(totalTime, queryDesc->estate->es_processed);
+			queryDesc->totaltime = totalTime;
 		}
 
 		ExecutorLevel--;
 	}
 	PG_CATCH();
 	{
+		if (totalTime)
+		{
+			queryDesc->totaltime = totalTime;
+		}
+
 		ExecutorLevel--;
 
 		PG_RE_THROW();
