@@ -326,6 +326,5 @@ test: multi_deparse_function multi_deparse_procedure
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last
-# Causes random test failures so commented out for now
 # ---------
-# test: ensure_no_intermediate_data_leak
+test: ensure_no_intermediate_data_leak

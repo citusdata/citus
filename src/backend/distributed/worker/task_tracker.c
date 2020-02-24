@@ -1021,6 +1021,12 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 				workerTask->connectionId = INVALID_CONNECTION_ID;
 			}
 
+			if (workerTask->taskId == JOB_CLEANUP_TASK_ID)
+			{
+				StringInfo jobDirectoryName = JobDirectoryName(workerTask->jobId);
+				CitusRemoveDirectory(jobDirectoryName->data);
+			}
+
 			workerTask->taskStatus = TASK_TO_REMOVE;
 			break;
 		}

@@ -2844,8 +2844,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 				else if (timedOut)
 				{
 					ereport(WARNING, (errmsg("could not receive response for cleanup "
-											 "query status for job " UINT64_FORMAT " "
-																				   "on node \"%s:%u\" with status %d",
+											 "query status for job " UINT64_FORMAT
+											 " on node \"%s:%u\" with status %d",
 											 jobId,
 											 nodeName, nodePort, (int) queryStatus),
 									  errhint("Manually clean job resources on node "
@@ -2863,8 +2863,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 			{
 				/* CLIENT_RESULT_UNAVAILABLE is returned if the connection failed somehow */
 				ereport(WARNING, (errmsg("could not receive response for cleanup query "
-										 "result for job " UINT64_FORMAT " on node "
-																		 "\"%s:%u\" with status %d",
+										 "result for job " UINT64_FORMAT
+										 " on node \"%s:%u\" with status %d",
 										 jobId, nodeName,
 										 nodePort, (int) resultStatus),
 								  errhint("Manually clean job resources on node "
