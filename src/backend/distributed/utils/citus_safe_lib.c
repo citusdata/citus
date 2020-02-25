@@ -12,11 +12,6 @@
  *-------------------------------------------------------------------------
  */
 
-/* In PG 11 pg_vsnprintf is not exported unless you set this define */
-#if PG_VERSION_NUM < 120000
-#define USE_REPL_SNPRINTF 1
-#endif
-
 #include "postgres.h"
 
 #include "safe_lib.h"
@@ -25,6 +20,18 @@
 
 #include "distributed/citus_safe_lib.h"
 #include "lib/stringinfo.h"
+
+/*
+ * In PG 11 pg_vsnprintf is not exported and compiled in most cases, in that
+ * case use the copied one from pg11_snprintf.c
+ * NOTE: Whenever removing this section also remove pg11_snprintf.c
+ */
+#if PG_VERSION_NUM < 120000
+extern int pg11_vsnprintf(char *str, size_t count, const char *fmt, va_list args);
+#define citus_vsnprintf pg11_vsnprintf
+#else
+#define citus_vsnprintf pg_vsnprintf
+#endif
 
 
 /*
@@ -296,7 +303,7 @@ SafeSnprintf(char *restrict buffer, rsize_t bufsz, const char *restrict format, 
 	va_list args;
 
 	va_start(args, format);
-	size_t result = pg_vsnprintf(buffer, bufsz, format, args);
+	size_t result = citus_vsnprintf(buffer, bufsz, format, args);
 	va_end(args);
 	return result;
 }

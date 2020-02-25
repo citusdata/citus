@@ -44,6 +44,9 @@
 #endif
 #include <sys/param.h>
 
+/* Include this file only for PG11 and only when USE_REPL_SNPRINTF is not set */
+#if PG_VERSION_NUM < 120000
+#ifndef USE_REPL_SNPRINTF
 /*
  * We used to use the platform's NL_ARGMAX here, but that's a bad idea,
  * first because the point of this module is to remove platform dependencies
@@ -108,6 +111,13 @@
 #undef	fprintf
 #undef	printf
 
+extern int	pg11_vsnprintf(char *str, size_t count, const char *fmt, va_list args);
+extern int	pg11_snprintf(char *str, size_t count, const char *fmt,...) pg_attribute_printf(3, 4);
+extern int	pg11_sprintf(char *str, const char *fmt,...) pg_attribute_printf(2, 3);
+extern int	pg11_vfprintf(FILE *stream, const char *fmt, va_list args);
+extern int	pg11_fprintf(FILE *stream, const char *fmt,...) pg_attribute_printf(2, 3);
+extern int	pg11_printf(const char *fmt,...) pg_attribute_printf(1, 2);
+
 /*
  * Info about where the formatted output is going.
  *
@@ -163,7 +173,7 @@ static void dopr(PrintfTarget *target, const char *format, va_list args);
 
 
 int
-pg_vsnprintf(char *str, size_t count, const char *fmt, va_list args)
+pg11_vsnprintf(char *str, size_t count, const char *fmt, va_list args)
 {
 	PrintfTarget target;
 	char		onebyte[1];
@@ -191,19 +201,19 @@ pg_vsnprintf(char *str, size_t count, const char *fmt, va_list args)
 }
 
 int
-pg_snprintf(char *str, size_t count, const char *fmt,...)
+pg11_snprintf(char *str, size_t count, const char *fmt,...)
 {
 	int			len;
 	va_list		args;
 
 	va_start(args, fmt);
-	len = pg_vsnprintf(str, count, fmt, args);
+	len = pg11_vsnprintf(str, count, fmt, args);
 	va_end(args);
 	return len;
 }
 
 static int
-pg_vsprintf(char *str, const char *fmt, va_list args)
+pg11_vsprintf(char *str, const char *fmt, va_list args)
 {
 	PrintfTarget target;
 
@@ -219,19 +229,19 @@ pg_vsprintf(char *str, const char *fmt, va_list args)
 }
 
 int
-pg_sprintf(char *str, const char *fmt,...)
+pg11_sprintf(char *str, const char *fmt,...)
 {
 	int			len;
 	va_list		args;
 
 	va_start(args, fmt);
-	len = pg_vsprintf(str, fmt, args);
+	len = pg11_vsprintf(str, fmt, args);
 	va_end(args);
 	return len;
 }
 
 int
-pg_vfprintf(FILE *stream, const char *fmt, va_list args)
+pg11_vfprintf(FILE *stream, const char *fmt, va_list args)
 {
 	PrintfTarget target;
 	char		buffer[1024];	/* size is arbitrary */
@@ -253,25 +263,25 @@ pg_vfprintf(FILE *stream, const char *fmt, va_list args)
 }
 
 int
-pg_fprintf(FILE *stream, const char *fmt,...)
+pg11_fprintf(FILE *stream, const char *fmt,...)
 {
 	int			len;
 	va_list		args;
 
 	va_start(args, fmt);
-	len = pg_vfprintf(stream, fmt, args);
+	len = pg11_vfprintf(stream, fmt, args);
 	va_end(args);
 	return len;
 }
 
 int
-pg_printf(const char *fmt,...)
+pg11_printf(const char *fmt,...)
 {
 	int			len;
 	va_list		args;
 
 	va_start(args, fmt);
-	len = pg_vfprintf(stdout, fmt, args);
+	len = pg11_vfprintf(stdout, fmt, args);
 	va_end(args);
 	return len;
 }
@@ -1167,3 +1177,5 @@ trailing_pad(int *padlen, PrintfTarget *target)
 		++(*padlen);
 	}
 }
+#endif /* USE_REPL_SNPRINTF */
+#endif /* PG_VERSION_NUM < 120000 */
