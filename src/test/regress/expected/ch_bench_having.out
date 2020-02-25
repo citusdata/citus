@@ -124,53 +124,55 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                      ->  Seq Scan on stock_1640000 stock
 (22 rows)
 
-explain select     s_i_id, sum(s_order_cnt) as ordercount
+explain (costs false)
+select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
-                                              QUERY PLAN
+                                 QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=510.65..511.15 rows=200 width=12)
+ Sort
    Sort Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
-     ->  Result  (cost=0.00..0.01 rows=1 width=1)
-   ->  HashAggregate  (cost=500.00..503.00 rows=200 width=12)
+     ->  Result
+   ->  HashAggregate
          Group Key: remote_scan.s_i_id
-         ->  Result  (cost=0.00..0.00 rows=100000 width=12)
+         ->  Result
                One-Time Filter: $0
-               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+               ->  Custom Scan (Citus Adaptive)
                      Filter: $0
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
+                           ->  HashAggregate
                                  Group Key: s.s_i_id
-                                 ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
+                                 ->  Seq Scan on stock_1640000 s
 (17 rows)
 
-explain select     s_i_id, sum(s_order_cnt) as ordercount
+explain (costs false)
+select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true);
-                                           QUERY PLAN
+                              QUERY PLAN
 ---------------------------------------------------------------------
- HashAggregate  (cost=500.01..503.01 rows=200 width=12)
+ HashAggregate
    Group Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
-     ->  Result  (cost=0.00..0.01 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=100000 width=12)
+     ->  Result
+   ->  Result
          One-Time Filter: $0
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+         ->  Custom Scan (Citus Adaptive)
                Filter: $0
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
+                     ->  HashAggregate
                            Group Key: s.s_i_id
-                           ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
+                           ->  Seq Scan on stock_1640000 s
 (15 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
