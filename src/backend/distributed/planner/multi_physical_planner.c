@@ -113,7 +113,11 @@ static int ExtractRangeTableId(Node *node);
 static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
 						   List *dependentJobList, List **columnNames, List **columnVars);
 static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
-											  List *tableIdList);
+											  List *tableIdList, List *funcColumnNames,
+											  List *funcColumnTypes,
+											  List *funcColumnTypeMods,
+											  List *funcCollations);
+
 static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
 static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
@@ -715,7 +719,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
 	jobQuery->havingQual = havingQual;
-	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	jobQuery->hasAggs = contain_agg_clause((Node *) targetList) ||
+						contain_agg_clause((Node *) havingQual);
 	jobQuery->distinctClause = distinctClause;
 	jobQuery->hasDistinctOn = hasDistinctOn;
 
@@ -754,7 +759,8 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
 
 	/* create a derived range table for the subtree below the collect */
 	RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode, columnNameList,
-															OutputTableIdList(multiNode));
+															OutputTableIdList(multiNode),
+															NIL, NIL, NIL, NIL);
 	rangeTableEntry->eref->colnames = columnNameList;
 	ModifyRangeTblExtraData(rangeTableEntry, CITUS_RTE_SHARD, NULL, NULL, NULL);
 	derivedRangeTableList = lappend(derivedRangeTableList, rangeTableEntry);
@@ -839,7 +845,8 @@ BaseRangeTableList(MultiNode *multiNode)
 				rangeTableEntry->alias = multiTable->alias;
 				rangeTableEntry->relid = multiTable->relationId;
 				SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_RELATION, NULL, NULL,
-									 list_make1_int(multiTable->rangeTableId));
+									 list_make1_int(multiTable->rangeTableId),
+									 NIL, NIL, NIL, NIL);
 
 				baseRangeTableList = lappend(baseRangeTableList, rangeTableEntry);
 			}
@@ -863,15 +870,18 @@ BaseRangeTableList(MultiNode *multiNode)
  * on worker nodes in case of the master node query.
  */
 static RangeTblEntry *
-DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList)
+DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList,
+					   List *funcColumnNames, List *funcColumnTypes,
+					   List *funcColumnTypeMods, List *funcCollations)
 {
 	RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
 	rangeTableEntry->inFromCl = true;
 	rangeTableEntry->eref = makeNode(Alias);
 	rangeTableEntry->eref->colnames = columnList;
 
-	SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_REMOTE_QUERY, NULL, NULL,
-						 tableIdList);
+	SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_REMOTE_QUERY, NULL, NULL, tableIdList,
+						 funcColumnNames, funcColumnTypes, funcColumnTypeMods,
+						 funcCollations);
 
 	return rangeTableEntry;
 }
@@ -1221,9 +1231,36 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 			List *columnNameList = DerivedColumnNameList(columnCount,
 														 dependentJob->jobId);
 
+			List *funcColumnNames = NIL;
+			List *funcColumnTypes = NIL;
+			List *funcColumnTypeMods = NIL;
+			List *funcCollations = NIL;
+
+			TargetEntry *targetEntry = NULL;
+			foreach_ptr(targetEntry, dependentTargetList)
+			{
+				Node *expr = (Node *) targetEntry->expr;
+
+				char *name = targetEntry->resname;
+				if (name == NULL)
+				{
+					name = pstrdup("unnamed");
+				}
+
+				funcColumnNames = lappend(funcColumnNames, makeString(name));
+
+				funcColumnTypes = lappend_oid(funcColumnTypes, exprType(expr));
+				funcColumnTypeMods = lappend_int(funcColumnTypeMods, exprTypmod(expr));
+				funcCollations = lappend_oid(funcCollations, exprCollation(expr));
+			}
+
 			RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode,
 																	columnNameList,
-																	tableIdList);
+																	tableIdList,
+																	funcColumnNames,
+																	funcColumnTypes,
+																	funcColumnTypeMods,
+																	funcCollations);
 			RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 
 			rangeTableRef->rtindex = list_length(*rangeTableList) + 1;

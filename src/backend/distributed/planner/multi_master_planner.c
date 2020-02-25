@@ -14,50 +14,38 @@
 #include "postgres.h"
 
 #include "catalog/pg_type.h"
-#include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
-#include "distributed/function_utils.h"
 #include "distributed/listutils.h"
-#include "distributed/multi_logical_optimizer.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/version_compat.h"
-#include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "nodes/print.h"
-#include "optimizer/clauses.h"
-#include "optimizer/cost.h"
-#include "optimizer/planmain.h"
-#include "optimizer/tlist.h"
-#include "optimizer/subselect.h"
-#if PG_VERSION_NUM >= 120000
-#include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#endif
-#include "utils/builtins.h"
-#include "utils/guc.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
-#include "utils/lsyscache.h"
-
+#include "optimizer/planner.h"
+#include "rewrite/rewriteManip.h"
 
 static List * MasterTargetList(List *workerTargetList);
-static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
-										  CustomScan *remoteScan);
-static Agg * BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan);
-static bool HasDistinctOrOrderByAggregate(Query *masterQuery);
-static bool UseGroupAggregateWithHLL(Query *masterQuery);
-static bool QueryContainsAggregateWithHLL(Query *query);
-static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
-static Agg * makeAggNode(List *groupClauseList, List *havingQual,
-						 AggStrategy aggrStrategy, List *queryTargetList, Plan *subPlan);
-static void FinalizeStatement(PlannerInfo *root, PlannedStmt *stmt, Plan *topLevelPlan);
+static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
+													   List *masterTargetList,
+													   CustomScan *remoteScan);
+static bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 
+static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
+									  struct CustomPath *best_path, List *tlist,
+									  List *clauses, List *custom_plans);
+
+bool ReplaceCitusExtraDataContainer = false;
+CustomScan *ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+
+/*
+ * CitusCustomScanPathMethods defines the methods for a custom path we insert into the
+ * planner during the planning of the query part that will be executed on the node
+ * coordinating the query.
+ */
+static CustomPathMethods CitusCustomScanPathMethods = {
+	.CustomName = "CitusCustomScanPath",
+	.PlanCustomPath = CitusCustomScanPathPlan,
+};
 
 /*
  * MasterNodeSelectPlan takes in a distributed plan and a custom scan node which
@@ -75,11 +63,7 @@ MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 	Job *workerJob = distributedPlan->workerJob;
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
-
-	PlannedStmt *masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList,
-														 remoteScan);
-
-	return masterSelectPlan;
+	return BuildSelectStatementViaStdPlanner(masterQuery, masterTargetList, remoteScan);
 }
 
 
@@ -132,516 +116,199 @@ MasterTargetList(List *workerTargetList)
 
 
 /*
- * BuildSelectStatement builds the final select statement to run on the master
- * node, before returning results to the user. The function first gets the custom
- * scan node for all results fetched to the master, and layers aggregation, sort
- * and limit plans on top of the scan statement if necessary.
+ * CreateCitusCustomScanPath creates a custom path node that will return the CustomScan if
+ * the path ends up in the best_path during postgres planning. We use this function during
+ * the set relation hook of postgres during the planning of the query part that will be
+ * executed on the query coordinating node.
  */
-static PlannedStmt *
-BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
+Path *
+CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
+						  Index restrictionIndex, RangeTblEntry *rte,
+						  CustomScan *remoteScan)
 {
-	/* top level select query should have only one range table entry */
-	Assert(list_length(masterQuery->rtable) == 1);
-	Agg *aggregationPlan = NULL;
-	Plan *topLevelPlan = NULL;
-	List *sortClauseList = copyObject(masterQuery->sortClause);
-	List *columnNameList = NIL;
-	TargetEntry *targetEntry = NULL;
-
-	PlannerGlobal *glob = makeNode(PlannerGlobal);
-	PlannerInfo *root = makeNode(PlannerInfo);
-	root->parse = masterQuery;
-	root->glob = glob;
-	root->query_level = 1;
-	root->planner_cxt = CurrentMemoryContext;
-	root->wt_param_id = -1;
-
-
-	/* (1) make PlannedStmt and set basic information */
-	PlannedStmt *selectStatement = makeNode(PlannedStmt);
-	selectStatement->canSetTag = true;
-	selectStatement->relationOids = NIL;
-	selectStatement->commandType = CMD_SELECT;
-
-
-	remoteScan->custom_scan_tlist = masterTargetList;
-
-	/* (2) add an aggregation plan if needed */
-	if (masterQuery->hasAggs || masterQuery->groupClause)
-	{
-		remoteScan->scan.plan.targetlist = masterTargetList;
-
-		aggregationPlan = BuildAggregatePlan(root, masterQuery, &remoteScan->scan.plan);
-		topLevelPlan = (Plan *) aggregationPlan;
-		selectStatement->planTree = topLevelPlan;
-	}
-	else
-	{
-		/* otherwise set the final projections on the scan plan directly */
-
-		/*
-		 * The masterTargetList contains all columns that we fetch from
-		 * the worker as non-resjunk.
-		 *
-		 * Here the output of the plan node determines the output of the query.
-		 * We therefore use the targetList of masterQuery, which has non-output
-		 * columns set as resjunk.
-		 */
-		remoteScan->scan.plan.targetlist = masterQuery->targetList;
-		topLevelPlan = &remoteScan->scan.plan;
-	}
+	CitusCustomScanPath *path = (CitusCustomScanPath *) newNode(
+		sizeof(CitusCustomScanPath), T_CustomPath);
+	path->custom_path.methods = &CitusCustomScanPathMethods;
+	path->custom_path.path.pathtype = T_CustomScan;
+	path->custom_path.path.pathtarget = relOptInfo->reltarget;
+	path->custom_path.path.parent = relOptInfo;
 
 	/*
-	 * (3) create distinct plan if needed.
+	 * The 100k rows we put on the cost of the path is kind of arbitrary and could be
+	 * improved in accuracy to produce better plans.
 	 *
-	 * distinct on() requires sort + unique plans. Unique itself is not enough
-	 * as it only compares the current value with previous one when checking
-	 * uniqueness, thus ordering is necessary. If already has order by
-	 * clause we append distinct clauses to the end of it. Postgresql requires
-	 * that if both distinct on() and order by exists, ordering shall start
-	 * on distinct clauses. Therefore we can safely append distinct clauses to
-	 * the end of order by clauses. Although the same column may appear more
-	 * than once in order by clauses, created plan uses only one instance, for
-	 * example order by a,b,a,a,b,c is translated to equivalent order by a,b,c.
+	 * 100k on the row estimate causes the postgres planner to behave very much like the
+	 * old citus planner in the plans it produces. Namely the old planner had hardcoded
+	 * the use of Hash Aggregates for most of the operations, unless a postgres guc was
+	 * set that would disallow hash aggregates to be used.
 	 *
-	 * If the query has distinct clause but not distinct on, we first create
-	 * distinct plan that is either HashAggreate or Sort + Unique plans depending
-	 * on hashable property of columns in distinct clause. If there is order by
-	 * clause, it is handled after distinct planning.
+	 * Ideally we would be able to provide estimates close to postgres' estimates on the
+	 * workers to let the standard planner choose an optimal solution for the masterQuery.
 	 */
-	if (masterQuery->hasDistinctOn)
-	{
-		ListCell *distinctCell = NULL;
-		foreach(distinctCell, masterQuery->distinctClause)
-		{
-			SortGroupClause *singleDistinctClause = lfirst(distinctCell);
-			Index sortGroupRef = singleDistinctClause->tleSortGroupRef;
+	path->custom_path.path.rows = 100000;
+	path->remoteScan = remoteScan;
 
-			if (get_sortgroupref_clause_noerr(sortGroupRef, sortClauseList) == NULL)
-			{
-				sortClauseList = lappend(sortClauseList, singleDistinctClause);
-			}
-		}
-	}
-	else if (masterQuery->distinctClause)
-	{
-		Plan *distinctPlan = BuildDistinctPlan(masterQuery, topLevelPlan);
-		topLevelPlan = distinctPlan;
-	}
-
-	/* (4) add a sorting plan if needed */
-	if (sortClauseList)
-	{
-		Sort *sortPlan = make_sort_from_sortclauses(sortClauseList, topLevelPlan);
-
-		/* just for reproducible costs between different PostgreSQL versions */
-		sortPlan->plan.startup_cost = 0;
-		sortPlan->plan.total_cost = 0;
-		sortPlan->plan.plan_rows = 0;
-
-		topLevelPlan = (Plan *) sortPlan;
-	}
-
-	/*
-	 * (5) add a unique plan for distinctOn.
-	 * If the query has distinct on we add a sort clause in step 3. Therefore
-	 * Step 4 always creates a sort plan.
-	 * */
-	if (masterQuery->hasDistinctOn)
-	{
-		Assert(IsA(topLevelPlan, Sort));
-		topLevelPlan =
-			(Plan *) make_unique_from_sortclauses(topLevelPlan,
-												  masterQuery->distinctClause);
-	}
-
-	/* (5) add a limit plan if needed */
-	if (masterQuery->limitCount || masterQuery->limitOffset)
-	{
-		Node *limitCount = masterQuery->limitCount;
-		Node *limitOffset = masterQuery->limitOffset;
-		Limit *limitPlan = make_limit(topLevelPlan, limitOffset, limitCount);
-		topLevelPlan = (Plan *) limitPlan;
-	}
-
-	/*
-	 * (6) set top level plan in the plantree and copy over some things from
-	 * PlannerInfo
-	 */
-	FinalizeStatement(root, selectStatement, topLevelPlan);
-
-	/*
-	 * (7) Replace rangetable with one with nice names to show in EXPLAIN plans
-	 */
-	foreach_ptr(targetEntry, masterTargetList)
-	{
-		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
-	}
-
-	RangeTblEntry *customScanRangeTableEntry = linitial(selectStatement->rtable);
-	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
-
-	return selectStatement;
+	return (Path *) path;
 }
 
 
 /*
- * FinalizeStatement sets some necessary fields on the final statement and its
- * plan to make it work with the regular postgres executor. This code is copied
- * almost verbatim from standard_planner in the PG source code.
+ * CitusCustomScanPathPlan is called for the CitusCustomScanPath node in the best_path
+ * after the postgres planner has evaluated all possible paths.
  *
- * Modifications from original code:
- * - Added SS_attach_initplans call
- */
-static void
-FinalizeStatement(PlannerInfo *root, PlannedStmt *result, Plan *top_plan)
-{
-	ListCell *lp,
-			 *lr;
-	PlannerGlobal *glob = root->glob;
-
-	/* Taken from create_plan */
-	SS_attach_initplans(root, top_plan);
-
-	/*
-	 * If any Params were generated, run through the plan tree and compute
-	 * each plan node's extParam/allParam sets.  Ideally we'd merge this into
-	 * set_plan_references' tree traversal, but for now it has to be separate
-	 * because we need to visit subplans before not after main plan.
-	 */
-	if (glob->paramExecTypes != NIL)
-	{
-		Assert(list_length(glob->subplans) == list_length(glob->subroots));
-		forboth(lp, glob->subplans, lr, glob->subroots)
-		{
-			Plan *subplan = (Plan *) lfirst(lp);
-			PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
-
-			SS_finalize_plan(subroot, subplan);
-		}
-		SS_finalize_plan(root, top_plan);
-	}
-
-	/* final cleanup of the plan */
-	Assert(glob->finalrtable == NIL);
-	Assert(glob->finalrowmarks == NIL);
-	Assert(glob->resultRelations == NIL);
-	Assert(glob->rootResultRelations == NIL);
-
-	top_plan = set_plan_references(root, top_plan);
-
-	/* ... and the subplans (both regular subplans and initplans) */
-	Assert(list_length(glob->subplans) == list_length(glob->subroots));
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan *subplan = (Plan *) lfirst(lp);
-		PlannerInfo *subroot = lfirst_node(PlannerInfo, lr);
-
-		lfirst(lp) = set_plan_references(subroot, subplan);
-	}
-	result->transientPlan = glob->transientPlan;
-	result->dependsOnRole = glob->dependsOnRole;
-	result->parallelModeNeeded = glob->parallelModeNeeded;
-	result->planTree = top_plan;
-
-	result->rtable = glob->finalrtable;
-	result->resultRelations = glob->resultRelations;
-#if PG_VERSION_NUM < 120000
-	result->nonleafResultRelations = glob->nonleafResultRelations;
-#endif
-	result->rootResultRelations = glob->rootResultRelations;
-	result->subplans = glob->subplans;
-	result->rewindPlanIDs = glob->rewindPlanIDs;
-	result->rowMarks = glob->finalrowmarks;
-	result->relationOids = glob->relationOids;
-	result->invalItems = glob->invalItems;
-	result->paramExecTypes = glob->paramExecTypes;
-}
-
-
-/*
- * BuildAggregatePlan creates and returns an aggregate plan. This aggregate plan
- * builds aggregation and grouping operators (if any) that are to be executed on
- * the master node.
- */
-static Agg *
-BuildAggregatePlan(PlannerInfo *root, Query *masterQuery, Plan *subPlan)
-{
-	/* assert that we need to build an aggregate plan */
-	Assert(masterQuery->hasAggs || masterQuery->groupClause);
-	AggClauseCosts aggregateCosts;
-	AggStrategy aggregateStrategy = AGG_PLAIN;
-	List *groupColumnList = masterQuery->groupClause;
-	List *aggregateTargetList = masterQuery->targetList;
-
-	/*
-	 * Replaces SubLink nodes with SubPlan nodes in the having section of the
-	 * query. (and creates the subplans in root->subplans)
-	 *
-	 * Would be nice if we could use masterQuery->hasSubLinks to only call
-	 * these when that is true. However, for some reason hasSubLinks is false
-	 * even when there are SubLinks.
-	 */
-	Node *havingQual = SS_process_sublinks(root, masterQuery->havingQual, true);
-
-	/*
-	 * Right now this is not really needed, since we don't support correlated
-	 * subqueries anyway. Once we do calling this is critical to do right after
-	 * calling SS_process_sublinks, according to the postgres function comment.
-	 */
-	havingQual = SS_replace_correlation_vars(root, havingQual);
-
-
-	/* estimate aggregate execution costs */
-	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
-	get_agg_clause_costs(root, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
-						 &aggregateCosts);
-
-	get_agg_clause_costs(root, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
-
-
-	/* if we have grouping, then initialize appropriate information */
-	if (list_length(groupColumnList) > 0)
-	{
-		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
-		bool groupingIsSortable = grouping_is_sortable(groupColumnList);
-		bool hasUnhashableAggregate = HasDistinctOrOrderByAggregate(masterQuery);
-
-		if (!groupingIsHashable && !groupingIsSortable)
-		{
-			ereport(ERROR, (errmsg("grouped column list cannot be hashed or sorted")));
-		}
-
-		/*
-		 * Postgres hash aggregate strategy does not support distinct aggregates
-		 * in group and order by with aggregate operations.
-		 * see nodeAgg.c:build_pertrans_for_aggref(). In that case we use
-		 * sorted agg strategy, otherwise we use hash strategy.
-		 *
-		 * If the master query contains hll aggregate functions and the client set
-		 * hll.force_groupagg to on, then we choose to use group aggregation.
-		 */
-		if (!enable_hashagg || !groupingIsHashable || hasUnhashableAggregate ||
-			UseGroupAggregateWithHLL(masterQuery))
-		{
-			char *messageHint = NULL;
-			if (!enable_hashagg && groupingIsHashable)
-			{
-				messageHint = "Consider setting enable_hashagg to on.";
-			}
-
-			if (!groupingIsSortable)
-			{
-				ereport(ERROR, (errmsg("grouped column list must cannot be sorted"),
-								errdetail("Having a distinct aggregate requires "
-										  "grouped column list to be sortable."),
-								messageHint ? errhint("%s", messageHint) : 0));
-			}
-
-			aggregateStrategy = AGG_SORTED;
-			subPlan = (Plan *) make_sort_from_sortclauses(groupColumnList, subPlan);
-		}
-		else
-		{
-			aggregateStrategy = AGG_HASHED;
-		}
-	}
-
-	/* finally create the plan */
-	Agg *aggregatePlan = makeAggNode(groupColumnList, (List *) havingQual,
-									 aggregateStrategy, aggregateTargetList, subPlan);
-
-	/* just for reproducible costs between different PostgreSQL versions */
-	aggregatePlan->plan.startup_cost = 0;
-	aggregatePlan->plan.total_cost = 0;
-	aggregatePlan->plan.plan_rows = 0;
-
-	return aggregatePlan;
-}
-
-
-/*
- * HasDistinctAggregate returns true if the query has a distinct
- * aggregate in its target list or in having clause.
- */
-static bool
-HasDistinctOrOrderByAggregate(Query *masterQuery)
-{
-	ListCell *allColumnCell = NULL;
-
-	List *targetVarList = pull_var_clause((Node *) masterQuery->targetList,
-										  PVC_INCLUDE_AGGREGATES);
-	List *havingVarList = pull_var_clause(masterQuery->havingQual,
-										  PVC_INCLUDE_AGGREGATES);
-
-	List *allColumnList = list_concat(targetVarList, havingVarList);
-	foreach(allColumnCell, allColumnList)
-	{
-		Node *columnNode = lfirst(allColumnCell);
-		if (IsA(columnNode, Aggref))
-		{
-			Aggref *aggref = (Aggref *) columnNode;
-			if (aggref->aggdistinct != NIL || aggref->aggorder != NIL)
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * UseGroupAggregateWithHLL first checks whether the HLL extension is loaded, if
- * it is not then simply return false. Otherwise, checks whether the client set
- * the hll.force_groupagg to on. If it is enabled and the master query contains
- * hll aggregate function, it returns true.
- */
-static bool
-UseGroupAggregateWithHLL(Query *masterQuery)
-{
-	Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
-
-	/* If HLL extension is not loaded, return false */
-	if (!OidIsValid(hllId))
-	{
-		return false;
-	}
-
-	/* If HLL is loaded but related GUC is not set, return false */
-	const char *gucStrValue = GetConfigOption(HLL_FORCE_GROUPAGG_GUC_NAME, true, false);
-	if (gucStrValue == NULL || strcmp(gucStrValue, "off") == 0)
-	{
-		return false;
-	}
-
-	return QueryContainsAggregateWithHLL(masterQuery);
-}
-
-
-/*
- * QueryContainsAggregateWithHLL returns true if the query has an hll aggregate
- * function in it's target list.
- */
-static bool
-QueryContainsAggregateWithHLL(Query *query)
-{
-	ListCell *varCell = NULL;
-
-	List *varList = pull_var_clause((Node *) query->targetList, PVC_INCLUDE_AGGREGATES);
-	foreach(varCell, varList)
-	{
-		Var *var = (Var *) lfirst(varCell);
-		if (nodeTag(var) == T_Aggref)
-		{
-			Aggref *aggref = (Aggref *) var;
-			int argCount = list_length(aggref->args);
-			Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
-			Oid hllSchemaOid = get_extension_schema(hllId);
-			const char *hllSchemaName = get_namespace_name(hllSchemaOid);
-
-			/*
-			 * If the obtained oid is InvalidOid for addFunctionId, that means
-			 * we don't have an hll_add_agg function with the given argument count.
-			 * So, we don't need to double check whether the obtained id is valid.
-			 */
-			Oid addFunctionId = FunctionOidExtended(hllSchemaName, HLL_ADD_AGGREGATE_NAME,
-													argCount, true);
-			Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME, 1);
-
-			if (aggref->aggfnoid == addFunctionId || aggref->aggfnoid == unionFunctionId)
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * BuildDistinctPlan creates an returns a plan for distinct. Depending on
- * availability of hash function it chooses HashAgg over Sort/Unique
- * plans.
- * This function has a potential performance issue since we blindly set
- * Plan nodes without looking at cost. We might need to revisit this
- * if we have performance issues with select distinct queries.
+ * This function returns a Plan node, more specifically the CustomScan Plan node that has
+ * the ability to execute the distributed part of the query.
+ *
+ * When this function is called there is an extra list of clauses passed in that might not
+ * already have been applied to the plan. We add these clauses to the quals this node will
+ * execute. The quals are evaluated before returning the tuples scanned from the workers
+ * to the plan above ours to make sure they do not end up in the final result.
  */
 static Plan *
-BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
+CitusCustomScanPathPlan(PlannerInfo *root,
+						RelOptInfo *rel,
+						struct CustomPath *best_path,
+						List *tlist,
+						List *clauses,
+						List *custom_plans)
 {
-	Plan *distinctPlan = NULL;
-	List *distinctClauseList = masterQuery->distinctClause;
-	List *targetList = copyObject(masterQuery->targetList);
+	CitusCustomScanPath *citusPath = (CitusCustomScanPath *) best_path;
 
-	/*
-	 * We don't need to add distinct plan if all of the columns used in group by
-	 * clause also used in distinct clause, since group by clause guarantees the
-	 * uniqueness of the target list for every row.
-	 */
-	if (IsGroupBySubsetOfDistinct(masterQuery->groupClause, masterQuery->distinctClause))
+	/* clauses might have been added by the planner, need to add them to our scan */
+	RestrictInfo *restrictInfo = NULL;
+	List **quals = &citusPath->remoteScan->scan.plan.qual;
+	foreach_ptr(restrictInfo, clauses)
 	{
-		return subPlan;
+		*quals = lappend(*quals, restrictInfo->clause);
 	}
-
-	Assert(masterQuery->distinctClause);
-	Assert(!masterQuery->hasDistinctOn);
-
-	/*
-	 * Create group by plan with HashAggregate if all distinct
-	 * members are hashable, and not containing distinct aggregate.
-	 * Otherwise create sort+unique plan.
-	 */
-	bool distinctClausesHashable = grouping_is_hashable(distinctClauseList);
-	bool hasUnhashableAggregate = HasDistinctOrOrderByAggregate(masterQuery);
-
-	if (enable_hashagg && distinctClausesHashable && !hasUnhashableAggregate)
-	{
-		distinctPlan = (Plan *) makeAggNode(distinctClauseList, NIL, AGG_HASHED,
-											targetList, subPlan);
-	}
-	else
-	{
-		Sort *sortPlan = make_sort_from_sortclauses(masterQuery->distinctClause,
-													subPlan);
-		distinctPlan = (Plan *) make_unique_from_sortclauses((Plan *) sortPlan,
-															 masterQuery->distinctClause);
-	}
-
-	return distinctPlan;
+	return (Plan *) citusPath->remoteScan;
 }
 
 
 /*
- * makeAggNode creates a "Agg" plan node. groupClauseList is a list of
- * SortGroupClause's.
+ * BuildSelectStatementViaStdPlanner creates a PlannedStmt where it combines the
+ * masterQuery and the remoteScan. It utilizes the standard_planner from postgres to
+ * create a plan based on the masterQuery.
  */
-static Agg *
-makeAggNode(List *groupClauseList, List *havingQual, AggStrategy aggrStrategy,
-			List *queryTargetList, Plan *subPlan)
+static PlannedStmt *
+BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
+								  CustomScan *remoteScan)
 {
-	Agg *aggNode = NULL;
-	int groupColumnCount = list_length(groupClauseList);
-	AttrNumber *groupColumnIdArray =
-		extract_grouping_cols(groupClauseList, subPlan->targetlist);
-	Oid *groupColumnOpArray = extract_grouping_ops(groupClauseList);
-	const int rowEstimate = 10;
+	/*
+	 * the standard planner will scribble on the target list. Since it is essential to not
+	 * change the custom_scan_tlist we copy the target list before adding them to any.
+	 * The masterTargetList is used in the end to extract the column names to be added to
+	 * the alias we will create for the CustomScan, (expressed as the
+	 * citus_extradata_container function call in the masterQuery).
+	 */
+	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
+	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
 
-#if (PG_VERSION_NUM >= 120000)
-	aggNode = make_agg(queryTargetList, havingQual, aggrStrategy,
-					   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
-					   groupColumnOpArray,
-					   extract_grouping_collations(groupClauseList,
-												   subPlan->targetlist),
-					   NIL, NIL, rowEstimate, subPlan);
+	/* probably want to do this where we add sublinks to the master plan */
+	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
+
+	/*
+	 * We will overwrite the alias of the rangetable which describes the custom scan.
+	 * Idealy we would have set the correct column names and alias on the range table in
+	 * the master query already when we inserted the extra data container. This could be
+	 * improved in the future.
+	 */
+
+	/* find the rangetable entry for the extradata container and overwrite its alias */
+	RangeTblEntry *extradataContainerRTE = NULL;
+	FindCitusExtradataContainerRTE((Node *) masterQuery, &extradataContainerRTE);
+	if (extradataContainerRTE != NULL)
+	{
+		/* extract column names from the masterTargetList */
+		List *columnNameList = NIL;
+		TargetEntry *targetEntry = NULL;
+		foreach_ptr(targetEntry, masterTargetList)
+		{
+			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+		}
+		extradataContainerRTE->eref = makeAlias("remote_scan", columnNameList);
+	}
+
+	/*
+	 * Print the master query at debug level 4. Since serializing the query is relatively
+	 * cpu intensive we only perform that if we are actually logging DEBUG4.
+	 */
+	const int logMasterQueryLevel = DEBUG4;
+	if (IsLoggableLevel(logMasterQueryLevel))
+	{
+		StringInfo queryString = makeStringInfo();
+		pg_get_query_def(masterQuery, queryString);
+		elog(logMasterQueryLevel, "master query: %s", queryString->data);
+	}
+
+	PlannedStmt *standardStmt = NULL;
+	PG_TRY();
+	{
+		/* This code should not be re-entrant, we check via asserts below */
+		Assert(ReplaceCitusExtraDataContainer == false);
+		Assert(ReplaceCitusExtraDataContainerWithCustomScan == NULL);
+		ReplaceCitusExtraDataContainer = true;
+		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
+
+		standardStmt = standard_planner(masterQuery, 0, NULL);
+
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+	}
+	PG_CATCH();
+	{
+		ReplaceCitusExtraDataContainer = false;
+		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	Assert(standardStmt != NULL);
+	return standardStmt;
+}
+
+
+/*
+ * Finds the rangetable entry in the query that refers to the citus_extradata_container
+ * and stores the pointer in result.
+ */
+static bool
+FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTblEntry = castNode(RangeTblEntry, node);
+		if (rangeTblEntry->rtekind == RTE_FUNCTION &&
+			list_length(rangeTblEntry->functions) == 1)
+		{
+			RangeTblFunction *rangeTblFunction = (RangeTblFunction *) linitial(
+				rangeTblEntry->functions);
+			FuncExpr *funcExpr = castNode(FuncExpr, rangeTblFunction->funcexpr);
+			if (funcExpr->funcid == CitusExtraDataContainerFuncId())
+			{
+				*result = rangeTblEntry;
+				return true;
+			}
+		}
+
+		/* query_tree_walker descends into RTEs */
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+#if PG_VERSION_NUM >= 120000
+		const int flags = QTW_EXAMINE_RTES_BEFORE;
 #else
-	aggNode = make_agg(queryTargetList, havingQual, aggrStrategy,
-					   AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
-					   groupColumnOpArray,
-					   NIL, NIL, rowEstimate, subPlan);
+		const int flags = QTW_EXAMINE_RTES;
 #endif
+		return query_tree_walker((Query *) node, FindCitusExtradataContainerRTE, result,
+								 flags);
+	}
 
-	return aggNode;
+	return expression_tree_walker(node, FindCitusExtradataContainerRTE, result);
 }

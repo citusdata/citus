@@ -72,6 +72,7 @@ extern int ExecutorLevel;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
+extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
 extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  TupleDesc tupleDescriptor,
@@ -86,6 +87,7 @@ extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskL
 extern void ExecuteUtilityTaskListWithoutResults(List *taskList);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);
+extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);

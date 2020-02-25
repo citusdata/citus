@@ -1,0 +1,60 @@
+-- Testing a having clause that could have been a where clause between a distributed table
+-- and a reference table. This query was the cause for intermediate results not being
+-- available during the replace of the planner for the master query with the standard
+-- planner.
+-- Since the having clause could have been a where clause the having clause on the grouping
+-- on the coordinator is replaced with a Result node containing a One-time filter if the
+-- having qual (one-time filter works because the query doesn't change with the tuples
+-- returned from below).
+SELECT count(*),
+       o_orderstatus
+FROM orders
+GROUP BY 2
+HAVING (
+           SELECT count(*)
+           FROM customer
+       ) > 0;
+ count | o_orderstatus
+---------------------------------------------------------------------
+  1461 | O
+    75 | P
+  1449 | F
+(3 rows)
+
+-- lets pin the plan in the test as well
+EXPLAIN (COSTS OFF)
+SELECT count(*),
+       o_orderstatus
+FROM orders
+GROUP BY 2
+HAVING (
+           SELECT count(*)
+           FROM customer
+       ) > 0;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Group Key: remote_scan.o_orderstatus
+   InitPlan 1 (returns $0)
+     ->  Function Scan on read_intermediate_result intermediate_result
+   ->  Result
+         One-Time Filter: ($0 > 0)
+         ->  Custom Scan (Citus Adaptive)
+               Filter: ($0 > 0)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 1
+                           Tasks Shown: All
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Aggregate
+                                       ->  Seq Scan on customer_360001 customer
+               Task Count: 2
+               Tasks Shown: One of 2
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate
+                           Group Key: orders.o_orderstatus
+                           ->  Seq Scan on orders_290002 orders
+(23 rows)
+

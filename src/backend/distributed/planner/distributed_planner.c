@@ -24,6 +24,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -53,6 +54,7 @@
 #endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "optimizer/planmain.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
@@ -98,6 +100,8 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
+static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
@@ -1425,18 +1429,58 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 static PlannedStmt *
 FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 {
-	ListCell *targetEntryCell = NULL;
-	List *targetList = NIL;
 	List *columnNameList = NIL;
 
+	customScan->custom_scan_tlist =
+		makeCustomScanTargetlistFromExistingTargetList(localPlan->planTree->targetlist);
+	customScan->scan.plan.targetlist =
+		makeTargetListFromCustomScanList(customScan->custom_scan_tlist);
+
+	/* extract the column names from the final targetlist*/
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, customScan->scan.plan.targetlist)
+	{
+		Value *columnName = makeString(targetEntry->resname);
+		columnNameList = lappend(columnNameList, columnName);
+	}
+
+	PlannedStmt *routerPlan = makeNode(PlannedStmt);
+	routerPlan->planTree = (Plan *) customScan;
+
+	RangeTblEntry *remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
+	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
+
+	/* add original range table list for access permission checks */
+	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
+
+	routerPlan->canSetTag = true;
+	routerPlan->relationOids = NIL;
+
+	routerPlan->queryId = localPlan->queryId;
+	routerPlan->utilityStmt = localPlan->utilityStmt;
+	routerPlan->commandType = localPlan->commandType;
+	routerPlan->hasReturning = localPlan->hasReturning;
+
+	return routerPlan;
+}
+
+
+/*
+ * makeCustomScanTargetlistFromExistingTargetList rebuilds the targetlist from the remote
+ * query into a list that can be used as the custom_scan_tlist for our Citus Custom Scan.
+ */
+static List *
+makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist)
+{
+	List *custom_scan_tlist = NIL;
+
 	/* we will have custom scan range table entry as the first one in the list */
-	int customScanRangeTableIndex = 1;
+	const int customScanRangeTableIndex = 1;
 
 	/* build a targetlist to read from the custom scan output */
-	foreach(targetEntryCell, localPlan->planTree->targetlist)
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, existingTargetlist)
 	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-
 		Assert(IsA(targetEntry, TargetEntry));
 
 		/*
@@ -1465,32 +1509,40 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 
 		TargetEntry *newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
-		targetList = lappend(targetList, newTargetEntry);
-
-		Value *columnName = makeString(targetEntry->resname);
-		columnNameList = lappend(columnNameList, columnName);
+		custom_scan_tlist = lappend(custom_scan_tlist, newTargetEntry);
 	}
 
-	customScan->scan.plan.targetlist = targetList;
+	return custom_scan_tlist;
+}
 
-	PlannedStmt *routerPlan = makeNode(PlannedStmt);
-	routerPlan->planTree = (Plan *) customScan;
 
-	RangeTblEntry *remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
-	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
-
-	/* add original range table list for access permission checks */
-	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
-
-	routerPlan->canSetTag = true;
-	routerPlan->relationOids = NIL;
-
-	routerPlan->queryId = localPlan->queryId;
-	routerPlan->utilityStmt = localPlan->utilityStmt;
-	routerPlan->commandType = localPlan->commandType;
-	routerPlan->hasReturning = localPlan->hasReturning;
-
-	return routerPlan;
+/*
+ * makeTargetListFromCustomScanList based on a custom_scan_tlist create the target list to
+ * use on the Citus Custom Scan Node. The targetlist differs from the custom_scan_tlist in
+ * a way that the expressions in the targetlist all are references to the index (resno) in
+ * the custom_scan_tlist in their varattno while the varno is replaced with INDEX_VAR
+ * instead of the range table entry index.
+ */
+static List *
+makeTargetListFromCustomScanList(List *custom_scan_tlist)
+{
+	List *targetList = NIL;
+	TargetEntry *targetEntry = NULL;
+	int resno = 1;
+	foreach_ptr(targetEntry, custom_scan_tlist)
+	{
+		/*
+		 * INDEX_VAR is used to reference back to the TargetEntry in custom_scan_tlist by
+		 * its resno (index)
+		 */
+		Var *newVar = makeVarFromTargetEntry(INDEX_VAR, targetEntry);
+		TargetEntry *newTargetEntry = makeTargetEntry((Expr *) newVar, resno,
+													  targetEntry->resname,
+													  targetEntry->resjunk);
+		targetList = lappend(targetList, newTargetEntry);
+		resno++;
+	}
+	return targetList;
 }
 
 
@@ -1778,6 +1830,25 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 								Index restrictionIndex, RangeTblEntry *rte)
 {
 	DistTableCacheEntry *cacheEntry = NULL;
+
+	if (ReplaceCitusExtraDataContainer && IsCitusExtraDataContainerRelation(rte))
+	{
+		/*
+		 * We got here by planning the query part that needs to be executed on the query
+		 * coordinator node.
+		 * We have verified the occurrence of the citus_extra_datacontainer function
+		 * encoding the remote scan we plan to execute here. We will replace all paths
+		 * with a path describing our custom scan.
+		 */
+		Path *path = CreateCitusCustomScanPath(root, relOptInfo, restrictionIndex, rte,
+											   ReplaceCitusExtraDataContainerWithCustomScan);
+
+		/* replace all paths with our custom scan and recalculate cheapest */
+		relOptInfo->pathlist = list_make1(path);
+		set_cheapest(relOptInfo);
+
+		return;
+	}
 
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
 	AdjustReadIntermediateResultArrayCost(rte, relOptInfo);

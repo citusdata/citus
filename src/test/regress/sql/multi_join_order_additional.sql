@@ -66,7 +66,8 @@ SELECT create_distributed_table('customer_hash', 'c_custkey');
 SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
 
-EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
+EXPLAIN (COSTS OFF)
+SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
 
 SET client_min_messages TO LOG;
@@ -75,43 +76,52 @@ SET client_min_messages TO LOG;
 -- particular, these queries check that we factorize out OR clauses if possible,
 -- and that we default to a cartesian product otherwise.
 
-EXPLAIN SELECT count(*) FROM lineitem, orders
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
 
-EXPLAIN SELECT l_quantity FROM lineitem, orders
+EXPLAIN (COSTS OFF)
+SELECT l_quantity FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey OR l_quantity > 5);
 
-EXPLAIN SELECT count(*) FROM orders, lineitem_hash
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 
 -- Verify we handle local joins between two hash-partitioned tables.
-EXPLAIN SELECT count(*) FROM orders_hash, lineitem_hash
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
-EXPLAIN SELECT count(*) FROM customer_hash, nation
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
 
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.
-EXPLAIN SELECT count(*) FROM orders, lineitem, customer_append
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM orders, lineitem, customer_append
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 
 -- Validate that we don't chose a single-partition join method with a
 -- hash-partitioned base table
-EXPLAIN SELECT count(*) FROM orders, customer_hash
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
 
 -- Validate that we can re-partition a hash partitioned table to join with a
 -- range partitioned one.
-EXPLAIN SELECT count(*) FROM orders_hash, customer_append
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
 
 -- Validate a 4 way join that could be done locally is planned as such by the logical
 -- planner. It used to be planned as a repartition join due to no 1 table being directly
 -- joined to all other tables, but instead follows a chain.
-EXPLAIN SELECT count(*)
+EXPLAIN (COSTS OFF)
+SELECT count(*)
 FROM (
     SELECT users_table.user_id
       FROM users_table

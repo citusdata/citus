@@ -1485,6 +1485,15 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		if (originalHavingQual != NULL)
 		{
 			newHavingQual = MasterAggregateMutator(originalHavingQual, &walkerContext);
+			if (IsA(newHavingQual, List))
+			{
+				/*
+				 * unflatten having qual to allow standard planner to work when transforming
+				 * the master query to a plan
+				 */
+				newHavingQual = (Node *) make_ands_explicit(
+					castNode(List, newHavingQual));
+			}
 		}
 	}
 

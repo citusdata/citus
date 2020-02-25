@@ -624,6 +624,28 @@ static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 
+
+/*
+ * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
+ * run. Given that the result of our subplans would be evaluated before the first call to
+ * the exec function of our custom scan we make sure our subplans have executed before.
+ */
+void
+AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
+{
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+
+	/*
+	 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
+	 * clear why this is necessary (instead of locking the parent during DDL), but
+	 * we do the same for consistency.
+	 */
+	LockPartitionsForDistributedPlan(distributedPlan);
+
+	ExecuteSubPlans(distributedPlan);
+}
+
+
 /*
  * AdaptiveExecutor is called via CitusExecScan on the
  * first call of CitusExecScan. The function fills the tupleStore
@@ -648,15 +670,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
-
-	/*
-	 * PostgreSQL takes locks on all partitions in the executor. It's not entirely
-	 * clear why this is necessary (instead of locking the parent during DDL), but
-	 * we do the same for consistency.
-	 */
-	LockPartitionsForDistributedPlan(distributedPlan);
-
-	ExecuteSubPlans(distributedPlan);
 
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)

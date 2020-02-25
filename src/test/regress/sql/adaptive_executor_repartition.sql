@@ -42,7 +42,8 @@ SELECT create_reference_table('ref_table');
 
 
 -- single hash repartition after bcast joins
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	count(*)
 FROM
 	ref_table r1, single_hash_repartition_second t1, single_hash_repartition_first t2
@@ -50,7 +51,8 @@ WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
 
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3

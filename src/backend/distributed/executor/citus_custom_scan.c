@@ -49,6 +49,7 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate,
 													int eflags);
+static void CitusPreExecScan(CitusScanState *scanState);
 static void HandleDeferredShardPruningForFastPathQueries(
 	DistributedPlan *distributedPlan);
 static void HandleDeferredShardPruningForInserts(DistributedPlan *distributedPlan);
@@ -115,6 +116,29 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 
 
 /*
+ * IsCitusCustomState returns if a given PlanState node is a CitusCustomState node.
+ */
+bool
+IsCitusCustomState(PlanState *planState)
+{
+	if (!IsA(planState, CustomScanState))
+	{
+		return false;
+	}
+
+	CustomScanState *css = castNode(CustomScanState, planState);
+	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
+		css->methods == &TaskTrackerCustomExecMethods ||
+		css->methods == &CoordinatorInsertSelectCustomExecMethods)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * Let PostgreSQL know about Citus' custom scan nodes.
  */
 void
@@ -141,7 +165,24 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 
 #if PG_VERSION_NUM >= 120000
+
+	/*
+	 * Since we are using a tuplestore we cannot use the virtual tuples postgres had
+	 * already setup on the CustomScan. Instead we need to reinitialize the tuples as
+	 * minimal.
+	 *
+	 * During initialization postgres also created the projection information and the
+	 * quals, but both are 'compiled' to be executed on virtual tuples. Since we replaced
+	 * the tuples with minimal tuples we also compile both the projection and the quals
+	 * on to these 'new' tuples.
+	 */
 	ExecInitResultSlot(&scanState->customScanState.ss.ps, &TTSOpsMinimalTuple);
+
+	ExecInitScanTupleSlot(node->ss.ps.state, &node->ss, node->ss.ps.scandesc,
+						  &TTSOpsMinimalTuple);
+	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
+
+	node->ss.ps.qual = ExecInitQual(node->ss.ps.plan->qual, (PlanState *) node);
 #endif
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
@@ -155,6 +196,16 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	CitusBeginScanWithoutCoordinatorProcessing(node, estate, eflags);
+}
+
+
+/*
+ * CitusPreExecScan is called right before postgres' executor starts pulling tuples.
+ */
+static void
+CitusPreExecScan(CitusScanState *scanState)
+{
+	AdaptiveExecutorPreExecutorRun(scanState);
 }
 
 
@@ -176,9 +227,7 @@ CitusExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
-
-	return resultSlot;
+	return ReturnTupleFromTuplestore(scanState);
 }
 
 
@@ -596,6 +645,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &AdaptiveExecutorCustomExecMethods;
+	scanState->PreExecScan = &CitusPreExecScan;
 
 	return (Node *) scanState;
 }
@@ -726,8 +776,7 @@ CitusReScan(CustomScanState *node)
 TupleDesc
 ScanStateGetTupleDescriptor(CitusScanState *scanState)
 {
-	return scanState->customScanState.ss.ps.ps_ResultTupleSlot->
-		   tts_tupleDescriptor;
+	return scanState->customScanState.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
 }
 
 

@@ -1147,7 +1147,7 @@ Aggregate
 RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -1170,7 +1170,7 @@ Aggregate
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
   Task Count: 1
   Tasks Shown: All
   ->  Task

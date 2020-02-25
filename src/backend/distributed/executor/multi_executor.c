@@ -21,6 +21,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
@@ -34,6 +35,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
+#include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
@@ -69,6 +71,9 @@ int ExecutorLevel = 0;
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
+static List * FindCitusCustomScanStates(PlanState *planState);
+static bool CitusCustomScanStateWalker(PlanState *planState,
+									   List **citusCustomScanStates);
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -123,9 +128,24 @@ CitusExecutorRun(QueryDesc *queryDesc,
 {
 	DestReceiver *dest = queryDesc->dest;
 
+	/*
+	 * We do some potentially time consuming operations our self now before we hand of
+	 * control to postgres' executor. To make sure that time spent is accurately measured
+	 * we remove the totaltime instrumentation from the queryDesc. Instead we will start
+	 * and stop the instrumentation of the total time and put it back on the queryDesc
+	 * before returning (or rethrowing) from this function.
+	 */
+	Instrumentation *volatile totalTime = queryDesc->totaltime;
+	queryDesc->totaltime = NULL;
+
 	PG_TRY();
 	{
 		ExecutorLevel++;
+
+		if (totalTime)
+		{
+			InstrStartNode(totalTime);
+		}
 
 		if (CitusHasBeenLoaded())
 		{
@@ -174,18 +194,84 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 		else
 		{
+			/* switch into per-query memory context before calling PreExecScan */
+			MemoryContext oldcontext = MemoryContextSwitchTo(
+				queryDesc->estate->es_query_cxt);
+
+			/*
+			 * Call PreExecScan for all citus custom scan nodes prior to starting the
+			 * postgres exec scan to give some citus scan nodes some time to initialize
+			 * state that would be too late if it were to initialize when the first tuple
+			 * would need to return.
+			 */
+			List *citusCustomScanStates = FindCitusCustomScanStates(queryDesc->planstate);
+			CitusScanState *citusScanState = NULL;
+			foreach_ptr(citusScanState, citusCustomScanStates)
+			{
+				if (citusScanState->PreExecScan)
+				{
+					citusScanState->PreExecScan(citusScanState);
+				}
+			}
+
+			/* postgres will switch here again and will restore back on its own */
+			MemoryContextSwitchTo(oldcontext);
+
 			standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		}
+
+		if (totalTime)
+		{
+			InstrStopNode(totalTime, queryDesc->estate->es_processed);
+			queryDesc->totaltime = totalTime;
 		}
 
 		ExecutorLevel--;
 	}
 	PG_CATCH();
 	{
+		if (totalTime)
+		{
+			queryDesc->totaltime = totalTime;
+		}
+
 		ExecutorLevel--;
 
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * FindCitusCustomScanStates returns a list of all citus custom scan states in it.
+ */
+static List *
+FindCitusCustomScanStates(PlanState *planState)
+{
+	List *citusCustomScanStates = NIL;
+	CitusCustomScanStateWalker(planState, &citusCustomScanStates);
+	return citusCustomScanStates;
+}
+
+
+/*
+ * CitusCustomScanStateWalker walks a planState tree structure and adds all
+ * CitusCustomState nodes to the list passed by reference as the second argument.
+ */
+static bool
+CitusCustomScanStateWalker(PlanState *planState, List **citusCustomScanStates)
+{
+	if (IsCitusCustomState(planState))
+	{
+		CitusScanState *css = (CitusScanState *) planState;
+		*citusCustomScanStates = lappend(*citusCustomScanStates, css);
+
+		/* breaks the walking of this tree */
+		return true;
+	}
+	return planstate_tree_walker(planState, CitusCustomScanStateWalker,
+								 citusCustomScanStates);
 }
 
 
@@ -214,10 +300,77 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		forwardScanDirection = false;
 	}
 
-	TupleTableSlot *resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
-	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
+	ExprState *qual = scanState->customScanState.ss.ps.qual;
+	ProjectionInfo *projInfo = scanState->customScanState.ss.ps.ps_ProjInfo;
+	ExprContext *econtext = scanState->customScanState.ss.ps.ps_ExprContext;
 
-	return resultSlot;
+	if (!qual && !projInfo)
+	{
+		/* no quals, nor projections return directly from the tuple store. */
+		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
+		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
+		return slot;
+	}
+
+	for (;;)
+	{
+		/*
+		 * If there is a very selective qual on the Citus Scan node we might block
+		 * interupts for a longer time if we would not check for interrupts in this loop
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * Reset per-tuple memory context to free any expression evaluation
+		 * storage allocated in the previous tuple cycle.
+		 */
+		ResetExprContext(econtext);
+
+		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
+		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
+
+		if (TupIsNull(slot))
+		{
+			/*
+			 * When the tuple is null we have reached the end of the tuplestore. We will
+			 * return a null tuple, however, depending on the existence of a projection we
+			 * need to either return the scan tuple or the projected tuple.
+			 */
+			if (projInfo)
+			{
+				return ExecClearTuple(projInfo->pi_state.resultslot);
+			}
+			else
+			{
+				return slot;
+			}
+		}
+
+		/* place the current tuple into the expr context */
+		econtext->ecxt_scantuple = slot;
+
+		if (!ExecQual(qual, econtext))
+		{
+			/* skip nodes that do not satisfy the qual (filter) */
+			InstrCountFiltered1(scanState, 1);
+			continue;
+		}
+
+		/* found a satisfactory scan tuple */
+		if (projInfo)
+		{
+			/*
+			 * Form a projection tuple, store it in the result tuple slot and return it.
+			 * ExecProj works on the ecxt_scantuple on the context stored earlier.
+			 */
+			return ExecProject(projInfo);
+		}
+		else
+		{
+			/* Here, we aren't projecting, so just return scan tuple */
+			return slot;
+		}
+	}
 }
 
 

@@ -79,6 +79,7 @@ static bool HasTablesample(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static bool IsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultArrayFunction(Node *node);
+static bool IsCitusExtraDataContainerFunc(Node *node);
 static bool IsFunctionWithOid(Node *node, Oid funcOid);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
@@ -808,6 +809,39 @@ static bool
 IsReadIntermediateResultArrayFunction(Node *node)
 {
 	return IsFunctionWithOid(node, CitusReadIntermediateResultArrayFuncId());
+}
+
+
+/*
+ * IsCitusExtraDataContainerRelation determines whether a range table entry contains a
+ * call to the citus_extradata_container function.
+ */
+bool
+IsCitusExtraDataContainerRelation(RangeTblEntry *rte)
+{
+	if (rte->rtekind != RTE_FUNCTION || list_length(rte->functions) != 1)
+	{
+		/* avoid more expensive checks below for non-functions */
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG5))
+	{
+		return false;
+	}
+
+	return FindNodeCheck((Node *) rte->functions, IsCitusExtraDataContainerFunc);
+}
+
+
+/*
+ * IsCitusExtraDataContainerFunc determines whether a given node is a function call
+ * to the citus_extradata_container function.
+ */
+static bool
+IsCitusExtraDataContainerFunc(Node *node)
+{
+	return IsFunctionWithOid(node, CitusExtraDataContainerFuncId());
 }
 
 

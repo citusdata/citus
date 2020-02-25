@@ -43,16 +43,19 @@ SELECT sum(l_linenumber), avg(l_linenumber)
 -- etc. This is in response to a bug we had where we were not able to resolve
 -- correct operator types for some kind of column types.
 
-EXPLAIN SELECT count(*)
+EXPLAIN (COSTS OFF)
+SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
 
-EXPLAIN SELECT count(*)
+EXPLAIN (COSTS OFF)
+SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
 
 -- Test that large table joins on partition varchar columns work
 
-EXPLAIN SELECT count(*)
+EXPLAIN (COSTS OFF)
+SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;

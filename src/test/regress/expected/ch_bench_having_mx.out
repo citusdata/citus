@@ -27,12 +27,12 @@ order by s_i_id;
                                           QUERY PLAN
 ---------------------------------------------------------------------
  Sort
-   Sort Key: s_i_id
+   Sort Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
-         Group Key: s_i_id
-         Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
+         Group Key: remote_scan.s_i_id
+         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Aggregate
@@ -73,12 +73,12 @@ order by s_i_id;
                                        QUERY PLAN
 ---------------------------------------------------------------------
  Sort
-   Sort Key: s_i_id
+   Sort Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  HashAggregate
-         Group Key: s_i_id
-         Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
+         Group Key: remote_scan.s_i_id
+         Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Aggregate
@@ -106,8 +106,8 @@ having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from st
                                     QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate
-   Group Key: s_i_id
-   Filter: ((pg_catalog.sum(worker_column_3))::bigint > $0)
+   Group Key: remote_scan.s_i_id
+   Filter: ((pg_catalog.sum(remote_scan.worker_column_3))::bigint > $0)
    InitPlan 1 (returns $0)
      ->  Function Scan on read_intermediate_result intermediate_result
    ->  Custom Scan (Citus Adaptive)
@@ -134,16 +134,41 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
-                                           QUERY PLAN
+                                              QUERY PLAN
 ---------------------------------------------------------------------
- Sort  (cost=0.00..0.00 rows=0 width=0)
+ Sort  (cost=510.65..511.15 rows=200 width=12)
    Sort Key: remote_scan.s_i_id
    InitPlan 1 (returns $0)
      ->  Result  (cost=0.00..0.01 rows=1 width=1)
-   ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  HashAggregate  (cost=500.00..503.00 rows=200 width=12)
          Group Key: remote_scan.s_i_id
-         Filter: $0
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Result  (cost=0.00..0.00 rows=100000 width=12)
+               One-Time Filter: $0
+               ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+                     Filter: $0
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
+                                 Group Key: s.s_i_id
+                                 ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
+(17 rows)
+
+explain select     s_i_id, sum(s_order_cnt) as ordercount
+from     stock s
+group by s_i_id
+having   (select true);
+                                           QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate  (cost=500.01..503.01 rows=200 width=12)
+   Group Key: remote_scan.s_i_id
+   InitPlan 1 (returns $0)
+     ->  Result  (cost=0.00..0.01 rows=1 width=1)
+   ->  Result  (cost=0.00..0.00 rows=100000 width=12)
+         One-Time Filter: $0
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+               Filter: $0
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
@@ -152,27 +177,6 @@ order by s_i_id;
                            Group Key: s.s_i_id
                            ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
 (15 rows)
-
-explain select     s_i_id, sum(s_order_cnt) as ordercount
-from     stock s
-group by s_i_id
-having   (select true);
-                                        QUERY PLAN
----------------------------------------------------------------------
- HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-   Group Key: remote_scan.s_i_id
-   Filter: $0
-   InitPlan 1 (returns $0)
-     ->  Result  (cost=0.00..0.01 rows=1 width=1)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  HashAggregate  (cost=40.60..42.60 rows=200 width=12)
-                     Group Key: s.s_i_id
-                     ->  Seq Scan on stock_1640000 s  (cost=0.00..30.40 rows=2040 width=8)
-(13 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock

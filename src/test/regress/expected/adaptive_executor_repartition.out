@@ -80,16 +80,17 @@ SELECT create_reference_table('ref_table');
 (1 row)
 
 -- single hash repartition after bcast joins
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	count(*)
 FROM
 	ref_table r1, single_hash_repartition_second t1, single_hash_repartition_first t2
 WHERE
 	r1.id = t1.id AND t2.sum = t1.id;
-                              QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -98,16 +99,17 @@ WHERE
 (7 rows)
 
 -- a more complicated join order, first colocated join, later single hash repartition join
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	count(*)
 FROM
 	single_hash_repartition_first t1, single_hash_repartition_first t2, single_hash_repartition_second t3
 WHERE
 	t1.id = t2.id AND t1.sum = t3.id;
-                              QUERY PLAN
+                            QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob

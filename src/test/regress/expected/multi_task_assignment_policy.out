@@ -68,53 +68,53 @@ BEGIN;
 SET client_min_messages TO DEBUG3;
 -- First test the default greedy task assignment policy
 SET citus.task_assignment_policy TO 'greedy';
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                              QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 

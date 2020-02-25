@@ -85,17 +85,17 @@ SET client_min_messages TO DEBUG3;
 
 SET citus.task_assignment_policy TO 'greedy';
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 
 -- Next test the first-replica task assignment policy
 
 SET citus.task_assignment_policy TO 'first-replica';
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 
 COMMIT;
 

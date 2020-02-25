@@ -10,7 +10,8 @@ SET client_min_messages TO LOG;
 
 -- Query #6 from the TPC-H decision support benchmark
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
 	lineitem
@@ -22,7 +23,8 @@ WHERE
 
 -- Query #3 from the TPC-H decision support benchmark
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
 	o_orderdate,
@@ -47,7 +49,8 @@ ORDER BY
 
 -- Query #10 from the TPC-H decision support benchmark
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	c_custkey,
 	c_name,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -81,7 +84,8 @@ ORDER BY
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	sum(l_extendedprice* (1 - l_discount)) as revenue
 FROM
 	lineitem,

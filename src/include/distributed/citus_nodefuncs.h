@@ -18,7 +18,9 @@
 /* citus_nodefuncs.c */
 extern void SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 								 char *fragmentSchemaName, char *fragmentTableName,
-								 List *tableIdList);
+								 List *tableIdList, List *funcColumnNames,
+								 List *funcColumnTypes, List *funcColumnTypeMods,
+								 List *funcCollations);
 extern void ModifyRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 									char *fragmentSchemaName, char *fragmentTableName,
 									List *tableIdList);

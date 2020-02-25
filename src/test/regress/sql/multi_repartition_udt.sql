@@ -191,7 +191,8 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
 
-EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
+EXPLAIN (COSTS OFF)
+SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
 	WHERE repartition_udt.pk > 1;
 

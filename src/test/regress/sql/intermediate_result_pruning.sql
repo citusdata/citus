@@ -442,8 +442,9 @@ ROLLBACK;
 -- test with INSERT SELECT via coordinator
 
 -- INSERT .. SELECT via coordinator that doesn't have any intermediate results
+-- We use offset 1 to make sure the result needs to be pulled to the coordinator, offset 0 would be optimized away
 INSERT INTO table_1
-	SELECT * FROM table_2 OFFSET 0;
+	SELECT * FROM table_2 OFFSET 1;
 
 -- INSERT .. SELECT via coordinator which has intermediate result,
 -- and can be pruned to a single worker because the final query is on
