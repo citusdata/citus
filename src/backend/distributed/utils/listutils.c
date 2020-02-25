@@ -15,6 +15,7 @@
 
 #include "utils/lsyscache.h"
 #include "lib/stringinfo.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
@@ -49,7 +50,7 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 	}
 
 	/* sort the array of pointers using the comparison function */
-	qsort(array, arraySize, sizeof(void *), comparisonFunction);
+	SafeQsort(array, arraySize, sizeof(void *), comparisonFunction);
 
 	/* convert the sorted array of pointers back to a sorted list */
 	for (arrayIndex = 0; arrayIndex < arraySize; arrayIndex++)

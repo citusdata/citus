@@ -1142,7 +1142,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	}
 
 	/* finally update the input subquery to point the result query */
-	memcpy(subquery, resultQuery, sizeof(Query));
+	*subquery = *resultQuery;
 }
 
 

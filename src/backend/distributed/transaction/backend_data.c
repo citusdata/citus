@@ -806,7 +806,7 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 
 	SpinLockAcquire(&backendData->mutex);
 
-	memcpy(result, backendData, sizeof(BackendData));
+	*result = *backendData;
 
 	SpinLockRelease(&backendData->mutex);
 }

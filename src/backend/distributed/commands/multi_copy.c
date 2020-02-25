@@ -65,6 +65,7 @@
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/intermediate_results.h"
@@ -432,9 +433,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	 * There is no need to deep copy everything. We will just deep copy of the fields
 	 * we will change.
 	 */
-	memcpy(copiedDistributedRelation, distributedRelation, sizeof(RelationData));
-	memcpy(copiedDistributedRelationTuple, distributedRelation->rd_rel,
-		   CLASS_TUPLE_SIZE);
+	*copiedDistributedRelation = *distributedRelation;
+	*copiedDistributedRelationTuple = *distributedRelation->rd_rel;
 
 	copiedDistributedRelation->rd_rel = copiedDistributedRelationTuple;
 	copiedDistributedRelation->rd_att = CreateTupleDescCopyConstr(tupleDescriptor);
@@ -511,8 +511,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	if (completionTag != NULL)
 	{
-		snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-				 "COPY " UINT64_FORMAT, processedRowCount);
+		SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+					 "COPY " UINT64_FORMAT, processedRowCount);
 	}
 }
 
@@ -696,8 +696,8 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 
 	if (completionTag != NULL)
 	{
-		snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-				 "COPY " UINT64_FORMAT, processedRowCount);
+		SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+					 "COPY " UINT64_FORMAT, processedRowCount);
 	}
 }
 
@@ -2693,8 +2693,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 
 			int64 tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
 
-			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-					 "COPY " UINT64_FORMAT, tuplesSent);
+			SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+						 "COPY " UINT64_FORMAT, tuplesSent);
 
 			return NULL;
 		}
@@ -2795,8 +2795,8 @@ CitusCopyTo(CopyStmt *copyStatement, char *completionTag)
 
 	if (completionTag != NULL)
 	{
-		snprintf(completionTag, COMPLETION_TAG_BUFSIZE, "COPY " UINT64_FORMAT,
-				 tuplesSent);
+		SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE, "COPY " UINT64_FORMAT,
+					 tuplesSent);
 	}
 }
 

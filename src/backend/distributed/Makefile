@@ -2,6 +2,10 @@
 
 citus_subdir = src/backend/distributed
 citus_top_builddir = ../../..
+safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
+safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
+safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
+safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
 
 MODULE_big = citus
 EXTENSION = citus
@@ -39,10 +43,18 @@ utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
 
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
-override CPPFLAGS += -I$(libpq_srcdir)
+override LDFLAGS += $(safestringlib_a)
+override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 SQL_DEPDIR=.deps/sql
 SQL_BUILDDIR=build/sql
+
+$(safestringlib_a): $(safestringlib_sources)
+	rm -rf $(safestringlib_builddir)
+	mkdir -p $(safestringlib_builddir)
+	cd $(safestringlib_builddir) && cmake $(safestringlib_srcdir) && make -j5
+
+citus.so: $(safestringlib_a)
 
 $(generated_sql_files): $(citus_abs_srcdir)/build/%: %
 	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)

@@ -226,7 +226,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	bool copyDone = false;
 
 	/* create local file to append remote data to */
-	snprintf(filename, MAXPGPATH, "%s", filePath->data);
+	strlcpy(filename, filePath->data, MAXPGPATH);
 
 	int32 fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
 	if (fileDescriptor < 0)
