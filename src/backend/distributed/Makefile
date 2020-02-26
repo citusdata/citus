@@ -52,7 +52,11 @@ SQL_BUILDDIR=build/sql
 $(safestringlib_a): $(safestringlib_sources)
 	rm -rf $(safestringlib_builddir)
 	mkdir -p $(safestringlib_builddir)
-	cd $(safestringlib_builddir) && cmake $(safestringlib_srcdir) && make -j5
+	@# exports of LDFLAGS and CPPFLAGS are to make sure the ones from this
+	@# Makefile are not used
+	+cd $(safestringlib_builddir) && \
+		export LDFLAGS='' && export CPPFLAGS='' && \
+		cmake $(safestringlib_srcdir) && make
 
 citus.so: $(safestringlib_a)
 
