@@ -636,6 +636,7 @@ SimplifyPruningTree(PruningTreeNode *node, PruningTreeNode *parent)
 	/* Boolean operator with single (recognized/unknown) constraint gets simplified */
 	if (ConstraintCount(node) <= 1)
 	{
+		Assert(node->childBooleanNodes == NIL);
 		parent->validConstraints = list_concat(parent->validConstraints,
 											   node->validConstraints);
 		parent->hasInvalidConstraints = parent->hasInvalidConstraints ||
@@ -1898,8 +1899,8 @@ CreatePruningNode(BoolExprType boolop)
 {
 	PruningTreeNode *node = palloc0(sizeof(PruningTreeNode));
 	node->boolop = boolop;
-	node->childBooleanNodes = NULL;
-	node->validConstraints = NULL;
+	node->childBooleanNodes = NIL;
+	node->validConstraints = NIL;
 	node->hasInvalidConstraints = false;
 	return node;
 }
