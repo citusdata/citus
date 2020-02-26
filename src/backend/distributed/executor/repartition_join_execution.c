@@ -83,7 +83,8 @@ CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
 {
 	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds, CurrentUserName());
-	SendCommandToAllWorkers(createSchemasCommand, CitusExtensionOwnerName());
+	SendCommandToWorkersInParallel(ALL_WORKERS, createSchemasCommand,
+								   CitusExtensionOwnerName());
 	return jobIds;
 }
 

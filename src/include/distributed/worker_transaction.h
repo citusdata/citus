@@ -51,6 +51,9 @@ extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 extern void SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
 												   char *command,
 												   const char *user);
+void SendCommandToWorkersInParallel(TargetWorkerSet targetWorkerSet, const
+									char *command,
+									const char *user);
 extern void RemoveWorkerTransaction(char *nodeName, int32 nodePort);
 
 /* helper functions for worker transactions */
