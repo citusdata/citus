@@ -65,7 +65,7 @@ ifneq (,$(SQL_Po_files))
 include $(SQL_Po_files)
 endif
 
-.PHONY: check-sql-snapshots
+.PHONY: check-sql-snapshots clean-full
 
 check-sql-snapshots:
 	bash -c '\
@@ -79,3 +79,7 @@ cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
 
 install: cleanup-before-install
+
+clean-full:
+	make clean
+	rm -rf $(safestringlib_builddir)

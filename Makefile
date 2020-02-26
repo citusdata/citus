@@ -26,7 +26,9 @@ install-headers: extension
 	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(DESTDIR)$(includedir_server)/distributed/'
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
-.PHONY: extension install-extension clean-extension
+clean-full:
+	$(MAKE) -C src/backend/distributed/ clean-full
+.PHONY: extension install-extension clean-extension clean-full
 # Add to generic targets
 install: install-extension install-headers
 clean: clean-extension
