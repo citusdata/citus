@@ -70,6 +70,8 @@ SET client_min_messages TO DEBUG3;
 SET citus.task_assignment_policy TO 'greedy';
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -82,6 +84,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -96,6 +100,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 SET citus.task_assignment_policy TO 'first-replica';
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -108,6 +114,8 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 EXPLAIN (COSTS OFF) SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no valid constraints found
+DEBUG:  shard count: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx

@@ -87,7 +87,6 @@ DEBUG:  Plan is router executable
 DELETE FROM modify_fast_path WHERE value_1 = 15 AND (key = 1 OR value_2 = 'citus');
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
 -- goes through fast-path planning even if the key is updated to the same value
 UPDATE modify_fast_path SET key = 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
