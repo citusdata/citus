@@ -300,6 +300,24 @@ if ( $constr )
         $dbname = $convals{dbname};
     }
 
+    open my $in, '<', "bin/normalize.sed" or die "Cannot open normalize.sed file\n";
+    open my $out, '>', "bin/normalize_modified.sed" or die "Cannot open normalize_modified.sed file\n";
+
+    while ( <$in> )
+    {
+        print $out $_;
+    }
+
+    close $in;
+
+
+    print $out "\n";
+    print $out "s/dbname=$dbname/dbname=<db>/g\n";
+    print $out "s/$user/<user>/g\n";
+    print $out "s/$host/<host>/g\n";
+    print $out "s/", substr("$masterPort", 0, length("$masterPort")-2), "[0-9][0-9]/xxxxx/g\n";
+
+
     my $worker1port = `psql "$constr" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
     my $worker2port = `psql "$constr" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
 
