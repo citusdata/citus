@@ -464,12 +464,11 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 	Assert(schemaName != NULL);
 	Assert(relationName != NULL);
 
-	/*
-	 * This new relation doesn't log to WAL, as the table creation and data copy
-	 * statements occur in the same transaction. Still, we want to make the
-	 * relation unlogged once we upgrade to PostgreSQL 9.1.
-	 */
 	RangeVar *relation = makeRangeVar(schemaName->data, relationName->data, -1);
+
+	/* this table will only exist for the duration of the query, avoid writing to WAL */
+	relation->relpersistence = RELPERSISTENCE_UNLOGGED;
+
 	List *columnDefinitionList = ColumnDefinitionList(columnNameList, columnTypeList);
 
 	CreateStmt *createStatement = CreateStatement(relation, columnDefinitionList);
