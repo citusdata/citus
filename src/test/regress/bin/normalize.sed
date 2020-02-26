@@ -91,4 +91,3 @@ s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('ins
 
 # ignore job id in repartitioned insert/select
 s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
-

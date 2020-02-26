@@ -72,7 +72,7 @@ CREATE TABLE multi_append_table_to_shard_stage
 	number INTEGER not null,
 	text TEXT not null
 );
-COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
+\COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
 -- Check that we error out if we try to append data to a hash partitioned table.
 SELECT master_create_empty_shard('multi_append_table_to_shard_right_reference_hash');
 ERROR:  relation "multi_append_table_to_shard_right_reference_hash" is a hash partitioned table
