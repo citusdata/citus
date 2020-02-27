@@ -27,8 +27,8 @@
  *	  cell in.
  *
  *   How it works:
- *	  - A ListCell is declared with the name {var}Cell and used throughout the
- *	    for loop using ## to concat.
+ *	  - A ListCell is declared with the name {var}CellDoNotUse and used
+ *	    throughout the for loop using ## to concat.
  *	  - To assign to var it needs to be done in the condition of the for loop,
  *	    because we cannot use the initializer since a ListCell* variable is
  *	    declared there.
@@ -36,9 +36,10 @@
  *	    var is NULL.
  */
 #define foreach_ptr(var, l) \
-	for (ListCell *(var ## Cell) = list_head(l); \
-		 (var ## Cell) != NULL && (((var) = lfirst(var ## Cell)) || true); \
-		 var ## Cell = lnext(var ## Cell))
+	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
+		 (var ## CellDoNotUse) != NULL && \
+		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
+		 var ## CellDoNotUse = lnext(var ## CellDoNotUse))
 
 
 /*
@@ -48,9 +49,10 @@
  *	  For explanation of how it works see foreach_ptr.
  */
 #define foreach_int(var, l) \
-	for (ListCell *(var ## Cell) = list_head(l); \
-		 (var ## Cell) != NULL && (((var) = lfirst_int(var ## Cell)) || true); \
-		 var ## Cell = lnext(var ## Cell))
+	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
+		 (var ## CellDoNotUse) != NULL && \
+		 (((var) = lfirst_int(var ## CellDoNotUse)) || true); \
+		 var ## CellDoNotUse = lnext(var ## CellDoNotUse))
 
 
 /*
@@ -60,9 +62,10 @@
  *	  For explanation of how it works see foreach_ptr.
  */
 #define foreach_oid(var, l) \
-	for (ListCell *(var ## Cell) = list_head(l); \
-		 (var ## Cell) != NULL && (((var) = lfirst_oid(var ## Cell)) || true); \
-		 var ## Cell = lnext(var ## Cell))
+	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
+		 (var ## CellDoNotUse) != NULL && \
+		 (((var) = lfirst_oid(var ## CellDoNotUse)) || true); \
+		 var ## CellDoNotUse = lnext(var ## CellDoNotUse))
 
 
 /* utility functions declaration shared within this module */
