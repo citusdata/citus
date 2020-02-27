@@ -290,9 +290,9 @@ DROP TABLE data_load_test1, data_load_test2;
 END;
 
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- creating an index after loading data works
 BEGIN;
@@ -348,9 +348,9 @@ CREATE UNLOGGED TABLE unlogged_table
 SELECT create_distributed_table('unlogged_table', 'key');
 SELECT * FROM master_get_table_ddl_events('unlogged_table');
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- Test rollback of create table
 BEGIN;
@@ -359,9 +359,9 @@ SELECT create_distributed_table('rollback_table','id');
 ROLLBACK;
 
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- Insert 3 rows to make sure that copy after shard creation touches the same
 -- worker node twice.
@@ -374,9 +374,9 @@ SELECT create_distributed_table('rollback_table','id');
 ROLLBACK;
 
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
-\c - - - :master_port
+\c - - :master_host :master_port
 
 BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
@@ -404,9 +404,9 @@ SELECT create_distributed_table('rollback_table','id');
 ROLLBACK;
 
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
-\c - - - :master_port
+\c - - :master_host :master_port
 
 BEGIN;
 CREATE TABLE tt1(id int);
@@ -418,10 +418,10 @@ INSERT INTO tt2 SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 
 -- Table should exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360069'::regclass;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360073'::regclass;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 DROP TABLE tt1;
 DROP TABLE tt2;
@@ -435,14 +435,14 @@ SELECT master_create_empty_shard('append_tt1');
 ROLLBACK;
 
 -- Table exists on the worker node.
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360077'::regclass;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE relname LIKE 'public.tt1%');
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- Queries executing with router executor is allowed in the same transaction
 -- with create_distributed_table
@@ -455,9 +455,9 @@ SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 
 -- Placements should be created on the worker
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360078'::regclass;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 DROP TABLE tt1;
 
@@ -468,9 +468,9 @@ DROP TABLE tt1;
 COMMIT;
 
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE  relname LIKE 'tt1%');
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- Tests with create_distributed_table & DDL & DML commands
 

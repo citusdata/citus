@@ -81,6 +81,8 @@ my $connectionTimeout = 5000;
 my $useMitmproxy = 0;
 my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 my $conninfo = "";
+my $publicWorker1Host = "localhost";
+my $publicWorker2Host = "localhost";
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -110,6 +112,8 @@ GetOptions(
     'connection-timeout=s' => \$connectionTimeout,
     'mitmproxy' => \$useMitmproxy,
     'conninfo=s' => \$conninfo,
+    'worker-1-public-hostname=s' => \$publicWorker1Host,
+    'worker-2-public-hostname=s' => \$publicWorker2Host,
     'help' => sub { Usage() });
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
@@ -553,6 +557,9 @@ for my $workeroff (0 .. $#workerHosts)
 	my $host = $workerHosts[$workeroff];
 	print $fh "--variable=worker_".($workeroff+1)."_host=\"$host\" ";
 }
+print $fh "--variable=master_host=\"$host\" ";
+print $fh "--variable=public_worker_1_host=\"$publicWorker1Host\" ";
+print $fh "--variable=public_worker_2_host=\"$publicWorker2Host\" ";
 for my $workeroff (0 .. $#followerWorkerPorts)
 {
 	my $port = $followerWorkerPorts[$workeroff];
