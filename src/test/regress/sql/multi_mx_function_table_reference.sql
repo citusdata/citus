@@ -11,15 +11,15 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 -- SET citus.log_remote_commands TO on;
 -- SET client_min_messages TO log;
 
 -- remove worker 2, so we can add it after we have created some functions that caused
 -- problems
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
 -- reproduction case as described in #3378
 CREATE TABLE zoop_table (x int, y int);
@@ -43,7 +43,7 @@ $$;
 SELECT create_distributed_function('zoop(int)', '$1');
 
 -- now add the worker back, this triggers function distribution which should not fail.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 SELECT public.wait_until_metadata_sync();
 
 
@@ -53,4 +53,4 @@ DROP SCHEMA function_table_reference CASCADE;
 -- make sure the worker is added at the end irregardless of anything failing to not make
 -- subsequent tests fail as well. All artifacts created during this test should have been
 -- dropped by the drop cascade above.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);

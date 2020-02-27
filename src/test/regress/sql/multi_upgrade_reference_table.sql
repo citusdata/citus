@@ -626,7 +626,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 3
 WHERE nodeport = :worker_2_port AND
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='upgrade_reference_table_mx'::regclass);
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- situation before upgrade_reference_table
 SELECT
@@ -724,5 +724,5 @@ ORDER BY shardid;
 
 \c - - - :master_port
 DROP TABLE upgrade_reference_table_mx;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 RESET client_min_messages;

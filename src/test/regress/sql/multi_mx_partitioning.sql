@@ -9,7 +9,7 @@ SET citus.shard_replication_factor TO 1;
 
 -- make sure wen can create partitioning tables in MX
 SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- 1-) Distributing partitioned table
 -- create partitioned table
@@ -162,9 +162,9 @@ DROP TABLE partitioning_test;
 \c - - - :master_port
 
 -- make sure we can repeatedly call start_metadata_sync_to_node
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- make sure we can drop partitions
 DROP TABLE partitioning_test_2009;

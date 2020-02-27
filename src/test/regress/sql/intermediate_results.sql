@@ -231,39 +231,39 @@ END;
 -- straightforward, single-result case
 BEGIN;
 SELECT broadcast_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_series(1, 5) s');
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], 'localhost', :worker_2_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], :'worker_2_host', :worker_2_port);
 SELECT * FROM read_intermediate_result('squares_1', 'binary') AS res (x int, x2 int);
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], :'worker_1_host', :worker_1_port);
 SELECT * FROM read_intermediate_result('squares_1', 'binary') AS res (x int, x2 int);
 END;
 
 -- multiple results, and some error cases
 BEGIN;
-SELECT store_intermediate_result_on_node('localhost', :worker_1_port,
+SELECT store_intermediate_result_on_node(:'worker_1_host', :worker_1_port,
                                          'squares_1', 'SELECT s, s*s FROM generate_series(1, 2) s');
-SELECT store_intermediate_result_on_node('localhost', :worker_1_port,
+SELECT store_intermediate_result_on_node(:'worker_1_host', :worker_1_port,
                                          'squares_2', 'SELECT s, s*s FROM generate_series(3, 4) s');
 SAVEPOINT s1;
 -- results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 2 should fail
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_2_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], :'worker_2_host', :worker_2_port);
 ROLLBACK TO SAVEPOINT s1;
 -- still, results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 1 should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], :'worker_1_host', :worker_1_port);
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 -- fetching again should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], :'worker_1_host', :worker_1_port);
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 ROLLBACK TO SAVEPOINT s1;
 -- empty result id list should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY[]::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY[]::text[], :'worker_1_host', :worker_1_port);
 -- null in result id list should error gracefully
-SELECT * FROM fetch_intermediate_results(ARRAY[NULL, 'squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY[NULL, 'squares_1', 'squares_2']::text[], :'worker_1_host', :worker_1_port);
 END;
 
 -- results should have been deleted after transaction commit

@@ -213,12 +213,12 @@ WITH r AS (
 ) SELECT * FROM test, r, t WHERE t.c=0;
 
 -- Test that we don't propagate to non-metadata worker nodes
-select stop_metadata_sync_to_node('localhost', :worker_1_port);
-select stop_metadata_sync_to_node('localhost', :worker_2_port);
+select stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+select stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 select mx_call_func(2, 0);
 SET client_min_messages TO NOTICE;
-select start_metadata_sync_to_node('localhost', :worker_1_port);
-select start_metadata_sync_to_node('localhost', :worker_2_port);
+select start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+select start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 -- stop_metadata_sync_to_node()/start_metadata_sync_to_node() might make
 -- worker backend caches inconsistent. Reconnect to coordinator to use

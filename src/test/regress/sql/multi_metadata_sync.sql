@@ -76,10 +76,10 @@ SELECT stop_metadata_sync_to_node('localhost', 8888);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 
 -- Add a node to another cluster to make sure it's also synced
-SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
+SELECT master_add_secondary_node('localhost', 8889, :'worker_1_host', :worker_1_port, nodecluster => 'second-cluster');
 
 -- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
 
 -- Check that the metadata has been copied to the worker
@@ -118,7 +118,7 @@ CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text,
 SELECT create_distributed_table('mx_testing_schema.fk_test_1', 'col1');
 SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
 \c - - - :worker_1_port
@@ -133,8 +133,8 @@ RESET citus.replication_model;
 
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
@@ -151,7 +151,7 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
 -- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
 \c - - - :master_port
 BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 ROLLBACK;
 
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
@@ -160,7 +160,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 CREATE TABLE mx_query_test (a int, b text, c int);
 SELECT create_distributed_table('mx_query_test', 'a');
@@ -186,14 +186,14 @@ DROP TABLE mx_query_test;
 
 -- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
 
 
 -- Test DDL propagation in MX tables
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SET citus.shard_count = 5;
 SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE SCHEMA mx_test_schema_1;
@@ -429,13 +429,13 @@ SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 -- sync table with serial column after create_distributed_table
 CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 DROP TABLE mx_table_with_small_sequence;
 
 -- Show that create_distributed_table works with a serial column
@@ -469,7 +469,7 @@ SELECT nextval('mx_table_with_sequence_c_seq');
 
 -- Check that adding a new metadata node sets the sequence space correctly
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 \c - - - :worker_2_port
 SELECT groupid FROM pg_dist_local_group;
@@ -515,7 +515,7 @@ CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
  -- the master user needs superuser permissions to change the replication model
 CREATE USER mx_user WITH SUPERUSER;
@@ -532,8 +532,8 @@ SET citus.replication_model TO 'streaming';
 SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT master_add_node(:'worker_2_host', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 \c - mx_user - :worker_1_port
 SELECT nextval('mx_table_b_seq');
@@ -569,7 +569,7 @@ UPDATE pg_dist_placement
   WHERE groupid = :old_worker_2_group;
 
 \c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 DROP USER mx_user;
 \c - - - :worker_1_port
@@ -637,7 +637,7 @@ CREATE TABLE tmp_placement AS
   SELECT * FROM pg_dist_placement WHERE groupid = :old_worker_2_group;
 DELETE FROM pg_dist_placement
   WHERE groupid = :old_worker_2_group;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
 
@@ -651,7 +651,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT master_add_node(:'worker_2_host', :worker_2_port);
 
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
@@ -727,15 +727,15 @@ SELECT create_reference_table('dist_table_2');
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
 SELECT master_add_node('localhost', :master_port, groupid => 0);
-SELECT master_disable_node('localhost', :worker_1_port);
-SELECT master_disable_node('localhost', :worker_2_port);
-SELECT master_remove_node('localhost', :worker_1_port);
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_disable_node(:'worker_1_host', :worker_1_port);
+SELECT master_disable_node(:'worker_2_host', :worker_2_port);
+SELECT master_remove_node(:'worker_1_host', :worker_1_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
 -- master_update_node should succeed
 SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT master_update_node(:worker_2_nodeid, 'localhost', 4444);
-SELECT master_update_node(:worker_2_nodeid, 'localhost', :worker_2_port);
+SELECT master_update_node(:worker_2_nodeid, :'worker_2_host', :worker_2_port);
 
 ALTER SYSTEM SET citus.metadata_sync_interval TO DEFAULT;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO DEFAULT;
@@ -744,8 +744,8 @@ SELECT pg_reload_conf();
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
 -- Cleanup
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;

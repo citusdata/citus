@@ -23,7 +23,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- repair colocated shards
-SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300000, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
@@ -48,7 +48,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- repair NOT colocated shard
-SELECT master_copy_shard_placement(1300016, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300016, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
@@ -73,7 +73,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- repair  shard in append distributed table
-SELECT master_copy_shard_placement(1300020, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300020, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
@@ -101,7 +101,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- repair while all placements of one shard in colocation group is unhealthy
-SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300000, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate

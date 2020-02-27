@@ -17,8 +17,8 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 -- test that coordinator pg_dist_node entry is synced to the workers
 SELECT wait_until_metadata_sync();
 
-SELECT verify_metadata('localhost', :worker_1_port),
-       verify_metadata('localhost', :worker_2_port);
+SELECT verify_metadata(:'worker_1_host', :worker_1_port),
+       verify_metadata(:'worker_2_host', :worker_2_port);
 
 CREATE TABLE ref(a int);
 SELECT create_reference_table('ref');
@@ -82,8 +82,8 @@ SELECT master_remove_node('localhost', :master_port);
 
 -- test that coordinator pg_dist_node entry was removed from the workers
 SELECT wait_until_metadata_sync();
-SELECT verify_metadata('localhost', :worker_1_port),
-       verify_metadata('localhost', :worker_2_port);
+SELECT verify_metadata(:'worker_1_host', :worker_1_port),
+       verify_metadata(:'worker_2_host', :worker_2_port);
 
 DROP SCHEMA mx_add_coordinator CASCADE;
 SET search_path TO DEFAULT;

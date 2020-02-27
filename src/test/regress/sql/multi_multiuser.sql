@@ -333,8 +333,8 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
 
 -- we don't want other tests to have metadata synced
 -- that might change the test outputs, so we're just trying to be careful
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 RESET ROLE;
 -- now we distribute the table as super user
@@ -415,15 +415,15 @@ RESET ROLE;
 
 \c - - - :worker_2_port
 -- super user should not be able to copy files created by a user
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, :'worker_1_host', :worker_1_port);
 
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, :'worker_1_host', :worker_1_port);
 
 -- only the user whom created the files should be able to fetch
 SET ROLE full_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, :'worker_1_host', :worker_1_port);
 RESET ROLE;
 
 -- now we will test that only the user who owns the fetched file is able to merge it into

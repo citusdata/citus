@@ -43,37 +43,37 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
 -- cannot repair a shard after a modification (transaction still open during repair)
 BEGIN;
 ALTER TABLE customer_engagements ADD COLUMN value float;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 ROLLBACK;
 
 BEGIN;
 INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 ROLLBACK;
 
 -- modifications after reparing a shard are fine (will use new metadata)
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 ALTER TABLE customer_engagements ADD COLUMN value float;
 ROLLBACK;
 
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
 ROLLBACK;
 
 -- deactivate placement
 UPDATE pg_dist_placement SET shardstate = 1 WHERE groupid = :worker_2_group and shardid = :newshardid;
 
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 UPDATE pg_dist_placement SET shardstate = 3 WHERE groupid = :worker_2_group and shardid = :newshardid;
 
 -- also try to copy from an inactive placement
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_2_host', :worker_2_port, :'worker_1_host', :worker_1_port);
 
 -- "copy" this shard from the first placement to the second one
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
 UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid AND groupid = :worker_1_group;
@@ -102,4 +102,4 @@ SELECT shardid as remotenewshardid FROM pg_dist_shard WHERE logicalrelid = 'remo
 UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND groupid = :worker_2_group;
 
 -- oops! we don't support repairing shards backed by foreign tables
-SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:remotenewshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);

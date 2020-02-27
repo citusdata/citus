@@ -920,7 +920,7 @@ SELECT placementid AS a_placement_id FROM pg_dist_shard_placement WHERE shardid 
 SELECT placementid AS b_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_2_port \gset
 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placement_id;
-SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(:a_shard_id, :'worker_2_host', :worker_2_port, :'worker_1_host', :worker_1_port);
 SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
 
 -- some queries that are captured in functions

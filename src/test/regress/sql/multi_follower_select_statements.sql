@@ -2,8 +2,8 @@
 
 -- do some setup
 
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node(:'worker_1_host', :worker_1_port);
+SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 
 CREATE TABLE the_table (a int, b int);
 SELECT create_distributed_table('the_table', 'a');

@@ -312,7 +312,7 @@ SELECT create_distributed_table('transactional_drop_mx', 'column1');
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='transactional_drop_mx'::regclass;
 
 -- make worker 1 receive metadata changes
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- see metadata is propogated to the worker
 \c - - - :worker_1_port
@@ -373,7 +373,7 @@ SELECT master_remove_node('localhost', :master_port);
 
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;

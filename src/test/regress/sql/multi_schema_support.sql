@@ -493,7 +493,7 @@ SET search_path TO public;
 
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
-SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(1190000, :'worker_2_host', :worker_2_port, :'worker_1_host', :worker_1_port);
 
 -- verify shardstate
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
@@ -504,7 +504,7 @@ SET search_path TO test_schema_support;
 
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
-SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(1190000, :'worker_2_host', :worker_2_port, :'worker_1_host', :worker_1_port);
 
 -- verify shardstate
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;

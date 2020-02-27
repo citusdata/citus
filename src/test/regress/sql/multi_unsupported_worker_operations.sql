@@ -34,7 +34,7 @@ FROM pg_dist_partition
 WHERE logicalrelid IN ('mx_table'::regclass, 'mx_table_2'::regclass)
 ORDER BY logicalrelid;
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 COPY mx_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
 -37, 'lorem'
@@ -138,19 +138,19 @@ SET colocationid = :old_colocation_id
 WHERE logicalrelid='mx_table_2'::regclass;
 
 -- start_metadata_sync_to_node
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- stop_metadata_sync_to_node
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 \c - - - :worker_1_port
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 \c - - - :master_port
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :worker_2_port
 SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
@@ -180,7 +180,7 @@ SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_po
 INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
 VALUES (:worker_2_group, :testshardid, 3, 0);
 
-SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:testshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 
 SELECT shardid, nodename, nodeport, shardstate
 FROM pg_dist_shard_placement
@@ -212,7 +212,7 @@ ROLLBACK;
 \c - - - :master_port
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 \c - - - :worker_1_port
 DELETE FROM pg_dist_node;
 SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;

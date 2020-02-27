@@ -25,8 +25,8 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
 SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
+SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 CREATE TABLE test_table(id int, time date);
 SELECT create_distributed_table('test_table', 'id');

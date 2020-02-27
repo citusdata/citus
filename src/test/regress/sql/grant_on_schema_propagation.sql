@@ -94,7 +94,7 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA non_dist_schema');
 -- test if the grantors are propagated correctly
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
 -- create a new schema
 CREATE SCHEMA grantor_schema;
@@ -122,7 +122,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER 
 \c - - - :master_port
 
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 
 -- check if the grantors are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
@@ -178,7 +178,7 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE')
 -- test grants on public schema
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
 -- distribute the public schema (it has to be distributed by now but just in case)
 CREATE TABLE public_schema_table (id INT);
@@ -197,7 +197,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspna
 \c - - - :master_port
 
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;

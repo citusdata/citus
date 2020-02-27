@@ -481,7 +481,7 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- disable the first node
-SELECT master_disable_node('localhost', :worker_1_port);
+SELECT master_disable_node(:'worker_1_host', :worker_1_port);
 -- set replication factor to 1 so that copy will
 -- succeed without replication count error
 SET citus.shard_replication_factor TO 1;
@@ -502,7 +502,7 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
-SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM master_activate_node(:'worker_1_host', :worker_1_port);
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv');

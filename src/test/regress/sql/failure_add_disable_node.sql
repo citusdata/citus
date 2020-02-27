@@ -155,16 +155,16 @@ WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
 -- fail master_add_node by failing copy out operation
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT master_remove_node(:'worker_1_host', :worker_1_port);
 SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
-SELECT master_add_node('localhost', :worker_1_port);
+SELECT master_add_node(:'worker_1_host', :worker_1_port);
 
 -- verify node is not added
 SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT citus.mitmproxy('conn.allow()');
-SELECT master_add_node('localhost', :worker_1_port);
+SELECT master_add_node(:'worker_1_host', :worker_1_port);
 
 -- verify node is added
 SELECT * FROM master_get_active_worker_nodes()

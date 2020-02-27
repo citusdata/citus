@@ -202,18 +202,18 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
 -- cannot repair a shard after a modification (transaction still open during repair)
 BEGIN;
 INSERT INTO customer_engagements VALUES (1, 1);
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 ROLLBACK;
 
 -- modifications after reparing a shard are fine (will use new metadata)
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
 SELECT * FROM customer_engagements ORDER BY 1,2,3;
 ROLLBACK;
 
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:newshardid, :'worker_1_host', :worker_1_port, :'worker_2_host', :worker_2_port);
 INSERT INTO customer_engagements VALUES (1, 1);
 SELECT count(*) FROM customer_engagements;
 ROLLBACK;

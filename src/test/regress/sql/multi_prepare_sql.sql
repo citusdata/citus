@@ -612,7 +612,7 @@ EXECUTE countsome; -- should indicate replanning
 EXECUTE countsome; -- no replanning
 
 -- repair shards, should invalidate via master_metadata_utility.c
-SELECT master_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
+SELECT master_copy_shard_placement(shardid, :'worker_2_host', :worker_2_port, :'worker_1_host', :worker_1_port)
 FROM pg_dist_shard_placement
 WHERE shardid IN (
         SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
