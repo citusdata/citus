@@ -856,6 +856,32 @@ SELECT count(*) FILTER (where value = 15) FROM collections_list_2 WHERE key = 4;
 
 SET client_min_messages to 'NOTICE';
 
+CREATE TABLE test_1 (id int, name text);
+SELECT create_distributed_table('test_1', 'id');
+
+INSERT INTO test_1 VALUES (1,'1'), (2,'2');
+
+PREPARE fast_path_router_select_require_master_evaluation(int) AS SELECT json_agg(json_build_object('id', a.id, 'name', a.name)) FROM test_1 a WHERE id = $1 GROUP BY id, name ;
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+
+
+PREPARE router_select_require_master_evaluation(int) AS SELECT json_agg(json_build_object('id', a.id, 'name', a.name)) FROM test_1 a JOIN test_1 b USING (id) WHERE id = $1 GROUP BY a.id, a.name ;
+
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+EXECUTE router_select_require_master_evaluation(1);
+
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 

@@ -2248,6 +2248,100 @@ DETAIL:  distribution column value: 4
 (1 row)
 
 SET client_min_messages to 'NOTICE';
+CREATE TABLE test_1 (id int, name text);
+SELECT create_distributed_table('test_1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_1 VALUES (1,'1'), (2,'2');
+PREPARE fast_path_router_select_require_master_evaluation(int) AS SELECT json_agg(json_build_object('id', a.id, 'name', a.name)) FROM test_1 a WHERE id = $1 GROUP BY id, name ;
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE fast_path_router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+PREPARE router_select_require_master_evaluation(int) AS SELECT json_agg(json_build_object('id', a.id, 'name', a.name)) FROM test_1 a JOIN test_1 b USING (id) WHERE id = $1 GROUP BY a.id, a.name ;
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
+EXECUTE router_select_require_master_evaluation(1);
+          json_agg
+---------------------------------------------------------------------
+ [{"id" : 1, "name" : "1"}]
+(1 row)
+
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 DROP MATERIALIZED VIEW mv_articles_hash_empty;
@@ -2266,9 +2360,10 @@ DROP TABLE articles_append;
 DROP TABLE collections_list;
 RESET search_path;
 DROP SCHEMA fast_path_router_select CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table fast_path_router_select.articles_hash
 drop cascades to function fast_path_router_select.raise_failed_execution_f_router(text)
 drop cascades to function fast_path_router_select.author_articles_max_id(integer)
 drop cascades to function fast_path_router_select.author_articles_id_word_count(integer)
 drop cascades to view fast_path_router_select.test_view
+drop cascades to table fast_path_router_select.test_1

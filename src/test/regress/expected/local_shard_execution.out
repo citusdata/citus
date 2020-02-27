@@ -820,6 +820,8 @@ SELECT DISTINCT trim(value) FROM (
         limit 2
     ) t;
 PREPARE local_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key = $1;
+PREPARE local_prepare_param_master_evaluation_fast_path AS SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) FROM distributed_table a WHERE key = $1 GROUP BY key, value;
+PREPARE local_prepare_param_master_evaluation_router AS SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) FROM distributed_table a JOIN distributed_table b USING(key) WHERE a.key = $1 GROUP BY a.key, a.value;
 PREPARE remote_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key != $1;
 BEGIN;
 	-- 6 local execution without params
@@ -961,6 +963,100 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
  count
 ---------------------------------------------------------------------
      0
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470001 a WHERE (key OPERATOR(pg_catalog.=) 1) GROUP BY key, value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(5);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470001 a WHERE (key OPERATOR(pg_catalog.=) 5) GROUP BY key, value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 5, "value" : "56"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(6);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470003 a WHERE (key OPERATOR(pg_catalog.=) 6) GROUP BY key, value
+ json_agg
+---------------------------------------------------------------------
+(0 rows)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470001 a WHERE (key OPERATOR(pg_catalog.=) 1) GROUP BY key, value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(5);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470001 a WHERE (key OPERATOR(pg_catalog.=) 5) GROUP BY key, value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 5, "value" : "56"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(6);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470003 a WHERE (key OPERATOR(pg_catalog.=) 6) GROUP BY key, value
+ json_agg
+---------------------------------------------------------------------
+(0 rows)
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', key, 'value', value)) AS json_agg FROM local_shard_execution.distributed_table_1470001 a WHERE (key OPERATOR(pg_catalog.=) 1) GROUP BY key, value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_router(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470001 a(key, value, age) JOIN local_shard_execution.distributed_table_1470001 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_router(5);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470001 a(key, value, age) JOIN local_shard_execution.distributed_table_1470001 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 5, "value" : "56"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_router(6);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470003 a(key, value, age) JOIN local_shard_execution.distributed_table_1470003 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+ json_agg
+---------------------------------------------------------------------
+(0 rows)
+
+	EXECUTE local_prepare_param_master_evaluation_router(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470001 a(key, value, age) JOIN local_shard_execution.distributed_table_1470001 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_router(5);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470001 a(key, value, age) JOIN local_shard_execution.distributed_table_1470001 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 5, "value" : "56"}]
+(1 row)
+
+	EXECUTE local_prepare_param_master_evaluation_router(6);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470003 a(key, value, age) JOIN local_shard_execution.distributed_table_1470003 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+ json_agg
+---------------------------------------------------------------------
+(0 rows)
+
+	EXECUTE local_prepare_param_master_evaluation_router(1);
+NOTICE:  executing the command locally: SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) AS json_agg FROM (local_shard_execution.distributed_table_1470001 a(key, value, age) JOIN local_shard_execution.distributed_table_1470001 b(key, value, age) USING (key)) WHERE (a.key OPERATOR(pg_catalog.=) $1) GROUP BY a.key, a.value
+           json_agg
+---------------------------------------------------------------------
+ [{"key" : 1, "value" : "12"}]
 (1 row)
 
 	-- followed by a non-local execution

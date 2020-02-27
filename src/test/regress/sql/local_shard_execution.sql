@@ -471,6 +471,8 @@ SELECT DISTINCT trim(value) FROM (
         limit 2
     ) t;
 PREPARE local_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key = $1;
+PREPARE local_prepare_param_master_evaluation_fast_path AS SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) FROM distributed_table a WHERE key = $1 GROUP BY key, value;
+PREPARE local_prepare_param_master_evaluation_router AS SELECT json_agg(json_build_object('key', a.key, 'value', a.value)) FROM distributed_table a JOIN distributed_table b USING(key) WHERE a.key = $1 GROUP BY a.key, a.value;
 PREPARE remote_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key != $1;
 BEGIN;
 	-- 6 local execution without params
@@ -496,6 +498,23 @@ BEGIN;
 	EXECUTE local_prepare_param(1);
 	EXECUTE local_prepare_param(5);
 	EXECUTE local_prepare_param(6);
+
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(5);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(6);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(5);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(6);
+	EXECUTE local_prepare_param_master_evaluation_fast_path(1);
+
+
+	EXECUTE local_prepare_param_master_evaluation_router(1);
+	EXECUTE local_prepare_param_master_evaluation_router(5);
+	EXECUTE local_prepare_param_master_evaluation_router(6);
+	EXECUTE local_prepare_param_master_evaluation_router(1);
+	EXECUTE local_prepare_param_master_evaluation_router(5);
+	EXECUTE local_prepare_param_master_evaluation_router(6);
+	EXECUTE local_prepare_param_master_evaluation_router(1);
 
 	-- followed by a non-local execution
 	EXECUTE remote_prepare_param(1);
