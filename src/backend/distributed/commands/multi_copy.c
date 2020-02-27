@@ -1490,8 +1490,8 @@ TypeForColumnName(Oid relationId, TupleDesc tupleDescriptor, char *columnName)
 
 
 /*
- * Walks a TupleDesc and returns an array of the types of each attribute. Will return
- * InvalidOid in the place of dropped attributes.
+ * Walks a TupleDesc and returns an array of the types of each attribute.
+ * Returns InvalidOid in the place of dropped or generated attributes.
  */
 static Oid *
 TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
@@ -1503,7 +1503,11 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (attr->attisdropped)
+		if (attr->attisdropped
+#if PG_VERSION_NUM >= 120000
+			|| attr->attgenerated == ATTRIBUTE_GENERATED_STORED
+#endif
+			)
 		{
 			typeArray[columnIndex] = InvalidOid;
 		}
@@ -1541,7 +1545,7 @@ ColumnCoercionPaths(TupleDesc destTupleDescriptor, TupleDesc inputTupleDescripto
 
 		if (inputTupleType == InvalidOid)
 		{
-			/* this was a dropped column and will not be in the incoming tuples */
+			/* TypeArrayFromTupleDescriptor decided to skip this column */
 			continue;
 		}
 
@@ -1582,9 +1586,9 @@ TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray, bool binaryFormat)
 		bool typeVariableLength = false;
 		Oid outputFunctionId = InvalidOid;
 
-		/* If there are any dropped columns it'll show up as a NULL */
 		if (columnTypeId == InvalidOid)
 		{
+			/* TypeArrayFromTupleDescriptor decided to skip this column */
 			continue;
 		}
 		else if (binaryFormat)
