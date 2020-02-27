@@ -55,8 +55,8 @@
 
 
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum,
-								   bool value);
+static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
+								   int attrNum, bool value);
 static List * SequenceDDLCommandsForTable(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -87,18 +87,18 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	char *nodeNameString = text_to_cstring(nodeName);
 
-	StartMetadatSyncToNode(nodeNameString, nodePort);
+	StartMetadataSyncToNode(nodeNameString, nodePort);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * StartMetadatSyncToNode is the internal API for
+ * StartMetadataSyncToNode is the internal API for
  * start_metadata_sync_to_node().
  */
 void
-StartMetadatSyncToNode(char *nodeNameString, int32 nodePort)
+StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
@@ -301,10 +301,9 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
  * rollbacks the transaction, and otherwise commits.
  */
 bool
-SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
-											 char *nodeUser, List *commandList)
+SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePort,
+											 const char *nodeUser, List *commandList)
 {
-	ListCell *commandCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	bool failed = false;
 
@@ -315,10 +314,9 @@ SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
 	RemoteTransactionBegin(workerConnection);
 
 	/* iterate over the commands and execute them in the same connection */
-	foreach(commandCell, commandList)
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
 	{
-		char *commandString = lfirst(commandCell);
-
 		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) != 0)
 		{
 			failed = true;
@@ -362,7 +360,6 @@ MetadataCreateCommands(void)
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
-	ListCell *distributedTableCell = NULL;
 	bool includeSequenceDefaults = true;
 
 	/* make sure we have deterministic output for our tests */
@@ -374,10 +371,9 @@ MetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	/* create the list of tables whose metadata will be created */
-	foreach(distributedTableCell, distributedTableList)
+	DistTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		if (ShouldSyncTableMetadata(cacheEntry->relationId))
 		{
 			propagatedTableList = lappend(propagatedTableList, cacheEntry);
@@ -385,10 +381,8 @@ MetadataCreateCommands(void)
 	}
 
 	/* create the tables, but not the metadata */
-	foreach(distributedTableCell, propagatedTableList)
+	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		Oid relationId = cacheEntry->relationId;
 		ObjectAddress tableAddress = { 0 };
 
@@ -414,11 +408,8 @@ MetadataCreateCommands(void)
 	}
 
 	/* construct the foreign key constraints after all tables are created */
-	foreach(distributedTableCell, propagatedTableList)
+	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
-
 		List *foreignConstraintCommands =
 			GetTableForeignConstraintCommands(cacheEntry->relationId);
 
@@ -427,11 +418,8 @@ MetadataCreateCommands(void)
 	}
 
 	/* construct partitioning hierarchy after all tables are created */
-	foreach(distributedTableCell, propagatedTableList)
+	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
-
 		if (PartitionTable(cacheEntry->relationId))
 		{
 			char *alterTableAttachPartitionCommands =
@@ -443,10 +431,8 @@ MetadataCreateCommands(void)
 	}
 
 	/* after all tables are created, create the metadata */
-	foreach(distributedTableCell, propagatedTableList)
+	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		Oid clusteredTableId = cacheEntry->relationId;
 
 		/* add the table metadata command first*/
@@ -568,7 +554,6 @@ MetadataDropCommands(void)
 char *
 NodeListInsertCommand(List *workerNodeList)
 {
-	ListCell *workerNodeCell = NULL;
 	StringInfo nodeListInsertCommand = makeStringInfo();
 	int workerCount = list_length(workerNodeList);
 	int processedWorkerNodeCount = 0;
@@ -594,9 +579,9 @@ NodeListInsertCommand(List *workerNodeList)
 					 "noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
@@ -678,7 +663,7 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
  * to drop a distributed table and its metadata on a remote node.
  */
 char *
-DistributionDeleteCommand(char *schemaName, char *tableName)
+DistributionDeleteCommand(const char *schemaName, const char *tableName)
 {
 	StringInfo deleteDistributionCommand = makeStringInfo();
 
@@ -722,7 +707,6 @@ List *
 ShardListInsertCommand(List *shardIntervalList)
 {
 	List *commandList = NIL;
-	ListCell *shardIntervalCell = NULL;
 	StringInfo insertPlacementCommand = makeStringInfo();
 	StringInfo insertShardCommand = makeStringInfo();
 	int shardCount = list_length(shardIntervalList);
@@ -735,18 +719,15 @@ ShardListInsertCommand(List *shardIntervalList)
 	}
 
 	/* add placements to insertPlacementCommand */
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-
 		List *shardPlacementList = ActiveShardPlacementList(shardId);
-		ListCell *shardPlacementCell = NULL;
 
-		foreach(shardPlacementCell, shardPlacementList)
+		ShardPlacement *placement = NULL;
+		foreach_ptr(placement, shardPlacementList)
 		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-
 			if (insertPlacementCommand->len == 0)
 			{
 				/* generate the shard placement query without any values yet */
@@ -782,9 +763,8 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "VALUES ");
 
 	/* now add shards to insertShardCommand */
-	foreach(shardIntervalCell, shardIntervalList)
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		Oid distributedRelationId = shardInterval->relationId;
 		char *qualifiedRelationName = generate_qualified_relation_name(
@@ -974,7 +954,7 @@ LocalGroupIdUpdateCommand(int32 groupId)
  * pg_dist_node to hasMetadata.
  */
 void
-MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
+MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata)
 {
 	UpdateDistNodeBoolAttr(nodeName, nodePort,
 						   Anum_pg_dist_node_hasmetadata,
@@ -987,7 +967,7 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
  * specified worker in pg_dist_node to the given value.
  */
 void
-MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced)
+MarkNodeMetadataSynced(const char *nodeName, int32 nodePort, bool synced)
 {
 	UpdateDistNodeBoolAttr(nodeName, nodePort,
 						   Anum_pg_dist_node_metadatasynced,
@@ -1000,7 +980,7 @@ MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced)
  * to the given value.
  */
 static void
-UpdateDistNodeBoolAttr(char *nodeName, int32 nodePort, int attrNum, bool value)
+UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool value)
 {
 	const bool indexOK = false;
 
@@ -1059,12 +1039,11 @@ SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
 	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
-	ListCell *listCell;
 	char *ownerName = TableOwner(relationId);
 
-	foreach(listCell, ownedSequences)
+	Oid sequenceOid = InvalidOid;
+	foreach_oid(sequenceOid, ownedSequences)
 	{
-		Oid sequenceOid = (Oid) lfirst_oid(listCell);
 		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
 		StringInfo wrappedSequenceDef = makeStringInfo();
@@ -1276,11 +1255,10 @@ static bool
 HasMetadataWorkers(void)
 {
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
-	ListCell *workerNodeCell = NULL;
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		if (workerNode->hasMetadata)
 		{
 			return true;
@@ -1302,16 +1280,14 @@ void
 CreateTableMetadataOnWorkers(Oid relationId)
 {
 	List *commandList = GetDistributedTableDDLEvents(relationId);
-	ListCell *commandCell = NULL;
 
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
-	foreach(commandCell, commandList)
+	const char *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		char *command = (char *) lfirst(commandCell);
-
 		SendCommandToWorkersWithMetadata(command);
 	}
 }
@@ -1331,24 +1307,20 @@ DetachPartitionCommandList(void)
 {
 	List *detachPartitionCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
-	ListCell *distributedTableCell = NULL;
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	foreach(distributedTableCell, distributedTableList)
+	DistTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
 	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		ListCell *partitionCell = NULL;
-
 		if (!PartitionedTable(cacheEntry->relationId))
 		{
 			continue;
 		}
 
 		List *partitionList = PartitionList(cacheEntry->relationId);
-		foreach(partitionCell, partitionList)
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
 		{
-			Oid partitionRelationId = lfirst_oid(partitionCell);
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
@@ -1384,7 +1356,6 @@ DetachPartitionCommandList(void)
 MetadataSyncResult
 SyncMetadataToNodes(void)
 {
-	ListCell *workerCell = NULL;
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
 
 	if (!IsCoordinator())
@@ -1403,11 +1374,9 @@ SyncMetadataToNodes(void)
 	}
 
 	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
-
-	foreach(workerCell, workerList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
 	{
-		WorkerNode *workerNode = lfirst(workerCell);
-
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;

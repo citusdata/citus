@@ -386,7 +386,6 @@ void
 LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
 	List *workerTaskList = workerJob->taskList;
-	ListCell *workerTaskCell = NULL;
 	bool randomAccess = true;
 	bool interTransactions = false;
 	char *copyFormat = "text";
@@ -402,10 +401,9 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 		copyFormat = "binary";
 	}
 
-	foreach(workerTaskCell, workerTaskList)
+	Task *workerTask = NULL;
+	foreach_ptr(workerTask, workerTaskList)
 	{
-		Task *workerTask = (Task *) lfirst(workerTaskCell);
-
 		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
 		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
@@ -496,17 +494,15 @@ SortTupleStore(CitusScanState *scanState)
 	Oid *collations = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
 	bool *nullsFirst = (bool *) palloc(numberOfSortKeys * sizeof(bool));
 
-	ListCell *targetCell = NULL;
 	int sortKeyIndex = 0;
-
 
 	/*
 	 * Iterate on the returning target list and generate the necessary information
 	 * for sorting the tuples.
 	 */
-	foreach(targetCell, targetList)
+	TargetEntry *returningEntry = NULL;
+	foreach_ptr(returningEntry, targetList)
 	{
-		TargetEntry *returningEntry = (TargetEntry *) lfirst(targetCell);
 		Oid sortop = InvalidOid;
 
 		/* determine the sortop, we don't need anything else */
@@ -740,7 +736,6 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 {
 	bool hasReferenceTable = false;
 	bool hasLocalTable = false;
-	ListCell *rangeTableCell = NULL;
 	bool hasReferenceTableReplica = false;
 
 	/*
@@ -784,9 +779,9 @@ IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
 	 * It doesn't contain optimized away table accesses (due to join optimization),
 	 * which is fine for our purpose.
 	 */
-	foreach(rangeTableCell, plan->rtable)
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, plan->rtable)
 	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		bool onlySearchPath = false;
 
 		/*

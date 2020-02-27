@@ -166,13 +166,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (IsTransactionBlock())
 		{
-			ListCell *optionCell = NULL;
 			bool analyze = false;
 
-			foreach(optionCell, explainStmt->options)
+			DefElem *option = NULL;
+			foreach_ptr(option, explainStmt->options)
 			{
-				DefElem *option = (DefElem *) lfirst(optionCell);
-
 				if (strcmp(option->defname, "analyze") == 0)
 				{
 					analyze = defGetBoolean(option);
@@ -807,12 +805,12 @@ CurrentSearchPath(void)
 {
 	StringInfo currentSearchPath = makeStringInfo();
 	List *searchPathList = fetch_search_path(false);
-	ListCell *searchPathCell;
 	bool schemaAdded = false;
 
-	foreach(searchPathCell, searchPathList)
+	Oid searchPathOid = InvalidOid;
+	foreach_oid(searchPathOid, searchPathList)
 	{
-		char *schemaName = get_namespace_name(lfirst_oid(searchPathCell));
+		char *schemaName = get_namespace_name(searchPathOid);
 
 		/* watch out for deleted namespace */
 		if (schemaName)
@@ -871,7 +869,6 @@ DDLTaskList(Oid relationId, const char *commandString)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ListCell *shardIntervalCell = NULL;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
@@ -882,9 +879,9 @@ DDLTaskList(Oid relationId, const char *commandString)
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		StringInfo applyCommand = makeStringInfo();
 
@@ -921,7 +918,6 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
 	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
 	char *concatenatedCommands = StringJoin(commands, ';');
-	ListCell *workerNodeCell = NULL;
 
 	if (list_length(workerNodes) <= 0)
 	{
@@ -936,10 +932,9 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	task->taskType = DDL_TASK;
 	SetTaskQueryString(task, concatenatedCommands);
 
-	foreach(workerNodeCell, workerNodes)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodes)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
 		targetPlacement->nodeName = workerNode->workerName;
 		targetPlacement->nodePort = workerNode->workerPort;

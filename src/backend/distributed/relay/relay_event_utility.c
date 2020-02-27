@@ -31,6 +31,7 @@
 #include "catalog/pg_constraint.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
@@ -105,7 +106,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			char **relationSchemaName = &(alterTableStmt->relation->schemaname);
 
 			List *commandList = alterTableStmt->cmds;
-			ListCell *commandCell = NULL;
 
 			/* prefix with schema name if it is not added already */
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
@@ -113,10 +113,9 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			/* append shardId to base relation name */
 			AppendShardIdToName(relationName, shardId);
 
-			foreach(commandCell, commandList)
+			AlterTableCmd *command = NULL;
+			foreach_ptr(command, commandList)
 			{
-				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
-
 				if (command->subtype == AT_AddConstraint)
 				{
 					Constraint *constraint = (Constraint *) command->def;
@@ -327,11 +326,9 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			if (grantStmt->targtype == ACL_TARGET_OBJECT &&
 				grantStmt->objtype == OBJECT_TABLE)
 			{
-				ListCell *lc;
-
-				foreach(lc, grantStmt->objects)
+				RangeVar *relation = NULL;
+				foreach_ptr(relation, grantStmt->objects)
 				{
-					RangeVar *relation = (RangeVar *) lfirst(lc);
 					char **relationName = &(relation->relname);
 					char **relationSchemaName = &(relation->schemaname);
 
@@ -524,11 +521,10 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
 			List *commandList = alterTableStmt->cmds;
-			ListCell *commandCell = NULL;
 
-			foreach(commandCell, commandList)
+			AlterTableCmd *command = NULL;
+			foreach_ptr(command, commandList)
 			{
-				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 				char **referencedTableName = NULL;
 				char **relationSchemaName = NULL;
 
@@ -553,10 +549,9 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 					ColumnDef *columnDefinition = (ColumnDef *) command->def;
 					List *columnConstraints = columnDefinition->constraints;
 
-					ListCell *columnConstraint = NULL;
-					foreach(columnConstraint, columnConstraints)
+					Constraint *constraint = NULL;
+					foreach_ptr(constraint, columnConstraints)
 					{
-						Constraint *constraint = (Constraint *) lfirst(columnConstraint);
 						if (constraint->contype == CONSTR_FOREIGN)
 						{
 							referencedTableName = &(constraint->pktable->relname);

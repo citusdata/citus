@@ -172,7 +172,6 @@ static void
 LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	ListCell *shardIntervalCell = NULL;
 	int processedShardIntervalCount = 0;
 	int totalShardIntervalCount = list_length(shardIntervalList);
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
@@ -181,9 +180,9 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		int64 shardId = shardInterval->shardId;
 
 		appendStringInfo(lockCommand, "%lu", shardId);
@@ -260,7 +259,6 @@ void
 LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	ListCell *shardIntervalCell = NULL;
 	int processedShardIntervalCount = 0;
 	int totalShardIntervalCount = list_length(shardIntervalList);
 
@@ -271,9 +269,9 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_metadata(%d, ARRAY[", lockmode);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		int64 shardId = shardInterval->shardId;
 
 		appendStringInfo(lockCommand, "%lu", shardId);
@@ -391,7 +389,6 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 void
 LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMode)
 {
-	ListCell *shardIntervalCell = NULL;
 	Oid relationId = RelationIdForShard(shardId);
 
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
@@ -403,10 +400,9 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 		LockShardListMetadataOnWorkers(lockMode, shardIntervalList);
 	}
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-
 		LockShardDistributionMetadata(shardInterval->shardId, lockMode);
 	}
 }
@@ -423,7 +419,6 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 static void
 LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 {
-	ListCell *shardIntervalCell = NULL;
 	Oid relationId = RelationIdForShard(shardId);
 
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
@@ -449,10 +444,9 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 		LockShardListResourcesOnFirstWorker(lockMode, referencedShardIntervalList);
 	}
 
-	foreach(shardIntervalCell, referencedShardIntervalList)
+	ShardInterval *referencedShardInterval = NULL;
+	foreach_ptr(referencedShardInterval, referencedShardIntervalList)
 	{
-		ShardInterval *referencedShardInterval = (ShardInterval *) lfirst(
-			shardIntervalCell);
 		LockShardResource(referencedShardInterval->shardId, lockMode);
 	}
 }
@@ -466,12 +460,10 @@ List *
 GetSortedReferenceShardIntervals(List *relationList)
 {
 	List *shardIntervalList = NIL;
-	ListCell *relationCell = NULL;
 
-	foreach(relationCell, relationList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationList)
 	{
-		Oid relationId = lfirst_oid(relationCell);
-
 		if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
 		{
 			continue;
@@ -560,14 +552,12 @@ UnlockJobResource(uint64 jobId, LOCKMODE lockmode)
 void
 LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 {
-	ListCell *shardIntervalCell = NULL;
-
 	/* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		int64 shardId = shardInterval->shardId;
 
 		LockShardDistributionMetadata(shardId, lockMode);
@@ -582,16 +572,13 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 void
 LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 {
-	ListCell *shardPlacementCell = NULL;
-
 	/* lock shards in order of shard id to prevent deadlock */
 	shardPlacementList =
 		SortList(shardPlacementList, CompareShardPlacementsByShardId);
 
-	foreach(shardPlacementCell, shardPlacementList)
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacementList)
 	{
-		GroupShardPlacement *placement =
-			(GroupShardPlacement *) lfirst(shardPlacementCell);
 		int64 shardId = placement->shardId;
 
 		LockShardDistributionMetadata(shardId, lockMode);
@@ -647,14 +634,12 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 static void
 LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 {
-	ListCell *shardIntervalCell = NULL;
-
 	/* lock shards in order of shard id to prevent deadlock */
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		int64 shardId = shardInterval->shardId;
 
 		LockShardResource(shardId, lockMode);
@@ -669,14 +654,12 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 void
 LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 {
-	ListCell *relationShardCell = NULL;
-
 	/* lock shards in a consistent order to prevent deadlock */
 	relationShardList = SortList(relationShardList, CompareRelationShards);
 
-	foreach(relationShardCell, relationShardList)
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
 	{
-		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
 		uint64 shardId = relationShard->shardId;
 
 		if (shardId != INVALID_SHARD_ID)

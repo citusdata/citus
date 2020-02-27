@@ -161,7 +161,6 @@ citus_relation_size(PG_FUNCTION_ARGS)
 static uint64
 DistributedTableSize(Oid relationId, char *sizeQuery)
 {
-	ListCell *workerNodeCell = NULL;
 	uint64 totalRelationSize = 0;
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
@@ -182,10 +181,9 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 	ErrorIfNotSuitableToGetSize(relationId);
 
 	List *workerNodeList = ActiveReadableNodeList();
-
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		uint64 relationSizeOnNode = DistributedTableSizeOnWorker(workerNode, relationId,
 																 sizeQuery);
 		totalRelationSize += relationSizeOnNode;
@@ -338,13 +336,12 @@ StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
 {
 	StringInfo selectQuery = makeStringInfo();
-	ListCell *shardIntervalCell = NULL;
 
 	appendStringInfo(selectQuery, "SELECT ");
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		Oid schemaId = get_rel_namespace(shardInterval->relationId);
 		char *schemaName = get_namespace_name(schemaId);
@@ -433,12 +430,11 @@ uint32
 TableShardReplicationFactor(Oid relationId)
 {
 	uint32 replicationCount = 0;
-	ListCell *shardCell = NULL;
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	foreach(shardCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
 		uint64 shardId = shardInterval->shardId;
 
 		List *shardPlacementList = ShardPlacementList(shardId);
@@ -695,10 +691,9 @@ ActiveShardPlacementList(uint64 shardId)
 	List *activePlacementList = NIL;
 	List *shardPlacementList = ShardPlacementList(shardId);
 
-	ListCell *shardPlacementCell = NULL;
-	foreach(shardPlacementCell, shardPlacementList)
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
 		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
 		{
 			activePlacementList = lappend(activePlacementList, shardPlacement);
@@ -1198,11 +1193,10 @@ UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char s
 	/* this function should only be called for partitioned tables */
 	Assert(PartitionedTable(partitionedTableOid));
 
-	ListCell *partitionOidCell = NULL;
 	List *partitionList = PartitionList(partitionedTableOid);
-	foreach(partitionOidCell, partitionList)
+	Oid partitionOid = InvalidOid;
+	foreach_oid(partitionOid, partitionList)
 	{
-		Oid partitionOid = lfirst_oid(partitionOidCell);
 		uint64 partitionShardId =
 			ColocatedShardIdInRelation(partitionOid, parentShardInterval->shardIndex);
 
@@ -1226,12 +1220,9 @@ static ShardPlacement *
 ShardPlacementOnGroup(uint64 shardId, int groupId)
 {
 	List *placementList = ShardPlacementList(shardId);
-	ListCell *placementCell = NULL;
-
-	foreach(placementCell, placementList)
+	ShardPlacement *placement = NULL;
+	foreach_ptr(placement, placementList)
 	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
-
 		if (placement->groupId == groupId)
 		{
 			return placement;

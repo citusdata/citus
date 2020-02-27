@@ -44,12 +44,13 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
-												char *superuser);
-static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const
-												 char *user);
+												const char *superuser);
+static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet,
+												 const char *user);
 static void GetConnectionsResults(List *connectionList, bool failOnError);
-static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet, const
-												   char *command, const char *user, bool
+static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet,
+												   const char *command, const char *user,
+												   bool
 												   failOnError);
 
 /*
@@ -57,7 +58,7 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
  * 2PC.
  */
 void
-SendCommandToWorker(char *nodeName, int32 nodePort, const char *command)
+SendCommandToWorker(const char *nodeName, int32 nodePort, const char *command)
 {
 	const char *nodeUser = CitusExtensionOwnerName();
 	SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
@@ -73,13 +74,12 @@ SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser
 						   const char *command)
 {
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	ListCell *workerNodeCell = NULL;
 
 	/* run commands serially */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 
 		SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
@@ -92,7 +92,7 @@ SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser
  * as part of the 2PC.
  */
 void
-SendCommandToWorkerAsUser(char *nodeName, int32 nodePort, const char *nodeUser,
+SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *nodeUser,
 						  const char *command)
 {
 	uint32 connectionFlags = 0;
@@ -130,9 +130,9 @@ SendCommandToWorkersWithMetadata(const char *command)
  * all workers as a superuser.
  */
 void
-SendCommandToAllWorkers(char *command, char *superuser)
+SendCommandToAllWorkers(const char *command, const char *superuser)
 {
-	SendCommandListToAllWorkers(list_make1(command), superuser);
+	SendCommandListToAllWorkers(list_make1((char *) command), superuser);
 }
 
 
@@ -141,7 +141,7 @@ SendCommandToAllWorkers(char *command, char *superuser)
  * a single transaction.
  */
 void
-SendCommandListToAllWorkers(List *commandList, char *superuser)
+SendCommandListToAllWorkers(List *commandList, const char *superuser)
 {
 	SendCommandListToAllWorkersInternal(commandList, true, superuser);
 }
@@ -153,14 +153,14 @@ SendCommandListToAllWorkers(List *commandList, char *superuser)
  * workers even if it fails in one of them.
  */
 static void
-SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, char *superuser)
+SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, const
+									char *superuser)
 {
-	ListCell *workerNodeCell = NULL;
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		if (failOnError)
 		{
 			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
@@ -185,7 +185,7 @@ SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, char *s
  * so this method doesnt return any error.
  */
 void
-SendOptionalCommandListToAllWorkers(List *commandList, char *superuser)
+SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser)
 {
 	SendCommandListToAllWorkersInternal(commandList, false, superuser);
 }
@@ -199,13 +199,11 @@ List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
 	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
-	ListCell *workerNodeCell = NULL;
 	List *result = NIL;
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
 		{
 			continue;
@@ -235,17 +233,15 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 {
 	TargetWorkerSet targetWorkerSet = WORKERS_WITH_METADATA;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
-	ListCell *commandCell = NULL;
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
 	/* run commands serially */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
@@ -255,10 +251,9 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 																		  nodeUser, NULL);
 
 		/* iterate over the commands and execute them in the same connection */
-		foreach(commandCell, commandList)
+		const char *commandString = NULL;
+		foreach_ptr(commandString, commandList)
 		{
-			char *commandString = lfirst(commandCell);
-
 			ExecuteCriticalRemoteCommand(workerConnection, commandString);
 		}
 
@@ -277,15 +272,13 @@ SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *use
 {
 	TargetWorkerSet targetWorkerSet = ALL_WORKERS;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	ListCell *workerNodeCell = NULL;
-	ListCell *commandCell = NULL;
 	int maxError = RESPONSE_OKAY;
 
 	/* run commands serially */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = FORCE_NEW_CONNECTION;
 
@@ -295,9 +288,9 @@ SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *use
 																		  NULL);
 
 		/* iterate over the commands and execute them in the same connection */
-		foreach(commandCell, commandList)
+		const char *commandString = NULL;
+		foreach_ptr(commandString, commandList)
 		{
-			char *commandString = lfirst(commandCell);
 			int result = ExecuteOptionalRemoteCommand(workerConnection, commandString,
 													  NULL);
 			if (result != RESPONSE_OKAY)
@@ -374,18 +367,15 @@ SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet, const
 									   char *command, const char *user, bool
 									   failOnError)
 {
-	ListCell *connectionCell = NULL;
-
 	List *connectionList = OpenConnectionsToWorkersInParallel(targetWorkerSet, user);
 
 	/* finish opening connections */
 	FinishConnectionListEstablishment(connectionList);
 
 	/* send commands in parallel */
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		int querySent = SendRemoteCommand(connection, command);
 		if (failOnError && querySent == 0)
 		{
@@ -404,15 +394,14 @@ SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet, const
 static List *
 OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *user)
 {
-	ListCell *workerNodeCell = NULL;
 	List *connectionList = NIL;
 
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int32 connectionFlags = OUTSIDE_TRANSACTION;
 
@@ -432,11 +421,9 @@ OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *
 static void
 GetConnectionsResults(List *connectionList, bool failOnError)
 {
-	ListCell *connectionCell = NULL;
-
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		bool raiseInterrupt = false;
 		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupt);
 
@@ -471,18 +458,16 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 								   const char *const *parameterValues)
 {
 	List *connectionList = NIL;
-	ListCell *connectionCell = NULL;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	ListCell *workerNodeCell = NULL;
 
 	UseCoordinatedTransaction();
 	CoordinatedTransactionUse2PC();
 
 	/* open connections in parallel */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int32 connectionFlags = 0;
 
@@ -501,10 +486,9 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	RemoteTransactionsBeginIfNecessary(connectionList);
 
 	/* send commands in parallel */
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		int querySent = SendRemoteCommandParams(connection, command, parameterCount,
 												parameterTypes, parameterValues);
 		if (querySent == 0)
@@ -514,10 +498,8 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	}
 
 	/* get results */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		PGresult *result = GetRemoteCommandResult(connection, true);
 		if (!IsResponseOK(result))
 		{
@@ -557,7 +539,6 @@ void
 SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 										   const char *nodeUser, List *commandList)
 {
-	ListCell *commandCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
@@ -568,10 +549,9 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 	RemoteTransactionBegin(workerConnection);
 
 	/* iterate over the commands and execute them in the same connection */
-	foreach(commandCell, commandList)
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
 	{
-		char *commandString = lfirst(commandCell);
-
 		ExecuteCriticalRemoteCommand(workerConnection, commandString);
 	}
 
@@ -597,12 +577,9 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 static void
 ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 {
-	ListCell *workerNodeCell = NULL;
-
-	foreach(workerNodeCell, metadataNodeList)
+	WorkerNode *metadataNode = NULL;
+	foreach_ptr(metadataNode, metadataNodeList)
 	{
-		WorkerNode *metadataNode = lfirst(workerNodeCell);
-
 		Assert(metadataNode->hasMetadata);
 
 		if (!metadataNode->metadataSynced)

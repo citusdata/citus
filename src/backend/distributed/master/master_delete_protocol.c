@@ -382,7 +382,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	}
 
 	ShardInterval *shardInterval = NULL;
-
 	foreach_ptr(shardInterval, deletableShardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -396,7 +395,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		List *shardPlacementList = ShardPlacementList(shardId);
 
 		ShardPlacement *shardPlacement = NULL;
-
 		foreach_ptr(shardPlacement, shardPlacementList)
 		{
 			uint64 shardPlacementId = shardPlacement->placementId;
@@ -559,13 +557,11 @@ CheckDeleteCriteria(Node *deleteCriteria)
 	}
 	else if (IsA(deleteCriteria, BoolExpr))
 	{
-		ListCell *opExpressionCell = NULL;
 		BoolExpr *deleteCriteriaExpression = (BoolExpr *) deleteCriteria;
 		List *opExpressionList = deleteCriteriaExpression->args;
-
-		foreach(opExpressionCell, opExpressionList)
+		Expr *opExpression = NULL;
+		foreach_ptr(opExpression, opExpressionList)
 		{
-			Expr *opExpression = (Expr *) lfirst(opExpressionCell);
 			if (!SimpleOpExpression(opExpression))
 			{
 				simpleOpExpression = false;
@@ -595,12 +591,11 @@ static void
 CheckPartitionColumn(Oid relationId, Node *whereClause)
 {
 	Var *partitionColumn = ForceDistPartitionKey(relationId);
-	ListCell *columnCell = NULL;
 
 	List *columnList = pull_var_clause_default(whereClause);
-	foreach(columnCell, columnList)
+	Var *var = NULL;
+	foreach_ptr(var, columnList)
 	{
-		Var *var = (Var *) lfirst(columnCell);
 		if (var->varattno != partitionColumn->varattno)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -624,7 +619,6 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 							 Node *deleteCriteria)
 {
 	List *dropShardIntervalList = NIL;
-	ListCell *shardIntervalCell = NULL;
 
 	/* build the base expression for constraint */
 	Index rangeTableIndex = 1;
@@ -635,9 +629,9 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 	List *deleteCriteriaList = list_make1(deleteCriteria);
 
 	/* walk over shard list and check if shards can be dropped */
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		if (shardInterval->minValueExists && shardInterval->maxValueExists)
 		{
 			List *restrictInfoList = NIL;

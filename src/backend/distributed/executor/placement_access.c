@@ -9,6 +9,7 @@
  *-------------------------------------------------------------------------
  */
 #include "distributed/placement_access.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 
 static List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
@@ -122,13 +123,11 @@ static List *
 BuildPlacementAccessList(int32 groupId, List *relationShardList,
 						 ShardPlacementAccessType accessType)
 {
-	ListCell *relationShardCell = NULL;
 	List *placementAccessList = NIL;
 
-	foreach(relationShardCell, relationShardList)
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
 	{
-		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
-
 		ShardPlacement *placement = FindShardPlacementOnGroup(groupId,
 															  relationShard->shardId);
 		if (placement == NULL)

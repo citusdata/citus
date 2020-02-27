@@ -19,6 +19,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -54,7 +55,7 @@ typedef struct NodeToNodeFragmentsTransfer
 
 
 /* forward declarations of local functions */
-static void WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+static void WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 									 int partitionColumnIndex,
 									 DistTableCacheEntry *targetRelation,
 									 bool binaryFormat);
@@ -65,7 +66,7 @@ static ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, in
 static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
 								   Oid intervalTypeId, ArrayType **minValueArray,
 								   ArrayType **maxValueArray);
-static char * SourceShardPrefix(char *resultPrefix, uint64 shardId);
+static char * SourceShardPrefix(const char *resultPrefix, uint64 shardId);
 static DistributedResultFragment * TupleToDistributedResultFragment(
 	TupleTableSlot *tupleSlot, DistTableCacheEntry *targetRelation);
 static Tuplestorestate * ExecuteSelectTasksIntoTupleStore(List *taskList,
@@ -96,7 +97,7 @@ static void ExecuteFetchTaskList(List *fetchTaskList);
  * partitioning.
  */
 List **
-RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
+RedistributeTaskListResults(const char *resultIdPrefix, List *selectTaskList,
 							int partitionColumnIndex,
 							DistTableCacheEntry *targetRelation,
 							bool binaryFormat)
@@ -131,7 +132,7 @@ RedistributeTaskListResults(char *resultIdPrefix, List *selectTaskList,
  * partitioning.
  */
 List *
-PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
@@ -165,12 +166,11 @@ PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
  * match the tuple descriptor in ExecutePartitionTaskList().
  */
 static void
-WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
+WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						 int partitionColumnIndex,
 						 DistTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
-	ListCell *taskCell = NULL;
 	ShardInterval **shardIntervalArray = targetRelation->sortedShardIntervalArray;
 	int shardCount = targetRelation->shardIntervalArrayLength;
 
@@ -193,9 +193,9 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 	StringInfo maxValuesString = ArrayObjectToString(maxValueArray, TEXTOID,
 													 intervalTypeMod);
 
-	foreach(taskCell, selectTaskList)
+	Task *selectTask = NULL;
+	foreach_ptr(selectTask, selectTaskList)
 	{
-		Task *selectTask = (Task *) lfirst(taskCell);
 		List *shardPlacementList = selectTask->taskPlacementList;
 		char *taskPrefix = SourceShardPrefix(resultIdPrefix, selectTask->anchorShardId);
 		char *partitionMethodString = targetRelation->partitionMethod == 'h' ?
@@ -208,10 +208,9 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
 		 * so we form a different query per placement, each of which returning
 		 * the node id of the placement.
 		 */
-		ListCell *placementCell = NULL;
-		foreach(placementCell, shardPlacementList)
+		ShardPlacement *shardPlacement = NULL;
+		foreach_ptr(shardPlacement, shardPlacementList)
 		{
-			ShardPlacement *shardPlacement = lfirst(placementCell);
 			StringInfo wrappedQuery = makeStringInfo();
 			appendStringInfo(wrappedQuery,
 							 "SELECT %u, partition_index"
@@ -241,7 +240,7 @@ WrapTasksForPartitioning(char *resultIdPrefix, List *selectTaskList,
  * given anchor shard id.
  */
 static char *
-SourceShardPrefix(char *resultPrefix, uint64 shardId)
+SourceShardPrefix(const char *resultPrefix, uint64 shardId)
 {
 	StringInfo taskPrefix = makeStringInfo();
 
@@ -440,10 +439,9 @@ ColocateFragmentsWithRelation(List *fragmentList, DistTableCacheEntry *targetRel
 	int shardCount = targetRelation->shardIntervalArrayLength;
 	List **shardResultIdList = palloc0(shardCount * sizeof(List *));
 
-	ListCell *fragmentCell = NULL;
-	foreach(fragmentCell, fragmentList)
+	DistributedResultFragment *sourceFragment = NULL;
+	foreach_ptr(sourceFragment, fragmentList)
 	{
-		DistributedResultFragment *sourceFragment = lfirst(fragmentCell);
 		int shardIndex = sourceFragment->targetShardIndex;
 
 		shardResultIdList[shardIndex] = lappend(shardResultIdList[shardIndex],
@@ -470,16 +468,13 @@ ColocationTransfers(List *fragmentList, DistTableCacheEntry *targetRelation)
 	HTAB *transferHash = hash_create("Fragment Transfer Hash", 32, &transferHashInfo,
 									 HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
-	ListCell *fragmentCell = NULL;
-	foreach(fragmentCell, fragmentList)
+	DistributedResultFragment *fragment = NULL;
+	foreach_ptr(fragment, fragmentList)
 	{
-		DistributedResultFragment *fragment = lfirst(fragmentCell);
 		List *placementList = ActiveShardPlacementList(fragment->targetShardId);
-
-		ListCell *placementCell = NULL;
-		foreach(placementCell, placementList)
+		ShardPlacement *placement = NULL;
+		foreach_ptr(placement, placementList)
 		{
-			ShardPlacement *placement = lfirst(placementCell);
 			NodePair transferKey = {
 				.sourceNodeId = fragment->nodeId,
 				.targetNodeId = placement->nodeId
@@ -528,12 +523,10 @@ static List *
 FragmentTransferTaskList(List *fragmentListTransfers)
 {
 	List *fetchTaskList = NIL;
-	ListCell *transferCell = NULL;
 
-	foreach(transferCell, fragmentListTransfers)
+	NodeToNodeFragmentsTransfer *fragmentsTransfer = NULL;
+	foreach_ptr(fragmentsTransfer, fragmentListTransfers)
 	{
-		NodeToNodeFragmentsTransfer *fragmentsTransfer = lfirst(transferCell);
-
 		uint32 targetNodeId = fragmentsTransfer->nodes.targetNodeId;
 
 		/* these should have already been pruned away in ColocationTransfers */
@@ -566,7 +559,6 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 static char *
 QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 {
-	ListCell *fragmentCell = NULL;
 	StringInfo queryString = makeStringInfo();
 	StringInfo fragmentNamesArrayString = makeStringInfo();
 	int fragmentCount = 0;
@@ -575,10 +567,10 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 
 	appendStringInfoString(fragmentNamesArrayString, "ARRAY[");
 
-	foreach(fragmentCell, fragmentsTransfer->fragmentList)
+	DistributedResultFragment *fragment = NULL;
+	foreach_ptr(fragment, fragmentsTransfer->fragmentList)
 	{
-		DistributedResultFragment *fragment = lfirst(fragmentCell);
-		char *fragmentName = fragment->resultId;
+		const char *fragmentName = fragment->resultId;
 
 		if (fragmentCount > 0)
 		{

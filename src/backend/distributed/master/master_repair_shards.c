@@ -50,14 +50,14 @@
 
 /* local function forward declarations */
 static char LookupShardTransferMode(Oid shardReplicationModeOid);
-static void RepairShardPlacement(int64 shardId, char *sourceNodeName,
-								 int32 sourceNodePort, char *targetNodeName,
+static void RepairShardPlacement(int64 shardId, const char *sourceNodeName,
+								 int32 sourceNodePort, const char *targetNodeName,
 								 int32 targetNodePort);
 static List * CopyPartitionShardsCommandList(ShardInterval *shardInterval,
-											 char *sourceNodeName,
+											 const char *sourceNodeName,
 											 int32 sourceNodePort);
-static void EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName,
-									 int32 sourceNodePort, char *targetNodeName,
+static void EnsureShardCanBeRepaired(int64 shardId, const char *sourceNodeName,
+									 int32 sourceNodePort, const char *targetNodeName,
 									 int32 targetNodePort);
 static List * RecreateTableDDLCommandList(Oid relationId);
 static List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
@@ -137,13 +137,9 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 void
 BlockWritesToShardList(List *shardList)
 {
-	ListCell *shardCell = NULL;
-
-
-	foreach(shardCell, shardList)
+	ShardInterval *shard = NULL;
+	foreach_ptr(shard, shardList)
 	{
-		ShardInterval *shard = (ShardInterval *) lfirst(shardCell);
-
 		/*
 		 * We need to lock the referenced reference table metadata to avoid
 		 * asynchronous shard copy in case of cascading DML operations.
@@ -213,8 +209,8 @@ LookupShardTransferMode(Oid shardReplicationModeOid)
  * This function is not co-location aware. It only repairs given shard.
  */
 static void
-RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
-					 char *targetNodeName, int32 targetNodePort)
+RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNodePort,
+					 const char *targetNodeName, int32 targetNodePort)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
@@ -333,19 +329,18 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
  * of the input shardInterval.
  */
 static List *
-CopyPartitionShardsCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+CopyPartitionShardsCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
 							   int32 sourceNodePort)
 {
 	Oid distributedTableId = shardInterval->relationId;
-	ListCell *partitionOidCell = NULL;
 	List *ddlCommandList = NIL;
 
 	Assert(PartitionedTableNoLock(distributedTableId));
 
 	List *partitionList = PartitionList(distributedTableId);
-	foreach(partitionOidCell, partitionList)
+	Oid partitionOid = InvalidOid;
+	foreach_oid(partitionOid, partitionList)
 	{
-		Oid partitionOid = lfirst_oid(partitionOidCell);
 		uint64 partitionShardId =
 			ColocatedShardIdInRelation(partitionOid, shardInterval->shardIndex);
 		ShardInterval *partitionShardInterval = LoadShardInterval(partitionShardId);
@@ -370,8 +365,8 @@ CopyPartitionShardsCommandList(ShardInterval *shardInterval, char *sourceNodeNam
  * node and inactive node on the target node.
  */
 static void
-EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
-						 char *targetNodeName, int32 targetNodePort)
+EnsureShardCanBeRepaired(int64 shardId, const char *sourceNodeName, int32 sourceNodePort,
+						 const char *targetNodeName, int32 targetNodePort)
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
 
@@ -401,14 +396,12 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
  * placement exists in the provided list.
  */
 ShardPlacement *
-SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort)
+SearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
+						   uint32 nodePort)
 {
-	ListCell *shardPlacementCell = NULL;
-
-	foreach(shardPlacementCell, shardPlacementList)
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		ShardPlacement *shardPlacement = lfirst(shardPlacementCell);
-
 		if (strncmp(nodeName, shardPlacement->nodeName, MAX_NODE_LENGTH) == 0 &&
 			nodePort == shardPlacement->nodePort)
 		{
@@ -425,7 +418,8 @@ SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 node
  * error if no such placement exists in the provided list.
  */
 ShardPlacement *
-ForceSearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort)
+ForceSearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
+								uint32 nodePort)
 {
 	ShardPlacement *placement = SearchShardPlacementInList(shardPlacementList, nodeName,
 														   nodePort);
@@ -446,7 +440,7 @@ ForceSearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32
  * the data by the flag includeDataCopy.
  */
 List *
-CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+CopyShardCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
 					 int32 sourceNodePort, bool includeDataCopy)
 {
 	int64 shardId = shardInterval->shardId;
@@ -526,7 +520,6 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 	int shardIndex = 0;
 
 	List *commandList = GetTableForeignConstraintCommands(shardInterval->relationId);
-	ListCell *commandCell = NULL;
 
 	/* we will only use shardIndex if there is a foreign constraint */
 	if (commandList != NIL)
@@ -537,9 +530,9 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 	*colocatedShardForeignConstraintCommandList = NIL;
 	*referenceTableForeignConstraintList = NIL;
 
-	foreach(commandCell, commandList)
+	const char *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		char *command = (char *) lfirst(commandCell);
 		char *escapedCommand = quote_literal_cstr(command);
 
 		uint64 referencedShardId = INVALID_SHARD_ID;
@@ -681,11 +674,10 @@ static List *
 WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 {
 	List *applyDdlCommandList = NIL;
-	ListCell *ddlCommandCell = NULL;
 
-	foreach(ddlCommandCell, ddlCommandList)
+	const char *ddlCommand = NULL;
+	foreach_ptr(ddlCommand, ddlCommandList)
 	{
-		char *ddlCommand = lfirst(ddlCommandCell);
 		char *escapedDdlCommand = quote_literal_cstr(ddlCommand);
 
 		StringInfo applyDdlCommand = makeStringInfo();

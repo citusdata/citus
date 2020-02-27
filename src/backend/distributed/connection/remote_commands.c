@@ -15,6 +15,7 @@
 
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/cancel_utils.h"
@@ -369,12 +370,9 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 void
 ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
 {
-	ListCell *commandCell = NULL;
-
-	foreach(commandCell, commandList)
+	const char *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		char *command = (char *) lfirst(commandCell);
-
 		ExecuteCriticalRemoteCommand(connection, command);
 	}
 }
@@ -781,7 +779,6 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 	int totalConnectionCount = list_length(connectionList);
 	int pendingConnectionsStartIndex = 0;
 	int connectionIndex = 0;
-	ListCell *connectionCell = NULL;
 
 	MultiConnection **allConnections =
 		palloc(totalConnectionCount * sizeof(MultiConnection *));
@@ -790,11 +787,10 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 	WaitEventSet *waitEventSet = NULL;
 
 	/* convert connection list to an array such that we can move items around */
-	foreach(connectionCell, connectionList)
+	MultiConnection *connectionItem = NULL;
+	foreach_ptr(connectionItem, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
-		allConnections[connectionIndex] = connection;
+		allConnections[connectionIndex] = connectionItem;
 		connectionReady[connectionIndex] = false;
 		connectionIndex++;
 	}

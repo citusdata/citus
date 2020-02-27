@@ -28,15 +28,15 @@ typedef enum
 } MetadataSyncResult;
 
 /* Functions declarations for metadata syncing */
-extern void StartMetadatSyncToNode(char *nodeNameString, int32 nodePort);
+extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
 extern List * GetDistributedTableDDLEvents(Oid relationId);
 extern List * MetadataDropCommands(void);
 extern char * DistributionCreateCommand(DistTableCacheEntry *cacheEntry);
-extern char * DistributionDeleteCommand(char *schemaName,
-										char *tableName);
+extern char * DistributionDeleteCommand(const char *schemaName,
+										const char *tableName);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 extern List * ShardListInsertCommand(List *shardIntervalList);
@@ -50,11 +50,12 @@ extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
-extern void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
-extern void MarkNodeMetadataSynced(char *nodeName, int32 nodePort, bool synced);
+extern void MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata);
+extern void MarkNodeMetadataSynced(const char *nodeName, int32 nodePort, bool synced);
 extern MetadataSyncResult SyncMetadataToNodes(void);
-extern bool SendOptionalCommandListToWorkerInTransaction(char *nodeName, int32 nodePort,
-														 char *nodeUser,
+extern bool SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32
+														 nodePort,
+														 const char *nodeUser,
 														 List *commandList);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"

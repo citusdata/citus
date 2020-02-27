@@ -29,21 +29,18 @@
 #include "utils/builtins.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acyclic_graph_execution.h"
-#include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
-#include "distributed/worker_manager.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/repartition_join_execution.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/worker_manager.h"
-#include "distributed/transaction_management.h"
-#include "distributed/multi_task_tracker_executor.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/directed_acyclic_graph_execution.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_server_executor.h"
+#include "distributed/multi_task_tracker_executor.h"
+#include "distributed/repartition_join_execution.h"
+#include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_transaction.h"
 
 
 static List * CreateTemporarySchemasForMergeTasks(Job *topLevelJob);
@@ -109,12 +106,11 @@ ExtractJobsInJobTree(Job *job)
 static void
 TraverseJobTree(Job *curJob, List **jobIds)
 {
-	ListCell *jobCell = NULL;
 	*jobIds = lappend(*jobIds, (void *) curJob->jobId);
 
-	foreach(jobCell, curJob->dependentJobList)
+	Job *childJob = NULL;
+	foreach_ptr(childJob, curJob->dependentJobList)
 	{
-		Job *childJob = (Job *) lfirst(jobCell);
 		TraverseJobTree(childJob, jobIds);
 	}
 }
@@ -127,11 +123,11 @@ static char *
 GenerateCreateSchemasCommand(List *jobIds, char *ownerName)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
-	ListCell *jobIdCell = NULL;
 
-	foreach(jobIdCell, jobIds)
+	void *jobIdPointer = NULL;
+	foreach_ptr(jobIdPointer, jobIds)
 	{
-		uint64 jobId = (uint64) lfirst(jobIdCell);
+		uint64 jobId = (uint64) jobIdPointer;
 		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY,
 						 jobId, quote_literal_cstr(ownerName));
 	}
@@ -150,11 +146,11 @@ static char *
 GenerateJobCommands(List *jobIds, char *templateCommand)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
-	ListCell *jobIdCell = NULL;
 
-	foreach(jobIdCell, jobIds)
+	void *jobIdPointer = NULL;
+	foreach_ptr(jobIdPointer, jobIds)
 	{
-		uint64 jobId = (uint64) lfirst(jobIdCell);
+		uint64 jobId = (uint64) jobIdPointer;
 		appendStringInfo(createSchemaCommand, templateCommand, jobId);
 	}
 	return createSchemaCommand->data;

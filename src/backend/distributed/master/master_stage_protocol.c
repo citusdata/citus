@@ -62,7 +62,7 @@
 /* Local functions forward declarations */
 static List * RelationShardListForShardCreate(ShardInterval *shardInterval);
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
-							 char *shardName, uint64 *shardSize,
+							 const char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
 
 /* exports for SQL callable functions */
@@ -230,9 +230,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *sourceTableName = text_to_cstring(sourceTableNameText);
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 
-	ListCell *shardPlacementCell = NULL;
 	float4 shardFillLevel = 0.0;
-
 
 	CheckCitusVersion(ERROR);
 
@@ -289,9 +287,9 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	UseCoordinatedTransaction();
 
 	/* issue command to append table to each shard placement */
-	foreach(shardPlacementCell, shardPlacementList)
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
 		MultiConnection *connection = GetPlacementConnection(FOR_DML, shardPlacement,
 															 NULL);
 		PGresult *queryResult = NULL;
@@ -488,15 +486,14 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 											 includeSequenceDefaults);
 	List *foreignConstraintCommandList =
 		GetTableForeignConstraintCommands(distributedRelationId);
-	ListCell *shardPlacementCell = NULL;
 
 	int taskId = 1;
 	List *taskList = NIL;
 	int poolSize = 1;
 
-	foreach(shardPlacementCell, shardPlacements)
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacements)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
 		uint64 shardId = shardPlacement->shardId;
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		int shardIndex = -1;
@@ -565,7 +562,6 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *referencingRelationList = cacheEntry->referencingRelationsViaForeignKey;
 	int shardIndex = -1;
-	ListCell *fkeyRelationIdCell = NULL;
 
 	/* list_concat_*() modifies the first arg, so make a copy first */
 	List *allForeignKeyRelations = list_copy(referencedRelationList);
@@ -586,9 +582,9 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 
 
 	/* all foregin key constraint relations */
-	foreach(fkeyRelationIdCell, allForeignKeyRelations)
+	Oid fkeyRelationid = InvalidOid;
+	foreach_oid(fkeyRelationid, allForeignKeyRelations)
 	{
-		Oid fkeyRelationid = lfirst_oid(fkeyRelationIdCell);
 		uint64 fkeyShardId = INVALID_SHARD_ID;
 
 		if (!IsDistributedTable(fkeyRelationid))
@@ -661,12 +657,10 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
-	ListCell *ddlCommandCell = NULL;
-	ListCell *foreignConstraintCommandCell = NULL;
 
-	foreach(ddlCommandCell, ddlCommandList)
+	const char *ddlCommand = NULL;
+	foreach_ptr(ddlCommand, ddlCommandList)
 	{
-		char *ddlCommand = (char *) lfirst(ddlCommandCell);
 		char *escapedDDLCommand = quote_literal_cstr(ddlCommand);
 		StringInfo applyDDLCommand = makeStringInfo();
 
@@ -685,9 +679,9 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 		commandList = lappend(commandList, applyDDLCommand->data);
 	}
 
-	foreach(foreignConstraintCommandCell, foreignConstraintCommandList)
+	const char *command = NULL;
+	foreach_ptr(command, foreignConstraintCommandList)
 	{
-		char *command = (char *) lfirst(foreignConstraintCommandCell);
 		char *escapedCommand = quote_literal_cstr(command);
 
 		uint64 referencedShardId = INVALID_SHARD_ID;
@@ -764,7 +758,6 @@ UpdateShardStatistics(int64 shardId)
 	Oid relationId = shardInterval->relationId;
 	char storageType = shardInterval->storageType;
 	char partitionType = PartitionMethod(relationId);
-	ListCell *shardPlacementCell = NULL;
 	bool statsOK = false;
 	uint64 shardSize = 0;
 	text *minValue = NULL;
@@ -782,10 +775,9 @@ UpdateShardStatistics(int64 shardId)
 	List *shardPlacementList = ActiveShardPlacementList(shardId);
 
 	/* get shard's statistics from a shard placement */
-	foreach(shardPlacementCell, shardPlacementList)
+	ShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacementList)
 	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-
 		statsOK = WorkerShardStats(placement, relationId, shardQualifiedName,
 								   &shardSize, &minValue, &maxValue);
 		if (statsOK)
@@ -812,10 +804,8 @@ UpdateShardStatistics(int64 shardId)
 	HOLD_INTERRUPTS();
 
 	/* update metadata for each shard placement we appended to */
-	shardPlacementCell = NULL;
-	foreach(shardPlacementCell, shardPlacementList)
+	foreach_ptr(placement, shardPlacementList)
 	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
 		uint64 placementId = placement->placementId;
 		int32 groupId = placement->groupId;
 
@@ -848,7 +838,7 @@ UpdateShardStatistics(int64 shardId)
  * we assume have changed after new table data have been appended to the shard.
  */
 static bool
-WorkerShardStats(ShardPlacement *placement, Oid relationId, char *shardName,
+WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardName,
 				 uint64 *shardSize, text **shardMinValue, text **shardMaxValue)
 {
 	StringInfo tableSizeQuery = makeStringInfo();
@@ -956,7 +946,7 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, char *shardName,
  * extracts referenced table id from it.
  */
 Oid
-ForeignConstraintGetReferencedTableId(char *queryString)
+ForeignConstraintGetReferencedTableId(const char *queryString)
 {
 	Node *queryNode = ParseTreeNode(queryString);
 	AlterTableStmt *foreignConstraintStmt = (AlterTableStmt *) queryNode;

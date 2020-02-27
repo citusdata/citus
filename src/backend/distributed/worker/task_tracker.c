@@ -31,6 +31,7 @@
 
 #include "commands/dbcommands.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/task_tracker.h"
@@ -370,16 +371,14 @@ TrackerCleanupJobSchemas(void)
 	 * this function to read from pg_database directly.
 	 */
 	List *databaseNameList = NIL;
-	ListCell *databaseNameCell = NULL;
 	const uint64 jobId = RESERVED_JOB_ID;
 	uint32 taskIndex = 1;
 
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
-	foreach(databaseNameCell, databaseNameList)
+	const char *databaseName = NULL;
+	foreach_ptr(databaseName, databaseNameList)
 	{
-		char *databaseName = (char *) lfirst(databaseNameCell);
-
 		/* template0 database does not accept connections */
 		int skipDatabaseName = strncmp(databaseName, TEMPLATE0_NAME, NAMEDATALEN);
 		if (skipDatabaseName == 0)
@@ -790,10 +789,9 @@ CompareTasksByTime(const void *first, const void *second)
 static void
 ScheduleWorkerTasks(HTAB *WorkerTasksHash, List *schedulableTaskList)
 {
-	ListCell *schedulableTaskCell = NULL;
-	foreach(schedulableTaskCell, schedulableTaskList)
+	WorkerTask *schedulableTask = NULL;
+	foreach_ptr(schedulableTask, schedulableTaskList)
 	{
-		WorkerTask *schedulableTask = (WorkerTask *) lfirst(schedulableTaskCell);
 		void *hashKey = (void *) schedulableTask;
 
 		WorkerTask *taskToSchedule = (WorkerTask *) hash_search(WorkerTasksHash, hashKey,

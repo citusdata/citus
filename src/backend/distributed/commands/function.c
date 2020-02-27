@@ -35,6 +35,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -1027,13 +1028,11 @@ static void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
 	List *workerList = ActivePrimaryWorkerNodeList(ShareLock);
-	ListCell *workerCell = NULL;
 	bool triggerMetadataSync = false;
 
-	foreach(workerCell, workerList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerCell);
-
 		/* if already has metadata, no need to do it again */
 		if (!workerNode->hasMetadata)
 		{
@@ -1212,7 +1211,6 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
 	ObjectType objectType = OBJECT_FUNCTION;
-	ListCell *parameterCell = NULL;
 
 	if (stmt->is_procedure)
 	{
@@ -1222,9 +1220,9 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->funcname;
 
-	foreach(parameterCell, stmt->parameters)
+	FunctionParameter *funcParam = NULL;
+	foreach_ptr(funcParam, stmt->parameters)
 	{
-		FunctionParameter *funcParam = castNode(FunctionParameter, lfirst(parameterCell));
 		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
 	}
 
@@ -1243,16 +1241,15 @@ ObjectAddress
 DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
-	ListCell *parameterCell = NULL;
 
 	Assert(stmt->kind == OBJECT_AGGREGATE);
 
 	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->defnames;
 
-	foreach(parameterCell, linitial(stmt->args))
+	FunctionParameter *funcParam = NULL;
+	foreach_ptr(funcParam, linitial(stmt->args))
 	{
-		FunctionParameter *funcParam = castNode(FunctionParameter, lfirst(parameterCell));
 		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
 	}
 
@@ -1403,8 +1400,6 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
 	List *deletingObjectWithArgsList = stmt->objects;
 	List *distributedObjectWithArgsList = NIL;
 	List *distributedFunctionAddresses = NIL;
-	ListCell *addressCell = NULL;
-	ListCell *objectWithArgsListCell = NULL;
 
 	AssertObjectTypeIsFunctional(stmt->removeType);
 
@@ -1436,9 +1431,9 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
 	 * iterate over all functions to be dropped and filter to keep only distributed
 	 * functions.
 	 */
-	foreach(objectWithArgsListCell, deletingObjectWithArgsList)
+	ObjectWithArgs *func = NULL;
+	foreach_ptr(func, deletingObjectWithArgsList)
 	{
-		ObjectWithArgs *func = castNode(ObjectWithArgs, lfirst(objectWithArgsListCell));
 		ObjectAddress address = FunctionToObjectAddress(stmt->removeType, func,
 														stmt->missing_ok);
 
@@ -1469,9 +1464,9 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
 	EnsureSequentialModeForFunctionDDL();
 
 	/* remove the entries for the distributed objects on dropping */
-	foreach(addressCell, distributedFunctionAddresses)
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedFunctionAddresses)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
 		UnmarkObjectDistributed(address);
 	}
 
@@ -1824,11 +1819,9 @@ FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 static void
 ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 {
-	ListCell *actionCell = NULL;
-
-	foreach(actionCell, stmt->actions)
+	DefElem *action = NULL;
+	foreach_ptr(action, stmt->actions)
 	{
-		DefElem *action = castNode(DefElem, lfirst(actionCell));
 		if (strcmp(action->defname, "set") == 0)
 		{
 			VariableSetStmt *setStmt = castNode(VariableSetStmt, action->arg);

@@ -17,6 +17,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/resource_lock.h"
@@ -64,17 +65,15 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	int relationIndex = 0;
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
-	ListCell *vacuumRelationCell = NULL;
 	List *relationIdList = NIL;
-	ListCell *relationIdCell = NULL;
 	CitusVacuumParams vacuumParams = VacuumStmtParams(vacuumStmt);
 	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
 	int executedVacuumCount = 0;
 
-	foreach(vacuumRelationCell, vacuumRelationList)
+	RangeVar *vacuumRelation = NULL;
+	foreach_ptr(vacuumRelation, vacuumRelationList)
 	{
-		RangeVar *vacuumRelation = (RangeVar *) lfirst(vacuumRelationCell);
 		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
@@ -87,9 +86,9 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 	}
 
 	/* execute vacuum on distributed tables */
-	foreach(relationIdCell, relationIdList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
 	{
-		Oid relationId = lfirst_oid(relationIdCell);
 		if (IsDistributedTable(relationId))
 		{
 			/*
@@ -131,7 +130,6 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 {
 	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
-	ListCell *relationIdCell = NULL;
 	int distributedRelationCount = 0;
 
 	/*
@@ -147,9 +145,9 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 								  "distributed tables.", stmtName)));
 	}
 
-	foreach(relationIdCell, vacuumRelationIdList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, vacuumRelationIdList)
 	{
-		Oid relationId = lfirst_oid(relationIdCell);
 		if (OidIsValid(relationId) && IsDistributedTable(relationId))
 		{
 			distributedRelationCount++;
@@ -185,7 +183,6 @@ static List *
 VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColumnList)
 {
 	List *taskList = NIL;
-	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
 	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumParams);
@@ -209,9 +206,9 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	/* grab shard lock before getting placement list */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
 		char *shardName = pstrdup(tableName);
@@ -353,7 +350,6 @@ static char *
 DeparseVacuumColumnNames(List *columnNameList)
 {
 	StringInfo columnNames = makeStringInfo();
-	ListCell *columnNameCell = NULL;
 
 	if (columnNameList == NIL)
 	{
@@ -362,11 +358,10 @@ DeparseVacuumColumnNames(List *columnNameList)
 
 	appendStringInfoString(columnNames, " (");
 
-	foreach(columnNameCell, columnNameList)
+	Value *columnName = NULL;
+	foreach_ptr(columnName, columnNameList)
 	{
-		char *columnName = strVal(lfirst(columnNameCell));
-
-		appendStringInfo(columnNames, "%s,", columnName);
+		appendStringInfo(columnNames, "%s,", strVal(columnName));
 	}
 
 	columnNames->data[columnNames->len - 1] = ')';
@@ -398,10 +393,9 @@ ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
 {
 	List *vacuumList = NIL;
 
-	ListCell *vacuumRelationCell = NULL;
-	foreach(vacuumRelationCell, vacuumStmt->rels)
+	VacuumRelation *vacuumRelation = NULL;
+	foreach_ptr(vacuumRelation, vacuumStmt->rels)
 	{
-		VacuumRelation *vacuumRelation = (VacuumRelation *) lfirst(vacuumRelationCell);
 		vacuumList = lappend(vacuumList, vacuumRelation->relation);
 	}
 
@@ -427,17 +421,15 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool freeze = false;
 	bool full = false;
 	bool disable_page_skipping = false;
-	ListCell *lc;
 
 	/* Set default value */
 	params.index_cleanup = VACOPT_TERNARY_DEFAULT;
 	params.truncate = VACOPT_TERNARY_DEFAULT;
 
 	/* Parse options list */
-	foreach(lc, vacstmt->options)
+	DefElem *opt = NULL;
+	foreach_ptr(opt, vacstmt->options)
 	{
-		DefElem *opt = (DefElem *) lfirst(lc);
-
 		/* Parse common options for VACUUM and ANALYZE */
 		if (strcmp(opt->defname, "verbose") == 0)
 		{

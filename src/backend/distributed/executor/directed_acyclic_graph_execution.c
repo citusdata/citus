@@ -11,17 +11,17 @@
 #include "access/hash.h"
 #include "distributed/hash_helpers.h"
 
-#include "distributed/directed_acyclic_graph_execution.h"
-#include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
-#include "distributed/worker_manager.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/worker_transaction.h"
-#include "distributed/worker_manager.h"
-#include "distributed/transaction_management.h"
-#include "distributed/multi_task_tracker_executor.h"
+#include "distributed/directed_acyclic_graph_execution.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_server_executor.h"
+#include "distributed/multi_task_tracker_executor.h"
+#include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
+#include "distributed/worker_manager.h"
+#include "distributed/worker_transaction.h"
 
 typedef struct TaskHashKey
 {
@@ -83,13 +83,10 @@ static List *
 FindExecutableTasks(List *allTasks, HTAB *completedTasks)
 {
 	List *curTasks = NIL;
-	ListCell *taskCell = NULL;
 
-
-	foreach(taskCell, allTasks)
+	Task *task = NULL;
+	foreach_ptr(task, allTasks)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-
 		if (IsAllDependencyCompleted(task, completedTasks) &&
 			!IsTaskAlreadyCompleted(task, completedTasks))
 		{
@@ -107,13 +104,11 @@ FindExecutableTasks(List *allTasks, HTAB *completedTasks)
 static void
 AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 {
-	ListCell *taskCell = NULL;
-
 	bool found;
 
-	foreach(taskCell, curCompletedTasks)
+	Task *task = NULL;
+	foreach_ptr(task, curCompletedTasks)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskHashKey taskKey = { task->jobId, task->taskId };
 		hash_search(completedTasks, &taskKey, HASH_ENTER, &found);
 	}
@@ -155,13 +150,11 @@ IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks)
 static bool
 IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 {
-	ListCell *taskCell = NULL;
 	bool found = false;
 
-
-	foreach(taskCell, targetTask->dependentTaskList)
+	Task *task = NULL;
+	foreach_ptr(task, targetTask->dependentTaskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskHashKey taskKey = { task->jobId, task->taskId };
 
 		hash_search(completedTasks, &taskKey, HASH_FIND, &found);

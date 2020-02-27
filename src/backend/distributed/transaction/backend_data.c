@@ -215,9 +215,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 {
 	TupleDesc tupleDescriptor = NULL;
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
-	ListCell *workerNodeCell = NULL;
 	List *connectionList = NIL;
-	ListCell *connectionCell = NULL;
 	StringInfo queryToSend = makeStringInfo();
 
 	CheckCitusVersion(ERROR);
@@ -229,10 +227,10 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
 
 	/* open connections in parallel */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
@@ -251,10 +249,9 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	FinishConnectionListEstablishment(connectionList);
 
 	/* send commands in parallel */
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		int querySent = SendRemoteCommand(connection, queryToSend->data);
 		if (querySent == 0)
 		{
@@ -263,9 +260,8 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	}
 
 	/* receive query results */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		bool raiseInterrupts = true;
 		Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
 		bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];

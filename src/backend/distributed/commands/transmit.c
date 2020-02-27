@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "commands/defrem.h"
+#include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
@@ -318,13 +319,11 @@ IsTransmitStmt(Node *parsetree)
 	if (IsA(parsetree, CopyStmt))
 	{
 		CopyStmt *copyStatement = (CopyStmt *) parsetree;
-		ListCell *optionCell = NULL;
 
 		/* Extract options from the statement node tree */
-		foreach(optionCell, copyStatement->options)
+		DefElem *defel = NULL;
+		foreach_ptr(defel, copyStatement->options)
 		{
-			DefElem *defel = (DefElem *) lfirst(optionCell);
-
 			if (strncmp(defel->defname, "format", NAMEDATALEN) == 0 &&
 				strncmp(defGetString(defel), "transmit", NAMEDATALEN) == 0)
 			{
@@ -344,22 +343,24 @@ IsTransmitStmt(Node *parsetree)
 char *
 TransmitStatementUser(CopyStmt *copyStatement)
 {
-	ListCell *optionCell = NULL;
-	char *userName = NULL;
-
 	AssertArg(IsTransmitStmt((Node *) copyStatement));
 
-	foreach(optionCell, copyStatement->options)
+	DefElem *lastUserDefElem = NULL;
+	DefElem *defel = NULL;
+	foreach_ptr(defel, copyStatement->options)
 	{
-		DefElem *defel = (DefElem *) lfirst(optionCell);
-
 		if (strncmp(defel->defname, "user", NAMEDATALEN) == 0)
 		{
-			userName = defGetString(defel);
+			lastUserDefElem = defel;
 		}
 	}
 
-	return userName;
+	if (lastUserDefElem == NULL)
+	{
+		return NULL;
+	}
+
+	return defGetString(lastUserDefElem);
 }
 
 

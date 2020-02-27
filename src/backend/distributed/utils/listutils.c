@@ -40,10 +40,9 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 	uint32 arraySize = (uint32) list_length(pointerList);
 	void **array = (void **) palloc0(arraySize * sizeof(void *));
 
-	ListCell *pointerCell = NULL;
-	foreach(pointerCell, pointerList)
+	void *pointer = NULL;
+	foreach_ptr(pointer, pointerList)
 	{
-		void *pointer = lfirst(pointerCell);
 		array[arrayIndex] = pointer;
 
 		arrayIndex++;
@@ -78,12 +77,12 @@ PointerArrayFromList(List *pointerList)
 {
 	int pointerCount = list_length(pointerList);
 	void **pointerArray = (void **) palloc0(pointerCount * sizeof(void *));
-	ListCell *pointerCell = NULL;
 	int pointerIndex = 0;
 
-	foreach(pointerCell, pointerList)
+	void *pointer = NULL;
+	foreach_ptr(pointer, pointerList)
 	{
-		pointerArray[pointerIndex] = (void *) lfirst(pointerCell);
+		pointerArray[pointerIndex] = pointer;
 		pointerIndex += 1;
 	}
 
@@ -125,7 +124,6 @@ HTAB *
 ListToHashSet(List *itemList, Size keySize, bool isStringList)
 {
 	HASHCTL info;
-	ListCell *itemCell = NULL;
 	int flags = HASH_ELEM | HASH_CONTEXT;
 
 	/* allocate sufficient capacity for O(1) expected look-up time */
@@ -144,9 +142,9 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 
 	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
 
-	foreach(itemCell, itemList)
+	void *item = NULL;
+	foreach_ptr(item, itemList)
 	{
-		void *item = lfirst(itemCell);
 		bool foundInSet = false;
 
 		hash_search(itemSet, item, HASH_ENTER, &foundInSet);
@@ -164,13 +162,11 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 char *
 StringJoin(List *stringList, char delimiter)
 {
-	ListCell *stringCell = NULL;
 	StringInfo joinedString = makeStringInfo();
 
-	foreach(stringCell, stringList)
+	const char *command = NULL;
+	foreach_ptr(command, stringList)
 	{
-		const char *command = lfirst(stringCell);
-
 		appendStringInfoString(joinedString, command);
 		appendStringInfoChar(joinedString, delimiter);
 	}
@@ -189,11 +185,11 @@ ListTake(List *pointerList, int size)
 {
 	List *result = NIL;
 	int listIndex = 0;
-	ListCell *pointerCell = NULL;
 
-	foreach(pointerCell, pointerList)
+	void *pointer = NULL;
+	foreach_ptr(pointer, pointerList)
 	{
-		result = lappend(result, lfirst(pointerCell));
+		result = lappend(result, pointer);
 		listIndex++;
 		if (listIndex >= size)
 		{

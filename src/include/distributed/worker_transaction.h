@@ -31,30 +31,30 @@ typedef enum TargetWorkerSet
 /* Functions declarations for worker transactions */
 extern List * GetWorkerTransactions(void);
 extern List * TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode);
-extern void SendCommandToWorker(char *nodeName, int32 nodePort, const char *command);
+extern void SendCommandToWorker(const char *nodeName, int32 nodePort, const
+								char *command);
 extern void SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet,
 									   const char *nodeUser, const char *command);
-extern void SendCommandToWorkerAsUser(char *nodeName, int32 nodePort,
+extern void SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort,
 									  const char *nodeUser, const char *command);
 extern void SendCommandToWorkersWithMetadata(const char *command);
 extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern int SendBareOptionalCommandListToAllWorkersAsUser(List *commandList,
 														 const char *user);
 extern void EnsureNoModificationsHaveBeenDone(void);
-extern void SendCommandListToAllWorkers(List *commandList, char *superuser);
-extern void SendOptionalCommandListToAllWorkers(List *commandList, char *superuser);
-extern void SendCommandToAllWorkers(char *command, char *superuser);
+extern void SendCommandListToAllWorkers(List *commandList, const char *superuser);
+extern void SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser);
+extern void SendCommandToAllWorkers(const char *command, const char *superuser);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 													   int32 nodePort,
 													   const char *nodeUser,
 													   List *commandList);
-extern void SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
-												   char *command,
+extern void SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet,
+												   const char *command,
 												   const char *user);
-void SendCommandToWorkersInParallel(TargetWorkerSet targetWorkerSet, const
-									char *command,
-									const char *user);
-extern void RemoveWorkerTransaction(char *nodeName, int32 nodePort);
+void SendCommandToWorkersInParallel(TargetWorkerSet targetWorkerSet,
+									const char *command, const char *user);
+extern void RemoveWorkerTransaction(const char *nodeName, int32 nodePort);
 
 /* helper functions for worker transactions */
 extern bool IsWorkerTransactionActive(void);

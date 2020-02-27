@@ -21,6 +21,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
@@ -51,7 +52,7 @@ typedef struct RemoteFileDestReceiver
 	/* public DestReceiver interface */
 	DestReceiver pub;
 
-	char *resultId;
+	const char *resultId;
 
 	/* descriptor of the tuples that are sent to the worker */
 	TupleDesc tupleDescriptor;
@@ -197,7 +198,7 @@ create_intermediate_result(PG_FUNCTION_ARGS)
  * coordinated transaction is started prior to using the DestReceiver.
  */
 DestReceiver *
-CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
+CreateRemoteFileDestReceiver(const char *resultId, EState *executorState,
 							 List *initialNodeList, bool writeLocalFile)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) palloc0(
@@ -238,9 +239,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	const char *nullPrintCharacter = "\\N";
 
 	List *initialNodeList = resultDest->initialNodeList;
-	ListCell *initialNodeCell = NULL;
 	List *connectionList = NIL;
-	ListCell *connectionCell = NULL;
 
 	resultDest->tupleDescriptor = inputTupleDescriptor;
 
@@ -272,10 +271,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 																			 fileMode));
 	}
 
-	foreach(initialNodeCell, initialNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, initialNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(initialNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 
 		/*
@@ -298,10 +297,9 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	/* must open transaction blocks to use intermediate results */
 	RemoteTransactionsBeginIfNecessary(connectionList);
 
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		StringInfo copyCommand = ConstructCopyResultStatement(resultId);
 
 		bool querySent = SendRemoteCommand(connection, copyCommand->data);
@@ -311,9 +309,8 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 		}
 	}
 
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		bool raiseInterrupts = true;
 
 		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
@@ -469,10 +466,9 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 static void
 BroadcastCopyData(StringInfo dataBuffer, List *connectionList)
 {
-	ListCell *connectionCell = NULL;
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		SendCopyDataOverConnection(dataBuffer, connection);
 	}
 }
@@ -678,7 +674,7 @@ RemoveIntermediateResultsDirectory(void)
  * or -1 if the file does not exist.
  */
 int64
-IntermediateResultSize(char *resultId)
+IntermediateResultSize(const char *resultId)
 {
 	struct stat fileStat;
 

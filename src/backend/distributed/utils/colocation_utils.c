@@ -107,16 +107,14 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
-	ListCell *colocatedShardCell = NULL;
 	int colocatedShardCount = list_length(colocatedShardList);
 	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
 	Oid arrayTypeId = OIDOID;
 	int colocatedShardIndex = 0;
 
-	foreach(colocatedShardCell, colocatedShardList)
+	ShardInterval *colocatedShardInterval = NULL;
+	foreach_ptr(colocatedShardInterval, colocatedShardList)
 	{
-		ShardInterval *colocatedShardInterval = (ShardInterval *) lfirst(
-			colocatedShardCell);
 		uint64 colocatedShardId = colocatedShardInterval->shardId;
 
 		Datum colocatedShardDatum = Int64GetDatum(colocatedShardId);
@@ -837,7 +835,6 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 {
 	Oid distributedTableId = shardInterval->relationId;
 	List *colocatedShardList = NIL;
-	ListCell *colocatedTableCell = NULL;
 
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
@@ -863,9 +860,9 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	/* ShardIndex have to find index of given shard */
 	Assert(shardIntervalIndex >= 0);
 
-	foreach(colocatedTableCell, colocatedTableList)
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
 		DistTableCacheEntry *colocatedTableCacheEntry =
 			DistributedTableCacheEntry(colocatedTableId);
 
