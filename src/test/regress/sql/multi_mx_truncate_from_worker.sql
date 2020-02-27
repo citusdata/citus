@@ -43,7 +43,7 @@ BEGIN;
 ROLLBACK;
 
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO 'truncate_from_workers';
 
 -- make sure that TRUNCATE workes expected from the worker node
@@ -76,11 +76,11 @@ BEGIN;
 ROLLBACK;
 
 -- fill some data for the next test
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO 'truncate_from_workers';
 INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO 'truncate_from_workers';
 
 -- make sure that DMLs-SELECTs works along with TRUNCATE worker fine
@@ -93,7 +93,7 @@ ROLLBACK;
 
 RESET client_min_messages;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes

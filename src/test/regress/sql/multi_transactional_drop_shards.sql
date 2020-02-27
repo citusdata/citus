@@ -31,9 +31,9 @@ ORDER BY
 \dt transactional_drop_shards
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then COMMIT
@@ -56,9 +56,9 @@ ORDER BY
 \dt transactional_drop_shards
 
 -- verify shards are dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test master_delete_protocol in transaction, then ROLLBACK
@@ -82,9 +82,9 @@ ORDER BY
     shardid, nodename, nodeport;
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test master_delete_protocol in transaction, then COMMIT
@@ -104,9 +104,9 @@ ORDER BY
     shardid, nodename, nodeport;
 
 -- verify shards are dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test DROP table in a transaction after insertion
@@ -132,9 +132,9 @@ ORDER BY
 \dt transactional_drop_shards
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test master_apply_delete_command in a transaction after insertion
@@ -155,7 +155,7 @@ ORDER BY
     shardid, nodename, nodeport;
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
 
 
@@ -168,7 +168,7 @@ $fdt$ LANGUAGE plpgsql;
 
 CREATE EVENT TRIGGER fail_drop_table ON sql_drop EXECUTE PROCEDURE fail_drop_table();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 \set VERBOSITY terse
 DROP TABLE transactional_drop_shards;
@@ -189,9 +189,9 @@ ORDER BY
 \dt transactional_drop_shards
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test DROP reference table with failing worker
@@ -217,9 +217,9 @@ ORDER BY
 \dt transactional_drop_reference
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_reference*
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test master_apply_delete_command table with failing worker
@@ -239,10 +239,10 @@ ORDER BY
     shardid, nodename, nodeport;
 
 -- verify shards are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_shards_*
 DROP EVENT TRIGGER fail_drop_table;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test with SERIAL column + with more shards
@@ -270,10 +270,10 @@ ORDER BY
 \dt transactional_drop_serial
 
 -- verify shards and sequence are not dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_serial_*
 \ds transactional_drop_serial_column2_seq
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then COMMIT
@@ -296,10 +296,10 @@ ORDER BY
 \dt transactional_drop_serial
 
 -- verify shards and sequence are dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt transactional_drop_serial_*
 \ds transactional_drop_serial_column2_seq
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- test with MX, DROP TABLE, then ROLLBACK
@@ -315,7 +315,7 @@ UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='transactional_drop
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- see metadata is propogated to the worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_mx'::regclass ORDER BY shardid;
 SELECT
     shardid, shardstate, nodename, nodeport
@@ -326,13 +326,13 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 BEGIN;
 DROP TABLE transactional_drop_mx;
 ROLLBACK;
 
 -- verify metadata is not deleted
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_mx'::regclass ORDER BY shardid;
 SELECT
     shardid, shardstate, nodename, nodeport
@@ -344,13 +344,13 @@ ORDER BY
     shardid, nodename, nodeport;
 
 -- test with MX, DROP TABLE, then COMMIT
-\c - - - :master_port
+\c - - :real_master_host :master_port
 BEGIN;
 DROP TABLE transactional_drop_mx;
 COMMIT;
 
 -- verify metadata is deleted
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT shardid FROM pg_dist_shard WHERE shardid IN (1410015, 1410016, 1410017, 1410018) ORDER BY shardid;
 SELECT
     shardid, shardstate, nodename, nodeport
@@ -361,7 +361,7 @@ WHERE
 ORDER BY
     shardid, nodename, nodeport;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- try using the coordinator as a worker and then dropping the table
 SELECT 1 FROM master_add_node('localhost', :master_port);

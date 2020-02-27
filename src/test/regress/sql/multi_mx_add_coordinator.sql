@@ -24,13 +24,13 @@ CREATE TABLE ref(a int);
 SELECT create_reference_table('ref');
 
 -- alter role from mx worker isn't propagated
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET citus.enable_alter_role_propagation TO ON;
 ALTER ROLE reprefuser WITH CREATEROLE;
 select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO mx_add_coordinator,public;
 SET client_min_messages TO WARNING;
 select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
@@ -56,7 +56,7 @@ INSERT INTO ref VALUES (1);
 TRUNCATE ref;
 
 -- test that changes from a metadata node is reflected in the coordinator placement
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO mx_add_coordinator,public;
 INSERT INTO ref VALUES (1), (2), (3);
 UPDATE ref SET a = a + 1;
@@ -69,7 +69,7 @@ INSERT INTO local_table VALUES (2), (4);
 SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
 
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO mx_add_coordinator,public;
 SELECT * FROM ref ORDER BY a;
 

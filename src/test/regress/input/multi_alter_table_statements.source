@@ -34,9 +34,9 @@ SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Verify that we can add columns
 
@@ -47,13 +47,13 @@ ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
 ALTER TABLE lineitem_alter ADD COLUMN null_column INTEGER;
 
 -- show changed schema on one worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT attname, atttypid::regtype
 FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
@@ -234,9 +234,9 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_2;
 
 -- Add column on only one worker...
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 ALTER TABLE lineitem_alter_220000 ADD COLUMN first integer;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- and try to add it in a multi-statement block, which fails
 BEGIN;
@@ -281,7 +281,7 @@ DROP INDEX replica_idx;
 ALTER TABLE single_shard_items REPLICA IDENTITY default;
 
 -- Drop the column from the worker...
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 ALTER TABLE lineitem_alter_220000 DROP COLUMN first;
 
 -- Create table to trigger at-xact-end (deferred) failure
@@ -296,7 +296,7 @@ $ldt$ LANGUAGE plpgsql;
 
 CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_tag();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 -- The above trigger will cause failure at transaction end on one placement.
 -- We'll test 2PC first, as it should handle this "best" (no divergence)
 SET citus.multi_shard_commit_protocol TO '2pc';
@@ -318,12 +318,12 @@ COMMIT;
 -- The block should have committed with a warning
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 DROP EVENT TRIGGER log_ddl_tag;
 DROP FUNCTION log_ddl_tag();
 DROP TABLE ddl_commands;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 -- Distributed SELECTs may appear after ALTER
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
@@ -357,13 +357,13 @@ SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
 WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
 
 -- Check that the schema on the worker still looks reasonable
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT attname, atttypid::regtype
 FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify that we can rename distributed tables
 SHOW citus.enable_ddl_propagation;
@@ -373,32 +373,32 @@ ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 SELECT relname FROM pg_class WHERE relname = 'lineitem_renamed';
 
 -- show rename worked on one worker, too
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- revert it to original name
 ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 
 -- show rename worked on one worker, too
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify that we can set and reset storage parameters
 ALTER TABLE lineitem_alter SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 ALTER TABLE lineitem_alter RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify that we can rename indexes on distributed tables
 CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
@@ -408,9 +408,9 @@ ALTER INDEX temp_index_1 RENAME TO idx_lineitem_linenumber;
 SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
 
 -- show rename worked on one worker, too
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- now get rid of the index
 DROP INDEX idx_lineitem_linenumber;
@@ -430,9 +430,9 @@ ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
 
 -- verify newly added column is not present in a worker shard
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT column_only_added_to_master FROM lineitem_alter_220000 LIMIT 0;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- ddl propagation flag is reset to default, disable it again
 SET citus.enable_ddl_propagation to false;
@@ -459,9 +459,9 @@ CREATE UNIQUE INDEX unique_lineitem_partkey on lineitem_alter(l_partkey);
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 
 -- verify index is not created on worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alter_%';
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify alter table and drop sequence in the same transaction does not cause deadlock
 SET citus.shard_count TO 4;
@@ -491,7 +491,7 @@ CREATE TABLE trigger_table (
 
 SELECT create_distributed_table('trigger_table', 'id');
 -- first set a trigger on a shard
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE FUNCTION update_value() RETURNS trigger AS $up$
     BEGIN
@@ -504,7 +504,7 @@ CREATE TRIGGER update_value
 BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 
@@ -531,9 +531,9 @@ SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Test alter table with drop table in the same transaction
 BEGIN;
@@ -544,9 +544,9 @@ DROP TABLE test_table_1;
 END;
 
 -- There should be no test_table_1 shard on workers
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Test WITH options on a normal simple hash-distributed table
 CREATE TABLE hash_dist(id bigint primary key, f1 text) WITH (fillfactor=40);
@@ -555,24 +555,24 @@ SELECT create_distributed_table('hash_dist','id');
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify that we can set and reset index storage parameters
 ALTER INDEX hash_dist_pkey SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 ALTER INDEX hash_dist_pkey RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
@@ -583,9 +583,9 @@ CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 -- show the index and its storage options on coordinator, then workers
 SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- get rid of the index
 DROP INDEX another_index;

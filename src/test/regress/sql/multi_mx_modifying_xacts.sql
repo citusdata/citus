@@ -20,7 +20,7 @@ COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 
 -- do it on the worker node as well
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 1');
@@ -28,7 +28,7 @@ COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 
 -- do it on the worker other node as well
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus Worker 2');
@@ -36,7 +36,7 @@ COMMIT;
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- abort a modification
 BEGIN;
@@ -45,7 +45,7 @@ ABORT;
 
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- abort a modification on the worker node
 BEGIN;
@@ -54,7 +54,7 @@ ABORT;
 
 SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- abort a modification on the other worker node
 BEGIN;
@@ -65,7 +65,7 @@ SELECT name FROM researchers_mx WHERE lab_id = 1 AND id = 1;
 
 
 -- switch back to the first worker node
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- creating savepoints should work...
 BEGIN;
@@ -126,7 +126,7 @@ INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
 
 -- have the same test on the other worker node
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 -- should be valid to edit labs_mx after researchers_mx...
 BEGIN;
 INSERT INTO researchers_mx VALUES (8, 5, 'Douglas Engelbart');
@@ -143,7 +143,7 @@ INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
 
 -- switch back to the worker node
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- this logic doesn't apply to router SELECTs occurring after a modification:
 -- selecting from the modified node is fine...
@@ -171,7 +171,7 @@ SELECT name FROM labs_mx WHERE id = 10;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 COMMIT;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 -- test primary key violations
 BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
@@ -182,7 +182,7 @@ COMMIT;
 SELECT * FROM objects_mx WHERE id = 1;
 
 -- same test on the second worker node
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 -- test primary key violations
 BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
@@ -193,7 +193,7 @@ COMMIT;
 SELECT * FROM objects_mx WHERE id = 1;
 
 -- create trigger on one worker to reject certain values
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE FUNCTION reject_bad_mx() RETURNS trigger AS $rb$
     BEGIN
@@ -222,7 +222,7 @@ SELECT * FROM objects_mx WHERE id = 2;
 SELECT * FROM labs_mx WHERE id = 7;
 
 -- same failure test from worker 2
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- test partial failure; statement 1 successed, statement 2 fails
 BEGIN;
@@ -234,10 +234,10 @@ COMMIT;
 SELECT * FROM objects_mx WHERE id = 2;
 SELECT * FROM labs_mx WHERE id = 7;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- what if there are errors on different shards at different times?
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON labs_mx_1220102
@@ -257,7 +257,7 @@ SELECT * FROM objects_mx WHERE id = 1;
 SELECT * FROM labs_mx WHERE id = 8;
 
 -- same test from the other worker
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 
 BEGIN;
@@ -273,7 +273,7 @@ SELECT * FROM labs_mx WHERE id = 8;
 
 
 -- what if the failures happen at COMMIT time?
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 DROP TRIGGER reject_bad_mx ON objects_mx_1220103;
 
@@ -315,7 +315,7 @@ SELECT * FROM objects_mx WHERE id = 1;
 SELECT * FROM labs_mx WHERE id = 8;
 
 -- what if one shard (objects_mx) succeeds but another (labs_mx) completely fails?
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 DROP TRIGGER reject_bad_mx ON objects_mx_1220103;
 

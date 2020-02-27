@@ -51,7 +51,7 @@ INSERT INTO mx_ref_table VALUES (-34, 'augue');
 SELECT * FROM mx_table ORDER BY col_1;
 
 -- Try commands from metadata worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE TABLE mx_table_worker(col_1 text);
 
@@ -79,10 +79,10 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 INSERT INTO pg_dist_shard SELECT * FROM pg_dist_shard_temp;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- changing isdatanode
 SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', false);
@@ -110,18 +110,18 @@ SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP INDEX mx_test_uniq_index;
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT master_remove_node('localhost', 5432);
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT master_remove_node('localhost', 5432);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- mark_tables_colocated
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
@@ -142,20 +142,20 @@ SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- stop_metadata_sync_to_node
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
 DELETE FROM pg_dist_node;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- DROP TABLE
 -- terse verbosity because pg10 has slightly different output
@@ -209,14 +209,14 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
 ROLLBACK;
 
 -- Cleanup
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
 SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DELETE FROM pg_dist_node;
 SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
 RESET citus.shard_replication_factor;

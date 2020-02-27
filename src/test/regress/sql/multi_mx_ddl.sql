@@ -22,7 +22,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table':
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- make sure we don't break the following tests by hiding the shard names
 SET citus.override_table_visibility TO FALSE;
@@ -34,7 +34,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'ddl_test%_index_1220088';
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- make sure we don't break the following tests by hiding the shard names
 SET citus.override_table_visibility TO FALSE;
@@ -50,7 +50,7 @@ INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
 
 -- Switch to the coordinator
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 
 -- SET DATA TYPE
@@ -58,11 +58,11 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version SET DATA TYPE double precision;
 
 INSERT INTO mx_ddl_table VALUES (78, 83, 2.1);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT * FROM mx_ddl_table ORDER BY key;
 
 -- Switch to the coordinator
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- DROP INDEX
 DROP INDEX ddl_test_index;
@@ -83,14 +83,14 @@ ALTER TABLE mx_ddl_table DROP COLUMN version;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \di ddl_test*_index
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \di ddl_test*_index
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
 \di ddl_test*_index_1220088
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \di ddl_test*_index
@@ -98,7 +98,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
 \di ddl_test*_index_1220089
 
 -- Show that DDL commands are done within a two-phase commit transaction
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
 
@@ -111,15 +111,15 @@ SET citus.replication_model TO streaming;
 CREATE TABLE mx_sequence(key INT, value BIGSERIAL);
 SELECT create_distributed_table('mx_sequence', 'key');
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT last_value AS worker_1_lastval FROM mx_sequence_value_seq \gset
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 SELECT last_value AS worker_2_lastval FROM mx_sequence_value_seq \gset
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- don't look at the actual values because they rely on the groupids of the nodes
 -- which can change depending on the tests which have run before this one

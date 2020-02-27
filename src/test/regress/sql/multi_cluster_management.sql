@@ -158,20 +158,20 @@ DROP TABLE cluster_management_test;
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- check that removing two nodes in the same transaction works
 SELECT
@@ -203,9 +203,9 @@ COMMIT;
 
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 SELECT 1 FROM master_add_node(:'worker_1_host', :worker_1_port);
@@ -236,12 +236,12 @@ WHERE
 
 DROP TABLE temp;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DELETE FROM pg_dist_partition;
 DELETE FROM pg_dist_shard;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_node;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 

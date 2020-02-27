@@ -233,7 +233,7 @@ SELECT * FROM
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- now use the same queries on a worker
 SET search_path TO locally_execute_intermediate_results;
@@ -701,7 +701,7 @@ SELECT * FROM
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA locally_execute_intermediate_results CASCADE;

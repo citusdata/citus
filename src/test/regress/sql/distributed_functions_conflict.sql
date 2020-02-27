@@ -4,7 +4,7 @@
 CREATE SCHEMA proc_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA proc_conflict;$$);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO proc_conflict;
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
 BEGIN
@@ -16,7 +16,7 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO proc_conflict;
 
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
@@ -31,7 +31,7 @@ CREATE AGGREGATE existing_agg(int) (
 
 SELECT create_distributed_function('existing_agg(int)');
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO proc_conflict;
 
 WITH data (val) AS (
@@ -41,7 +41,7 @@ WITH data (val) AS (
 )
 SELECT existing_agg(val) FROM data;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO proc_conflict;
 
 WITH data (val) AS (
@@ -57,7 +57,7 @@ SET client_min_messages TO error;
 DROP AGGREGATE existing_agg(int) CASCADE;
 DROP FUNCTION existing_func(int, int) CASCADE;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO proc_conflict;
 
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
@@ -70,7 +70,7 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO proc_conflict;
 
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
@@ -85,7 +85,7 @@ CREATE AGGREGATE existing_agg(int) (
 
 SELECT create_distributed_function('existing_agg(int)');
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path TO proc_conflict;
 
 WITH data (val) AS (
@@ -95,7 +95,7 @@ WITH data (val) AS (
 )
 SELECT existing_agg(val) FROM data;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path TO proc_conflict;
 
 WITH data (val) AS (

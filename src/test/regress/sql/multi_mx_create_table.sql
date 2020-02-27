@@ -57,7 +57,7 @@ CREATE TYPE citus_mx_test_schema.new_composite_type as (key1 text, key2 text);
 CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 
 -- now create required stuff in the worker 1
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- create schema to test schema support
 CREATE SCHEMA citus_mx_test_schema_join_1;
@@ -101,7 +101,7 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 );
 
 -- now create required stuff in the worker 2
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- create schema to test schema support
 CREATE SCHEMA citus_mx_test_schema_join_1;
@@ -146,7 +146,7 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 );
 
 -- connect back to the master, and do some more tests
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;

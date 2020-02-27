@@ -1,4 +1,4 @@
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- do some setup
 
@@ -17,6 +17,6 @@ SELECT * FROM tab;
 
 -- clean up
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 DROP TABLE tab;

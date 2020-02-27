@@ -71,7 +71,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -82,7 +82,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
@@ -103,7 +103,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -114,7 +114,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- remove same node twice
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
@@ -148,7 +148,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -159,7 +159,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
@@ -182,7 +182,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -193,7 +193,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- remove node in a transaction and COMMIT
 
@@ -214,7 +214,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -225,7 +225,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
@@ -248,7 +248,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -259,7 +259,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
@@ -283,7 +283,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -294,7 +294,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 INSERT INTO remove_node_reference_table VALUES(1);
@@ -321,7 +321,7 @@ WHERE colocationid IN
 --verify the data is inserted
 SELECT * FROM remove_node_reference_table;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -334,7 +334,7 @@ WHERE
 
 SELECT * FROM remove_node_reference_table;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
@@ -359,7 +359,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -370,7 +370,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
@@ -394,7 +394,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -405,7 +405,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SET citus.next_shard_id TO 1380001;
 
@@ -483,7 +483,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -495,7 +495,7 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY
 	shardid;
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
@@ -516,7 +516,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -527,7 +527,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
@@ -554,7 +554,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -566,7 +566,7 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY shardid ASC;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT master_disable_node(:'worker_2_host', :worker_2_port);
 
@@ -587,7 +587,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -598,7 +598,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node(:'worker_2_host', :worker_2_port);

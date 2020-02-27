@@ -81,6 +81,7 @@ my $connectionTimeout = 5000;
 my $useMitmproxy = 0;
 my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
 my $constr = "";
+my $hoststr = "";
 
 my $serversAreShutdown = "TRUE";
 my $usingWindows = 0;
@@ -110,6 +111,7 @@ GetOptions(
     'connection-timeout=s' => \$connectionTimeout,
     'mitmproxy' => \$useMitmproxy,
     'constr=s' => \$constr,
+    'hoststr=s' => \$hoststr,
     'help' => sub { Usage() });
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
@@ -266,6 +268,8 @@ revert_replace_postgres();
 my $host = "localhost";
 my $user = "postgres";
 my $dbname = "postgres";
+my $realWorker1Host = "localhost";
+my $realWorker2Host = "localhost";
 
 # n.b. previously this was on port 57640, which caused issues because that's in the
 # ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
@@ -349,6 +353,13 @@ else
         push(@workerPorts, $workerPort);
         push(@workerHosts, "localhost");
     }
+}
+
+if ($hoststr)
+{
+    my %hostvals = split /=|\s/, $hoststr;
+    $realWorker1Host = $hostvals{worker1host};
+    $realWorker2Host = $hostvals{worker2host};
 }
 
 my $followerCoordPort = 9070;
@@ -542,6 +553,9 @@ for my $workeroff (0 .. $#workerHosts)
 	my $host = $workerHosts[$workeroff];
 	print $fh "--variable=worker_".($workeroff+1)."_host=\"$host\" ";
 }
+print $fh "--variable=real_master_host=\"$host\" ";
+print $fh "--variable=real_worker_1_host=\"$realWorker1Host\" ";
+print $fh "--variable=real_worker_2_host=\"$realWorker2Host\" ";
 for my $workeroff (0 .. $#followerWorkerPorts)
 {
 	my $port = $followerWorkerPorts[$workeroff];

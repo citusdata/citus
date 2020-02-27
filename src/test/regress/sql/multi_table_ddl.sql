@@ -83,9 +83,9 @@ ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
 
 -- drop distributed table
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE testserialtable;
 
 -- verify owned sequence is dropped
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \ds

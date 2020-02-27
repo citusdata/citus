@@ -3,9 +3,9 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
-\c - - - :worker_1_port
-\c - - - :worker_2_port
-\c - - - :master_port
+\c - - :real_worker_1_host :worker_1_port
+\c - - :real_worker_2_host :worker_2_port
+\c - - :real_master_host :master_port
 
 \a\t
 
@@ -17,7 +17,7 @@ VACUUM ANALYZE orders_mx;
 VACUUM ANALYZE customer_mx;
 VACUUM ANALYZE supplier_mx;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
@@ -42,7 +42,7 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
@@ -83,7 +83,7 @@ SELECT true AS valid FROM explain_json($$
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- Test XML format
 EXPLAIN (COSTS FALSE, FORMAT XML)
@@ -105,7 +105,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)

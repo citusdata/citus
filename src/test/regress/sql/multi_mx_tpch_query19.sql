@@ -4,7 +4,7 @@
 
 
 -- connect to the coordinator
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Query #19 from the TPC-H decision support benchmark. Note that we modified
 -- the query from its original to make it work on smaller data sets.
@@ -40,7 +40,7 @@ WHERE
 	);
 
 -- connect one of the workers
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- Query #19 from the TPC-H decision support benchmark. Note that we modified
 -- the query from its original to make it work on smaller data sets.
@@ -76,7 +76,7 @@ WHERE
 	);
 
 -- connect to the other node
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- Query #19 from the TPC-H decision support benchmark. Note that we modified
 -- the query from its original to make it work on smaller data sets.

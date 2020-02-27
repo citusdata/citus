@@ -6,7 +6,7 @@
 
 
 -- connect to master
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT
 	c_custkey,
@@ -43,7 +43,7 @@ LIMIT 20;
 
 
 -- connect one of the workers
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT
 	c_custkey,
@@ -79,7 +79,7 @@ ORDER BY
 LIMIT 20;
 
 -- connect to the other worker
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 SELECT
 	c_custkey,

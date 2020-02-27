@@ -79,12 +79,12 @@ DROP TABLE local_table;
 
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Verify that we error out on unsupported statement types
 
@@ -156,14 +156,14 @@ DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 -- As there's a primary key, so exclude those from this check.
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 
 -- create index that will conflict with master operations
 CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON index_test_hash_102089(b);
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- should fail because worker index already exists
 CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
@@ -176,12 +176,12 @@ DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- now drop shard index to test partial master DROP failure
 DROP INDEX CONCURRENTLY ith_b_idx_102089;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP INDEX CONCURRENTLY ith_b_idx;
 
 -- the failure results in an INVALID index

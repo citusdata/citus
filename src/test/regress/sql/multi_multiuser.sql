@@ -39,7 +39,7 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 SET citus.enable_ddl_propagation TO DEFAULT;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 CREATE USER full_access;
 CREATE USER usage_access;
 CREATE USER read_access;
@@ -60,7 +60,7 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
 GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
 GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 CREATE USER full_access;
 CREATE USER usage_access;
 CREATE USER read_access;
@@ -81,7 +81,7 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
 GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
 GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
@@ -320,7 +320,7 @@ CREATE FUNCTION usage_access_func_third(key int, variadic v int[]) RETURNS text
     LANGUAGE plpgsql AS 'begin return current_user; end;';
 
 -- connect back as super user
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- show that the current user is a super user
 SELECT usesuper FROM pg_user where usename IN (SELECT current_user);
@@ -406,14 +406,14 @@ SELECT worker_cleanup_job_schema_cache();
 RESET ROLE;
 
 -- to test access to files created during repartition we will create some on worker 1
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET ROLE full_access;
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 RESET ROLE;
 
 -- all attempts for transfer are initiated from other workers
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 -- super user should not be able to copy files created by a user
 SELECT worker_fetch_partition_file(42, 1, 1, 1, :'worker_1_host', :worker_1_port);
 
@@ -498,7 +498,7 @@ SELECT count(*) FROM pg_merge_job_0042.task_000001;
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
 RESET ROLE;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 

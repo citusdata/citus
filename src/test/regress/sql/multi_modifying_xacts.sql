@@ -392,7 +392,7 @@ AND    sp.shardstate = 1
 AND    s.logicalrelid = 'objects'::regclass;
 
 -- create trigger on one worker to reject certain values
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
@@ -409,7 +409,7 @@ AFTER INSERT ON objects_1200003
 DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- test partial failure; worker_1 succeeds, 2 fails
 -- in this case, we expect the transaction to abort
@@ -437,7 +437,7 @@ DELETE FROM objects;
 
 -- there cannot be errors on different shards at different times
 -- because the first failure will fail the whole transaction
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.name = 'BAD') THEN
@@ -453,7 +453,7 @@ AFTER INSERT ON labs_1200002
 DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -476,7 +476,7 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
 
 -- what if the failures happen at COMMIT time?
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 DROP TRIGGER reject_bad ON objects_1200003;
 
@@ -485,7 +485,7 @@ AFTER INSERT ON objects_1200003
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- should be the same story as before, just at COMMIT time
 BEGIN;
@@ -516,7 +516,7 @@ WHERE  sp.shardid = s.shardid
 AND    s.logicalrelid = 'objects'::regclass;
 
 -- what if all nodes have failures at COMMIT time?
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 DROP TRIGGER reject_bad ON labs_1200002;
 
@@ -525,7 +525,7 @@ AFTER INSERT ON labs_1200002
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -548,11 +548,11 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 	    s.logicalrelid = 'labs'::regclass);
 
 -- what if one shard (objects) succeeds but another (labs) completely fails?
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 DROP TRIGGER reject_bad ON objects_1200003;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.next_shard_id TO 1200004;
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -644,7 +644,7 @@ ROLLBACK;
 SELECT * FROM reference_modifying_xacts;
 
 -- lets fail on of the workers at before the commit time
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE FUNCTION reject_bad_reference() RETURNS trigger AS $rb$
     BEGIN
@@ -661,7 +661,7 @@ AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 \set VERBOSITY terse
 -- try without wrapping inside a transaction
 INSERT INTO reference_modifying_xacts VALUES (999, 3);
@@ -672,7 +672,7 @@ INSERT INTO reference_modifying_xacts VALUES (999, 3);
 COMMIT;
 
 -- lets fail one of the workers at COMMIT time
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 
 CREATE CONSTRAINT TRIGGER reject_bad_reference
@@ -680,7 +680,7 @@ AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY  DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 \set VERBOSITY terse
 
 -- try without wrapping inside a transaction
@@ -701,11 +701,11 @@ GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
 -- for the time-being drop the constraint
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- now create a hash distributed table and run tests
 -- including both the reference table and the hash
@@ -738,7 +738,7 @@ INSERT INTO hash_modifying_xacts VALUES (2, 2);
 ABORT;
 
 -- lets fail one of the workers before COMMIT time for the hash table
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE FUNCTION reject_bad_hash() RETURNS trigger AS $rb$
     BEGIN
@@ -755,7 +755,7 @@ AFTER INSERT ON hash_modifying_xacts_1200007
 DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 \set VERBOSITY terse
 
 -- the transaction as a whole should fail
@@ -769,7 +769,7 @@ SELECT * FROM reference_modifying_xacts WHERE key = 55;
 
 -- now lets fail on of the workers for the hash distributed table table
 -- when there is a reference table involved
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DROP TRIGGER reject_bad_hash ON hash_modifying_xacts_1200007;
 
 -- the trigger is on execution time
@@ -778,7 +778,7 @@ AFTER INSERT ON hash_modifying_xacts_1200007
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 \set VERBOSITY terse
 
 -- the transaction as a whole should fail
@@ -804,14 +804,14 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- and ensure that hash distributed table's
 -- change is rollbacked as well
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 \set VERBOSITY terse
 
 BEGIN;
@@ -881,9 +881,9 @@ SELECT count(*) FROM pg_dist_transaction;
 
 -- first create the new user on all nodes
 CREATE USER test_user;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 CREATE USER test_user;
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 CREATE USER test_user;
 
 -- now connect back to the master with the new user

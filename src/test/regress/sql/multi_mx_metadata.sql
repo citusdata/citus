@@ -44,7 +44,7 @@ SELECT recover_prepared_transactions();
 -- Verify that the commit records have been removed
 SELECT count(*) FROM pg_dist_transaction;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
@@ -58,7 +58,7 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
@@ -73,7 +73,7 @@ SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
 
 -- Create a table and then roll back the transaction
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
@@ -86,11 +86,11 @@ SELECT create_distributed_table('should_not_exist', 'key');
 ABORT;
 
 -- Verify that the table does not exist on the worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_not_exist';
 
 -- Ensure that we don't allow prepare on a metadata transaction
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
@@ -118,14 +118,14 @@ SELECT create_distributed_table('objects_for_xacts', 'id');
 COMMIT;
 
 -- see that the table actually created and distributed
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
 
 SELECT count(*) FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
@@ -147,7 +147,7 @@ ROLLBACK;
 -- show that the table not exists on the coordinator
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- the distributed table not exists on the worker node
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
@@ -161,7 +161,7 @@ SELECT master_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::reg
 SELECT recover_prepared_transactions();
 
 -- Create some "fake" prepared transactions to recover
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 BEGIN;
 CREATE TABLE should_abort (value int);
@@ -175,7 +175,7 @@ BEGIN;
 CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 -- Add "fake" pg_dist_transaction records and run recovery
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_commit');
@@ -185,11 +185,11 @@ SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
 
 -- Confirm that transactions were correctly rolled forward
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 CREATE USER no_access_mx;
 SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);

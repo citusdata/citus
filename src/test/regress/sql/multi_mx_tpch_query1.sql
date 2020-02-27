@@ -4,7 +4,7 @@
 
 
 -- connect to the coordinator
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Query #1 from the TPC-H decision support benchmark
 
@@ -31,7 +31,7 @@ ORDER BY
 	l_linestatus;
 
 -- connect one of the workers
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- Query #1 from the TPC-H decision support benchmark
 
@@ -58,7 +58,7 @@ ORDER BY
 	l_linestatus;
 
 	-- connect to the other node
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 -- Query #1 from the TPC-H decision support benchmark
 

@@ -254,7 +254,7 @@ SELECT run_command_on_workers('GRANT ALL ON SCHEMA multi_real_time_transaction T
 SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user');
 
 -- create trigger on one worker to reject access if GUC not
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path = 'multi_real_time_transaction';
 
 ALTER TABLE test_table_1610000 ENABLE ROW LEVEL SECURITY;
@@ -262,7 +262,7 @@ ALTER TABLE test_table_1610000 ENABLE ROW LEVEL SECURITY;
 CREATE POLICY hide_by_default ON test_table_1610000 TO PUBLIC
     USING (COALESCE(current_setting('app.show_rows', TRUE)::bool, FALSE));
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET ROLE rls_user;
 SET search_path = 'multi_real_time_transaction';
 
@@ -303,14 +303,14 @@ SET ROLE rls_user;
 SET search_path = 'multi_real_time_transaction';
 SELECT * FROM co_test_table ORDER BY id, col_1;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path = 'multi_real_time_transaction';
 
 -- shard 1610004 contains data from tenant id 1
 SELECT * FROM co_test_table_1610004 ORDER BY id, col_1;
 SELECT * FROM co_test_table_1610006 ORDER BY id, col_1;
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 SET search_path = 'multi_real_time_transaction';
 
 -- shard 1610005 contains data from tenant id 3
@@ -318,7 +318,7 @@ SELECT * FROM co_test_table_1610005 ORDER BY id, col_1;
 -- shard 1610007 contains data from tenant id 2
 SELECT * FROM co_test_table_1610007 ORDER BY id, col_1;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path = 'multi_real_time_transaction';
 
 -- Let's set up a policy on the coordinator and workers which filters the tenants.

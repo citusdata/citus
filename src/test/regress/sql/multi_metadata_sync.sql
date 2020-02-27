@@ -83,7 +83,7 @@ SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
 
 -- Check that the metadata has been copied to the worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -102,7 +102,7 @@ SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that start_metadata_sync_to_node considers foreign key constraints
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Since we're superuser, we can set the replication model to 'streaming' to
 -- create some MX tables
@@ -121,10 +121,10 @@ SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE mx_testing_schema_2.fk_test_2;
 DROP TABLE mx_testing_schema.fk_test_1;
 
@@ -132,10 +132,10 @@ RESET citus.shard_replication_factor;
 RESET citus.replication_model;
 
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -149,7 +149,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
-\c - - - :master_port
+\c - - :real_master_host :master_port
 BEGIN;
 SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 ROLLBACK;
@@ -157,7 +157,7 @@ ROLLBACK;
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- Check that the distributed table can be queried from the worker
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
@@ -173,19 +173,19 @@ INSERT INTO mx_query_test VALUES (3, 'three', 9);
 INSERT INTO mx_query_test VALUES (4, 'four', 16);
 INSERT INTO mx_query_test VALUES (5, 'five', 24);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT * FROM mx_query_test ORDER BY a;
 INSERT INTO mx_query_test VALUES (6, 'six', 36);
 UPDATE mx_query_test SET c = 25 WHERE a = 5;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT * FROM mx_query_test ORDER BY a;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE mx_query_test;
 
 -- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
 SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
@@ -246,7 +246,7 @@ ORDER BY
 	logicalrelid, shardid;
 
 -- Check that metadata of MX tables exist on the metadata worker
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 
 -- Check that tables are created
 \dt mx_test_schema_?.mx_table_?
@@ -272,7 +272,7 @@ ORDER BY
 	logicalrelid, shardid;
 
 -- Check that metadata of MX tables don't exist on the non-metadata worker
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 
 \d mx_test_schema_1.mx_table_1
 \d mx_test_schema_2.mx_table_2
@@ -282,27 +282,27 @@ SELECT * FROM pg_dist_shard;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 
 -- Check that CREATE INDEX statement is propagated
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_test_schema_2.mx_index_3'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_test_schema_2.mx_table_2_col1_key'::regclass;
 
 -- Check that DROP INDEX statement is propagated
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_test_schema_2.mx_index_3'::regclass;
 
 -- Check that ALTER TABLE statements are propagated
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
 ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
@@ -314,12 +314,12 @@ FOREIGN KEY
 	(col1)
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1);
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
 -- Check that foreign key constraint with NOT VALID works as well
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint;
 ALTER TABLE
@@ -331,11 +331,11 @@ FOREIGN KEY
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1)
 NOT VALID;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
 -- Check that mark_tables_colocated call propagates the changes to the workers
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 SET citus.shard_count TO 7;
@@ -384,7 +384,7 @@ FROM
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT
 	logicalrelid, colocationid
 FROM
@@ -393,7 +393,7 @@ WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Check that DROP TABLE on MX tables works
 DROP TABLE mx_colocation_test_1;
@@ -401,12 +401,12 @@ DROP TABLE mx_colocation_test_2;
 \d mx_colocation_test_1
 \d mx_colocation_test_2
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \d mx_colocation_test_1
 \d mx_colocation_test_2
 
 -- Check that dropped MX table can be recreated again
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_count TO 7;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
@@ -424,7 +424,7 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 DROP TABLE mx_temp_drop_test;
 
 -- Check that MX tables can be created with SERIAL columns
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
@@ -443,10 +443,10 @@ CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 INSERT INTO mx_table_with_small_sequence VALUES (0);
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 INSERT INTO mx_table_with_small_sequence VALUES (1), (3);
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 
@@ -458,7 +458,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 \ds mx_table_with_sequence_c_seq
 
 -- Check that the sequences created on the metadata worker as well
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
@@ -468,10 +468,10 @@ SELECT nextval('mx_table_with_sequence_b_seq');
 SELECT nextval('mx_table_with_sequence_c_seq');
 
 -- Check that adding a new metadata node sets the sequence space correctly
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 SELECT groupid FROM pg_dist_local_group;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
@@ -482,7 +482,7 @@ SELECT nextval('mx_table_with_sequence_c_seq');
 INSERT INTO mx_table_with_small_sequence VALUES (2), (4);
 
 -- Check that dropping the mx table with sequences works as expected
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- check our small sequence values
 SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
@@ -494,18 +494,18 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 \ds mx_table_with_sequence_c_seq
 
 -- Check that the sequences are dropped from the workers
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
 -- Check that the sequences are dropped from the workers
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
 -- Check that MX sequences play well with non-super users
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- Remove a node so that shards and sequences won't be created on table creation. Therefore,
 -- we can test that start_metadata_sync_to_node can actually create the sequence with proper
@@ -519,9 +519,9 @@ SELECT master_remove_node(:'worker_2_host', :worker_2_port);
 
  -- the master user needs superuser permissions to change the replication model
 CREATE USER mx_user WITH SUPERUSER;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 CREATE USER mx_user;
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 CREATE USER mx_user;
 
 \c - mx_user - :master_port
@@ -559,26 +559,26 @@ DROP TABLE pg_dist_partition_temp;
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT stop_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 
 DROP USER mx_user;
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 DROP USER mx_user;
-\c - - - :worker_2_port
+\c - - :real_worker_2_host :worker_2_port
 DROP USER mx_user;
 
 -- Check that create_reference_table creates the metadata on workers
-\c - - - :master_port
+\c - - :real_master_host :master_port
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
 
@@ -588,7 +588,7 @@ SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
 
 \dt mx_ref
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 \dt mx_ref
 SELECT
 	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
@@ -604,7 +604,7 @@ ORDER BY
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
 
 -- Check that DDL commands are propagated to reference tables on workers
-\c - - - :master_port
+\c - - :real_master_host :master_port
 ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
 CREATE INDEX mx_ref_index ON mx_ref(col_1);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
@@ -612,25 +612,25 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 
 -- Check that metada is cleaned successfully upon drop table
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE mx_ref;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_ref_index'::regclass;
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 
 -- Check that master_add_node propagates the metadata about new placements of a reference table
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT groupid AS old_worker_2_group
   FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 CREATE TABLE tmp_placement AS
@@ -645,12 +645,12 @@ SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT master_add_node(:'worker_2_host', :worker_2_port);
 
 SELECT shardid, nodename, nodeport
@@ -658,14 +658,14 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
 
 -- Get the metadata back into a consistent state
-\c - - - :master_port
+\c - - :real_master_host :master_port
 INSERT INTO pg_dist_placement (SELECT * FROM tmp_placement);
 DROP TABLE tmp_placement;
 
@@ -673,20 +673,20 @@ UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
 
 -- Confirm that shouldhaveshards is 'true'
-\c - - - :master_port
+\c - - :real_master_host :master_port
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 \c - postgres - :worker_1_port
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
 
 -- Check that setting shouldhaveshards to false is correctly transferred to other mx nodes
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', false);
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
@@ -701,7 +701,7 @@ select shouldhaveshards from pg_dist_node where nodeport = 8888;
 \c - postgres - :worker_1_port
 select shouldhaveshards from pg_dist_node where nodeport = 8888;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 --
 -- Check that metadata commands error out if any nodes are out-of-sync
 --

@@ -10,7 +10,7 @@
 -- and CTE inlining is not relevant to router plannery anyway
 SET citus.enable_cte_inlining TO false;
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 -- this table is used in a CTE test
 CREATE TABLE authors_hash_mx ( name text, id bigint );
 

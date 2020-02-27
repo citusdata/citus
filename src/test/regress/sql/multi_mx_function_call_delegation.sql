@@ -223,7 +223,7 @@ select start_metadata_sync_to_node(:'worker_2_host', :worker_2_port);
 -- stop_metadata_sync_to_node()/start_metadata_sync_to_node() might make
 -- worker backend caches inconsistent. Reconnect to coordinator to use
 -- new worker connections, hence new backends.
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET search_path to multi_mx_function_call_delegation, public;
 SET client_min_messages TO DEBUG1;
 SET citus.replication_model = 'streaming';

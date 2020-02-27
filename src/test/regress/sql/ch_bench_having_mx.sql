@@ -14,7 +14,7 @@ CREATE TABLE stock (
 
 SELECT create_distributed_table('stock','s_w_id');
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path = ch_bench_having;
 explain (costs false, summary false, timing false)
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -122,7 +122,7 @@ having   (select max(s_order_cnt) > 2 as having_query from stock where s_i_id = 
 order by s_i_id;
 
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
@@ -158,7 +158,7 @@ insert into stock VALUES
 
 SELECT create_distributed_table('stock','s_w_id');
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET search_path = ch_bench_having, public;
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -192,7 +192,7 @@ having   sum(s_order_cnt) >
         and n_name = 'GERMANY')
 order by ordercount desc;
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 DROP SCHEMA ch_bench_having CASCADE;

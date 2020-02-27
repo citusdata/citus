@@ -2,7 +2,7 @@
 -- MULTI_MX_REPARTITION_W1_UDT
 --
 
-\c - - - :worker_1_port
+\c - - :real_worker_1_host :worker_1_port
 SET client_min_messages = LOG;
 -- Query that should result in a repartition join on UDT column.
 SET citus.task_executor_type = 'task-tracker';

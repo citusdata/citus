@@ -1,4 +1,4 @@
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 -- do some setup
 
@@ -46,7 +46,7 @@ SELECT * FROM the_table;
 
 -- add the secondary nodes and try again, the SELECT statement should work this time
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 
 SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
   groupid => (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_1_port),
@@ -91,12 +91,12 @@ order by s_i_id;
 -- now move the secondary nodes into the new cluster and see that the follower, finally
 -- correctly configured, can run select queries involving them
 
-\c - - - :master_port
+\c - - :real_master_host :master_port
 UPDATE pg_dist_node SET nodecluster = 'second-cluster' WHERE noderole = 'secondary';
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 SELECT * FROM the_table;
 
 -- clean up after ourselves
-\c - - - :master_port
+\c - - :real_master_host :master_port
 DROP TABLE the_table;
 DROP TABLE stock;
