@@ -1392,6 +1392,26 @@ DistPartitionKey(Oid relationId)
 }
 
 
+/*
+ * ForceDistPartitionKey is the same as DistPartitionKey but errors out instead
+ * of returning NULL if this is called with a relationId of a reference table.
+ */
+Var *
+ForceDistPartitionKey(Oid relationId)
+{
+	Var *partitionKey = DistPartitionKey(relationId);
+
+	if (partitionKey == NULL)
+	{
+		ereport(ERROR, (errmsg(
+							"no distribution column found for relation %d, because it is a reference table",
+							relationId)));
+	}
+
+	return partitionKey;
+}
+
+
 /* Returns the partition method for the given relation. */
 char
 PartitionMethod(Oid relationId)

@@ -46,7 +46,7 @@ store_intermediate_result_on_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = ForceFindWorkerNode(nodeNameString, nodePort);
 
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.

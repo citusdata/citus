@@ -334,14 +334,14 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		parsetree = copyObject(parsetree);
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag, queryString);
 
-		MemoryContext previousContext = MemoryContextSwitchTo(planContext);
-		parsetree = copyObject(parsetree);
-		MemoryContextSwitchTo(previousContext);
-
 		if (parsetree == NULL)
 		{
 			return;
 		}
+
+		MemoryContext previousContext = MemoryContextSwitchTo(planContext);
+		parsetree = copyObject(parsetree);
+		MemoryContextSwitchTo(previousContext);
 
 		/*
 		 * we need to set the parsetree here already as we copy and replace the original

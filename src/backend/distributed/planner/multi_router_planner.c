@@ -1383,7 +1383,11 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 		Const *newValue = (Const *) setExpr;
 		List *restrictClauseList = WhereClauseList(joinTree);
 		OpExpr *equalityExpr = MakeOpExpression(column, BTEqualStrategyNumber);
-		Const *rightConst = (Const *) get_rightop((Expr *) equalityExpr);
+		Node *rightOp = get_rightop((Expr *) equalityExpr);
+
+		Assert(rightOp != NULL);
+		Assert(IsA(rightOp, Const));
+		Const *rightConst = (Const *) rightOp;
 
 		rightConst->constvalue = newValue->constvalue;
 		rightConst->constisnull = newValue->constisnull;
@@ -1972,6 +1976,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 
 	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
 	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
+	Assert(updateOrDeleteRTE != NULL);
 
 	DistTableCacheEntry *modificationTableCacheEntry = DistributedTableCacheEntry(
 		updateOrDeleteRTE->relid);
@@ -2407,6 +2412,11 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 		DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
 		ShardInterval *shardInterval =
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
+		if (shardInterval == NULL)
+		{
+			ereport(ERROR, (errmsg(
+								"could not find shardinterval to which to send the query")));
+		}
 
 		if (outputPartitionValueConst != NULL)
 		{
@@ -2733,9 +2743,10 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			OpExpr *equalityExpr = MakeOpExpression(partitionColumn,
 													BTEqualStrategyNumber);
 			Node *rightOp = get_rightop((Expr *) equalityExpr);
-			Const *rightConst = (Const *) rightOp;
 
+			Assert(rightOp != NULL);
 			Assert(IsA(rightOp, Const));
+			Const *rightConst = (Const *) rightOp;
 
 			rightConst->constvalue = partitionValueConst->constvalue;
 			rightConst->constisnull = partitionValueConst->constisnull;

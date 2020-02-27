@@ -158,7 +158,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			bool missingOk = false;
 			Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock,
 											  missingOk);
-			Var *parentDistributionColumn = DistPartitionKey(parentRelationId);
+			Var *parentDistributionColumn = ForceDistPartitionKey(parentRelationId);
 			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 			char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 			bool viaDeprecatedAPI = false;
@@ -237,7 +237,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (IsDistributedTable(relationId) &&
 				!IsDistributedTable(partitionRelationId))
 			{
-				Var *distributionColumn = DistPartitionKey(relationId);
+				Var *distributionColumn = ForceDistPartitionKey(relationId);
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
@@ -883,6 +883,8 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	{
 		return;
 	}
+
+	Assert(distributionColumn != NULL);
 
 	char *relationName = RelationGetRelationName(relation);
 	List *indexOidList = RelationGetIndexList(relation);

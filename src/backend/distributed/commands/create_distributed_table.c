@@ -166,6 +166,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
 																 distributionColumnName);
+	Assert(distributionColumn != NULL);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
@@ -232,6 +233,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
 																 distributionColumnName);
+	Assert(distributionColumn != NULL);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
@@ -795,7 +797,7 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	DistTableCacheEntry *sourceTableEntry = DistributedTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
+	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
 
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{

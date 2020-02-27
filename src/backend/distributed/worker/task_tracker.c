@@ -643,6 +643,10 @@ SchedulableTaskList(HTAB *WorkerTasksHash)
 
 	/* get all schedulable tasks ordered according to a priority criteria */
 	WorkerTask *schedulableTaskQueue = SchedulableTaskPriorityQueue(WorkerTasksHash);
+	if (schedulableTaskQueue == NULL)
+	{
+		return NIL;
+	}
 
 	for (uint32 queueIndex = 0; queueIndex < tasksToScheduleCount; queueIndex++)
 	{

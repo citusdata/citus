@@ -173,7 +173,11 @@ MakeTextPartitionExpression(Oid distributedTableId, text *value)
 	if (value != NULL)
 	{
 		OpExpr *equalityExpr = MakeOpExpression(partitionColumn, BTEqualStrategyNumber);
-		Const *rightConst = (Const *) get_rightop((Expr *) equalityExpr);
+		Node *rightOp = get_rightop((Expr *) equalityExpr);
+
+		Assert(rightOp != NULL);
+		Assert(IsA(rightOp, Const));
+		Const *rightConst = (Const *) rightOp;
 
 		rightConst->constvalue = (Datum) value;
 		rightConst->constisnull = false;

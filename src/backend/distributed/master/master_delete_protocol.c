@@ -162,7 +162,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	else if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from distributed table"),
+						errmsg("cannot delete from reference table"),
 						errdetail("Delete statements on reference tables "
 								  "are not supported.")));
 	}
@@ -521,7 +521,7 @@ CheckDeleteCriteria(Node *deleteCriteria)
 static void
 CheckPartitionColumn(Oid relationId, Node *whereClause)
 {
-	Var *partitionColumn = DistPartitionKey(relationId);
+	Var *partitionColumn = ForceDistPartitionKey(relationId);
 	ListCell *columnCell = NULL;
 
 	List *columnList = pull_var_clause_default(whereClause);

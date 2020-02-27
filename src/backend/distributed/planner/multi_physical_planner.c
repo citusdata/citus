@@ -3203,6 +3203,43 @@ GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber)
 
 
 /*
+ * BinaryOpExpression checks that a given expression is a binary operator. If
+ * this is the case it returns true and sets leftOperand and rightOperand to
+ * the left and right hand side of the operator. left/rightOperand will be
+ * stripped of implicit coercions by strip_implicit_coercions.
+ */
+bool
+BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand)
+{
+	if (!is_opclause(clause) || list_length(((OpExpr *) clause)->args) != 2)
+	{
+		if (leftOperand != NULL)
+		{
+			*leftOperand = NULL;
+		}
+		if (rightOperand != NULL)
+		{
+			*leftOperand = NULL;
+		}
+		return false;
+	}
+	if (leftOperand != NULL)
+	{
+		*leftOperand = get_leftop(clause);
+		Assert(*leftOperand != NULL);
+		*leftOperand = strip_implicit_coercions(*leftOperand);
+	}
+	if (rightOperand != NULL)
+	{
+		*rightOperand = get_rightop(clause);
+		Assert(*rightOperand != NULL);
+		*rightOperand = strip_implicit_coercions(*rightOperand);
+	}
+	return true;
+}
+
+
+/*
  * SimpleOpExpression checks that given expression is a simple operator
  * expression. A simple operator expression is a binary operator expression with
  * operands of a var and a non-null constant.
@@ -3210,23 +3247,14 @@ GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber)
 bool
 SimpleOpExpression(Expr *clause)
 {
-	Node *leftOperand = NULL;
-	Node *rightOperand = NULL;
 	Const *constantClause = NULL;
 
-	if (is_opclause(clause) && list_length(((OpExpr *) clause)->args) == 2)
+	Node *leftOperand;
+	Node *rightOperand;
+	if (!BinaryOpExpression(clause, &leftOperand, &rightOperand))
 	{
-		leftOperand = get_leftop(clause);
-		rightOperand = get_rightop(clause);
+		return false;
 	}
-	else
-	{
-		return false; /* not a binary opclause */
-	}
-
-	/* strip coercions before doing check */
-	leftOperand = strip_implicit_coercions(leftOperand);
-	rightOperand = strip_implicit_coercions(rightOperand);
 
 	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
 	{
@@ -3259,13 +3287,13 @@ SimpleOpExpression(Expr *clause)
 bool
 OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 {
-	Node *leftOperand = get_leftop((Expr *) operatorExpression);
-	Node *rightOperand = get_rightop((Expr *) operatorExpression);
+	Node *leftOperand;
+	Node *rightOperand;
+	if (!BinaryOpExpression((Expr *) operatorExpression, &leftOperand, &rightOperand))
+	{
+		return false;
+	}
 	Var *column = NULL;
-
-	/* strip coercions before doing check */
-	leftOperand = strip_implicit_coercions(leftOperand);
-	rightOperand = strip_implicit_coercions(rightOperand);
 
 	if (IsA(leftOperand, Var))
 	{
@@ -3335,6 +3363,8 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Assert(shardInterval != NULL);
 	Assert(shardInterval->minValueExists);
 	Assert(shardInterval->maxValueExists);
+	Assert(minNode != NULL);
+	Assert(maxNode != NULL);
 	Assert(IsA(minNode, Const));
 	Assert(IsA(maxNode, Const));
 

@@ -221,7 +221,6 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 
 	char relationKind = get_rel_relkind(distributedTableId);
 	char *tableOwner = TableOwner(shardInterval->relationId);
-	bool missingOk = false;
 
 
 	/* prevent table from being dropped */
@@ -319,9 +318,9 @@ RepairShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 
 	/* after successful repair, we update shard state as healthy*/
 	List *placementList = ShardPlacementList(shardId);
-	ShardPlacement *placement = SearchShardPlacementInList(placementList, targetNodeName,
-														   targetNodePort,
-														   missingOk);
+	ShardPlacement *placement = ForceSearchShardPlacementInList(placementList,
+																targetNodeName,
+																targetNodePort);
 	UpdateShardPlacementState(placement->placementId, SHARD_STATE_ACTIVE);
 }
 
@@ -375,23 +374,19 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
 						 char *targetNodeName, int32 targetNodePort)
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
-	bool missingSourceOk = false;
-	bool missingTargetOk = false;
 
-	ShardPlacement *sourcePlacement = SearchShardPlacementInList(shardPlacementList,
-																 sourceNodeName,
-																 sourceNodePort,
-																 missingSourceOk);
+	ShardPlacement *sourcePlacement = ForceSearchShardPlacementInList(shardPlacementList,
+																	  sourceNodeName,
+																	  sourceNodePort);
 	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("source placement must be in active state")));
 	}
 
-	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																 targetNodeName,
-																 targetNodePort,
-																 missingTargetOk);
+	ShardPlacement *targetPlacement = ForceSearchShardPlacementInList(shardPlacementList,
+																	  targetNodeName,
+																	  targetNodePort);
 	if (targetPlacement->shardState != SHARD_STATE_INACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -402,15 +397,13 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
 
 /*
  * SearchShardPlacementInList searches a provided list for a shard placement with the
- * specified node name and port. If missingOk is set to true, this function returns NULL
- * if no such placement exists in the provided list, otherwise it throws an error.
+ * specified node name and port. This function returns NULL if no such
+ * placement exists in the provided list.
  */
 ShardPlacement *
-SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort, bool
-						   missingOk)
+SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort)
 {
 	ListCell *shardPlacementCell = NULL;
-	ShardPlacement *matchingPlacement = NULL;
 
 	foreach(shardPlacementCell, shardPlacementList)
 	{
@@ -419,25 +412,31 @@ SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 node
 		if (strncmp(nodeName, shardPlacement->nodeName, MAX_NODE_LENGTH) == 0 &&
 			nodePort == shardPlacement->nodePort)
 		{
-			matchingPlacement = shardPlacement;
-			break;
+			return shardPlacement;
 		}
 	}
+	return NULL;
+}
 
-	if (matchingPlacement == NULL)
+
+/*
+ * ForceSearchShardPlacementInList searches a provided list for a shard
+ * placement with the specified node name and port. This function throws an
+ * error if no such placement exists in the provided list.
+ */
+ShardPlacement *
+ForceSearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort)
+{
+	ShardPlacement *placement = SearchShardPlacementInList(shardPlacementList, nodeName,
+														   nodePort);
+	if (placement == NULL)
 	{
-		if (missingOk)
-		{
-			return NULL;
-		}
-
 		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
 						errmsg("could not find placement matching \"%s:%d\"",
 							   nodeName, nodePort),
 						errhint("Confirm the placement still exists and try again.")));
 	}
-
-	return matchingPlacement;
+	return placement;
 }
 
 
