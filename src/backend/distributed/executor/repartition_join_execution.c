@@ -106,7 +106,10 @@ ExtractJobsInJobTree(Job *job)
 static void
 TraverseJobTree(Job *curJob, List **jobIds)
 {
-	*jobIds = lappend(*jobIds, (void *) curJob->jobId);
+	uint64 *jobIdPointer = palloc(sizeof(uint64));
+	*jobIdPointer = curJob->jobId;
+
+	*jobIds = lappend(*jobIds, jobIdPointer);
 
 	Job *childJob = NULL;
 	foreach_ptr(childJob, curJob->dependentJobList)
@@ -124,10 +127,10 @@ GenerateCreateSchemasCommand(List *jobIds, char *ownerName)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
 
-	void *jobIdPointer = NULL;
+	uint64 *jobIdPointer = NULL;
 	foreach_ptr(jobIdPointer, jobIds)
 	{
-		uint64 jobId = (uint64) jobIdPointer;
+		uint64 jobId = *jobIdPointer;
 		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY,
 						 jobId, quote_literal_cstr(ownerName));
 	}
@@ -147,10 +150,10 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 {
 	StringInfo createSchemaCommand = makeStringInfo();
 
-	void *jobIdPointer = NULL;
+	uint64 *jobIdPointer = NULL;
 	foreach_ptr(jobIdPointer, jobIds)
 	{
-		uint64 jobId = (uint64) jobIdPointer;
+		uint64 jobId = *jobIdPointer;
 		appendStringInfo(createSchemaCommand, templateCommand, jobId);
 	}
 	return createSchemaCommand->data;
