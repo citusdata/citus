@@ -879,40 +879,37 @@ VarConstOpExprClause(OpExpr *opClause, Var *partitionColumn, Var **varClause,
 	Var *foundVarClause = NULL;
 	Const *foundConstantClause = NULL;
 
-	if (list_length(opClause->args) == 2)
+	Node *leftOperand;
+	Node *rightOperand;
+	if (!BinaryOpExpression((Expr *) opClause, &leftOperand, &rightOperand))
 	{
-		Node *leftOperand = get_leftop((Expr *) opClause);
-		Node *rightOperand = get_rightop((Expr *) opClause);
-
-		leftOperand = strip_implicit_coercions(leftOperand);
-		rightOperand = strip_implicit_coercions(rightOperand);
-
-		if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
-		{
-			foundVarClause = (Var *) leftOperand;
-			foundConstantClause = (Const *) rightOperand;
-		}
-		else if (IsA(leftOperand, Const) && IsA(rightOperand, Var))
-		{
-			foundVarClause = (Var *) rightOperand;
-			foundConstantClause = (Const *) leftOperand;
-		}
+		return false;
 	}
 
-	if (foundVarClause && foundConstantClause)
+	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
 	{
-		if (varClause)
-		{
-			*varClause = foundVarClause;
-		}
-		if (constantClause)
-		{
-			*constantClause = foundConstantClause;
-		}
-		return true;
+		foundVarClause = (Var *) leftOperand;
+		foundConstantClause = (Const *) rightOperand;
+	}
+	else if (IsA(leftOperand, Const) && IsA(rightOperand, Var))
+	{
+		foundVarClause = (Var *) rightOperand;
+		foundConstantClause = (Const *) leftOperand;
+	}
+	else
+	{
+		return false;
 	}
 
-	return false;
+	if (varClause)
+	{
+		*varClause = foundVarClause;
+	}
+	if (constantClause)
+	{
+		*constantClause = foundConstantClause;
+	}
+	return true;
 }
 
 

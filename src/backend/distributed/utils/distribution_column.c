@@ -58,6 +58,7 @@ column_name_to_column(PG_FUNCTION_ARGS)
 	Relation relation = relation_open(relationId, AccessShareLock);
 
 	Var *column = BuildDistributionKeyFromColumnName(relation, columnName);
+	Assert(column != NULL);
 	char *columnNodeString = nodeToString(column);
 	text *columnNodeText = cstring_to_text(columnNodeString);
 
@@ -82,6 +83,7 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 	Relation relation = relation_open(distributedTableId, AccessExclusiveLock);
 
 	Var *column = BuildDistributionKeyFromColumnName(relation, columnName);
+	Assert(column != NULL);
 
 	relation_close(relation, NoLock);
 

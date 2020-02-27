@@ -356,26 +356,17 @@ ConjunctionContainsColumnFilter(Node *node, Var *column, Node **distributionKeyV
 static bool
 DistKeyInSimpleOpExpression(Expr *clause, Var *distColumn, Node **distributionKeyValue)
 {
-	Node *leftOperand = NULL;
-	Node *rightOperand = NULL;
 	Param *paramClause = NULL;
 	Const *constantClause = NULL;
 
 	Var *columnInExpr = NULL;
 
-	if (is_opclause(clause) && list_length(((OpExpr *) clause)->args) == 2)
+	Node *leftOperand;
+	Node *rightOperand;
+	if (!BinaryOpExpression(clause, &leftOperand, &rightOperand))
 	{
-		leftOperand = get_leftop(clause);
-		rightOperand = get_rightop(clause);
+		return false;
 	}
-	else
-	{
-		return false; /* not a binary opclause */
-	}
-
-	/* strip coercions before doing check */
-	leftOperand = strip_implicit_coercions(leftOperand);
-	rightOperand = strip_implicit_coercions(rightOperand);
 
 	if (IsA(rightOperand, Param) && IsA(leftOperand, Var))
 	{

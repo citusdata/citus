@@ -210,8 +210,7 @@ CreateRenameCollationStmt(const ObjectAddress *address, char *newName)
 	HeapTuple colltup = SearchSysCache1(COLLOID, collid);
 	if (!HeapTupleIsValid(colltup))
 	{
-		elog(ERROR, "citus cache lookup error");
-		return NULL;
+		ereport(ERROR, (errmsg("citus cache lookup error")));
 	}
 	Form_pg_collation collationForm =
 		(Form_pg_collation) GETSTRUCT(colltup);

@@ -827,7 +827,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		Oid inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
 		char *distributionValueString = DatumToString(inputDatum, inputDataType);
 
-		Var *distributionColumn = DistPartitionKey(relationId);
+		Var *distributionColumn = ForceDistPartitionKey(relationId);
 		Oid distributionDataType = distributionColumn->vartype;
 
 		Datum distributionValueDatum = StringToDatum(distributionValueString,
@@ -878,6 +878,23 @@ FindWorkerNode(char *nodeName, int32 nodePort)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * FindWorkerNode searches over the worker nodes and returns the workerNode
+ * if it exists otherwise it errors out.
+ */
+WorkerNode *
+ForceFindWorkerNode(char *nodeName, int32 nodePort)
+{
+	WorkerNode *node = FindWorkerNode(nodeName, nodePort);
+	if (node == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
+						errmsg("node %s:%d not found", nodeName, nodePort)));
+	}
+	return node;
 }
 
 
