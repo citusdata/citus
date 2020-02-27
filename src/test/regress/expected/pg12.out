@@ -21,10 +21,11 @@ insert into test_am values (1, 1);
 select create_distributed_table('test_am','id');
 ERROR:  cannot distribute relations using non-heap access methods
 -- Test generated columns
+-- val1 after val2 to test https://github.com/citusdata/citus/issues/3538
 create table gen1 (
 	id int,
-	val1 int,
-	val2 int GENERATED ALWAYS AS (val1 + 2) STORED
+	val2 int GENERATED ALWAYS AS (val1 + 2) STORED,
+	val1 int
 );
 create table gen2 (
 	id int,
@@ -46,16 +47,16 @@ DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) STORED.
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 select * from gen1 order by 1,2,3;
- id | val1 | val2 
+ id | val2 | val1 
 ----+------+------
-  1 |    4 |    6
-  2 |    4 |    6
-  3 |    6 |    8
-  4 |    6 |    8
-  5 |    2 |    4
-  6 |    2 |    4
-  7 |    2 |    4
-  8 |    2 |    4
+  1 |    6 |    4
+  2 |    6 |    4
+  3 |    8 |    6
+  4 |    8 |    6
+  5 |    4 |    2
+  6 |    4 |    2
+  7 |    4 |    2
+  8 |    4 |    2
 (8 rows)
 
 select * from gen2 order by 1,2,3;
