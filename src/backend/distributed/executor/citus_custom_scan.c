@@ -312,8 +312,8 @@ CitusBeginScanWithCoordinatorProcessing(CustomScanState *node, EState *estate, i
 	else if (jobQuery->commandType == CMD_SELECT && !workerJob->deferredPruning)
 	{
 		/* we'll use generated strings, no need to have the parameters anymore */
-		EState *executorState = planState->state;
-		//ResetExecutionParameters(executorState);
+		/*EState *executorState = planState->state; */
+		/*ResetExecutionParameters(executorState); */
 
 		/* we're done, we don't want to evaluate functions for SELECT queries */
 		return;
