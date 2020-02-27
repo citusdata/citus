@@ -76,6 +76,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
@@ -129,7 +130,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 	ParamListInfo paramListInfo = copyParamList(executorState->es_param_list_info);
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
-	ListCell *taskCell = NULL;
 	uint64 totalRowsProcessed = 0;
 
 	if (paramListInfo != NULL)
@@ -143,10 +143,9 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		numParams = paramListInfo->numParams;
 	}
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-
 		/*
 		 * If we have a valid shard id, a distributed table will be accessed
 		 * during execution. Record it to apply the restrictions related to
@@ -171,10 +170,10 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 																RowShareLock :
 																AccessShareLock);
 
-			ListCell *oidCell = NULL;
-			foreach(oidCell, localPlan->relationOids)
+			Oid relationId = InvalidOid;
+			foreach_oid(relationId, localPlan->relationOids)
 			{
-				LockRelationOid(lfirst_oid(oidCell), lockMode);
+				LockRelationOid(relationId, lockMode);
 			}
 		}
 		else
@@ -264,15 +263,12 @@ void
 ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 						   List **remoteTaskList)
 {
-	ListCell *taskCell = NULL;
-
 	*remoteTaskList = NIL;
 	*localTaskList = NIL;
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-
 		List *localTaskPlacementList = NULL;
 		List *remoteTaskPlacementList = NULL;
 
@@ -338,17 +334,14 @@ static void
 SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacementList,
 							  List **remoteTaskPlacementList)
 {
-	ListCell *placementCell = NULL;
 	int32 localGroupId = GetLocalGroupId();
 
 	*localTaskPlacementList = NIL;
 	*remoteTaskPlacementList = NIL;
 
-	foreach(placementCell, taskPlacementList)
+	ShardPlacement *taskPlacement = NULL;
+	foreach_ptr(taskPlacement, taskPlacementList)
 	{
-		ShardPlacement *taskPlacement =
-			(ShardPlacement *) lfirst(placementCell);
-
 		if (taskPlacement->groupId == localGroupId)
 		{
 			*localTaskPlacementList = lappend(*localTaskPlacementList, taskPlacement);
@@ -494,13 +487,11 @@ ShouldExecuteTasksLocally(List *taskList)
 bool
 TaskAccessesLocalNode(Task *task)
 {
-	ListCell *placementCell = NULL;
 	int localGroupId = GetLocalGroupId();
 
-	foreach(placementCell, task->taskPlacementList)
+	ShardPlacement *taskPlacement = NULL;
+	foreach_ptr(taskPlacement, task->taskPlacementList)
 	{
-		ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(placementCell);
-
 		if (taskPlacement->groupId == localGroupId)
 		{
 			return true;

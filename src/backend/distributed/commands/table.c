@@ -24,6 +24,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -67,16 +68,14 @@ List *
 PreprocessDropTableStmt(Node *node, const char *queryString)
 {
 	DropStmt *dropTableStatement = castNode(DropStmt, node);
-	ListCell *dropTableCell = NULL;
 
 	Assert(dropTableStatement->removeType == OBJECT_TABLE);
 
-	foreach(dropTableCell, dropTableStatement->objects)
+	List *tableNameList = NULL;
+	foreach_ptr(tableNameList, dropTableStatement->objects)
 	{
-		List *tableNameList = (List *) lfirst(dropTableCell);
 		RangeVar *tableRangeVar = makeRangeVarFromNameList(tableNameList);
 		bool missingOK = true;
-		ListCell *partitionCell = NULL;
 
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
@@ -108,9 +107,9 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 
 		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-		foreach(partitionCell, partitionList)
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
 		{
-			Oid partitionRelationId = lfirst_oid(partitionCell);
 			char *detachPartitionCommand =
 				GenerateDetachPartitionCommand(partitionRelationId);
 
@@ -204,12 +203,9 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 										 const char *queryString)
 {
 	List *commandList = alterTableStatement->cmds;
-	ListCell *commandCell = NULL;
-
-	foreach(commandCell, commandList)
+	AlterTableCmd *alterTableCommand = NULL;
+	foreach_ptr(alterTableCommand, commandList)
 	{
-		AlterTableCmd *alterTableCommand = (AlterTableCmd *) lfirst(commandCell);
-
 		if (alterTableCommand->subtype == AT_AttachPartition)
 		{
 			Oid relationId = AlterTableLookupRelation(alterTableStatement, NoLock);
@@ -290,7 +286,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 {
 	AlterTableStmt *alterTableStatement = castNode(AlterTableStmt, node);
 	Oid rightRelationId = InvalidOid;
-	ListCell *commandCell = NULL;
 	bool executeSequentially = false;
 
 	/* first check whether a distributed relation is affected */
@@ -346,10 +341,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	 * foreign constraint in master. Validity will be checked in workers anyway.
 	 */
 	List *commandList = alterTableStatement->cmds;
-
-	foreach(commandCell, commandList)
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
 		if (alterTableType == AT_AddConstraint)
@@ -389,10 +383,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			List *columnConstraints = columnDefinition->constraints;
 
-			ListCell *columnConstraint = NULL;
-			foreach(columnConstraint, columnConstraints)
+			Constraint *constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
 			{
-				Constraint *constraint = (Constraint *) lfirst(columnConstraint);
 				if (constraint->contype == CONSTR_FOREIGN)
 				{
 					rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
@@ -546,8 +539,6 @@ Node *
 WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 							const char *alterTableCommand)
 {
-	ListCell *commandCell = NULL;
-
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
 	{
@@ -574,10 +565,9 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 	 * foreign constraint in master. Validity will be checked in workers anyway.
 	 */
 	List *commandList = alterTableStatement->cmds;
-
-	foreach(commandCell, commandList)
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
 		if (alterTableType == AT_AddConstraint)
@@ -636,9 +626,6 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 void
 ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 {
-	List *commandList = alterTableStatement->cmds;
-	ListCell *commandCell = NULL;
-
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
 	{
@@ -659,9 +646,10 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 	}
 
 	/* then check if any of subcommands drop partition column.*/
-	foreach(commandCell, commandList)
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 		if (alterTableType == AT_DropColumn)
 		{
@@ -685,9 +673,6 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 void
 PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
-	List *commandList = alterTableStatement->cmds;
-	ListCell *commandCell = NULL;
-
 	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
 	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 
@@ -699,9 +684,10 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
-	foreach(commandCell, commandList)
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
 		if (alterTableType == AT_AddConstraint)
@@ -723,8 +709,6 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
-			ListCell *columnConstraint = NULL;
-
 			ColumnDef *columnDefinition = (ColumnDef *) command->def;
 			List *columnConstraints = columnDefinition->constraints;
 			if (columnConstraints)
@@ -737,10 +721,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				continue;
 			}
 
-			foreach(columnConstraint, columnConstraints)
+			Constraint *constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
 			{
-				Constraint *constraint = (Constraint *) lfirst(columnConstraint);
-
 				if (constraint->conname == NULL &&
 					(constraint->contype == CONSTR_PRIMARY ||
 					 constraint->contype == CONSTR_UNIQUE ||
@@ -861,8 +844,6 @@ void
 ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 							 Var *distributionColumn, uint32 colocationId)
 {
-	ListCell *indexOidCell = NULL;
-
 	/*
 	 * We first perform check for foreign constraints. It is important to do this check
 	 * before next check, because other types of constraints are allowed on reference
@@ -889,9 +870,9 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	char *relationName = RelationGetRelationName(relation);
 	List *indexOidList = RelationGetIndexList(relation);
 
-	foreach(indexOidCell, indexOidList)
+	Oid indexOid = InvalidOid;
+	foreach_oid(indexOid, indexOidList)
 	{
-		Oid indexOid = lfirst_oid(indexOidCell);
 		Relation indexDesc = index_open(indexOid, RowExclusiveLock);
 		bool hasDistributionColumn = false;
 
@@ -979,13 +960,11 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 static void
 ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
-	List *commandList = alterTableStatement->cmds;
-	ListCell *commandCell = NULL;
-
 	/* error out if any of the subcommands are unsupported */
-	foreach(commandCell, commandList)
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
 		switch (alterTableType)
@@ -1213,10 +1192,9 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		ColumnDef *columnDefinition = (ColumnDef *) command->def;
 		List *columnConstraints = columnDefinition->constraints;
 
-		ListCell *columnConstraint = NULL;
-		foreach(columnConstraint, columnConstraints)
+		Constraint *constraint = NULL;
+		foreach_ptr(constraint, columnConstraints)
 		{
-			Constraint *constraint = (Constraint *) lfirst(columnConstraint);
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
 				Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,

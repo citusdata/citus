@@ -15,6 +15,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/distributed_planner.h"
@@ -34,12 +35,10 @@ ShardInterval *
 LowestShardIntervalById(List *shardIntervalList)
 {
 	ShardInterval *lowestShardInterval = NULL;
-	ListCell *shardIntervalCell = NULL;
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-
 		if (lowestShardInterval == NULL ||
 			lowestShardInterval->shardId > shardInterval->shardId)
 		{
@@ -460,12 +459,12 @@ SingleReplicatedTable(Oid relationId)
 		return false;
 	}
 
-	/* checking only for the first shard id should suffice */
-	Oid shardId = (*(uint64 *) linitial(shardList));
-
 	/* for hash distributed tables, it is sufficient to only check one shard */
 	if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH)
 	{
+		/* checking only for the first shard id should suffice */
+		uint64 shardId = *(uint64 *) linitial(shardList);
+
 		shardPlacementList = ShardPlacementList(shardId);
 		if (list_length(shardPlacementList) != 1)
 		{
@@ -475,12 +474,10 @@ SingleReplicatedTable(Oid relationId)
 	else
 	{
 		List *shardIntervalList = LoadShardList(relationId);
-		ListCell *shardIntervalCell = NULL;
-
-		foreach(shardIntervalCell, shardIntervalList)
+		uint64 *shardIdPointer = NULL;
+		foreach_ptr(shardIdPointer, shardIntervalList)
 		{
-			uint64 *shardIdPointer = (uint64 *) lfirst(shardIntervalCell);
-			shardId = (*shardIdPointer);
+			uint64 shardId = *shardIdPointer;
 			shardPlacementList = ShardPlacementList(shardId);
 
 			if (list_length(shardPlacementList) != 1)

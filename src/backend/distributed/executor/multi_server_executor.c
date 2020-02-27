@@ -19,6 +19,8 @@
 
 #include <unistd.h>
 
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -27,7 +29,6 @@
 #include "distributed/master_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/log_utils.h"
 #include "utils/lsyscache.h"
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
@@ -143,11 +144,9 @@ JobExecutorType(DistributedPlan *distributedPlan)
 static bool
 HasReplicatedDistributedTable(List *relationOids)
 {
-	ListCell *oidCell = NULL;
-
-	foreach(oidCell, relationOids)
+	Oid oid;
+	foreach_oid(oid, relationOids)
 	{
-		Oid oid = lfirst_oid(oidCell);
 		char partitionMethod = PartitionMethod(oid);
 		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{

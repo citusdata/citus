@@ -22,6 +22,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
@@ -79,12 +80,9 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
-	ListCell *fragmentCell = NULL;
-
-	foreach(fragmentCell, fragmentList)
+	DistributedResultFragment *fragment = NULL;
+	foreach_ptr(fragment, fragmentList)
 	{
-		DistributedResultFragment *fragment = lfirst(fragmentCell);
-
 		bool columnNulls[5] = { 0 };
 		Datum columnValues[5] = {
 			CStringGetTextDatum(fragment->resultId),
@@ -161,11 +159,10 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 		Datum *resultIdValues = palloc0(fragmentCount * sizeof(Datum));
 		List *sortedResultIds = SortList(shardResultIds[shardIndex], pg_qsort_strcmp);
 
-		ListCell *resultIdCell = NULL;
+		const char *resultId = NULL;
 		int resultIdIndex = 0;
-		foreach(resultIdCell, sortedResultIds)
+		foreach_ptr(resultId, sortedResultIds)
 		{
-			char *resultId = lfirst(resultIdCell);
 			resultIdValues[resultIdIndex++] = CStringGetTextDatum(resultId);
 		}
 

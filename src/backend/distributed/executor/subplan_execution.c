@@ -12,6 +12,7 @@
 
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/recursive_planning.h"
@@ -35,7 +36,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 {
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
-	ListCell *subPlanCell = NULL;
 
 	if (subPlanList == NIL)
 	{
@@ -54,9 +54,9 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	 */
 	UseCoordinatedTransaction();
 
-	foreach(subPlanCell, subPlanList)
+	DistributedSubPlan *subPlan = NULL;
+	foreach_ptr(subPlan, subPlanList)
 	{
-		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plannedStmt = subPlan->plan;
 		uint32 subPlanId = subPlan->subPlanId;
 		ParamListInfo params = NULL;

@@ -22,6 +22,7 @@
 #include <distributed/connection_management.h>
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include <distributed/metadata_sync.h>
@@ -51,18 +52,16 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
 	bool useIndex = false;
-	ListCell *dropSchemaCell;
 
 	if (dropStatement->behavior != DROP_CASCADE)
 	{
 		return NIL;
 	}
 
-	foreach(dropSchemaCell, dropStatement->objects)
+	Value *schemaValue = NULL;
+	foreach_ptr(schemaValue, dropStatement->objects)
 	{
-		Value *schemaValue = (Value *) lfirst(dropSchemaCell);
-		char *schemaString = strVal(schemaValue);
-
+		const char *schemaString = strVal(schemaValue);
 		Oid namespaceOid = get_namespace_oid(schemaString, true);
 
 		if (namespaceOid == InvalidOid)
@@ -152,11 +151,11 @@ static List *
 FilterDistributedSchemas(List *schemas)
 {
 	List *distributedSchemas = NIL;
-	ListCell *cell = NULL;
 
-	foreach(cell, schemas)
+	Value *schemaValue = NULL;
+	foreach_ptr(schemaValue, schemas)
 	{
-		char *schemaName = strVal(lfirst(cell));
+		const char *schemaName = strVal(schemaValue);
 		Oid schemaOid = get_namespace_oid(schemaName, true);
 
 		if (!OidIsValid(schemaOid))
@@ -172,7 +171,7 @@ FilterDistributedSchemas(List *schemas)
 			continue;
 		}
 
-		distributedSchemas = lappend(distributedSchemas, makeString(schemaName));
+		distributedSchemas = lappend(distributedSchemas, schemaValue);
 	}
 
 	return distributedSchemas;

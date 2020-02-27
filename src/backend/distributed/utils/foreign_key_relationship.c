@@ -126,7 +126,6 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 {
 	List *foreignConstraintList = NIL;
 	List *foreignNodeList = NIL;
-	ListCell *nodeCell = NULL;
 	bool isFound = false;
 
 	CreateForeignConstraintRelationshipGraph();
@@ -151,11 +150,9 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 	 * We need only their OIDs, we get back node list to make their visited
 	 * variable to false for using them iteratively.
 	 */
-	foreach(nodeCell, foreignNodeList)
+	ForeignConstraintRelationshipNode *currentNode = NULL;
+	foreach_ptr(currentNode, foreignNodeList)
 	{
-		ForeignConstraintRelationshipNode *currentNode =
-			(ForeignConstraintRelationshipNode *) lfirst(nodeCell);
-
 		foreignConstraintList = lappend_oid(foreignConstraintList,
 											currentNode->relationId);
 		currentNode->visited = false;
@@ -257,7 +254,6 @@ static void
 GetConnectedListHelper(ForeignConstraintRelationshipNode *node, List **adjacentNodeList,
 					   bool isReferencing)
 {
-	ListCell *nodeCell = NULL;
 	List *neighbourList = NIL;
 
 	node->visited = true;
@@ -271,10 +267,9 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, List **adjacentN
 		neighbourList = node->adjacencyList;
 	}
 
-	foreach(nodeCell, neighbourList)
+	ForeignConstraintRelationshipNode *neighborNode = NULL;
+	foreach_ptr(neighborNode, neighbourList)
 	{
-		ForeignConstraintRelationshipNode *neighborNode =
-			(ForeignConstraintRelationshipNode *) lfirst(nodeCell);
 		if (neighborNode->visited == false)
 		{
 			*adjacentNodeList = lappend(*adjacentNodeList, neighborNode);
@@ -298,7 +293,6 @@ PopulateAdjacencyLists(void)
 	Oid prevReferencingOid = InvalidOid;
 	Oid prevReferencedOid = InvalidOid;
 	List *frelEdgeList = NIL;
-	ListCell *frelEdgeCell = NULL;
 
 	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 
@@ -327,11 +321,9 @@ PopulateAdjacencyLists(void)
 	 */
 	frelEdgeList = SortList(frelEdgeList, CompareForeignConstraintRelationshipEdges);
 
-	foreach(frelEdgeCell, frelEdgeList)
+	ForeignConstraintRelationshipEdge *currentFConstraintRelationshipEdge = NULL;
+	foreach_ptr(currentFConstraintRelationshipEdge, frelEdgeList)
 	{
-		ForeignConstraintRelationshipEdge *currentFConstraintRelationshipEdge =
-			(ForeignConstraintRelationshipEdge *) lfirst(frelEdgeCell);
-
 		/* we just saw this edge, no need to add it twice */
 		if (currentFConstraintRelationshipEdge->referencingRelationOID ==
 			prevReferencingOid &&

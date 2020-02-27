@@ -34,6 +34,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
@@ -332,17 +333,15 @@ List *
 DistributedTableList(void)
 {
 	List *distributedTableList = NIL;
-	ListCell *distTableOidCell = NULL;
 
 	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
 
 	/* first, we need to iterate over pg_dist_partition */
 	List *distTableOidList = DistTableOidList();
 
-	foreach(distTableOidCell, distTableOidList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, distTableOidList)
 	{
-		Oid relationId = lfirst_oid(distTableOidCell);
-
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		distributedTableList = lappend(distributedTableList, cacheEntry);
@@ -1137,7 +1136,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	{
 		Relation distShardRelation = heap_open(DistShardRelationId(), AccessShareLock);
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
-		ListCell *distShardTupleCell = NULL;
 		int arrayIndex = 0;
 
 		shardIntervalArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
@@ -1153,9 +1151,9 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 								   shardIntervalArrayLength *
 								   sizeof(int));
 
-		foreach(distShardTupleCell, distShardTupleList)
+		HeapTuple shardTuple = NULL;
+		foreach_ptr(shardTuple, distShardTupleList)
 		{
-			HeapTuple shardTuple = lfirst(distShardTupleCell);
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
 																distShardTupleDesc,
 																intervalTypeId,
@@ -1291,7 +1289,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	{
 		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		bool foundInCache = false;
-		ListCell *placementCell = NULL;
 		int placementOffset = 0;
 
 		ShardCacheEntry *shardEntry = hash_search(DistShardCacheHash,
@@ -1323,11 +1320,9 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 		GroupShardPlacement *placementArray = palloc0(numberOfPlacements *
 													  sizeof(GroupShardPlacement));
-		foreach(placementCell, placementList)
+		GroupShardPlacement *srcPlacement = NULL;
+		foreach_ptr(srcPlacement, placementList)
 		{
-			GroupShardPlacement *srcPlacement =
-				(GroupShardPlacement *) lfirst(placementCell);
-
 			placementArray[placementOffset] = *srcPlacement;
 			placementOffset++;
 		}
@@ -3024,7 +3019,6 @@ PrepareWorkerNodeCache(void)
 static void
 InitializeWorkerNodeCache(void)
 {
-	ListCell *workerNodeCell = NULL;
 	HASHCTL info;
 	long maxTableSize = (long) MaxWorkerNodesTracked;
 	bool includeNodesFromOtherClusters = false;
@@ -3057,9 +3051,9 @@ InitializeWorkerNodeCache(void)
 														 newWorkerNodeCount);
 
 	/* iterate over the worker node list */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *currentNode = NULL;
+	foreach_ptr(currentNode, workerNodeList)
 	{
-		WorkerNode *currentNode = lfirst(workerNodeCell);
 		bool handleFound = false;
 
 		/* search for the worker node in the hash, and then insert the values */

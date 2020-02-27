@@ -190,14 +190,13 @@ static List *
 FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 									   List **objectAddresses)
 {
-	ListCell *objectCell = NULL;
 	List *result = NIL;
 
 	*objectAddresses = NIL;
 
-	foreach(objectCell, objects)
+	List *collName = NULL;
+	foreach_ptr(collName, objects)
 	{
-		List *collName = lfirst(objectCell);
 		Oid collOid = get_collation_oid(collName, true);
 		ObjectAddress collAddress = { 0 };
 

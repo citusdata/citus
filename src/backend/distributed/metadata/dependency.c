@@ -86,7 +86,6 @@ GetUniqueDependenciesList(List *objectAddressesList)
 	InitObjectAddressCollector(&objectAddressCollector);
 
 	ObjectAddress *objectAddress = NULL;
-
 	foreach_ptr(objectAddress, objectAddressesList)
 	{
 		if (IsObjectAddressCollected(objectAddress, &objectAddressCollector))
@@ -111,7 +110,6 @@ List *
 GetDependenciesForObject(const ObjectAddress *target)
 {
 	ObjectAddressCollector collector = { 0 };
-
 	InitObjectAddressCollector(&collector);
 
 	recurse_pg_depend(target,
@@ -140,14 +138,11 @@ List *
 OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 {
 	ObjectAddressCollector collector = { 0 };
-	ListCell *objectAddressCell = NULL;
-
 	InitObjectAddressCollector(&collector);
 
-	foreach(objectAddressCell, objectAddressList)
+	ObjectAddress *objectAddress = NULL;
+	foreach_ptr(objectAddress, objectAddressList)
 	{
-		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(objectAddressCell);
-
 		if (IsObjectAddressCollected(objectAddress, &collector))
 		{
 			/* skip objects that are already ordered */
@@ -201,7 +196,6 @@ recurse_pg_depend(const ObjectAddress *target,
 	ScanKeyData key[2];
 	HeapTuple depTup = NULL;
 	List *pgDependEntries = NIL;
-	ListCell *pgDependCell = NULL;
 
 	if (TargetObjectVisited(collector, target))
 	{
@@ -249,9 +243,9 @@ recurse_pg_depend(const ObjectAddress *target,
 	/*
 	 * Iterate all entries and recurse depth first
 	 */
-	foreach(pgDependCell, pgDependEntries)
+	Form_pg_depend pg_depend = NULL;
+	foreach_ptr(pg_depend, pgDependEntries)
 	{
-		Form_pg_depend pg_depend = (Form_pg_depend) lfirst(pgDependCell);
 		ObjectAddress address = { 0 };
 		ObjectAddressSet(address, pg_depend->refclassid, pg_depend->refobjid);
 

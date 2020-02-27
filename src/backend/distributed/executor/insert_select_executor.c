@@ -300,7 +300,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			 * distributed INSERT...SELECT from a set of intermediate results
 			 * to the target relation.
 			 */
-			ListCell *taskCell = NULL;
 			List *prunedTaskList = NIL;
 
 			shardStateHash = ExecutePlanIntoColocatedIntermediateResults(
@@ -321,9 +320,9 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			 * written to them. Prune those tasks out by only including tasks
 			 * on shards with connections.
 			 */
-			foreach(taskCell, taskList)
+			Task *task = NULL;
+			foreach_ptr(task, taskList)
 			{
-				Task *task = (Task *) lfirst(taskCell);
 				uint64 shardId = task->anchorShardId;
 				bool shardModified = false;
 
@@ -417,7 +416,6 @@ static Query *
 WrapSubquery(Query *subquery)
 {
 	ParseState *pstate = make_parsestate(NULL);
-	ListCell *selectTargetCell = NULL;
 	List *newTargetList = NIL;
 
 	Query *outerQuery = makeNode(Query);
@@ -436,10 +434,9 @@ WrapSubquery(Query *subquery)
 	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
 	/* create a target list that matches the SELECT */
-	foreach(selectTargetCell, subquery->targetList)
+	TargetEntry *selectTargetEntry = NULL;
+	foreach_ptr(selectTargetEntry, subquery->targetList)
 	{
-		TargetEntry *selectTargetEntry = (TargetEntry *) lfirst(selectTargetCell);
-
 		/* exactly 1 entry in FROM */
 		int indexInRangeTable = 1;
 
@@ -648,14 +645,12 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 static List *
 BuildColumnNameListFromTargetList(Oid targetRelationId, List *insertTargetList)
 {
-	ListCell *insertTargetCell = NULL;
 	List *columnNameList = NIL;
 
 	/* build the list of column names for the COPY statement */
-	foreach(insertTargetCell, insertTargetList)
+	TargetEntry *insertTargetEntry = NULL;
+	foreach_ptr(insertTargetEntry, insertTargetList)
 	{
-		TargetEntry *insertTargetEntry = (TargetEntry *) lfirst(insertTargetCell);
-
 		columnNameList = lappend(columnNameList, insertTargetEntry->resname);
 	}
 
@@ -671,14 +666,12 @@ BuildColumnNameListFromTargetList(Oid targetRelationId, List *insertTargetList)
 static int
 PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 {
-	ListCell *columnNameCell = NULL;
 	Var *partitionColumn = PartitionColumn(relationId, 0);
 	int partitionColumnIndex = 0;
 
-	foreach(columnNameCell, columnNameList)
+	const char *columnName = NULL;
+	foreach_ptr(columnName, columnNameList)
 	{
-		char *columnName = (char *) lfirst(columnNameCell);
-
 		AttrNumber attrNumber = get_attnum(relationId, columnName);
 
 		/* check whether this is the partition column */
@@ -804,10 +797,10 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	/* selectEntry->resno must be the ordinal number of the entry */
 	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
 	int entryResNo = 1;
-	foreach(selectEntryCell, selectTargetList)
+	TargetEntry *selectTargetEntry = NULL;
+	foreach_ptr(selectTargetEntry, selectTargetList)
 	{
-		TargetEntry *selectEntry = lfirst(selectEntryCell);
-		selectEntry->resno = entryResNo++;
+		selectTargetEntry->resno = entryResNo++;
 	}
 
 	heap_close(distributedRelation, NoLock);

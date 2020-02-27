@@ -113,15 +113,12 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 int
 RecoverTwoPhaseCommits(void)
 {
-	ListCell *workerNodeCell = NULL;
 	int recoveredTransactionCount = 0;
 
 	List *workerList = ActivePrimaryNodeList(NoLock);
-
-	foreach(workerNodeCell, workerList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		recoveredTransactionCount += RecoverWorkerTransactions(workerNode);
 	}
 

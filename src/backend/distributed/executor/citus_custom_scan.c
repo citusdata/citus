@@ -20,6 +20,7 @@
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
@@ -536,12 +537,10 @@ CacheLocalPlanForTask(Task *task, DistributedPlan *originalDistributedPlan)
 PlannedStmt *
 GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
-	ListCell *cachedLocalPlanCell = NULL;
 	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
-	foreach(cachedLocalPlanCell, cachedPlanList)
+	LocalPlannedStatement *localPlannedStatement = NULL;
+	foreach_ptr(localPlannedStatement, cachedPlanList)
 	{
-		LocalPlannedStatement *localPlannedStatement = lfirst(cachedLocalPlanCell);
-
 		if (localPlannedStatement->shardId == task->anchorShardId &&
 			localPlannedStatement->localGroupId == GetLocalGroupId())
 		{

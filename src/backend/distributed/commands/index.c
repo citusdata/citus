@@ -25,6 +25,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
@@ -309,20 +310,19 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 {
 	DropStmt *dropIndexStatement = castNode(DropStmt, node);
 	List *ddlJobs = NIL;
-	ListCell *dropObjectCell = NULL;
 	Oid distributedIndexId = InvalidOid;
 	Oid distributedRelationId = InvalidOid;
 
 	Assert(dropIndexStatement->removeType == OBJECT_INDEX);
 
 	/* check if any of the indexes being dropped belong to a distributed table */
-	foreach(dropObjectCell, dropIndexStatement->objects)
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, dropIndexStatement->objects)
 	{
 		struct DropRelationCallbackState state;
 		uint32 rvrFlags = RVR_MISSING_OK;
 		LOCKMODE lockmode = AccessExclusiveLock;
 
-		List *objectNameList = (List *) lfirst(dropObjectCell);
 		RangeVar *rangeVar = makeRangeVarFromNameList(objectNameList);
 
 		/*
@@ -463,13 +463,11 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 void
 ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 {
-	List *commandList = alterTableStatement->cmds;
-	ListCell *commandCell = NULL;
-
 	/* error out if any of the subcommands are unsupported */
-	foreach(commandCell, commandList)
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
 	{
-		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 		AlterTableType alterTableType = command->subtype;
 
 		switch (alterTableType)
@@ -508,7 +506,6 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ListCell *shardIntervalCell = NULL;
 	StringInfoData ddlString;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
@@ -518,9 +515,9 @@ CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
 		deparse_shard_index_statement(indexStmt, relationId, shardId, &ddlString);
@@ -553,7 +550,6 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ListCell *shardIntervalCell = NULL;
 	StringInfoData ddlString;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
@@ -563,9 +559,9 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
 		deparse_shard_reindex_statement(reindexStmt, relationId, shardId, &ddlString);
@@ -794,7 +790,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
 		char partitionMethod = PartitionMethod(relationId);
-		ListCell *indexParameterCell = NULL;
 		bool indexContainsPartitionColumn = false;
 
 		/*
@@ -815,10 +810,10 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 
 		Var *partitionKey = ForceDistPartitionKey(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
-		foreach(indexParameterCell, indexParameterList)
+		IndexElem *indexElement = NULL;
+		foreach_ptr(indexElement, indexParameterList)
 		{
-			IndexElem *indexElement = (IndexElem *) lfirst(indexParameterCell);
-			char *columnName = indexElement->name;
+			const char *columnName = indexElement->name;
 
 			/* column name is null for index expressions, skip it */
 			if (columnName == NULL)
@@ -872,7 +867,6 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ListCell *shardIntervalCell = NULL;
 	char *indexName = get_rel_name(indexId);
 	Oid schemaId = get_rel_namespace(indexId);
 	char *schemaName = get_namespace_name(schemaId);
@@ -885,9 +879,9 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *shardIndexName = pstrdup(indexName);
 

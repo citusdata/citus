@@ -18,6 +18,7 @@
 
 #include <unistd.h>
 
+#include "distributed/listutils.h"
 #include "distributed/multi_progress.h"
 #include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
@@ -86,13 +87,12 @@ show_progress(PG_FUNCTION_ARGS)
 	uint64 magicNumber = PG_GETARG_INT64(0);
 	List *attachedDSMSegments = NIL;
 	List *monitorList = ProgressMonitorList(magicNumber, &attachedDSMSegments);
-	ListCell *monitorCell = NULL;
 	TupleDesc tupdesc;
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
-	foreach(monitorCell, monitorList)
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, monitorList)
 	{
-		ProgressMonitorData *monitor = lfirst(monitorCell);
 		uint64 *steps = monitor->steps;
 
 		for (int stepIndex = 0; stepIndex < monitor->stepCount; stepIndex++)

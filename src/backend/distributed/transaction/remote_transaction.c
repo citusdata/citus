@@ -18,6 +18,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
@@ -59,7 +60,6 @@ void
 StartRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	ListCell *subIdCell = NULL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_NOT_STARTED);
 
@@ -75,10 +75,10 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	List *activeSubXacts = ActiveSubXactContexts();
 	transaction->lastSuccessfulSubXact = TopSubTransactionId;
 	transaction->lastQueuedSubXact = TopSubTransactionId;
-	foreach(subIdCell, activeSubXacts)
-	{
-		SubXactContext *subXactState = lfirst(subIdCell);
 
+	SubXactContext *subXactState = NULL;
+	foreach_ptr(subXactState, activeSubXacts)
+	{
 		/* append SET LOCAL state from when SAVEPOINT was encountered... */
 		if (subXactState->setLocalCmds != NULL)
 		{
@@ -189,21 +189,17 @@ RemoteTransactionBegin(struct MultiConnection *connection)
 void
 RemoteTransactionListBegin(List *connectionList)
 {
-	ListCell *connectionCell = NULL;
+	MultiConnection *connection = NULL;
 
 	/* send BEGIN to all nodes */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		StartRemoteTransactionBegin(connection);
 	}
 
 	/* wait for BEGIN to finish on all nodes */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		FinishRemoteTransactionBegin(connection);
 	}
 }
@@ -605,7 +601,7 @@ RemoteTransactionBeginIfNecessary(MultiConnection *connection)
 void
 RemoteTransactionsBeginIfNecessary(List *connectionList)
 {
-	ListCell *connectionCell = NULL;
+	MultiConnection *connection = NULL;
 
 	/*
 	 * Don't do anything if not in a coordinated transaction. That allows the
@@ -618,9 +614,8 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 	}
 
 	/* issue BEGIN to all connections needing it */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		/* can't send BEGIN if a command already is in progress */
@@ -643,9 +638,8 @@ RemoteTransactionsBeginIfNecessary(List *connectionList)
 	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* get result of all the BEGINs */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		/*

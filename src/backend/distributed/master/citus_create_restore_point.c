@@ -16,6 +16,7 @@
 #include "access/xlog_internal.h"
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
@@ -114,15 +115,13 @@ static List *
 OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 {
 	List *connectionList = NIL;
-	ListCell *workerNodeCell = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		MultiConnection *connection = StartNodeConnection(connectionFlags,
 														  workerNode->workerName,
 														  workerNode->workerPort);
@@ -158,15 +157,13 @@ BlockDistributedTransactions(void)
 static void
 CreateRemoteRestorePoints(char *restoreName, List *connectionList)
 {
-	ListCell *connectionCell = NULL;
 	int parameterCount = 1;
 	Oid parameterTypes[1] = { TEXTOID };
 	const char *parameterValues[1] = { restoreName };
 
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		int querySent = SendRemoteCommandParams(connection, CREATE_RESTORE_POINT_COMMAND,
 												parameterCount, parameterTypes,
 												parameterValues);
@@ -176,10 +173,8 @@ CreateRemoteRestorePoints(char *restoreName, List *connectionList)
 		}
 	}
 
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
 		PGresult *result = GetRemoteCommandResult(connection, true);
 		if (!IsResponseOK(result))
 		{

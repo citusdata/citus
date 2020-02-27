@@ -9,6 +9,7 @@
  *-------------------------------------------------------------------------
  */
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -87,11 +88,9 @@ AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel)
 void
 AcquireExecutorMultiShardLocks(List *taskList)
 {
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		LOCKMODE lockMode = NoLock;
 
 		if (task->anchorShardId == INVALID_SHARD_ID)
@@ -227,8 +226,6 @@ RequiresConsistentSnapshot(Task *task)
 void
 AcquireMetadataLocks(List *taskList)
 {
-	ListCell *taskCell = NULL;
-
 	/*
 	 * Note: to avoid the overhead of additional sorting, we assume tasks
 	 * to be already sorted by shard ID such that deadlocks are avoided.
@@ -236,10 +233,9 @@ AcquireMetadataLocks(List *taskList)
 	 * command right now.
 	 */
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-
 		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
 }
@@ -354,7 +350,6 @@ AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel)
 static void
 AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 {
-	ListCell *relationRowLockCell = NULL;
 	LOCKMODE rowLockMode = NoLock;
 
 	if (relationRowLockList == NIL)
@@ -379,9 +374,9 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 	 * with each other but conflicts with modify commands, we get ShareLock for
 	 * them.
 	 */
-	foreach(relationRowLockCell, relationRowLockList)
+	RelationRowLock *relationRowLock = NULL;
+	foreach_ptr(relationRowLock, relationRowLockList)
 	{
-		RelationRowLock *relationRowLock = lfirst(relationRowLockCell);
 		LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
 		Oid relationId = relationRowLock->relationId;
 
@@ -412,11 +407,9 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 void
 LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
 {
-	ListCell *relationIdCell = NULL;
-
-	foreach(relationIdCell, relationIdList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
 	{
-		Oid relationId = lfirst_oid(relationIdCell);
 		if (PartitionedTable(relationId))
 		{
 			LockPartitionRelations(relationId, lockmode);
@@ -439,11 +432,9 @@ LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
 	 * locks.
 	 */
 	List *partitionList = PartitionList(relationId);
-	ListCell *partitionCell = NULL;
-
-	foreach(partitionCell, partitionList)
+	Oid partitionRelationId = InvalidOid;
+	foreach_oid(partitionRelationId, partitionList)
 	{
-		Oid partitionRelationId = lfirst_oid(partitionCell);
 		LockRelationOid(partitionRelationId, lockMode);
 	}
 }

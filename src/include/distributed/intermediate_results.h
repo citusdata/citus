@@ -49,23 +49,24 @@ typedef struct DistributedResultFragment
 
 
 /* intermediate_results.c */
-extern DestReceiver * CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
+extern DestReceiver * CreateRemoteFileDestReceiver(const char *resultId,
+												   EState *executorState,
 												   List *initialNodeList, bool
 												   writeLocalFile);
 extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectory(void);
-extern int64 IntermediateResultSize(char *resultId);
+extern int64 IntermediateResultSize(const char *resultId);
 extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
 
 /* distributed_intermediate_results.c */
-extern List ** RedistributeTaskListResults(char *resultIdPrefix,
+extern List ** RedistributeTaskListResults(const char *resultIdPrefix,
 										   List *selectTaskList,
 										   int partitionColumnIndex,
 										   DistTableCacheEntry *targetRelation,
 										   bool binaryFormat);
-extern List * PartitionTasklistResults(char *resultIdPrefix, List *selectTaskList,
+extern List * PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 									   int partitionColumnIndex,
 									   DistTableCacheEntry *distributionScheme,
 									   bool binaryFormat);

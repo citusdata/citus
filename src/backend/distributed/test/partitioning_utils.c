@@ -80,14 +80,11 @@ print_partitions(PG_FUNCTION_ARGS)
 	StringInfo resultRelationNames = makeStringInfo();
 
 	List *partitionList = PartitionList(PG_GETARG_OID(0));
-	ListCell *partitionOidCell = NULL;
-
 	partitionList = SortList(partitionList, CompareOids);
 
-	foreach(partitionOidCell, partitionList)
+	Oid partitionOid = InvalidOid;
+	foreach_oid(partitionOid, partitionList)
 	{
-		Oid partitionOid = lfirst_oid(partitionOidCell);
-
 		/* at least one table is already added, add comma */
 		if (resultRelationNames->len > 0)
 		{

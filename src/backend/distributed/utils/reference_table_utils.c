@@ -121,22 +121,20 @@ void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
-	ListCell *referenceTableCell = NULL;
 
 	/* if there is no reference table, we do not need to replicate anything */
 	if (list_length(referenceTableList) > 0)
 	{
 		List *referenceShardIntervalList = NIL;
-		ListCell *referenceShardIntervalCell = NULL;
 
 		/*
 		 * We sort the reference table list to prevent deadlocks in concurrent
 		 * ReplicateAllReferenceTablesToAllNodes calls.
 		 */
 		referenceTableList = SortList(referenceTableList, CompareOids);
-		foreach(referenceTableCell, referenceTableList)
+		Oid referenceTableId = InvalidOid;
+		foreach_oid(referenceTableId, referenceTableList)
 		{
-			Oid referenceTableId = lfirst_oid(referenceTableCell);
 			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 
@@ -149,10 +147,9 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			BlockWritesToShardList(referenceShardIntervalList);
 		}
 
-		foreach(referenceShardIntervalCell, referenceShardIntervalList)
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, referenceShardIntervalList)
 		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(
-				referenceShardIntervalCell);
 			uint64 shardId = shardInterval->shardId;
 
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
@@ -161,10 +158,8 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 		}
 
 		/* create foreign constraints between reference tables */
-		foreach(referenceShardIntervalCell, referenceShardIntervalList)
+		foreach_ptr(shardInterval, referenceShardIntervalList)
 		{
-			ShardInterval *shardInterval =
-				(ShardInterval *) lfirst(referenceShardIntervalCell);
 			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
@@ -235,8 +230,6 @@ ReplicateSingleShardTableToAllNodes(Oid relationId)
 static void
 ReplicateShardToAllNodes(ShardInterval *shardInterval)
 {
-	ListCell *workerNodeCell = NULL;
-
 	/* prevent concurrent pg_dist_node changes */
 	List *workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
 
@@ -246,9 +239,9 @@ ReplicateShardToAllNodes(ShardInterval *shardInterval)
 	 * the metadata to reflect newly copied shard.
 	 */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
@@ -407,7 +400,6 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 {
 	List *referenceTableList = ReferenceTableOidList();
 	List *referenceShardIntervalList = NIL;
-	ListCell *referenceTableCell = NULL;
 
 	/* if there are no reference tables, we do not need to do anything */
 	if (list_length(referenceTableList) == 0)
@@ -427,11 +419,10 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 		BlockWritesToShardList(referenceShardIntervalList);
 	}
 
-	foreach(referenceTableCell, referenceTableList)
+	StringInfo deletePlacementCommand = makeStringInfo();
+	Oid referenceTableId = InvalidOid;
+	foreach_oid(referenceTableId, referenceTableList)
 	{
-		StringInfo deletePlacementCommand = makeStringInfo();
-
-		Oid referenceTableId = lfirst_oid(referenceTableCell);
 		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
 															   groupId);
 		if (list_length(placements) == 0)
@@ -446,6 +437,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 
 		DeleteShardPlacementRow(placement->placementId);
 
+		resetStringInfo(deletePlacementCommand);
 		appendStringInfo(deletePlacementCommand,
 						 "DELETE FROM pg_dist_placement WHERE placementid = "
 						 UINT64_FORMAT,
@@ -465,15 +457,12 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 List *
 ReferenceTableOidList()
 {
-	List *distTableOidList = DistTableOidList();
-	ListCell *distTableOidCell = NULL;
-
 	List *referenceTableList = NIL;
 
-	foreach(distTableOidCell, distTableOidList)
+	List *distTableOidList = DistTableOidList();
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, distTableOidList)
 	{
-		Oid relationId = lfirst_oid(distTableOidCell);
-
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)

@@ -857,7 +857,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
  * if it already exists. Else, the function returns NULL.
  */
 WorkerNode *
-FindWorkerNode(char *nodeName, int32 nodePort)
+FindWorkerNode(const char *nodeName, int32 nodePort)
 {
 	HTAB *workerNodeHash = GetWorkerNodeHash();
 	bool handleFound = false;
@@ -886,7 +886,7 @@ FindWorkerNode(char *nodeName, int32 nodePort)
  * if it exists otherwise it errors out.
  */
 WorkerNode *
-ForceFindWorkerNode(char *nodeName, int32 nodePort)
+ForceFindWorkerNode(const char *nodeName, int32 nodePort)
 {
 	WorkerNode *node = FindWorkerNode(nodeName, nodePort);
 	if (node == NULL)

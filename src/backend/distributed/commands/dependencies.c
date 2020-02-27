@@ -15,6 +15,7 @@
 #include "commands/extension.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
@@ -50,23 +51,14 @@ bool EnableDependencyCreation = true;
 void
 EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
-	/* local variables to work with dependencies */
 	List *dependenciesWithCommands = NIL;
-	ListCell *dependencyCell = NULL;
-
-	/* local variables to collect ddl commands */
 	List *ddlCommands = NULL;
 
-	/* local variables to work with worker nodes */
-	ListCell *workerNodeCell = NULL;
-
-	/*
-	 * collect all dependencies in creation order and get their ddl commands
-	 */
+	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
-	foreach(dependencyCell, dependencies)
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
 	{
-		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
@@ -105,9 +97,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 * to the nodes before marking the objects as distributed these objects would never be
 	 * created on the workers when they get added, causing shards to fail to create.
 	 */
-	foreach(dependencyCell, dependenciesWithCommands)
+	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
 		MarkObjectDistributed(dependency);
 	}
 
@@ -121,10 +112,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	}
 
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
@@ -145,16 +135,14 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 {
 	/* local variables to work with dependencies */
 	List *distributableDependencies = NIL;
-	ListCell *dependencyCell = NULL;
 
 	/* collect all dependencies in creation order */
 	List *dependencies = GetDependenciesForObject(target);
 
 	/* filter the ones that can be distributed */
-	foreach(dependencyCell, dependencies)
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
 	{
-		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
-
 		/*
 		 * TODO: maybe we can optimize the logic applied in below line. Actually we
 		 * do not need to create ddl commands as we are not ensuring their existence
@@ -258,7 +246,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 void
 ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 {
-	ListCell *dependencyCell = NULL;
 	List *ddlCommands = NIL;
 
 	/*
@@ -290,9 +277,9 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	}
 
 	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
-	foreach(dependencyCell, dependencies)
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
 	{
-		ObjectAddress *dependency = (ObjectAddress *) lfirst(dependencyCell);
 		ddlCommands = list_concat(ddlCommands,
 								  GetDependencyCreateDDLCommands(dependency));
 	}
@@ -367,11 +354,10 @@ static List *
 FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
 {
 	List *result = NIL;
-	ListCell *objectAddressListCell = NULL;
 
-	foreach(objectAddressListCell, objectAddressList)
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, objectAddressList)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(objectAddressListCell);
 		if (predicate(address))
 		{
 			result = lappend(result, address);

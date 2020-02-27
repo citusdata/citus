@@ -24,6 +24,7 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #include <sys/utsname.h>
 
 #include "access/xact.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/shardinterval_utils.h"
@@ -174,12 +175,10 @@ static uint64
 DistributedTablesSize(List *distTableOids)
 {
 	uint64 totalSize = 0;
-	ListCell *distTableOidCell = NULL;
 
-	foreach(distTableOidCell, distTableOids)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, distTableOids)
 	{
-		Oid relationId = lfirst_oid(distTableOidCell);
-
 		/*
 		 * Relations can get dropped after getting the Oid list and before we
 		 * reach here. Acquire a lock to make sure the relation is available

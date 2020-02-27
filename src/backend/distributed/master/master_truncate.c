@@ -17,6 +17,7 @@
 #include "commands/trigger.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
@@ -103,11 +104,9 @@ TruncateTaskList(Oid relationId)
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
-	ListCell *shardIntervalCell = NULL;
-
-	foreach(shardIntervalCell, shardIntervalList)
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *shardRelationName = pstrdup(relationName);
 

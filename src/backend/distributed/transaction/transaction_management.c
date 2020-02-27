@@ -25,6 +25,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/transaction_management.h"
@@ -595,16 +596,15 @@ PopSubXact(SubTransactionId subId)
 List *
 ActiveSubXacts(void)
 {
-	ListCell *subXactCell = NULL;
 	List *activeSubXactsReversed = NIL;
 
 	/*
 	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
 	 * in temporal order.
 	 */
-	foreach(subXactCell, activeSubXactContexts)
+	SubXactContext *state = NULL;
+	foreach_ptr(state, activeSubXactContexts)
 	{
-		SubXactContext *state = lfirst(subXactCell);
 		activeSubXactsReversed = lcons_int(state->subId, activeSubXactsReversed);
 	}
 
@@ -616,16 +616,15 @@ ActiveSubXacts(void)
 List *
 ActiveSubXactContexts(void)
 {
-	ListCell *subXactCell = NULL;
 	List *reversedSubXactStates = NIL;
 
 	/*
 	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
 	 * in temporal order.
 	 */
-	foreach(subXactCell, activeSubXactContexts)
+	SubXactContext *state = NULL;
+	foreach_ptr(state, activeSubXactContexts)
 	{
-		SubXactContext *state = lfirst(subXactCell);
 		reversedSubXactStates = lcons(state, reversedSubXactStates);
 	}
 

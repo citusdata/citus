@@ -20,6 +20,7 @@
 #include "access/xact.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -325,7 +326,6 @@ RecordParallelRelationAccessForTaskList(List *taskList)
 static void
 RecordRelationParallelSelectAccessForTask(Task *task)
 {
-	ListCell *relationShardCell = NULL;
 	Oid lastRelationId = InvalidOid;
 
 	/* no point in recoding accesses in non-transaction blocks, skip the loop */
@@ -336,9 +336,9 @@ RecordRelationParallelSelectAccessForTask(Task *task)
 
 	List *relationShardList = task->relationShardList;
 
-	foreach(relationShardCell, relationShardList)
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
 	{
-		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
 		Oid currentRelationId = relationShard->relationId;
 
 		/*
@@ -367,7 +367,6 @@ static void
 RecordRelationParallelModifyAccessForTask(Task *task)
 {
 	List *relationShardList = NULL;
-	ListCell *relationShardCell = NULL;
 	Oid lastRelationId = InvalidOid;
 
 	/* no point in recoding accesses in non-transaction blocks, skip the loop */
@@ -382,9 +381,9 @@ RecordRelationParallelModifyAccessForTask(Task *task)
 	if (task->modifyWithSubquery)
 	{
 		relationShardList = task->relationShardList;
-		foreach(relationShardCell, relationShardList)
+		RelationShard *relationShard = NULL;
+		foreach_ptr(relationShard, relationShardList)
 		{
-			RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
 			Oid currentRelationId = relationShard->relationId;
 
 			/*
@@ -414,12 +413,11 @@ static void
 RecordRelationParallelDDLAccessForTask(Task *task)
 {
 	List *relationShardList = task->relationShardList;
-	ListCell *relationShardCell = NULL;
 	Oid lastRelationId = InvalidOid;
 
-	foreach(relationShardCell, relationShardList)
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
 	{
-		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
 		Oid currentRelationId = relationShard->relationId;
 
 		/*
@@ -493,12 +491,10 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 	if (PartitionedTable(relationId))
 	{
 		List *partitionList = PartitionList(relationId);
-		ListCell *partitionCell = NULL;
 
-		foreach(partitionCell, partitionList)
+		Oid partitionOid = InvalidOid;
+		foreach_oid(partitionOid, partitionList)
 		{
-			Oid partitionOid = lfirst_oid(partitionCell);
-
 			/* recursively record all relation accesses of its partitions */
 			RecordParallelRelationAccess(partitionOid, placementAccess);
 		}
@@ -887,12 +883,10 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 											conflictingAccessMode)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-	ListCell *referencedRelationCell = NULL;
 
-	foreach(referencedRelationCell, cacheEntry->referencedRelationsViaForeignKey)
+	Oid referencedRelation = InvalidOid;
+	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
 	{
-		Oid referencedRelation = lfirst_oid(referencedRelationCell);
-
 		/* we're only interested in foreign keys to reference tables */
 		if (PartitionMethod(referencedRelation) != DISTRIBUTE_BY_NONE)
 		{
@@ -954,15 +948,13 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 											 conflictingAccessMode)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-	ListCell *referencingRelationCell = NULL;
 	bool holdsConflictingLocks = false;
 
 	Assert(PartitionMethod(relationId) == DISTRIBUTE_BY_NONE);
 
-	foreach(referencingRelationCell, cacheEntry->referencingRelationsViaForeignKey)
+	Oid referencingRelation = InvalidOid;
+	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
 	{
-		Oid referencingRelation = lfirst_oid(referencingRelationCell);
-
 		/*
 		 * We're only interested in foreign keys to reference tables from
 		 * hash distributed tables.

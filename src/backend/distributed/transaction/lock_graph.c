@@ -21,6 +21,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
@@ -90,19 +91,17 @@ WaitGraph *
 BuildGlobalWaitGraph(void)
 {
 	List *workerNodeList = ActiveReadableNodeList();
-	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	List *connectionList = NIL;
-	ListCell *connectionCell = NULL;
 	int localNodeId = GetLocalGroupId();
 
 	WaitGraph *waitGraph = BuildLocalWaitGraph();
 
 	/* open connections in parallel */
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
@@ -122,9 +121,9 @@ BuildGlobalWaitGraph(void)
 	FinishConnectionListEstablishment(connectionList);
 
 	/* send commands in parallel */
-	foreach(connectionCell, connectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		const char *command = "SELECT * FROM dump_local_wait_edges()";
 
 		int querySent = SendRemoteCommand(connection, command);
@@ -135,9 +134,8 @@ BuildGlobalWaitGraph(void)
 	}
 
 	/* receive dump_local_wait_edges results */
-	foreach(connectionCell, connectionList)
+	foreach_ptr(connection, connectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		bool raiseInterrupts = true;
 
 		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);

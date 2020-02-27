@@ -238,7 +238,6 @@ void
 CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 					  useExclusiveConnections)
 {
-	ListCell *sourceShardCell = NULL;
 	bool colocatedShard = true;
 	List *insertedShardPlacements = NIL;
 
@@ -276,9 +275,9 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 
 	char targetShardStorageType = ShardStorageType(targetRelationId);
 
-	foreach(sourceShardCell, sourceShardIntervalList)
+	ShardInterval *sourceShardInterval = NULL;
+	foreach_ptr(sourceShardInterval, sourceShardIntervalList)
 	{
-		ShardInterval *sourceShardInterval = (ShardInterval *) lfirst(sourceShardCell);
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 newShardId = GetNextShardId();
 

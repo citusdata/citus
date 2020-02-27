@@ -30,6 +30,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
@@ -160,7 +161,6 @@ void
 MultiTaskTrackerExecute(Job *job)
 {
 	List *jobTaskList = job->taskList;
-	ListCell *taskAndExecutionCell = NULL;
 	uint32 topLevelTaskCount = 0;
 	uint32 failedTaskId = 0;
 	bool allTasksCompleted = false;
@@ -191,10 +191,9 @@ MultiTaskTrackerExecute(Job *job)
 	 * We now count the number of "top level" tasks in the query tree. Once they
 	 * complete, we'll need to fetch these tasks' results to the master node.
 	 */
-	foreach(taskAndExecutionCell, taskAndExecutionList)
+	Task *task = NULL;
+	foreach_ptr(task, taskAndExecutionList)
 	{
-		Task *task = (Task *) lfirst(taskAndExecutionCell);
-
 		bool topLevelTask = TopLevelTask(task);
 		if (topLevelTask)
 		{
@@ -235,9 +234,8 @@ MultiTaskTrackerExecute(Job *job)
 		double acceptableHealthyTrackerCount = 0.0;
 
 		/* first, loop around all tasks and manage them */
-		foreach(taskAndExecutionCell, taskAndExecutionList)
+		foreach_ptr(task, taskAndExecutionList)
 		{
-			Task *task = (Task *) lfirst(taskAndExecutionCell);
 			TaskExecution *taskExecution = task->taskExecution;
 
 			TaskTracker *execTaskTracker = ResolveTaskTracker(taskTrackerHash,
@@ -300,12 +298,9 @@ MultiTaskTrackerExecute(Job *job)
 		}
 
 		/* second, loop around "top level" tasks to fetch their results */
-		taskAndExecutionCell = NULL;
-		foreach(taskAndExecutionCell, taskAndExecutionList)
+		foreach_ptr(task, taskAndExecutionList)
 		{
-			Task *task = (Task *) lfirst(taskAndExecutionCell);
 			TaskExecution *taskExecution = task->taskExecution;
-
 
 			/*
 			 * We find the tasks that appear in the top level of the query tree,
@@ -471,8 +466,6 @@ TaskAndExecutionList(List *jobTaskList)
 	List *taskQueue = list_copy(jobTaskList);
 	while (taskQueue != NIL)
 	{
-		ListCell *dependentTaskCell = NULL;
-
 		/* pop first element from the task queue */
 		Task *task = (Task *) linitial(taskQueue);
 		taskQueue = list_delete_first(taskQueue);
@@ -501,6 +494,7 @@ TaskAndExecutionList(List *jobTaskList)
 		 * taskHash is used to reduce the complexity of keeping track of
 		 * the tasks that are already encountered.
 		 */
+		ListCell *dependentTaskCell = NULL;
 		foreach(dependentTaskCell, dependendTaskList)
 		{
 			Task *dependendTask = lfirst(dependentTaskCell);
@@ -685,10 +679,9 @@ TrackerHash(const char *taskTrackerHashName, List *workerNodeList, char *userNam
 	uint32 taskTrackerHashSize = list_length(workerNodeList);
 	HTAB *taskTrackerHash = TrackerHashCreate(taskTrackerHashName, taskTrackerHashSize);
 
-	ListCell *workerNodeCell = NULL;
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
@@ -1505,11 +1498,10 @@ static bool
 TaskExecutionsCompleted(List *taskList)
 {
 	bool taskExecutionsComplete = true;
-	ListCell *taskCell = NULL;
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskExecution *taskExecution = task->taskExecution;
 		uint32 nodeIndex = taskExecution->currentNodeIndex;
 
@@ -1791,8 +1783,6 @@ static List *
 ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 {
 	List *constrainedTaskList = NIL;
-	ListCell *mergeTaskCell = NULL;
-	ListCell *upstreamTaskCell = NULL;
 
 	/*
 	 * We first check if this task depends on any merge tasks. If it does *not*,
@@ -1807,9 +1797,9 @@ ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 	}
 
 	/* we first add merge tasks and their dependencies to our constraint group */
-	foreach(mergeTaskCell, mergeTaskList)
+	Task *mergeTask = NULL;
+	foreach_ptr(mergeTask, mergeTaskList)
 	{
-		Task *mergeTask = (Task *) lfirst(mergeTaskCell);
 		List *dependentTaskList = mergeTask->dependentTaskList;
 
 		constrainedTaskList = lappend(constrainedTaskList, mergeTask);
@@ -1830,9 +1820,9 @@ ConstrainedTaskList(List *taskAndExecutionList, Task *task)
 													constrainingTask);
 	Assert(upstreamTaskList != NIL);
 
-	foreach(upstreamTaskCell, upstreamTaskList)
+	Task *upstreamTask = NULL;
+	foreach_ptr(upstreamTask, upstreamTaskList)
 	{
-		Task *upstreamTask = (Task *) lfirst(upstreamTaskCell);
 		List *dependentTaskList = upstreamTask->dependentTaskList;
 
 		/*
@@ -1884,13 +1874,11 @@ static List *
 UpstreamDependencyList(List *taskAndExecutionList, Task *searchedTask)
 {
 	List *upstreamTaskList = NIL;
-	ListCell *taskAndExecutionCell = NULL;
 
-	foreach(taskAndExecutionCell, taskAndExecutionList)
+	Task *upstreamTask = NULL;
+	foreach_ptr(upstreamTask, taskAndExecutionList)
 	{
-		Task *upstreamTask = (Task *) lfirst(taskAndExecutionCell);
 		List *dependentTaskList = upstreamTask->dependentTaskList;
-		ListCell *dependentTaskCell = NULL;
 
 		/*
 		 * The given task and its upstream dependency cannot be of the same type.
@@ -1906,9 +1894,9 @@ UpstreamDependencyList(List *taskAndExecutionList, Task *searchedTask)
 		 * We walk over the upstream task's dependency list, and check if any of
 		 * them is the task we are looking for.
 		 */
-		foreach(dependentTaskCell, dependentTaskList)
+		Task *dependentTask = NULL;
+		foreach_ptr(dependentTask, dependentTaskList)
 		{
-			Task *dependentTask = (Task *) lfirst(dependentTaskCell);
 			if (TasksEqual(dependentTask, searchedTask))
 			{
 				upstreamTaskList = lappend(upstreamTaskList, upstreamTask);
@@ -1983,11 +1971,10 @@ static List *
 MergeTaskList(List *taskList)
 {
 	List *mergeTaskList = NIL;
-	ListCell *taskCell = NULL;
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		if (task->taskType == MERGE_TASK)
 		{
 			mergeTaskList = lappend(mergeTaskList, task);
@@ -2008,15 +1995,14 @@ static void
 ReassignTaskList(List *taskList)
 {
 	List *completedTaskList = NIL;
-	ListCell *taskCell = NULL;
 
 	/*
 	 * As an optimization, we first find the SQL tasks whose results we already
 	 * fetched to the master node. We don't need to re-execute these SQL tasks.
 	 */
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskExecution *taskExecution = task->taskExecution;
 
 		bool transmitCompleted = TransmitExecutionCompleted(taskExecution);
@@ -2028,10 +2014,8 @@ ReassignTaskList(List *taskList)
 
 	taskList = TaskListDifference(taskList, completedTaskList);
 
-	taskCell = NULL;
-	foreach(taskCell, taskList)
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskExecution *taskExecution = task->taskExecution;
 
 		uint32 currentNodeIndex = taskExecution->currentNodeIndex;
@@ -2059,10 +2043,9 @@ ReassignTaskList(List *taskList)
 static void
 ReassignMapFetchTaskList(List *mapFetchTaskList)
 {
-	ListCell *mapFetchTaskCell = NULL;
-	foreach(mapFetchTaskCell, mapFetchTaskList)
+	Task *mapFetchTask = NULL;
+	foreach_ptr(mapFetchTask, mapFetchTaskList)
 	{
-		Task *mapFetchTask = (Task *) lfirst(mapFetchTaskCell);
 		TaskExecution *mapFetchTaskExecution = mapFetchTask->taskExecution;
 
 		TaskExecStatus *taskStatusArray = mapFetchTaskExecution->taskStatusArray;
@@ -2288,15 +2271,12 @@ AssignQueuedTasks(TaskTracker *taskTracker)
 		void *queryResult = NULL;
 		int rowCount = 0;
 		int columnCount = 0;
-		ListCell *taskCell = NULL;
 
 		bool batchSuccess = MultiClientSendQuery(connectionId,
 												 assignTaskBatchQuery->data);
 
-		foreach(taskCell, tasksToAssignList)
+		foreach_ptr(taskState, tasksToAssignList)
 		{
-			taskState = (TrackerTaskState *) lfirst(taskCell);
-
 			if (!batchSuccess)
 			{
 				taskState->status = TASK_CLIENT_SIDE_ASSIGN_FAILED;
@@ -2349,7 +2329,6 @@ TaskStatusBatchList(TaskTracker *taskTracker)
 	int32 assignedTaskIndex = 0;
 	List *assignedTaskList = taskTracker->assignedTaskList;
 	List *taskStatusBatchList = NIL;
-	ListCell *taskCell = NULL;
 
 	int32 assignedTaskCount = list_length(assignedTaskList);
 	if (assignedTaskCount == 0)
@@ -2364,9 +2343,9 @@ TaskStatusBatchList(TaskTracker *taskTracker)
 		currentTaskIndex = -1;
 	}
 
-	foreach(taskCell, assignedTaskList)
+	TrackerTaskState *assignedTask = NULL;
+	foreach_ptr(assignedTask, assignedTaskList)
 	{
-		TrackerTaskState *assignedTask = (TrackerTaskState *) lfirst(taskCell);
 		TaskStatus taskStatus = assignedTask->status;
 
 		bool taskRunning = false;
@@ -2403,12 +2382,10 @@ static StringInfo
 TaskStatusBatchQuery(List *taskList)
 {
 	StringInfo taskStatusBatchQuery = makeStringInfo();
-	ListCell *taskCell = NULL;
 
-	foreach(taskCell, taskList)
+	TrackerTaskState *taskState = NULL;
+	foreach_ptr(taskState, taskList)
 	{
-		TrackerTaskState *taskState = (TrackerTaskState *) lfirst(taskCell);
-
 		appendStringInfo(taskStatusBatchQuery, TASK_STATUS_QUERY,
 						 taskState->jobId, taskState->taskId);
 	}
@@ -2427,16 +2404,15 @@ TaskStatusBatchQuery(List *taskList)
 static void
 ReceiveTaskStatusBatchQueryResponse(TaskTracker *taskTracker)
 {
-	ListCell *taskCell = NULL;
 	List *checkedTaskList = taskTracker->connectionBusyOnTaskList;
 	int32 connectionId = taskTracker->connectionId;
 	int rowCount = 0;
 	int columnCount = 0;
 	void *queryResult = NULL;
 
-	foreach(taskCell, checkedTaskList)
+	TrackerTaskState *checkedTask = NULL;
+	foreach_ptr(checkedTask, checkedTaskList)
 	{
-		TrackerTaskState *checkedTask = (TrackerTaskState *) lfirst(taskCell);
 		TaskStatus taskStatus = TASK_STATUS_INVALID_FIRST;
 
 		BatchQueryStatus queryStatus = MultiClientBatchResult(connectionId, &queryResult,
@@ -2621,9 +2597,6 @@ static void
 TrackerCleanupResources(HTAB *taskTrackerHash, HTAB *transmitTrackerHash,
 						List *jobIdList, List *taskList)
 {
-	ListCell *taskCell = NULL;
-	ListCell *jobIdCell = NULL;
-
 	/*
 	 * We are done with query execution. We now wait for open requests to the task
 	 * trackers to complete and cancel any open requests to the transmit trackers.
@@ -2632,9 +2605,9 @@ TrackerCleanupResources(HTAB *taskTrackerHash, HTAB *transmitTrackerHash,
 	TrackerHashCancelActiveRequest(transmitTrackerHash);
 
 	/* only close open files; open connections are owned by trackers */
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		TaskExecution *taskExecution = task->taskExecution;
 
 		CleanupTaskExecution(taskExecution);
@@ -2645,10 +2618,9 @@ TrackerCleanupResources(HTAB *taskTrackerHash, HTAB *transmitTrackerHash,
 	 * For each executed job, we create a special task to clean up its resources
 	 * on worker nodes, and send this clean-up task to all task trackers.
 	 */
-	foreach(jobIdCell, jobIdList)
+	uint64 *jobIdPointer = NULL;
+	foreach_ptr(jobIdPointer, jobIdList)
 	{
-		uint64 *jobIdPointer = (uint64 *) lfirst(jobIdCell);
-
 		Task *jobCleanupTask = JobCleanupTask(*jobIdPointer);
 		TrackerHashCleanupJob(taskTrackerHash, jobCleanupTask);
 	}
@@ -2814,7 +2786,6 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 	while (list_length(remainingTaskTrackerList) > 0 && !timedOut)
 	{
 		List *activeTackTrackerList = remainingTaskTrackerList;
-		ListCell *activeTaskTrackerCell = NULL;
 
 		remainingTaskTrackerList = NIL;
 
@@ -2823,9 +2794,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 		timedOut = TimestampDifferenceExceeds(startTime, currentTime,
 											  NodeConnectionTimeout);
 
-		foreach(activeTaskTrackerCell, activeTackTrackerList)
+		foreach_ptr(taskTracker, activeTackTrackerList)
 		{
-			taskTracker = (TaskTracker *) lfirst(activeTaskTrackerCell);
 			int32 connectionId = taskTracker->connectionId;
 			char *nodeName = taskTracker->workerName;
 			uint32 nodePort = taskTracker->workerPort;

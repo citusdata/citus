@@ -84,15 +84,14 @@ get_colocated_table_array(PG_FUNCTION_ARGS)
 	Oid distributedTableId = PG_GETARG_OID(0);
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
-	ListCell *colocatedTableCell = NULL;
 	int colocatedTableCount = list_length(colocatedTableList);
 	Datum *colocatedTablesDatumArray = palloc0(colocatedTableCount * sizeof(Datum));
 	Oid arrayTypeId = OIDOID;
 	int colocatedTableIndex = 0;
 
-	foreach(colocatedTableCell, colocatedTableList)
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
 		Datum colocatedTableDatum = ObjectIdGetDatum(colocatedTableId);
 
 		colocatedTablesDatumArray[colocatedTableIndex] = colocatedTableDatum;

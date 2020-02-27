@@ -30,6 +30,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
@@ -712,8 +713,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 static bool
 check_log_statement(List *statementList)
 {
-	ListCell *statementCell;
-
 	if (log_statement == LOGSTMT_NONE)
 	{
 		return false;
@@ -725,10 +724,9 @@ check_log_statement(List *statementList)
 	}
 
 	/* else we have to inspect the statement(s) to see whether to log */
-	foreach(statementCell, statementList)
+	Node *statement = NULL;
+	foreach_ptr(statement, statementList)
 	{
-		Node *statement = (Node *) lfirst(statementCell);
-
 		if (GetCommandLogLevel(statement) <= log_statement)
 		{
 			return true;
@@ -826,12 +824,8 @@ static void
 SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 {
 	DefElem *defElem = NULL;
-	ListCell *optionCell = NULL;
-
-	foreach(optionCell, statement->options)
+	foreach_ptr(defElem, statement->options)
 	{
-		defElem = (DefElem *) lfirst(optionCell);
-
 		if (strcmp(defElem->defname, name) == 0)
 		{
 			pfree(defElem->arg);

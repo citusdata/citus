@@ -17,6 +17,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
@@ -208,7 +209,7 @@ AddSchemaFieldIfMissing(CreateExtensionStmt *createExtensionStmt)
 		 * As we already created the extension by standard_ProcessUtility,
 		 * we actually know the schema it belongs to
 		 */
-		bool missingOk = false;
+		const bool missingOk = false;
 		Oid extensionOid = get_extension_oid(createExtensionStmt->extname, missingOk);
 		Oid extensionSchemaOid = get_extension_schema(extensionOid);
 		char *extensionSchemaName = get_namespace_name(extensionSchemaOid);
@@ -238,7 +239,6 @@ List *
 PreprocessDropExtensionStmt(Node *node, const char *queryString)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
-	ListCell *addressCell = NULL;
 
 	if (!ShouldPropagateExtensionCommand(node))
 	{
@@ -278,9 +278,9 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString)
 		distributedExtensions);
 
 	/* unmark each distributed extension */
-	foreach(addressCell, distributedExtensionAddresses)
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedExtensionAddresses)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
 		UnmarkObjectDistributed(address);
 	}
 
@@ -293,7 +293,6 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString)
 	 */
 	stmt->objects = distributedExtensions;
 	const char *deparsedStmt = DeparseTreeNode((Node *) stmt);
-
 	stmt->objects = allDroppedExtensions;
 
 	/*
@@ -318,12 +317,11 @@ FilterDistributedExtensions(List *extensionObjectList)
 {
 	List *extensionNameList = NIL;
 
-	bool missingOk = true;
-	ListCell *objectCell = NULL;
-
-	foreach(objectCell, extensionObjectList)
+	Value *objectName = NULL;
+	foreach_ptr(objectName, extensionObjectList)
 	{
-		char *extensionName = strVal(lfirst(objectCell));
+		const char *extensionName = strVal(objectName);
+		const bool missingOk = true;
 
 		Oid extensionOid = get_extension_oid(extensionName, missingOk);
 
@@ -340,7 +338,7 @@ FilterDistributedExtensions(List *extensionObjectList)
 			continue;
 		}
 
-		extensionNameList = lappend(extensionNameList, makeString(extensionName));
+		extensionNameList = lappend(extensionNameList, objectName);
 	}
 
 	return extensionNameList;
@@ -358,17 +356,15 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 {
 	List *extensionObjectAddressList = NIL;
 
-	ListCell *objectCell = NULL;
-
-	foreach(objectCell, extensionObjectList)
+	Value *objectName;
+	foreach_ptr(objectName, extensionObjectList)
 	{
 		/*
 		 * We set missingOk to false as we assume all the objects in
 		 * extensionObjectList list are valid and distributed.
 		 */
-		bool missingOk = false;
-
-		const char *extensionName = strVal(lfirst(objectCell));
+		const char *extensionName = strVal(objectName);
+		const bool missingOk = false;
 
 		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 
@@ -553,18 +549,15 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
 static void
 MarkExistingObjectDependenciesDistributedIfSupported()
 {
-	ListCell *listCell = NULL;
-
 	/* resulting object addresses to be marked as distributed */
 	List *resultingObjectAddresses = NIL;
 
 	/* resolve dependencies of distributed tables */
 	List *distributedTableOidList = DistTableOidList();
 
-	foreach(listCell, distributedTableOidList)
+	Oid distributedTableOid = InvalidOid;
+	foreach_oid(distributedTableOid, distributedTableOidList)
 	{
-		Oid distributedTableOid = lfirst_oid(listCell);
-
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, distributedTableOid);
 
@@ -578,10 +571,9 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* resolve dependencies of the objects in pg_dist_object*/
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
 
-	foreach(listCell, distributedObjectAddressList)
+	ObjectAddress *distributedObjectAddress = NULL;
+	foreach_ptr(distributedObjectAddress, distributedObjectAddressList)
 	{
-		ObjectAddress *distributedObjectAddress = (ObjectAddress *) lfirst(listCell);
-
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(distributedObjectAddress);
 
@@ -592,9 +584,9 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* remove duplicates from object addresses list for efficiency */
 	List *uniqueObjectAddresses = GetUniqueDependenciesList(resultingObjectAddresses);
 
-	foreach(listCell, uniqueObjectAddresses)
+	ObjectAddress *objectAddress = NULL;
+	foreach_ptr(objectAddress, uniqueObjectAddresses)
 	{
-		ObjectAddress *objectAddress = (ObjectAddress *) lfirst(listCell);
 		MarkObjectDistributed(objectAddress);
 	}
 }
@@ -729,8 +721,6 @@ IsCreateAlterExtensionUpdateCitusStmt(Node *parseTree)
 bool
 IsDropCitusStmt(Node *parseTree)
 {
-	ListCell *objectCell = NULL;
-
 	/* if it is not a DropStmt, it is needless to search for citus */
 	if (!IsA(parseTree, DropStmt))
 	{
@@ -738,9 +728,10 @@ IsDropCitusStmt(Node *parseTree)
 	}
 
 	/* now that we have a DropStmt, check if citus is among the objects to dropped */
-	foreach(objectCell, ((DropStmt *) parseTree)->objects)
+	Value *objectName;
+	foreach_ptr(objectName, ((DropStmt *) parseTree)->objects)
 	{
-		const char *extensionName = strVal(lfirst(objectCell));
+		const char *extensionName = strVal(objectName);
 
 		if (strncasecmp(extensionName, "citus", NAMEDATALEN) == 0)
 		{

@@ -12,6 +12,7 @@
 #include "pgstat.h"
 
 #include "distributed/function_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_progress.h"
 #include "distributed/version_compat.h"
 #include "storage/dsm.h"
@@ -228,12 +229,9 @@ MonitorDataFromDSMHandle(dsm_handle dsmHandle, dsm_segment **attachedSegment)
 void
 DetachFromDSMSegments(List *dsmSegmentList)
 {
-	ListCell *dsmSegmentCell = NULL;
-
-	foreach(dsmSegmentCell, dsmSegmentList)
+	dsm_segment *dsmSegment = NULL;
+	foreach_ptr(dsmSegment, dsmSegmentList)
 	{
-		dsm_segment *dsmSegment = (dsm_segment *) lfirst(dsmSegmentCell);
-
 		dsm_detach(dsmSegment);
 	}
 }

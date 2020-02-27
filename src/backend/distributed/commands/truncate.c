@@ -64,10 +64,9 @@ static void
 ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 {
 	List *relationList = truncateStatement->relations;
-	ListCell *relationCell = NULL;
-	foreach(relationCell, relationList)
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, relationList)
 	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		char relationKind = get_rel_relkind(relationId);
 		if (IsDistributedTable(relationId) &&
@@ -90,11 +89,9 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 static void
 EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 {
-	ListCell *relationCell = NULL;
-
-	foreach(relationCell, truncateStatement->relations)
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, truncateStatement->relations)
 	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		if (!IsDistributedTable(relationId))
@@ -118,12 +115,11 @@ static void
 ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 {
 	List *relationList = command->relations;
-	ListCell *relationCell = NULL;
 	bool failOK = false;
 
-	foreach(relationCell, relationList)
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, relationList)
 	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 
 		if (IsDistributedTable(relationId) &&
@@ -168,7 +164,6 @@ static void
 LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 {
 	List *distributedRelationList = NIL;
-	ListCell *relationCell = NULL;
 
 	/* nothing to do if there is no metadata at worker nodes */
 	if (!ClusterHasKnownMetadataWorkers())
@@ -176,9 +171,9 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		return;
 	}
 
-	foreach(relationCell, truncateStatement->relations)
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, truncateStatement->relations)
 	{
-		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		Oid referencingRelationId = InvalidOid;
 
@@ -249,16 +244,15 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		{
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 			StringInfo lockRelationCommand = makeStringInfo();
-			ListCell *workerNodeCell = NULL;
 
 			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
 							 quote_literal_cstr(qualifiedRelationName),
 							 lockModeText);
 
-			foreach(workerNodeCell, workerNodeList)
+			WorkerNode *workerNode = NULL;
+			foreach_ptr(workerNode, workerNodeList)
 			{
-				WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-				char *nodeName = workerNode->workerName;
+				const char *nodeName = workerNode->workerName;
 				int nodePort = workerNode->workerPort;
 
 				/* if local node is one of the targets, acquire the lock locally */

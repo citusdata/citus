@@ -21,6 +21,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/memutils.h"
 #include "distributed/metadata_cache.h"
@@ -222,12 +223,11 @@ StartWorkerListConnections(List *workerNodeList, uint32 flags, const char *user,
 						   const char *database)
 {
 	List *connectionList = NIL;
-	ListCell *workerNodeCell = NULL;
 
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		char *nodeName = workerNode->workerName;
+		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
@@ -599,8 +599,6 @@ EventSetSizeForConnectionList(List *connections)
 static WaitEventSet *
 WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 {
-	ListCell *connectionCell = NULL;
-
 	const int eventSetSize = EventSetSizeForConnectionList(connections);
 	int numEventsAdded = 0;
 
@@ -621,11 +619,9 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 	numEventsAdded += 2;
 
-	foreach(connectionCell, connections)
+	MultiConnectionPollState *connectionState = NULL;
+	foreach_ptr(connectionState, connections)
 	{
-		MultiConnectionPollState *connectionState = (MultiConnectionPollState *) lfirst(
-			connectionCell);
-
 		if (numEventsAdded >= eventSetSize)
 		{
 			/* room for events to schedule is exhausted */
@@ -688,15 +684,14 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 	INSTR_TIME_SET_CURRENT(connectionStart);
 
 	List *connectionStates = NULL;
-	ListCell *multiConnectionCell = NULL;
 
 	WaitEventSet *waitEventSet = NULL;
 	bool waitEventSetRebuild = true;
 	int waitCount = 0;
 
-	foreach(multiConnectionCell, multiConnectionList)
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, multiConnectionList)
 	{
-		MultiConnection *connection = (MultiConnection *) lfirst(multiConnectionCell);
 		MultiConnectionPollState *connectionState =
 			palloc0(sizeof(MultiConnectionPollState));
 
@@ -802,9 +797,8 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 */
 				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
 				{
-					MultiConnection *connection = connectionState->connection;
-
-					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+					connectionState->connection->connectionState =
+						MULTI_CONNECTION_CONNECTED;
 				}
 			}
 		}
@@ -876,10 +870,9 @@ MillisecondsToTimeout(instr_time start, long msAfterStart)
 static void
 CloseNotReadyMultiConnectionStates(List *connectionStates)
 {
-	ListCell *connectionStateCell = NULL;
-	foreach(connectionStateCell, connectionStates)
+	MultiConnectionPollState *connectionState = NULL;
+	foreach_ptr(connectionState, connectionStates)
 	{
-		MultiConnectionPollState *connectionState = lfirst(connectionStateCell);
 		MultiConnection *connection = connectionState->connection;
 
 		if (connectionState->phase != MULTI_CONNECTION_PHASE_CONNECTING)

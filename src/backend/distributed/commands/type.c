@@ -54,6 +54,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/namespace.h"
 #include "distributed/metadata_sync.h"
@@ -452,7 +453,6 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
 	 * the old list to put back
 	 */
 	List *oldTypes = stmt->objects;
-	ListCell *addressCell = NULL;
 
 	if (!ShouldPropagate())
 	{
@@ -478,9 +478,9 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
 	 * remove the entries for the distributed objects on dropping
 	 */
 	List *distributedTypeAddresses = TypeNameListToObjectAddresses(distributedTypes);
-	foreach(addressCell, distributedTypeAddresses)
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedTypeAddresses)
 	{
-		ObjectAddress *address = (ObjectAddress *) lfirst(addressCell);
 		UnmarkObjectDistributed(address);
 	}
 
@@ -489,14 +489,14 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
 	 * deparse to an executable sql statement for the workers
 	 */
 	stmt->objects = distributedTypes;
-	const char *dropStmtSql = DeparseTreeNode((Node *) stmt);
+	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
 	EnsureSequentialModeForTypeDDL();
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) dropStmtSql,
+								dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(ALL_WORKERS, commands);
@@ -1113,11 +1113,10 @@ GenerateBackupNameForTypeCollision(const ObjectAddress *address)
 static List *
 FilterNameListForDistributedTypes(List *objects, bool missing_ok)
 {
-	ListCell *objectCell = NULL;
 	List *result = NIL;
-	foreach(objectCell, objects)
+	TypeName *typeName = NULL;
+	foreach_ptr(typeName, objects)
 	{
-		TypeName *typeName = castNode(TypeName, lfirst(objectCell));
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
 		ObjectAddress typeAddress = { 0 };
 
@@ -1144,11 +1143,10 @@ FilterNameListForDistributedTypes(List *objects, bool missing_ok)
 static List *
 TypeNameListToObjectAddresses(List *objects)
 {
-	ListCell *objectCell = NULL;
 	List *result = NIL;
-	foreach(objectCell, objects)
+	TypeName *typeName = NULL;
+	foreach_ptr(typeName, objects)
 	{
-		TypeName *typeName = castNode(TypeName, lfirst(objectCell));
 		Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
 		ObjectAddress *typeAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSet(*typeAddress, TypeRelationId, typeOid);

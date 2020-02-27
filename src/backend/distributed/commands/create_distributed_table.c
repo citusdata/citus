@@ -37,6 +37,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -396,11 +397,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	if (PartitionedTable(relationId))
 	{
 		List *partitionList = PartitionList(relationId);
-		ListCell *partitionCell = NULL;
-
-		foreach(partitionCell, partitionList)
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
 		{
-			Oid partitionRelationId = lfirst_oid(partitionCell);
 			CreateDistributedTable(partitionRelationId, distributionColumn,
 								   distributionMethod, colocateWithTableName,
 								   viaDeprecatedAPI);

@@ -15,6 +15,7 @@
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "distributed/commands.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/parsenodes.h"
 
@@ -113,11 +114,9 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 static bool
 OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
 {
-	ListCell *optionCell = NULL;
-
-	foreach(optionCell, optionList)
+	DefElem *defElem = NULL;
+	foreach_ptr(defElem, optionList)
 	{
-		DefElem *defElem = (DefElem *) lfirst(optionCell);
 		if (strcmp(defElem->defname, "owned_by") == 0)
 		{
 			List *ownedByNames = defGetQualifiedName(defElem);

@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/insert_select_planner.h"
@@ -44,20 +45,17 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 
 	char *queryStringChar = text_to_cstring(queryString);
 	List *parseTreeList = pg_parse_query(queryStringChar);
-	ListCell *parseTreeCell = NULL;
 
-	foreach(parseTreeCell, parseTreeList)
+	Node *parsetree = NULL;
+	foreach_ptr(parsetree, parseTreeList)
 	{
-		Node *parsetree = (Node *) lfirst(parseTreeCell);
-		ListCell *queryTreeCell = NULL;
-
 		List *queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree,
 													 queryStringChar,
 													 NULL, 0, NULL);
 
-		foreach(queryTreeCell, queryTreeList)
+		Query *query = NULL;
+		foreach_ptr(query, queryTreeList)
 		{
-			Query *query = lfirst(queryTreeCell);
 			StringInfo buffer = makeStringInfo();
 
 			/* reoreder the target list only for INSERT .. SELECT queries */

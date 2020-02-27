@@ -16,6 +16,7 @@
 
 #include "commands/dbcommands.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
@@ -536,20 +537,18 @@ OddNumber(uint32 number)
 static bool
 ListMember(List *currentList, WorkerNode *workerNode)
 {
-	bool listMember = false;
 	Size keySize = WORKER_LENGTH + sizeof(uint32);
 
-	ListCell *currentCell = NULL;
-	foreach(currentCell, currentList)
+	WorkerNode *currentNode = NULL;
+	foreach_ptr(currentNode, currentList)
 	{
-		WorkerNode *currentNode = (WorkerNode *) lfirst(currentCell);
 		if (WorkerNodeCompare(workerNode, currentNode, keySize) == 0)
 		{
-			listMember = true;
+			return true;
 		}
 	}
 
-	return listMember;
+	return false;
 }
 
 
@@ -604,13 +603,10 @@ WorkerNode *
 GetFirstPrimaryWorkerNode(void)
 {
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
-	ListCell *workerNodeCell = NULL;
 	WorkerNode *firstWorkerNode = NULL;
-
-	foreach(workerNodeCell, workerNodeList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-
 		if (firstWorkerNode == NULL ||
 			CompareWorkerNodes(&workerNode, &firstWorkerNode) < 0)
 		{

@@ -121,7 +121,7 @@ extern void CreateReferenceTableShard(Oid distributedTableId);
 extern List * WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 										   List *ddlCommandList,
 										   List *foreignConstraintCommandList);
-extern Oid ForeignConstraintGetReferencedTableId(char *queryString);
+extern Oid ForeignConstraintGetReferencedTableId(const char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
 extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,
 										char **tableName);
@@ -155,7 +155,8 @@ extern Datum isolate_tenant_to_new_shard(PG_FUNCTION_ARGS);
 extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
 
 /* function declarations for shard copy functinality */
-extern List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+extern List * CopyShardCommandList(ShardInterval *shardInterval, const
+								   char *sourceNodeName,
 								   int32 sourceNodePort, bool includeData);
 extern List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
 extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
@@ -164,8 +165,9 @@ extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInt
 														 List **
 														 referenceTableForeignConstraintList);
 extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
-												   char *nodeName, uint32 nodePort);
+												   const char *nodeName, uint32 nodePort);
 extern ShardPlacement * ForceSearchShardPlacementInList(List *shardPlacementList,
-														char *nodeName, uint32 nodePort);
+														const char *nodeName,
+														uint32 nodePort);
 
 #endif   /* MASTER_PROTOCOL_H */

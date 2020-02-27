@@ -21,6 +21,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "nodes/makefuncs.h"
@@ -46,7 +47,6 @@ List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
-	ListCell *optionCell = NULL;
 
 	if (!EnableAlterRolePropagation || !IsCoordinator())
 	{
@@ -60,10 +60,9 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
-	foreach(optionCell, stmt->options)
+	DefElem *option = NULL;
+	foreach_ptr(option, stmt->options)
 	{
-		DefElem *option = (DefElem *) lfirst(optionCell);
-
 		if (strcasecmp(option->defname, "password") == 0)
 		{
 			Oid roleOid = get_rolespec_oid(stmt->role, true);

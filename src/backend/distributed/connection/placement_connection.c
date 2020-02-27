@@ -15,6 +15,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
@@ -338,13 +339,11 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 void
 AssignPlacementListToConnection(List *placementAccessList, MultiConnection *connection)
 {
-	ListCell *placementAccessCell = NULL;
-	char *userName = connection->user;
+	const char *userName = connection->user;
 
-	foreach(placementAccessCell, placementAccessList)
+	ShardPlacementAccess *placementAccess = NULL;
+	foreach_ptr(placementAccess, placementAccessList)
 	{
-		ShardPlacementAccess *placementAccess =
-			(ShardPlacementAccess *) lfirst(placementAccessCell);
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
@@ -490,7 +489,6 @@ static MultiConnection *
 FindPlacementListConnection(int flags, List *placementAccessList, const char *userName)
 {
 	bool foundModifyingConnection = false;
-	ListCell *placementAccessCell = NULL;
 	MultiConnection *chosenConnection = NULL;
 
 	/*
@@ -506,10 +504,9 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 	 * If placements have only been read in this transaction, then use the last
 	 * suitable connection found for a placement in the placementAccessList.
 	 */
-	foreach(placementAccessCell, placementAccessList)
+	ShardPlacementAccess *placementAccess = NULL;
+	foreach_ptr(placementAccess, placementAccessList)
 	{
-		ShardPlacementAccess *placementAccess =
-			(ShardPlacementAccess *) lfirst(placementAccessCell);
 		ShardPlacement *placement = placementAccess->placement;
 		ShardPlacementAccessType accessType = placementAccess->accessType;
 
