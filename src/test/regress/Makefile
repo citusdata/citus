@@ -112,8 +112,12 @@ check-empty: all
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-multi: all
-	$(pg_regress_multi_check) --constr="$(constr)" --hoststr="$(hoststr)" --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
+
+check-multi-hyperscale-superuser: all
+	$(pg_regress_multi_check) --conninfo="$(conninfo)" --worker-1-public-hostname="$(worker_1_public_hostname)" --worker-2-public-hostname="$(worker_2_public_hostname)" --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule_hyperscale_superuser $(EXTRA_TESTS)
 
 check-multi-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
