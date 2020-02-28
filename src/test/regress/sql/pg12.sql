@@ -25,10 +25,11 @@ insert into test_am values (1, 1);
 select create_distributed_table('test_am','id');
 
 -- Test generated columns
+-- val1 after val2 to test https://github.com/citusdata/citus/issues/3538
 create table gen1 (
 	id int,
-	val1 int,
-	val2 int GENERATED ALWAYS AS (val1 + 2) STORED
+	val2 int GENERATED ALWAYS AS (val1 + 2) STORED,
+	val1 int
 );
 create table gen2 (
 	id int,
