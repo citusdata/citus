@@ -44,7 +44,7 @@ typedef struct CitusVacuumParams
 static bool IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList);
 static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
 							 List *vacuumColumnList);
-static StringInfo DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
+static char * DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
 static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
 static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
@@ -182,15 +182,17 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 static List *
 VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColumnList)
 {
+	/* resulting task list */
 	List *taskList = NIL;
-	uint64 jobId = INVALID_JOB_ID;
+
+	/* enumerate the tasks when putting them to the taskList */
 	int taskId = 1;
-	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumParams);
-	const int vacuumPrefixLen = vacuumString->len;
+
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
-	char *tableName = get_rel_name(relationId);
+	char *relationName = get_rel_name(relationId);
 
+	const char *vacuumStringPrefix = DeparseVacuumStmtPrefix(vacuumParams);
 	const char *columnNames = DeparseVacuumColumnNames(vacuumColumnList);
 
 	/*
@@ -210,20 +212,25 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
+		char *shardRelationName = pstrdup(relationName);
 
-		char *shardName = pstrdup(tableName);
-		AppendShardIdToName(&shardName, shardInterval->shardId);
-		shardName = quote_qualified_identifier(schemaName, shardName);
+		/* build shard relation name */
+		AppendShardIdToName(&shardRelationName, shardId);
 
-		vacuumString->len = vacuumPrefixLen;
-		appendStringInfoString(vacuumString, shardName);
-		appendStringInfoString(vacuumString, columnNames);
+		char *quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
+
+		/* copy base vacuum string and build the shard specific command */
+		StringInfo vacuumStringForShard = makeStringInfo();
+		appendStringInfoString(vacuumStringForShard, vacuumStringPrefix);
+
+		appendStringInfoString(vacuumStringForShard, quotedShardName);
+		appendStringInfoString(vacuumStringForShard, columnNames);
 
 		Task *task = CitusMakeNode(Task);
-		task->jobId = jobId;
+		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = VACUUM_ANALYZE_TASK;
-		SetTaskQueryString(task, pstrdup(vacuumString->data));
+		SetTaskQueryString(task, vacuumStringForShard->data);
 		task->dependentTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
@@ -242,7 +249,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
  * reuse this prefix within a loop to generate shard-specific VACUUM or ANALYZE
  * statements.
  */
-static StringInfo
+static char *
 DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 {
 	int vacuumFlags = vacuumParams.options;
@@ -276,7 +283,7 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 #endif
 		)
 	{
-		return vacuumPrefix;
+		return vacuumPrefix->data;
 	}
 
 	/* otherwise, handle options */
@@ -334,7 +341,7 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 
 	appendStringInfoChar(vacuumPrefix, ' ');
 
-	return vacuumPrefix;
+	return vacuumPrefix->data;
 }
 
 
