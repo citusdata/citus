@@ -790,7 +790,16 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 	else
 	{
 		char *relationName = get_rel_name(distributedRelationId);
-		ereport(ERROR, (errmsg("relation %s is not distributed", relationName)));
+
+		if (relationName == NULL)
+		{
+			ereport(ERROR, (errmsg("relation with OID %u does not exist",
+								   distributedRelationId)));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("relation %s is not distributed", relationName)));
+		}
 	}
 }
 
