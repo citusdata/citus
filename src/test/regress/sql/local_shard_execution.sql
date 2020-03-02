@@ -36,6 +36,16 @@ CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, ser, ts, collection_id, value)
 	FOR VALUES IN ( 0 );
 
+-- create a volatile function that returns the local node id
+CREATE OR REPLACE FUNCTION get_local_node_id_volatile()
+RETURNS INT AS $$
+DECLARE localGroupId int;
+BEGIN
+        SELECT groupid INTO localGroupId FROM pg_dist_local_group;
+  RETURN localGroupId;
+END; $$ language plpgsql VOLATILE;
+SELECT create_distributed_function('get_local_node_id_volatile()');
+
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution;
@@ -361,6 +371,29 @@ $$ LANGUAGE plpgsql;
 
 CALL only_local_execution();
 
+-- insert a row that we need in the next tests
+INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29';
+
+-- make sure that functions can use local execution
+CREATE OR REPLACE PROCEDURE only_local_execution_with_function_evaluation() AS $$
+		DECLARE nodeId INT;
+		BEGIN
+			-- fast path router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table WHERE key = 1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+
+			-- regular router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = 1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+		END;
+$$ LANGUAGE plpgsql;
+
+CALL only_local_execution_with_function_evaluation();
+
 CREATE OR REPLACE PROCEDURE only_local_execution_with_params(int) AS $$
 		DECLARE cnt INT;
 		BEGIN
@@ -371,6 +404,25 @@ CREATE OR REPLACE PROCEDURE only_local_execution_with_params(int) AS $$
 $$ LANGUAGE plpgsql;
 
 CALL only_local_execution_with_params(1);
+
+CREATE OR REPLACE PROCEDURE only_local_execution_with_function_evaluation_param(int) AS $$
+		DECLARE nodeId INT;
+		BEGIN
+			-- fast path router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table WHERE key = $1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+
+			-- regular router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = $1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+		END;
+$$ LANGUAGE plpgsql;
+
+CALL only_local_execution_with_function_evaluation_param(1);
 
 CREATE OR REPLACE PROCEDURE local_execution_followed_by_dist() AS $$
 		DECLARE cnt INT;
