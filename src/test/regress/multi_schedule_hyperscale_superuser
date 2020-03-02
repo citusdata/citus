@@ -19,21 +19,12 @@
 # remove / add node operations, we do not want any preexisting objects before
 # propagate_extension_commands
 # ---
-#test: multi_extension
-#test: multi_703_upgrade
-#test: multi_cluster_management
-#test: alter_role_propagation
-#test: propagate_extension_commands
-test: escape_extension_name
 test: multi_test_helpers
 test: multi_test_catalog_views
-#test: multi_table_ddl
 test: multi_name_lengths
 test: multi_name_resolution
 test: multi_metadata_access
-test: multi_metadata_attributes
 
-#test: multi_read_from_secondaries
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
@@ -41,11 +32,9 @@ test: multi_metadata_attributes
 # ----------
 test: multi_create_table
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
-#test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select
-test: multi_shard_update_delete recursive_dml_with_different_planners_executors
-test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
+test: recursive_dml_with_different_planners_executors
+test: insert_select_repartition dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict
-test: multi_row_insert
 
 # following should not run in parallel because it relies on connection counts to workers
 test: insert_select_connection_leak
@@ -60,47 +49,44 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils replicated_partitioned_table
+test: multi_partitioning_utils
 
 
 # ----------
 # Tests for recursive subquery planning
 # ----------
-test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
-test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where
+test: subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
+test: subqueries_deep subquery_view subquery_partitioning subqueries_not_supported subquery_in_where
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
 test: subquery_prepared_statements pg12 cte_inline
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
-test: multi_deparse_shard_query multi_distributed_transaction_id multi_real_time_transaction intermediate_results limit_intermediate_size
-test: multi_explain hyperscale_tutorial partitioned_intermediate_results distributed_intermediate_results
-test: multi_basic_queries multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
-test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
+test: multi_deparse_shard_query multi_distributed_transaction_id limit_intermediate_size
+test: hyperscale_tutorial
+test: multi_basic_queries multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
+test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_sql_function
 test: multi_function_in_join row_types materialized_view
 test: multi_subquery_in_where_reference_clause full_join adaptive_executor propagate_set_commands
 test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc
-test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause_approximate multi_outer_join_reference multi_single_relation_subquery
-test: multi_reference_table multi_select_for_update relation_access_tracking
-test: custom_aggregate_support aggregate_support
-test: multi_average_expression multi_working_columns multi_having_pushdown
-test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
-test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having ch_bench_subquery_repartition chbenchmark_all_queries expression_reference_join
+test: multi_agg_distinct multi_limit_clause_approximate multi_outer_join_reference
+test: multi_select_for_update relation_access_tracking
+test: multi_working_columns multi_having_pushdown
+test: multi_limit_clause
+test: bool_agg ch_bench_having ch_bench_subquery_repartition chbenchmark_all_queries expression_reference_join
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning
 test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
-test: multi_null_minmax_value_pruning
 test: multi_query_directory_cleanup
-test: multi_task_assignment_policy multi_cross_shard
-test: multi_utility_statements
+test: multi_cross_shard
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: multi_binary_master_copy_format
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior
 # ----------
-test: multi_tpch_query1 multi_tpch_query3 multi_tpch_query6 multi_tpch_query10
+test: multi_tpch_query3 multi_tpch_query6 multi_tpch_query10
 test: multi_tpch_query12 multi_tpch_query14 multi_tpch_query19
 test: multi_tpch_query7 multi_tpch_query7_nested
 
@@ -123,15 +109,14 @@ test: adaptive_executor_repartition
 # ---------
 # Tests that modify data should run sequentially
 # ---------
-test: with_prepare
 
 # ---------
 # Tests for recursive planning.
 # ---------
-test: with_nested with_where with_set_operations
-test: with_modifying cte_prepared_modify cte_nested_modification
+test: with_where
+test: cte_prepared_modify cte_nested_modification
 test: ensure_no_intermediate_data_leak
-test: with_executors with_join with_partitioning with_transactions with_dml
+test: with_executors with_partitioning with_dml
 
 
 # ----------
@@ -144,8 +129,6 @@ test: multi_shard_modify
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
-test: multi_index_statements
-test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
 
 # ----------
@@ -155,23 +138,11 @@ test: multi_alter_table_add_constraints
 test: multi_create_schema
 
 # ----------
-# Tests to check if we inform the user about potential caveats of creating new
-# databases, schemas, roles, and authentication information.
-# ----------
-test: multi_utility_warnings
-
-# ----------
 # Tests to check the sequential and parallel executions of DDL and modification
 # commands
 # Should not be executed in parallel with other tests
 # ----------
 test: sequential_modifications
-
-# ---------
-# multi_append_table_to_shard loads data to create shards in a way that forces
-# shard caching.
-# ---------
-test: multi_append_table_to_shard
 
 # ---------
 # multi_outer_join loads data to create shards to test outer join mappings
@@ -186,56 +157,17 @@ test: multi_outer_join
 # is independent from the rest of the group, it is added to increase parallelism.
 # ---
 test: multi_create_fdw
-test: multi_complex_count_distinct multi_select_distinct
-test: multi_modifications
-test: multi_distribution_metadata
-test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards
+test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list
 test: multi_upsert multi_simple_queries multi_data_types
 test: multi_utilities foreign_key_to_reference_table validate_constraint
-test: multi_modifying_xacts
-test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
-test: multi_transaction_recovery
+test: multi_repartition_udt multi_repartitioned_subquery_udf
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy fast_path_router_modify
-test: multi_router_planner null_parameters
-
-# ----------
-# multi_large_shardid loads more lineitem data using high shard identifiers
-# ----------
-test: multi_large_shardid
-
-# ----------
-#  multi_size_queries tests various size commands on distributed tables
-# ----------
-test: multi_size_queries
-
-# ----------
-# multi_drop_extension makes sure we can safely drop and recreate the extension
-# ----------
-#test: multi_drop_extension
-
-# ----------
-# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
-# multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
-# ----------
-test: multi_metadata_sync
-#test: multi_unsupported_worker_operations
-
-# ----------
-# grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
-# multi_schema_support makes sure we can work with tables in schemas other than public with no problem
-# ----------
-test: grant_on_schema_propagation
-test: multi_schema_support
-
-# ----------
-# multi_function_evaluation tests edge-cases in master-side function pre-evaluation
-# ----------
-test: multi_function_evaluation
+test: fast_path_router_modify
+test: null_parameters
 
 # ----------
 # multi_truncate tests truncate functionality for distributed tables
@@ -243,54 +175,15 @@ test: multi_function_evaluation
 test: multi_truncate
 
 # ----------
-# multi_colocation_utils tests utility functions written for co-location feature & internal API
-# multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
-# ----------
-test: multi_colocation_utils
-test: multi_colocated_shard_transfer
-
-# ----------
-# multi_citus_tools tests utility functions written for citus tools
-# ----------
-test: multi_citus_tools
-
-# ----------
 # multi_foreign_key tests foreign key push down on distributed tables
 # ----------
 test: multi_foreign_key multi_foreign_key_relation_graph
-
-# ----------
-# multi_upgrade_reference_table tests for upgrade_reference_table UDF
-# multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
-# multi_remove_node_reference_table tests metadata changes after master_remove_node
-# ----------
-test: multi_upgrade_reference_table
-test: multi_replicate_reference_table
-test: multi_remove_node_reference_table
 
 # --------
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
-#test: add_coordinator
-test: multi_upgrade_reference_table
-test: multi_replicate_reference_table
-test: multi_reference_table
 test: foreign_key_to_reference_table
-test: replicate_reference_tables_to_coordinator
-test: coordinator_shouldhaveshards
-
-test: remove_coordinator
-
-# ----------
-# multi_transactional_drop_shards tests for dropping shards using connection API
-# ----------
-test: multi_transactional_drop_shards
-
-# ----------
-# multi_multiuser tests simple combinations of permission access and queries
-# ----------
-test: multi_multiuser
 
 # ---------
 # multi_cache_invalidation tests for an obscure crash citus used to exhibit when shardids
@@ -304,22 +197,14 @@ test: multi_cache_invalidation
 test: multi_task_string_size
 
 # ---------
-# connection encryption tests
-# ---------
-test: ssl_by_default
-
-# ---------
 # object distribution tests
 # ---------
-test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
-#test: distributed_functions distributed_functions_conflict
-test: distributed_collations distributed_collations_conflict
-test: distributed_procedure
+test: distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 
 # ---------
 # deparsing logic tests
 # ---------
-test: multi_deparse_function multi_deparse_procedure
+test: multi_deparse_function
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last
