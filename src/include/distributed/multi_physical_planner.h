@@ -157,6 +157,13 @@ typedef struct Job
 
 	/* for local shard queries, we may save the local plan here */
 	List *localPlannedStatements;
+
+	/*
+	 * When we evaluate functions and parameters in jobQuery then we
+	 * should no longer send the list of parameters along with the
+	 * query.
+	 */
+	bool parametersInJobQueryResolved;
 } Job;
 
 
@@ -274,6 +281,13 @@ typedef struct Task
 	 * the task splitted into local and remote tasks.
 	 */
 	bool partiallyLocalOrRemote;
+
+	/*
+	 * When we evaluate functions and parameters in the query string then
+	 * we should no longer send the list of parameters long with the
+	 * query.
+	 */
+	bool parametersInQueryStringResolved;
 } Task;
 
 

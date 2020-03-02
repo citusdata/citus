@@ -339,6 +339,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_BOOL_FIELD(deferredPruning);
 	WRITE_NODE_FIELD(partitionKeyValue);
 	WRITE_NODE_FIELD(localPlannedStatements);
+	WRITE_BOOL_FIELD(parametersInJobQueryResolved);
 }
 
 
@@ -492,6 +493,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(relationRowLockList);
 	WRITE_NODE_FIELD(rowValuesLists);
 	WRITE_BOOL_FIELD(partiallyLocalOrRemote);
+	WRITE_BOOL_FIELD(parametersInQueryStringResolved);
 }
 
 

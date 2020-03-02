@@ -190,6 +190,7 @@ readJobInfo(Job *local_node)
 	READ_BOOL_FIELD(deferredPruning);
 	READ_NODE_FIELD(partitionKeyValue);
 	READ_NODE_FIELD(localPlannedStatements);
+	READ_BOOL_FIELD(parametersInJobQueryResolved);
 }
 
 
@@ -405,6 +406,7 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(relationRowLockList);
 	READ_NODE_FIELD(rowValuesLists);
 	READ_BOOL_FIELD(partiallyLocalOrRemote);
+	READ_BOOL_FIELD(parametersInQueryStringResolved);
 
 	READ_DONE();
 }
