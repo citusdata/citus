@@ -17,6 +17,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
@@ -46,18 +47,20 @@ static char * DeparseTaskQuery(Task *task, Query *query);
  * include execution-time changes such as function evaluation.
  */
 void
-RebuildQueryStrings(Query *originalQuery, List *taskList)
+RebuildQueryStrings(Job *workerJob)
 {
-	ListCell *taskCell = NULL;
+	Query *originalQuery = workerJob->jobQuery;
+	List *taskList = workerJob->taskList;
 	Oid relationId = ((RangeTblEntry *) linitial(originalQuery->rtable))->relid;
 	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery);
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		Query *query = originalQuery;
 
-		if (UpdateOrDeleteQuery(query) && list_length(taskList))
+		if (UpdateOrDeleteQuery(query) && list_length(taskList) > 1)
 		{
 			query = copyObject(originalQuery);
 		}
@@ -114,6 +117,12 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 								: ApplyLogRedaction(TaskQueryString(task)))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
+
+		/*
+		 * If parameters were resolved in the job query, then they are now also
+		 * resolved in the query string.
+		 */
+		task->parametersInQueryStringResolved = workerJob->parametersInJobQueryResolved;
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
 								ApplyLogRedaction(TaskQueryString(task)))));

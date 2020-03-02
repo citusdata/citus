@@ -158,11 +158,11 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static List * SingleShardSelectTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool parametersInQueryResolved);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static List * SingleShardModifyTaskList(Query *query, uint64 jobId,
 										List *relationShardList, List *placementList,
-										uint64 shardId);
+										uint64 shardId, bool parametersInQueryResolved);
 static List * RemoveCoordinatorPlacement(List *placementList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
@@ -1447,7 +1447,9 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	}
 	else
 	{
-		taskList = RouterInsertTaskList(query, planningError);
+		bool parametersInQueryResolved = false;
+
+		taskList = RouterInsertTaskList(query, parametersInQueryResolved, planningError);
 		if (*planningError)
 		{
 			return NULL;
@@ -1457,19 +1459,20 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 		requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 	}
 
+	Job *job = CreateJob(originalQuery);
+	job->taskList = taskList;
+	job->requiresMasterEvaluation = requiresMasterEvaluation;
+	job->deferredPruning = deferredPruning;
+
 	if (!requiresMasterEvaluation)
 	{
 		/* no functions or parameters, build the query strings upfront */
-		RebuildQueryStrings(originalQuery, taskList);
+		RebuildQueryStrings(job);
 
 		/* remember the partition column value */
 		partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 	}
 
-	Job *job = CreateJob(originalQuery);
-	job->taskList = taskList;
-	job->requiresMasterEvaluation = requiresMasterEvaluation;
-	job->deferredPruning = deferredPruning;
 	job->partitionKeyValue = partitionKeyValue;
 
 	return job;
@@ -1561,7 +1564,8 @@ ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry)
  * a distributed table via the router executor.
  */
 List *
-RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
+RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
+					 DeferredErrorMessage **planningError)
 {
 	List *insertTaskList = NIL;
 	ListCell *modifyRouteCell = NULL;
@@ -1593,8 +1597,8 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 		relationShard->relationId = distributedTableId;
 
 		modifyTask->relationShardList = list_make1(relationShard);
-
 		modifyTask->taskPlacementList = ShardPlacementList(modifyRoute->shardId);
+		modifyTask->parametersInQueryStringResolved = parametersInQueryResolved;
 
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
@@ -1772,7 +1776,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 	{
 		job->taskList = SingleShardSelectTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId,
+												  job->parametersInJobQueryResolved);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1798,7 +1803,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 	{
 		job->taskList = SingleShardModifyTaskList(originalQuery, job->jobId,
 												  relationShardList, placementList,
-												  shardId);
+												  shardId,
+												  job->parametersInJobQueryResolved);
 	}
 }
 
@@ -1890,7 +1896,8 @@ RemoveCoordinatorPlacement(List *placementList)
  */
 static List *
 SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList, uint64 shardId)
+						  List *placementList, uint64 shardId,
+						  bool parametersInQueryResolved)
 {
 	Task *task = CreateTask(SELECT_TASK);
 	List *relationRowLockList = NIL;
@@ -1908,6 +1915,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
 	task->relationRowLockList = relationRowLockList;
+	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
 	return list_make1(task);
 }
@@ -1960,7 +1968,8 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
  */
 static List *
 SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
-						  List *placementList, uint64 shardId)
+						  List *placementList, uint64 shardId,
+						  bool parametersInQueryResolved)
 {
 	Task *task = CreateTask(MODIFY_TASK);
 	List *rangeTableList = NIL;
@@ -1987,6 +1996,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
 	task->replicationModel = modificationTableCacheEntry->replicationModel;
+	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
 	return list_make1(task);
 }
