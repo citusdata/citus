@@ -550,7 +550,65 @@ WHERE
 	range_column IN ('A', 'E') AND
 	range_partitioned.data IN (SELECT data FROM some_data);
 
+
+-- test case for issue #3556
+CREATE TABLE accounts (id text PRIMARY KEY);
+CREATE TABLE stats (account_id text PRIMARY KEY, spent int);
+
+SELECT create_distributed_table('accounts', 'id', colocate_with => 'none');
+SELECT create_distributed_table('stats', 'account_id', colocate_with => 'accounts');
+
+INSERT INTO accounts (id) VALUES ('foo');
+INSERT INTO stats (account_id, spent) VALUES ('foo', 100);
+
+SELECT *
+FROM
+(
+    WITH accounts_cte AS (
+        SELECT id AS account_id
+        FROM accounts
+    ),
+    joined_stats_cte_1 AS (
+        SELECT spent, account_id
+        FROM stats
+        INNER JOIN accounts_cte USING (account_id)
+    ),
+    joined_stats_cte_2 AS (
+        SELECT spent, account_id
+        FROM joined_stats_cte_1
+        INNER JOIN accounts_cte USING (account_id)
+    )
+    SELECT SUM(spent) OVER (PARTITION BY coalesce(account_id, NULL))
+    FROM accounts_cte
+    INNER JOIN joined_stats_cte_2 USING (account_id)
+) inner_query;
+
+-- confirm that the pruning works well when using round-robin as well
+SET citus.task_assignment_policy to 'round-robin';
+SELECT *
+FROM
+(
+    WITH accounts_cte AS (
+        SELECT id AS account_id
+        FROM accounts
+    ),
+    joined_stats_cte_1 AS (
+        SELECT spent, account_id
+        FROM stats
+        INNER JOIN accounts_cte USING (account_id)
+    ),
+    joined_stats_cte_2 AS (
+        SELECT spent, account_id
+        FROM joined_stats_cte_1
+        INNER JOIN accounts_cte USING (account_id)
+    )
+    SELECT SUM(spent) OVER (PARTITION BY coalesce(account_id, NULL))
+    FROM accounts_cte
+    INNER JOIN joined_stats_cte_2 USING (account_id)
+) inner_query;
+
+SET citus.task_assignment_policy to DEFAULT;
 SET client_min_messages TO DEFAULT;
-DROP TABLE table_1, table_2, table_3, ref_table, range_partitioned;
+DROP TABLE table_1, table_2, table_3, ref_table, accounts, stats, range_partitioned;
 DROP SCHEMA intermediate_result_pruning;
 
