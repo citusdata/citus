@@ -4433,9 +4433,20 @@ get_parameter(Param *param, deparse_context *context)
 	}
 
 	/*
-	 * Not PARAM_EXEC, or couldn't find referent: just print $N.
+	 * Not PARAM_EXEC, or couldn't find referent: for base types just print $N.
+	 * For composite types, add cast to the parameter to ease remote node detect
+	 * the type.
 	 */
-	appendStringInfo(context->buf, "$%d", param->paramid);
+	if (param->paramtype >= FirstNormalObjectId)
+	{
+		char *typeName = format_type_with_typemod(param->paramtype, param->paramtypmod);
+
+		appendStringInfo(context->buf, "$%d::%s", param->paramid, typeName);
+	}
+	else
+	{
+		appendStringInfo(context->buf, "$%d", param->paramid);
+	}
 }
 
 /*

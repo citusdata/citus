@@ -179,6 +179,41 @@ EXECUTE prepared_insert('comment-4', '(4, 40)');
 EXECUTE prepared_insert('comment-5', '(5, 50)');
 EXECUTE prepared_insert('comment-6', '(6, 60)');
 
+-- to make this work, Citus adds the type casting for composite keys
+-- during the deparsing
+PREPARE prepared_custom_type_select(test_composite_type) AS
+	SELECT count(*) FROM router_executor_table WHERE id = 1 AND stats = $1;
+
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+EXECUTE prepared_custom_type_select('(1,1)');
+
+CREATE SCHEMA internal_test_schema;
+SET search_path TO internal_test_schema;
+
+-- to make this work, Citus adds the type casting for composite keys
+-- during the deparsing
+PREPARE prepared_custom_type_select_with_search_path(public.test_composite_type) AS
+	SELECT count(*) FROM public.router_executor_table WHERE id = 1 AND stats = $1;
+
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)');
+
+-- also show that it works even if we explicitly cast the type
+EXECUTE prepared_custom_type_select_with_search_path('(1,1)'::public.test_composite_type);
+
+DROP SCHEMA internal_test_schema CASCADE;
+SET search_path TO public;
+
 SELECT * FROM router_executor_table ORDER BY comment;
 
 -- test parameterized selects
