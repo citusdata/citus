@@ -396,7 +396,7 @@ PendingWorkerTransactionList(MultiConnection *connection)
 	StringInfo command = makeStringInfo();
 	bool raiseInterrupts = true;
 	List *transactionNames = NIL;
-	int coordinatorId = GetLocalGroupId();
+	int32 coordinatorId = GetLocalGroupId();
 
 	appendStringInfo(command, "SELECT gid FROM pg_prepared_xacts "
 							  "WHERE gid LIKE 'citus\\_%d\\_%%'",

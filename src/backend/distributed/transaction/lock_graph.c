@@ -93,7 +93,7 @@ BuildGlobalWaitGraph(void)
 	List *workerNodeList = ActiveReadableNodeList();
 	char *nodeUser = CitusExtensionOwnerName();
 	List *connectionList = NIL;
-	int localNodeId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 
 	WaitGraph *waitGraph = BuildLocalWaitGraph();
 
@@ -105,7 +105,7 @@ BuildGlobalWaitGraph(void)
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
-		if (workerNode->groupId == localNodeId)
+		if (workerNode->groupId == localGroupId)
 		{
 			/* we already have local wait edges */
 			continue;

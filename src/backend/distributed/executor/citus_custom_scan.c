@@ -532,10 +532,13 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
 	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
 	LocalPlannedStatement *localPlannedStatement = NULL;
+
+	int32 localGroupId = GetLocalGroupId();
+
 	foreach_ptr(localPlannedStatement, cachedPlanList)
 	{
 		if (localPlannedStatement->shardId == task->anchorShardId &&
-			localPlannedStatement->localGroupId == GetLocalGroupId())
+			localPlannedStatement->localGroupId == localGroupId)
 		{
 			/* already have a cached plan, no need to continue */
 			return localPlannedStatement->localPlan;

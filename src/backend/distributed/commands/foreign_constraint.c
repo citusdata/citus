@@ -31,7 +31,7 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-
+/* Local functions forward declarations */
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
 													   relationId, int pgConstraintKey,
 													   char *columnName);
@@ -173,6 +173,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 									  " or a reference table.")));
 		}
 
+		/* set referenced table related variables here in an optimized way */
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);

@@ -1334,7 +1334,7 @@ GetNextNodeId()
 void
 EnsureCoordinator(void)
 {
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 
 	if (localGroupId != 0)
 	{

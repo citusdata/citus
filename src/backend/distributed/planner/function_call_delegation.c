@@ -123,8 +123,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	int32 groupId = GetLocalGroupId();
-	if (groupId != 0 || groupId == GROUP_ID_UPGRADING)
+	int32 localGroupId = GetLocalGroupId();
+	if (localGroupId != COORDINATOR_GROUP_ID || localGroupId == GROUP_ID_UPGRADING)
 	{
 		/* do not delegate from workers, or while upgrading */
 		return NULL;

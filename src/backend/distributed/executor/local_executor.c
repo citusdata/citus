@@ -504,7 +504,7 @@ ShouldExecuteTasksLocally(List *taskList)
 bool
 TaskAccessesLocalNode(Task *task)
 {
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 
 	ShardPlacement *taskPlacement = NULL;
 	foreach_ptr(taskPlacement, task->taskPlacementList)
