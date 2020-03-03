@@ -186,17 +186,25 @@ AppendAlterExtensionStmt(StringInfo buf, AlterExtensionStmt *alterExtensionStmt)
 	const char *extensionName = alterExtensionStmt->extname;
 	extensionName = quote_identifier(extensionName);
 
-	Value *newVersionValue = GetExtensionOption(optionsList, "new_version");
+	appendStringInfo(buf, "ALTER EXTENSION %s UPDATE", extensionName);
 
-	appendStringInfo(buf, "ALTER EXTENSION %s UPDATE ", extensionName);
-
-	/* "new_version" may not be specified in AlterExtensionStmt */
-	if (newVersionValue)
+	/*
+	 * Append the options for ALTER EXTENSION ... UPDATE
+	 * Currently there is only 1 option, but this structure follows how postgres parses
+	 * the options.
+	 */
+	DefElem *option = NULL;
+	foreach_ptr(option, optionsList)
 	{
-		const char *newVersion = strVal(newVersionValue);
-		newVersion = quote_identifier(newVersion);
-
-		appendStringInfo(buf, " TO %s", newVersion);
+		if (strcmp(option->defname, "new_version") == 0)
+		{
+			const char *newVersion = defGetString(option);
+			appendStringInfo(buf, " TO %s", quote_identifier(newVersion));
+		}
+		else
+		{
+			elog(ERROR, "unrecognized option: %s", option->defname);
+		}
 	}
 
 	appendStringInfoString(buf, ";");
