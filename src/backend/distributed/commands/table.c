@@ -122,9 +122,9 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 
 
 /*
- * PostprocessCreateTableStmtPartitionOf takes CreateStmt object as a parameter but
- * it only processes CREATE TABLE ... PARTITION OF statements and it checks if
- * user creates the table as a partition of a distributed table. In that case,
+ * PostprocessCreateTableStmtPartitionOf takes CreateStmt object as a parameter
+ * but it only processes CREATE TABLE ... PARTITION OF statements and it checks
+ * if user creates the table as a partition of a distributed table. In that case,
  * it distributes partition as well. Since the table itself is a partition,
  * CreateDistributedTable will attach it to its parent table automatically after
  * distributing it.
@@ -173,9 +173,10 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 
 /*
- * PostprocessAlterTableStmtAttachPartition takes AlterTableStmt object as parameter
- * but it only processes into ALTER TABLE ... ATTACH PARTITION commands and
- * distributes the partition if necessary. There are four cases to consider;
+ * PostprocessAlterTableStmtAttachPartition takes AlterTableStmt object as
+ * parameter but it only processes into ALTER TABLE ... ATTACH PARTITION
+ * commands and distributes the partition if necessary. There are four cases
+ * to consider;
  *
  * Parent is not distributed, partition is not distributed: We do not need to
  * do anything in this case.
@@ -250,9 +251,9 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 
 
 /*
- * PostprocessAlterTableSchemaStmt is executed after the change has been applied locally, we
- * can now use the new dependencies of the table to ensure all its dependencies exist on
- * the workers before we apply the commands remotely.
+ * PostprocessAlterTableSchemaStmt is executed after the change has been applied
+ * locally, we can now use the new dependencies of the table to ensure all its
+ * dependencies exist on the workers before we apply the commands remotely.
  */
 List *
 PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
@@ -274,19 +275,18 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 
 /*
- * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement involves
- * a distributed table. If so (and if the statement does not use unsupported
- * options), it modifies the input statement to ensure proper execution against
- * the master node table and creates a DDLJob to encapsulate information needed
- * during the worker node portion of DDL execution before returning that DDLJob
- * in a List. If no distributed table is involved, this function returns NIL.
+ * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement
+ * involves a distributed table. If so (and if the statement does not use
+ * unsupported options), it modifies the input statement to ensure proper
+ * execution against the master node table and creates a DDLJob to encapsulate
+ * information needed during the worker node portion of DDL execution before
+ * returning that DDLJob in a List. If no distributed table is involved, this
+ * function returns NIL.
  */
 List *
 PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 {
 	AlterTableStmt *alterTableStatement = castNode(AlterTableStmt, node);
-	Oid rightRelationId = InvalidOid;
-	bool executeSequentially = false;
 
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -296,6 +296,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 
 	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
 	Oid leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
 	if (!OidIsValid(leftRelationId))
 	{
 		return NIL;
@@ -309,11 +310,12 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	char leftRelationKind = get_rel_relkind(leftRelationId);
 	if (leftRelationKind == RELKIND_INDEX)
 	{
-		leftRelationId = IndexGetRelation(leftRelationId, false);
+		bool missingOk = false;
+		leftRelationId = IndexGetRelation(leftRelationId, missingOk);
 	}
 
-	bool isDistributedRelation = IsDistributedTable(leftRelationId);
-	if (!isDistributedRelation)
+	bool referencingIsLocalTable = !IsDistributedTable(leftRelationId);
+	if (referencingIsLocalTable)
 	{
 		return NIL;
 	}
@@ -334,13 +336,19 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
+	/* these will be set in below loop according to subcommands */
+	Oid rightRelationId = InvalidOid;
+	bool executeSequentially = false;
+
 	/*
-	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands list.
-	 * If there is we assign referenced relation id to rightRelationId and we also
-	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
-	 * foreign constraint in master. Validity will be checked in workers anyway.
+	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands
+	 * list. If there is we assign referenced relation id to rightRelationId and
+	 * we also set skip_validation to true to prevent PostgreSQL to verify validity
+	 * of the foreign constraint in master. Validity will be checked in workers
+	 * anyway.
 	 */
 	List *commandList = alterTableStatement->cmds;
+
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
 	{
@@ -438,6 +446,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
 		}
 
+		/*
+		 * We check and set the execution mode only if we fall into either of first two
+		 * conditional blocks, otherwise we already continue the loop
+		 */
 		executeSequentially |= SetupExecutionModeForAlterTable(leftRelationId,
 															   command);
 	}
@@ -447,14 +459,16 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		SetLocalMultiShardModifyModeToSequential();
 	}
 
+	/* fill them here as it is possible to use them in some condtional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
 
-	if (rightRelationId)
+	if (OidIsValid(rightRelationId))
 	{
-		if (!IsDistributedTable(rightRelationId))
+		bool referencedIsLocalTable = !IsDistributedTable(rightRelationId);
+		if (referencedIsLocalTable)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -496,10 +510,11 @@ PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
 
 
 /*
- * PreprocessAlterTableSchemaStmt is executed before the statement is applied to the local
- * postgres instance.
+ * PreprocessAlterTableSchemaStmt is executed before the statement is applied
+ * to the local postgres instance.
  *
- * In this stage we can prepare the commands that will alter the schemas of the shards.
+ * In this stage we can prepare the commands that will alter the schemas of the
+ * shards.
  */
 List *
 PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
@@ -664,11 +679,11 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 
 
 /*
- * PostprocessAlterTableStmt runs after the ALTER TABLE command has already run on the
- * master, so we are checking constraints over the table with constraints already defined
- * (to make the constraint check process same for ALTER TABLE and CREATE TABLE). If
- * constraints do not fulfill the rules we defined, they will be removed and the table
- * will return back to the state before the ALTER TABLE command.
+ * PostprocessAlterTableStmt runs after the ALTER TABLE command has already run
+ * on the master, so we are checking constraints over the table with constraints
+ * already defined (to make the constraint check process same for ALTER TABLE and
+ * CREATE TABLE). If constraints do not fulfill the rules we defined, they will be
+ * removed and the table will return back to the state before the ALTER TABLE command.
  */
 void
 PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
@@ -845,11 +860,11 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 							 Var *distributionColumn, uint32 colocationId)
 {
 	/*
-	 * We first perform check for foreign constraints. It is important to do this check
-	 * before next check, because other types of constraints are allowed on reference
-	 * tables and we return early for those constraints thanks to next check. Therefore,
-	 * for reference tables, we first check for foreing constraints and if they are OK,
-	 * we do not error out for other types of constraints.
+	 * We first perform check for foreign constraints. It is important to do this
+	 * check before next check, because other types of constraints are allowed on
+	 * reference tables and we return early for those constraints thanks to next
+	 * check. Therefore, for reference tables, we first check for foreign constraints
+	 * and if they are OK, we do not error out for other types of constraints.
 	 */
 	ErrorIfUnsupportedForeignConstraintExists(relation, distributionMethod,
 											  distributionColumn,
@@ -929,13 +944,14 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 
 		if (!hasDistributionColumn)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create constraint on \"%s\"",
-								   relationName),
-							errdetail("Distributed relations cannot have UNIQUE, "
-									  "EXCLUDE, or PRIMARY KEY constraints that do not "
-									  "include the partition column (with an equality "
-									  "operator if EXCLUDE).")));
+			ereport(ERROR, (
+						errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create constraint on \"%s\"",
+							   relationName),
+						errdetail("Distributed relations cannot have UNIQUE, "
+								  "EXCLUDE, or PRIMARY KEY constraints that do not "
+								  "include the partition column (with an equality "
+								  "operator if EXCLUDE).")));
 		}
 
 		index_close(indexDesc, NoLock);
@@ -1434,13 +1450,13 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
 
 
 /*
- * AlterTableSchemaStmtObjectAddress returns the ObjectAddress of the table that is the
- * object of the AlterObjectSchemaStmt.
+ * AlterTableSchemaStmtObjectAddress returns the ObjectAddress of the table that
+ * is the object of the AlterObjectSchemaStmt.
  *
- * This could be called both before or after it has been applied locally. It will look in
- * the old schema first, if the table cannot be found in that schema it will look in the
- * new schema. Errors if missing_ok is false and the table cannot be found in either of the
- * schemas.
+ * This could be called both before or after it has been applied locally. It will
+ * look in the old schema first, if the table cannot be found in that schema it
+ * will look in the new schema. Errors if missing_ok is false and the table cannot
+ * be found in either of the schemas.
  */
 ObjectAddress
 AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
@@ -1469,10 +1485,12 @@ AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 
 		if (!missing_ok && tableOid == InvalidOid)
 		{
+			const char *quotedTableName =
+				quote_qualified_identifier(stmt->relation->schemaname, tableName);
+
 			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE),
 							errmsg("relation \"%s\" does not exist",
-								   quote_qualified_identifier(stmt->relation->schemaname,
-															  tableName))));
+								   quotedTableName)));
 		}
 	}
 
