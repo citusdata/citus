@@ -33,36 +33,22 @@ static void AppendAlterExtensionStmt(StringInfo buf,
 
 
 /*
- * GetExtensionOption returns Value* of DefElem node with "defname" from "options" list
+ * GetExtensionOption returns DefElem * node with "defname" from "options" list
  */
-Value *
+DefElem *
 GetExtensionOption(List *extensionOptions, const char *defname)
 {
-	Value *targetValue = NULL;
-
-	ListCell *defElemCell = NULL;
-
-	foreach(defElemCell, extensionOptions)
+	DefElem *defElement = NULL;
+	foreach_ptr(defElement, extensionOptions)
 	{
-		DefElem *defElement = (DefElem *) lfirst(defElemCell);
-
-		if (IsA(defElement, DefElem) && strncmp(defElement->defname, defname,
-												NAMEDATALEN) == 0)
+		if (IsA(defElement, DefElem) &&
+			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)
 		{
-			targetValue = (Value *) defElement->arg;
-			break;
+			return defElement;
 		}
 	}
 
-	/* return target string safely */
-	if (targetValue)
-	{
-		return targetValue;
-	}
-	else
-	{
-		return NULL;
-	}
+	return NULL;
 }
 
 

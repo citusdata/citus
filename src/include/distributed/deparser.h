@@ -97,8 +97,8 @@ extern void QualifyAlterFunctionDependsStmt(Node *stmt);
 extern char * DeparseAlterRoleStmt(Node *stmt);
 
 /* forward declarations for deparse_extension_stmts.c */
-extern Value * GetExtensionOption(List *extensionOptions,
-								  const char *defname);
+extern DefElem * GetExtensionOption(List *extensionOptions,
+									const char *defname);
 extern char * DeparseCreateExtensionStmt(Node *stmt);
 extern char * DeparseDropExtensionStmt(Node *stmt);
 extern char * DeparseAlterExtensionSchemaStmt(Node *stmt);
