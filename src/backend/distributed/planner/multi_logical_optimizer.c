@@ -52,6 +52,7 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
 #include "parser/parsetree.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -1434,7 +1435,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
-		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
+		bool hasAggregates = contain_aggs_of_level((Node *) originalExpression, 0);
 		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/*
@@ -2331,7 +2332,7 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *originalExpression = originalTargetEntry->expr;
 		List *newExpressionList = NIL;
-		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
+		bool hasAggregates = contain_aggs_of_level((Node *) originalExpression, 0);
 		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/* reset walker context */
@@ -2674,7 +2675,7 @@ TargetListHasAggregates(List *targetEntryList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpr = targetEntry->expr;
-		bool hasAggregates = contain_agg_clause((Node *) targetExpr);
+		bool hasAggregates = contain_aggs_of_level((Node *) targetExpr, 0);
 		bool hasWindowFunction = contain_window_function((Node *) targetExpr);
 
 		/*
@@ -4390,7 +4391,7 @@ GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
 		SortGroupClause *sgClause = (SortGroupClause *) lfirst(sortClauseCell);
 		TargetEntry *targetEntry = get_sortgroupclause_tle(sgClause, originalTargetList);
 		Expr *targetExpr = targetEntry->expr;
-		bool containsAggregate = contain_agg_clause((Node *) targetExpr);
+		bool containsAggregate = contain_aggs_of_level((Node *) targetExpr, 0);
 		bool createNewTargetEntry = false;
 
 		/* we are only interested in target entries containing aggregates */
@@ -4492,7 +4493,7 @@ HasOrderByAggregate(List *sortClauseList, List *targetList)
 		SortGroupClause *sortClause = (SortGroupClause *) lfirst(sortClauseCell);
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
-		bool containsAggregate = contain_agg_clause(sortExpression);
+		bool containsAggregate = contain_aggs_of_level(sortExpression, 0);
 		if (containsAggregate)
 		{
 			hasOrderByAggregate = true;
@@ -4566,7 +4567,7 @@ HasOrderByComplexExpression(List *sortClauseList, List *targetList)
 			continue;
 		}
 
-		bool nestedAggregate = contain_agg_clause(sortExpression);
+		bool nestedAggregate = contain_aggs_of_level(sortExpression, 0);
 		if (nestedAggregate)
 		{
 			hasOrderByComplexExpression = true;

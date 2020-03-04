@@ -68,6 +68,7 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/fmgroids.h"
@@ -715,7 +716,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
 	jobQuery->havingQual = havingQual;
-	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	jobQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0) ||
+						contain_aggs_of_level((Node *) havingQual, 0);
 	jobQuery->distinctClause = distinctClause;
 	jobQuery->hasDistinctOn = hasDistinctOn;
 
@@ -799,7 +801,7 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
 	reduceQuery->limitOffset = extendedOpNode->limitOffset;
 	reduceQuery->limitCount = extendedOpNode->limitCount;
 	reduceQuery->havingQual = extendedOpNode->havingQual;
-	reduceQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	reduceQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0);
 
 	return reduceQuery;
 }
@@ -1516,8 +1518,8 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	/* build the where clause list using select predicates */
 	List *whereClauseList = QuerySelectClauseList(multiNode);
 
-	if (contain_agg_clause((Node *) targetList) ||
-		contain_agg_clause((Node *) havingQual))
+	if (contain_aggs_of_level((Node *) targetList, 0) ||
+		contain_aggs_of_level((Node *) havingQual, 0))
 	{
 		hasAggregates = true;
 	}
