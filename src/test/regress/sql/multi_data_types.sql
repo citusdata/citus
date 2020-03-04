@@ -80,6 +80,23 @@ INSERT INTO composite_type_partitioned_table VALUES  (3, '(5, 6)'::test_composit
 INSERT INTO composite_type_partitioned_table VALUES  (4, '(7, 8)'::test_composite_type);
 INSERT INTO composite_type_partitioned_table VALUES  (5, '(9, 10)'::test_composite_type);
 
+PREPARE do_insert(int,test_composite_type) AS INSERT INTO composite_type_partitioned_table VALUES ($1,$2);
+EXECUTE do_insert(5, '(9,10)');
+EXECUTE do_insert(5, '(9,10)');
+EXECUTE do_insert(5, '(9,10)');
+EXECUTE do_insert(5, '(9,10)');
+EXECUTE do_insert(5, '(9,10)');
+EXECUTE do_insert(5, '(9,10)');
+
+PREPARE get_id(test_composite_type) AS SELECT min(id) FROM composite_type_partitioned_table WHERE col = $1;
+EXECUTE get_id('(9,10)');
+EXECUTE get_id('(9,10)');
+EXECUTE get_id('(9,10)');
+EXECUTE get_id('(9,10)');
+EXECUTE get_id('(9,10)');
+EXECUTE get_id('(9,10)');
+
+
 SELECT * FROM composite_type_partitioned_table WHERE col =  '(7, 8)'::test_composite_type;
 
 UPDATE composite_type_partitioned_table SET id = 6 WHERE col =  '(7, 8)'::test_composite_type;
