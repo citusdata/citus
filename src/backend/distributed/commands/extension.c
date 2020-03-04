@@ -12,6 +12,7 @@
 
 #include "citus_version.h"
 #include "catalog/pg_extension_d.h"
+#include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
@@ -101,13 +102,12 @@ ExtractNewExtensionVersion(Node *parseTree)
 		Assert(false);
 	}
 
-	Value *newVersionValue = GetExtensionOption(optionsList, "new_version");
+	DefElem *newVersionValue = GetExtensionOption(optionsList, "new_version");
 
 	/* return target string safely */
 	if (newVersionValue)
 	{
-		const char *newVersion = strVal(newVersionValue);
-
+		const char *newVersion = defGetString(newVersionValue);
 		return pstrdup(newVersion);
 	}
 	else
@@ -171,6 +171,9 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	 */
 	AddSchemaFieldIfMissing(stmt);
 
+	/* always send commands with IF NOT EXISTS */
+	stmt->if_not_exists = true;
+
 	const char *createExtensionStmtSql = DeparseTreeNode(node);
 
 	/*
@@ -201,7 +204,7 @@ AddSchemaFieldIfMissing(CreateExtensionStmt *createExtensionStmt)
 {
 	List *optionsList = createExtensionStmt->options;
 
-	Value *schemaNameValue = GetExtensionOption(optionsList, "schema");
+	DefElem *schemaNameValue = GetExtensionOption(optionsList, "schema");
 
 	if (!schemaNameValue)
 	{

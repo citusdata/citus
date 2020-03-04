@@ -110,12 +110,51 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 CREATE TABLE ref_table_2 (x seg);
 SELECT create_reference_table('ref_table_2');
 
+-- we also add an old style extension from before extensions which we upgrade to an extension
+-- by exercising it before the add node we verify it will create the extension (without upgrading)
+-- it on the new worker as well. For this we use the dict_int extension which is in contrib,
+-- supports FROM unpackaged, and is relatively small
+
+-- create objects for dict_int manually so we can upgrade from unpacked
+CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
+CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
+COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
+SELECT run_command_on_workers($$
+CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+$$);
+
+SELECT run_command_on_workers($$
+CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+$$);
+
+SELECT run_command_on_workers($$
+CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
+$$);
+
+SELECT run_command_on_workers($$
+CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
+$$);
+
+SELECT run_command_on_workers($$
+COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
+$$);
+
+CREATE EXTENSION dict_int FROM unpackaged;
+SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
+SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
+
 -- and add the other node
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
+
+-- check for the unpackaged extension to be created correctly
+SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
+SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
 
 -- and similarly check for the reference table
 select count(*) from pg_dist_partition where partmethod='n' and logicalrelid='ref_table_2'::regclass;
