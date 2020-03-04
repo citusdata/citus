@@ -114,10 +114,11 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
-static void LogLocalCommand(Task *task);
+static void LogLocalCommand(char *queryString);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
+static bool ShouldLogLocalCommand(void);
 
 
 /*
@@ -206,7 +207,15 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 		}
 
-		LogLocalCommand(task);
+		if (ShouldLogLocalCommand())
+		{
+			/*
+			 * We avoid calling TaskQueryString unless the user wants the query to be logged,
+			 * since computing the deparsed query string is not needed when using a cached local
+			 * plan.
+			 */
+			LogLocalCommand(TaskQueryString(task));
+		}
 
 		char *shardQueryString = task->queryStringLazy
 								 ? task->queryStringLazy
@@ -242,15 +251,20 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
  * distributed table, meaning it is part of distributed execution.
  */
 static void
-LogLocalCommand(Task *task)
+LogLocalCommand(char *queryString)
 {
-	if (!(LogRemoteCommands || LogLocalCommands))
-	{
-		return;
-	}
-
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(TaskQueryString(task)))));
+							ApplyLogRedaction(queryString))));
+}
+
+
+/*
+ * ShouldLogLocalCommand returns true if we should log local commands.
+ */
+static bool
+ShouldLogLocalCommand()
+{
+	return LogRemoteCommands || LogLocalCommands;
 }
 
 
