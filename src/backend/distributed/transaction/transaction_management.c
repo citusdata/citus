@@ -110,6 +110,7 @@ static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
 static void SwallowErrors(void (*func)());
 static bool MaybeExecutingUDF(void);
+static void ResetGlobalVariables(void);
 
 
 /*
@@ -248,13 +249,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				AfterXactConnectionHandling(true);
 			}
 
-			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
-			XactModificationLevel = XACT_MODIFICATION_NONE;
-			TransactionAccessedLocalPlacement = false;
-			TransactionConnectedToLocalGroup = false;
-			dlist_init(&InProgressTransactions);
-			activeSetStmts = NULL;
-			CoordinatedTransactionUses2PC = false;
+			ResetGlobalVariables();
 
 			UnSetDistributedTransactionId();
 
@@ -303,13 +298,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				AfterXactConnectionHandling(false);
 			}
 
-			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
-			XactModificationLevel = XACT_MODIFICATION_NONE;
-			TransactionAccessedLocalPlacement = false;
-			TransactionConnectedToLocalGroup = false;
-			dlist_init(&InProgressTransactions);
-			activeSetStmts = NULL;
-			CoordinatedTransactionUses2PC = false;
+			ResetGlobalVariables();
 
 			/*
 			 * Getting here without ExecutorLevel 0 is a bug, however it is such a big
@@ -443,6 +432,23 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			break;
 		}
 	}
+}
+
+
+/*
+ * ResetGlobalVariables resets global variables that
+ * might be changed during the execution of queries.
+ */
+static void
+ResetGlobalVariables()
+{
+	CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
+	XactModificationLevel = XACT_MODIFICATION_NONE;
+	TransactionAccessedLocalPlacement = false;
+	TransactionConnectedToLocalGroup = false;
+	dlist_init(&InProgressTransactions);
+	activeSetStmts = NULL;
+	CoordinatedTransactionUses2PC = false;
 }
 
 
