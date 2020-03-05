@@ -1609,6 +1609,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
+	int32 localGroupId = GetLocalGroupId();
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
@@ -1752,7 +1754,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			}
 
 			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
-				GetLocalGroupId())
+				localGroupId)
 			{
 				TransactionConnectedToLocalGroup = true;
 			}

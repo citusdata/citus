@@ -199,7 +199,7 @@ ClusterHasKnownMetadataWorkers()
 {
 	bool workerWithMetadata = false;
 
-	if (GetLocalGroupId() != 0)
+	if (!IsCoordinator())
 	{
 		workerWithMetadata = true;
 	}

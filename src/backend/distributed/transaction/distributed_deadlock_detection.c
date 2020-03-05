@@ -105,7 +105,7 @@ CheckForDistributedDeadlocks(void)
 {
 	HASH_SEQ_STATUS status;
 	TransactionNode *transactionNode = NULL;
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 	List *workerNodeList = ActiveReadableNodeList();
 
 	/*
@@ -368,6 +368,12 @@ ResetVisitedFields(HTAB *adjacencyList)
 static bool
 AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 {
+#ifdef USE_ASSERT_CHECKING
+
+	/* if assertions are disabled, it would give unused variable warning */
+	int32 localGroupId = GetLocalGroupId();
+#endif
+
 	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
@@ -403,7 +409,7 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 		}
 
 		/* at the point we should only have transactions initiated by this node */
-		Assert(currentTransactionId->initiatorNodeIdentifier == GetLocalGroupId());
+		Assert(currentTransactionId->initiatorNodeIdentifier == localGroupId);
 
 		transactionNode->initiatorProc = currentProc;
 
