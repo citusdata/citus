@@ -184,15 +184,25 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		}
 		else
 		{
-			Query *shardQuery = ParseQueryString(TaskQueryString(task), parameterTypes,
-												 numParams);
+			int taskNumParams = numParams;
+			Oid *taskParameterTypes = parameterTypes;
 
-			/*
-			 * We should not consider using CURSOR_OPT_FORCE_DISTRIBUTED in case of
-			 * intermediate results in the query. That'd trigger ExecuteLocalTaskPlan()
-			 * go through the distributed executor, which we do not want since the
-			 * query is already known to be local.
-			 */
+			if (task->parametersInQueryStringResolved)
+			{
+				/*
+				 * Parameters were removed from the query string so do not pass them
+				 * here. Otherwise, we might see errors when passing custom types,
+				 * since their OIDs were set to 0 and their type is normally
+				 * inferred from
+				 */
+				taskNumParams = 0;
+				taskParameterTypes = NULL;
+			}
+
+			Query *shardQuery = ParseQueryString(TaskQueryString(task),
+												 taskParameterTypes,
+												 taskNumParams);
+
 			int cursorOptions = 0;
 
 			/*
