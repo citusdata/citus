@@ -108,16 +108,63 @@ bool LogLocalCommands = false;
 bool TransactionAccessedLocalPlacement = false;
 bool TransactionConnectedToLocalGroup = false;
 
+HTAB *LocalExecutionStateHash = NULL;
+
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
-										  List **remoteTaskPlacementList);
+										  List **remoteTaskPlacementList,
+										  HTAB *localExecutionStateHash, bool
+										  isSingleTask);
 static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
 								   char *queryString);
 static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
+
+typedef struct LocalExecutionState LocalExecutionState;
+
+struct LocalExecutionState
+{
+	/* Used as hash key. */
+	uint64 shardId;
+};
+
+
+HTAB *
+CreateLocalExecutionStateHash()
+{
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(uint64);
+	info.entrysize = sizeof(LocalExecutionState);
+	info.hcxt = TopMemoryContext;
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	HTAB *localExecutionStateHash = hash_create("Local Execution State Hash", 128, &info,
+												hashFlags);
+
+	return localExecutionStateHash;
+}
+
+
+static bool
+ShouldExecutePlacementLocally(uint64 shardId, HTAB *localExecutionStateHash)
+{
+	bool found;
+	hash_search(localExecutionStateHash, &shardId, HASH_FIND, &found);
+	return found;
+}
+
+
+static void
+AddLocallyExecutedPlacement(uint64 shardId, HTAB *localExecutionStateHash)
+{
+	bool found;
+	hash_search(localExecutionStateHash, &shardId, HASH_ENTER, &found);
+}
 
 
 /*
@@ -129,7 +176,8 @@ static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
  * The function returns totalRowsProcessed.
  */
 uint64
-ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
+ExecuteLocalTaskList(CitusScanState *scanState, List *taskList,
+					 HTAB *localExecutionStateHash)
 {
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
@@ -159,6 +207,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		 */
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
+			AddLocallyExecutedPlacement(task->anchorShardId, localExecutionStateHash);
 			TransactionAccessedLocalPlacement = true;
 		}
 
@@ -274,13 +323,15 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 	*localTaskList = NIL;
 
 	Task *task = NULL;
+	bool singleTask = (list_length(taskList) == 1);
 	foreach_ptr(task, taskList)
 	{
 		List *localTaskPlacementList = NULL;
 		List *remoteTaskPlacementList = NULL;
 
 		SplitLocalAndRemotePlacements(
-			task->taskPlacementList, &localTaskPlacementList, &remoteTaskPlacementList);
+			task->taskPlacementList, &localTaskPlacementList, &remoteTaskPlacementList,
+			LocalExecutionStateHash, singleTask);
 
 		/* either the local or the remote should be non-nil */
 		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
@@ -339,7 +390,8 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
  */
 static void
 SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacementList,
-							  List **remoteTaskPlacementList)
+							  List **remoteTaskPlacementList,
+							  HTAB *localExecutionStateHash, bool isSingleTask)
 {
 	int32 localGroupId = GetLocalGroupId();
 
@@ -349,7 +401,14 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 	ShardPlacement *taskPlacement = NULL;
 	foreach_ptr(taskPlacement, taskPlacementList)
 	{
-		if (taskPlacement->groupId == localGroupId)
+		bool isLocalPlacement = taskPlacement->groupId == localGroupId;
+		bool shouldExecutePlacementLocally = false;
+		if (isLocalPlacement)
+		{
+			shouldExecutePlacementLocally = ShouldExecutePlacementLocally(
+				taskPlacement->shardId, localExecutionStateHash);
+		}
+		if (shouldExecutePlacementLocally || isSingleTask)
 		{
 			*localTaskPlacementList = lappend(*localTaskPlacementList, taskPlacement);
 		}

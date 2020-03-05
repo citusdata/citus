@@ -286,6 +286,7 @@ typedef struct DistributedExecution
 	 * do cleanup for repartition queries.
 	 */
 	List *jobIdList;
+	HTAB *localExecutionStateHash;
 } DistributedExecution;
 
 
@@ -782,7 +783,8 @@ HasDependentJobs(Job *mainJob)
 static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
-	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
+	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList,
+												LocalExecutionStateHash);
 
 	/*
 	 * We're deliberately not setting execution->rowsProcessed here. The main reason
@@ -978,6 +980,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	if (ShouldExecuteTasksLocally(taskList))
 	{
+		if (LocalExecutionStateHash == NULL)
+		{
+			LocalExecutionStateHash = CreateLocalExecutionStateHash();
+		}
 		bool readOnlyPlan = !TaskListModifiesDatabase(modLevel, taskList);
 
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,

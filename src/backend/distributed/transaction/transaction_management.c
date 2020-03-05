@@ -251,6 +251,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			TransactionAccessedLocalPlacement = false;
+			if (LocalExecutionStateHash != NULL)
+			{
+				hash_destroy(LocalExecutionStateHash);
+			}
+			LocalExecutionStateHash = NULL;
 			TransactionConnectedToLocalGroup = false;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
@@ -307,6 +312,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			TransactionAccessedLocalPlacement = false;
 			TransactionConnectedToLocalGroup = false;
+			if (LocalExecutionStateHash != NULL)
+			{
+				hash_destroy(LocalExecutionStateHash);
+			}
+			LocalExecutionStateHash = NULL;
 			dlist_init(&InProgressTransactions);
 			activeSetStmts = NULL;
 			CoordinatedTransactionUses2PC = false;

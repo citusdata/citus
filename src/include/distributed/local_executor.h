@@ -20,8 +20,11 @@ extern bool LogLocalCommands;
 extern bool TransactionAccessedLocalPlacement;
 extern bool TransactionConnectedToLocalGroup;
 
+extern HTAB *LocalExecutionStateHash;
+
 /* extern function declarations */
-extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
+extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList,
+								   HTAB *localExecutionStateHash);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);
@@ -29,5 +32,5 @@ extern bool AnyTaskAccessesLocalNode(List *taskList);
 extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void DisableLocalExecution(void);
-
+extern HTAB * CreateLocalExecutionStateHash(void);
 #endif /* LOCAL_EXECUTION_H */
