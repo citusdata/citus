@@ -106,7 +106,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	int workerNodeCount = GetWorkerNodeCount();
+	int workerNodeCount = ActiveReadableWorkerNodeCount();
 
 	foreach(subPlanCell, usedSubPlanNodeList)
 	{
@@ -124,13 +124,14 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 		}
 
 		/*
-		 * There is no need to traverse the whole plan if the intermediate result
-		 * will be written to a local file and send to all nodes
+		 * There is no need to traverse the subplan if the intermediate result
+		 * will be written to a local file and sent to all nodes. Note that the
+		 * remaining subplans in the distributed plan should still be traversed.
 		 */
 		if (list_length(entry->nodeIdList) == workerNodeCount && entry->writeLocalFile)
 		{
 			elog(DEBUG4, "Subplan %s is used in all workers", resultId);
-			break;
+			continue;
 		}
 		else if (usedPlan->locationMask & SUBPLAN_ACCESS_REMOTE)
 		{
@@ -139,7 +140,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			 *
 			 * If we have reference tables in the distributed plan, all the
 			 * workers will be in the node list. We can improve intermediate result
-			 * pruning by deciding which reference table shard will be accessed earlier
+			 * pruning by deciding which reference table shard will be accessed earlier.
 			 */
 			AppendAllAccessedWorkerNodes(entry, distributedPlan, workerNodeCount);
 

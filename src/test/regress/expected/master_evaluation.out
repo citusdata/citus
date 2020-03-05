@@ -53,50 +53,113 @@ SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key =
 (1 row)
 
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE p1(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key  = $1;
-execute p1(1);
+PREPARE fast_path_router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key  = $1;
+execute fast_path_router_with_param(1);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(2);
+execute fast_path_router_with_param(2);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(3);
+execute fast_path_router_with_param(3);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(4);
+execute fast_path_router_with_param(4);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(5);
+execute fast_path_router_with_param(5);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(6);
+execute fast_path_router_with_param(6);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(7);
+execute fast_path_router_with_param(7);
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-execute p1(8);
+execute fast_path_router_with_param(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- same query as fast_path_router_with_param, but with consts
+SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = $1;
+execute router_with_param(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(2);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(3);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(4);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(5);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(6);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(7);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+execute router_with_param(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- same query as router_with_param, but with consts
+SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = 1;
  ?column?
 ---------------------------------------------------------------------
  t

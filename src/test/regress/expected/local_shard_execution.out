@@ -47,6 +47,37 @@ SELECT create_distributed_table('collections_list', 'key');
 CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, ser, ts, collection_id, value)
 	FOR VALUES IN ( 0 );
+-- create a volatile function that returns the local node id
+CREATE OR REPLACE FUNCTION get_local_node_id_volatile()
+RETURNS INT AS $$
+DECLARE localGroupId int;
+BEGIN
+        SELECT groupid INTO localGroupId FROM pg_dist_local_group;
+  RETURN localGroupId;
+END; $$ language plpgsql VOLATILE;
+SELECT create_distributed_function('get_local_node_id_volatile()');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test case for issue #3556
+CREATE TABLE accounts (id text PRIMARY KEY);
+CREATE TABLE stats (account_id text PRIMARY KEY, spent int);
+SELECT create_distributed_table('accounts', 'id', colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('stats', 'account_id', colocate_with => 'accounts');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO accounts (id) VALUES ('foo');
+INSERT INTO stats (account_id, spent) VALUES ('foo', 100);
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution;
@@ -75,6 +106,50 @@ CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) R
 		RETURN shard_is_local;
         END;
 $$ LANGUAGE plpgsql;
+-- test case for issue #3556
+SET citus.log_intermediate_results TO TRUE;
+SET client_min_messages TO DEBUG1;
+SELECT *
+FROM
+(
+    WITH accounts_cte AS (
+        SELECT id AS account_id
+        FROM accounts
+    ),
+    joined_stats_cte_1 AS (
+        SELECT spent, account_id
+        FROM stats
+        INNER JOIN accounts_cte USING (account_id)
+    ),
+    joined_stats_cte_2 AS (
+        SELECT spent, account_id
+        FROM joined_stats_cte_1
+        INNER JOIN accounts_cte USING (account_id)
+    )
+    SELECT SUM(spent) OVER (PARTITION BY coalesce(account_id, NULL))
+    FROM accounts_cte
+    INNER JOIN joined_stats_cte_2 USING (account_id)
+) inner_query;
+DEBUG:  CTE joined_stats_cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE joined_stats_cte_2 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE accounts_cte: SELECT id AS account_id FROM local_shard_execution.accounts
+DEBUG:  generating subplan XXX_1 for CTE accounts_cte: SELECT id AS account_id FROM local_shard_execution.accounts
+DEBUG:  generating subplan XXX_2 for CTE joined_stats_cte_1: SELECT stats.spent, stats.account_id FROM (local_shard_execution.stats JOIN (SELECT intermediate_result.account_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(account_id text)) accounts_cte USING (account_id))
+DEBUG:  generating subplan XXX_3 for CTE joined_stats_cte_2: SELECT joined_stats_cte_1.spent, joined_stats_cte_1.account_id FROM ((SELECT intermediate_result.spent, intermediate_result.account_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(spent integer, account_id text)) joined_stats_cte_1 JOIN (SELECT intermediate_result.account_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(account_id text)) accounts_cte USING (account_id))
+DEBUG:  generating subplan XXX_4 for subquery SELECT sum(joined_stats_cte_2.spent) OVER (PARTITION BY COALESCE(accounts_cte.account_id, NULL::text)) AS sum FROM ((SELECT intermediate_result.account_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(account_id text)) accounts_cte JOIN (SELECT intermediate_result.spent, intermediate_result.account_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(spent integer, account_id text)) joined_stats_cte_2 USING (account_id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum FROM (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(sum bigint)) inner_query
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_3 will be written to local file
+DEBUG:  Subplan XXX_4 will be written to local file
+ sum
+---------------------------------------------------------------------
+ 100
+(1 row)
+
+SET citus.log_intermediate_results TO DEFAULT;
+SET client_min_messages TO DEFAULT;
 -- pick some example values that reside on the shards locally and remote
 -- distribution key values of 1,6, 500 and 701 are LOCAL to shards,
 -- we'll use these values in the tests
@@ -634,6 +709,33 @@ PL/pgSQL function only_local_execution() line 5 at SQL statement
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
 CONTEXT:  SQL statement "DELETE FROM distributed_table WHERE key = 1"
 PL/pgSQL function only_local_execution() line 6 at SQL statement
+-- insert a row that we need in the next tests
+INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29';
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text
+-- make sure that functions can use local execution
+CREATE OR REPLACE PROCEDURE only_local_execution_with_function_evaluation() AS $$
+		DECLARE nodeId INT;
+		BEGIN
+			-- fast path router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table WHERE key = 1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+
+			-- regular router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = 1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+		END;
+$$ LANGUAGE plpgsql;
+CALL only_local_execution_with_function_evaluation();
+NOTICE:  executing the command locally: SELECT local_shard_execution.get_local_node_id_volatile() AS get_local_node_id_volatile FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+CONTEXT:  SQL statement "SELECT get_local_node_id_volatile()             FROM distributed_table WHERE key = 1"
+PL/pgSQL function only_local_execution_with_function_evaluation() line 5 at SQL statement
+NOTICE:  executing the command locally: SELECT local_shard_execution.get_local_node_id_volatile() AS get_local_node_id_volatile FROM (local_shard_execution.distributed_table_1470001 d1(key, value, age) JOIN local_shard_execution.distributed_table_1470001 d2(key, value, age) USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) 1)
+CONTEXT:  SQL statement "SELECT get_local_node_id_volatile()             FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = 1"
+PL/pgSQL function only_local_execution_with_function_evaluation() line 11 at SQL statement
 CREATE OR REPLACE PROCEDURE only_local_execution_with_params(int) AS $$
 		DECLARE cnt INT;
 		BEGIN
@@ -652,6 +754,29 @@ PL/pgSQL function only_local_execution_with_params(integer) line 5 at SQL statem
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
 CONTEXT:  SQL statement "DELETE FROM distributed_table WHERE key = $1"
 PL/pgSQL function only_local_execution_with_params(integer) line 6 at SQL statement
+CREATE OR REPLACE PROCEDURE only_local_execution_with_function_evaluation_param(int) AS $$
+		DECLARE nodeId INT;
+		BEGIN
+			-- fast path router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table WHERE key = $1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+
+			-- regular router
+			SELECT get_local_node_id_volatile() INTO nodeId FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = $1;
+			IF nodeId <= 0 THEN
+				RAISE NOTICE 'unexpected node id';
+			END IF;
+		END;
+$$ LANGUAGE plpgsql;
+CALL only_local_execution_with_function_evaluation_param(1);
+NOTICE:  executing the command locally: SELECT local_shard_execution.get_local_node_id_volatile() AS get_local_node_id_volatile FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+CONTEXT:  SQL statement "SELECT get_local_node_id_volatile()             FROM distributed_table WHERE key = $1"
+PL/pgSQL function only_local_execution_with_function_evaluation_param(integer) line 5 at SQL statement
+NOTICE:  executing the command locally: SELECT local_shard_execution.get_local_node_id_volatile() AS get_local_node_id_volatile FROM (local_shard_execution.distributed_table_1470001 d1(key, value, age) JOIN local_shard_execution.distributed_table_1470001 d2(key, value, age) USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) $1)
+CONTEXT:  SQL statement "SELECT get_local_node_id_volatile()             FROM distributed_table d1 JOIN distributed_table d2 USING (key) WHERE d1.key = $1"
+PL/pgSQL function only_local_execution_with_function_evaluation_param(integer) line 11 at SQL statement
 CREATE OR REPLACE PROCEDURE local_execution_followed_by_dist() AS $$
 		DECLARE cnt INT;
 		BEGIN

@@ -36,16 +36,33 @@ INSERT INTO master_evaluation_table SELECT i, i FROM generate_series(0,100)i;
 SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
 
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE p1(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key  = $1;
+PREPARE fast_path_router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key  = $1;
 
-execute p1(1);
-execute p1(2);
-execute p1(3);
-execute p1(4);
-execute p1(5);
-execute p1(6);
-execute p1(7);
-execute p1(8);
+execute fast_path_router_with_param(1);
+execute fast_path_router_with_param(2);
+execute fast_path_router_with_param(3);
+execute fast_path_router_with_param(4);
+execute fast_path_router_with_param(5);
+execute fast_path_router_with_param(6);
+execute fast_path_router_with_param(7);
+execute fast_path_router_with_param(8);
+
+-- same query as fast_path_router_with_param, but with consts
+SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
+
+PREPARE router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = $1;
+
+execute router_with_param(1);
+execute router_with_param(2);
+execute router_with_param(3);
+execute router_with_param(4);
+execute router_with_param(5);
+execute router_with_param(6);
+execute router_with_param(7);
+execute router_with_param(8);
+
+-- same query as router_with_param, but with consts
+SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = 1;
 
 -- for multi-shard queries, we  still expect the evaluation to happen on the workers
 SELECT count(*), max(get_local_node_id_volatile()) != 0,  min(get_local_node_id_volatile()) != 0 FROM master_evaluation_table;

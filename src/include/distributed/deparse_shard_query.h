@@ -21,7 +21,7 @@
 #include "distributed/citus_custom_scan.h"
 
 
-extern void RebuildQueryStrings(Query *originalQuery, List *taskList);
+extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern void SetTaskQuery(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);

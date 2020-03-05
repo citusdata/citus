@@ -3185,7 +3185,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
 
-	if (paramListInfo != NULL)
+	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;
 		Oid *parameterTypes = NULL;
