@@ -52,6 +52,7 @@ static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginSelectScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusPreExecScan(CitusScanState *scanState);
+static bool ModifyJobNeedsEvaluation(Job *workerJob);
 static void RegenerateTaskForFasthPathQuery(Job *workerJob);
 static void RegenerateTaskListForInsert(Job *workerJob);
 static void CacheLocalPlanForShardQuery(Task *task,
@@ -334,10 +335,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	Job *workerJob = currentPlan->workerJob;
 	Query *jobQuery = workerJob->jobQuery;
-	bool evaluateAllExpressions = workerJob->requiresMasterEvaluation ||
-								  workerJob->deferredPruning;
 
-	if (evaluateAllExpressions)
+	if (ModifyJobNeedsEvaluation(workerJob))
 	{
 		/* evaluate both functions and parameters */
 		ExecuteMasterEvaluableFunctionsAndParameters(jobQuery, planState);
@@ -411,6 +410,30 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 */
 		CacheLocalPlanForShardQuery(task, originalDistributedPlan);
 	}
+}
+
+
+/*
+ * ModifyJobNeedsEvaluation checks whether the functions and parameters in the job query
+ * need to be evaluated before we can build task query strings.
+ */
+static bool
+ModifyJobNeedsEvaluation(Job *workerJob)
+{
+	if (workerJob->requiresMasterEvaluation)
+	{
+		/* query contains functions that need to be evaluated on the coordinator */
+		return true;
+	}
+
+	if (workerJob->partitionKeyValue != NULL)
+	{
+		/* the value of the distribution column is already known */
+		return false;
+	}
+
+	/* pruning was deferred due to a parameter in the partition column */
+	return workerJob->deferredPruning;
 }
 
 
@@ -630,14 +653,22 @@ RegenerateTaskListForInsert(Job *workerJob)
 	/* need to perform shard pruning, rebuild the task list from scratch */
 	List *taskList = RouterInsertTaskList(jobQuery, parametersInJobQueryResolved,
 										  &planningError);
-
 	if (planningError != NULL)
 	{
 		RaiseDeferredError(planningError, ERROR);
 	}
 
 	workerJob->taskList = taskList;
-	workerJob->partitionKeyValue = ExtractInsertPartitionKeyValue(jobQuery);
+
+	if (workerJob->partitionKeyValue == NULL)
+	{
+		/*
+		 * If we were not able to determine the partition key value in the planner,
+		 * take another shot now. It may still be NULL in case of a multi-row
+		 * insert.
+		 */
+		workerJob->partitionKeyValue = ExtractInsertPartitionKeyValue(jobQuery);
+	}
 
 	RebuildQueryStrings(workerJob);
 }
