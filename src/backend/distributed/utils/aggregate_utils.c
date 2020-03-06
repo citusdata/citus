@@ -21,6 +21,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "distributed/version_compat.h"
+#include "nodes/nodeFuncs.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
@@ -62,6 +63,9 @@ static StypeBox * TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo);
 static void HandleTransition(StypeBox *box, FunctionCallInfo fcinfo,
 							 FunctionCallInfo innerFcinfo);
 static void HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value);
+static bool TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box);
+static bool TypecheckCoordCombineAggReturnType(FunctionCallInfo fcinfo, Oid ffunc,
+											   StypeBox *box);
 
 /*
  * GetAggregateForm loads corresponding tuple & Form_pg_aggregate for oid
@@ -346,6 +350,12 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	{
 		box = pallocInAggContext(fcinfo, sizeof(StypeBox));
 		box->agg = PG_GETARG_OID(1);
+
+		if (!TypecheckWorkerPartialAggArgType(fcinfo, box))
+		{
+			ereport(ERROR, (errmsg(
+								"worker_partial_agg_sfunc could not confirm type correctness")));
+		}
 	}
 	else
 	{
@@ -617,6 +627,12 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	bool fextra = aggform->aggfinalextra;
 	ReleaseSysCache(aggtuple);
 
+	if (!TypecheckCoordCombineAggReturnType(fcinfo, ffunc, box))
+	{
+		ereport(ERROR, (errmsg(
+							"coord_combine_agg_ffunc could not confirm type correctness")));
+	}
+
 	if (ffunc == InvalidOid)
 	{
 		if (box->valueNull)
@@ -655,4 +671,75 @@ coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
 	Datum result = FunctionCallInvoke(innerFcinfo);
 	fcinfo->isnull = innerFcinfo->isnull;
 	return result;
+}
+
+
+/*
+ * TypecheckWorkerPartialAggArgType returns whether the arguments being passed to
+ * worker_partial_agg match the arguments expected by the aggregate being distributed.
+ */
+static bool
+TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
+{
+	Aggref *aggref = AggGetAggref(fcinfo);
+	if (aggref == NULL)
+	{
+		return false;
+	}
+
+	Assert(list_length(aggref->args) == 2);
+	TargetEntry *aggarg = list_nth(aggref->args, 1);
+
+	bool argtypesNull;
+	HeapTuple proctuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(box->agg));
+	if (!HeapTupleIsValid(proctuple))
+	{
+		return false;
+	}
+
+	Datum argtypes = SysCacheGetAttr(PROCOID, proctuple,
+									 Anum_pg_proc_proargtypes,
+									 &argtypesNull);
+	Assert(!argtypesNull);
+	ReleaseSysCache(proctuple);
+
+	if (ARR_NDIM(DatumGetArrayTypeP(argtypes)) != 1 ||
+		ARR_DIMS(DatumGetArrayTypeP(argtypes))[0] != 1)
+	{
+		elog(ERROR, "worker_partial_agg_sfunc cannot type check aggregates "
+					"taking anything other than 1 argument");
+	}
+
+	int arrayIndex = 0;
+	Datum argtype = array_get_element(argtypes,
+									  1, &arrayIndex, -1, sizeof(Oid), true, 'i',
+									  &argtypesNull);
+	Assert(!argtypesNull);
+
+	return aggarg != NULL && exprType((Node *) aggarg->expr) == DatumGetObjectId(argtype);
+}
+
+
+/*
+ * TypecheckCoordCombineAggReturnType returns whether the return type of the aggregate
+ * being distributed by coord_combine_agg matches the null constant used to inform postgres
+ * what the aggregate's expected return type is.
+ */
+static bool
+TypecheckCoordCombineAggReturnType(FunctionCallInfo fcinfo, Oid ffunc, StypeBox *box)
+{
+	Aggref *aggref = AggGetAggref(fcinfo);
+	if (aggref == NULL)
+	{
+		return false;
+	}
+
+	Oid finalType = ffunc == InvalidOid ?
+					box->transtype : get_func_rettype(ffunc);
+
+	Assert(list_length(aggref->args) == 3);
+	TargetEntry *nulltag = list_nth(aggref->args, 2);
+
+	return nulltag != NULL && IsA(nulltag->expr, Const) &&
+		   ((Const *) nulltag->expr)->consttype == finalType;
 }

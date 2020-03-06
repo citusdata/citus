@@ -204,5 +204,18 @@ RESET citus.task_executor_type;
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 
+-- Test https://github.com/citusdata/citus/issues/3328
+create table nulltable(id int);
+insert into nulltable values (0);
+-- These cases are not type correct
+select pg_catalog.worker_partial_agg('string_agg(text,text)'::regprocedure, id) from nulltable;
+select pg_catalog.worker_partial_agg('sum(int8)'::regprocedure, id) from nulltable;
+select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::text) from nulltable;
+select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::text) from nulltable;
+-- These cases are type correct
+select pg_catalog.worker_partial_agg('sum(int)'::regprocedure, id) from nulltable;
+select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::float8) from nulltable;
+select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::float8) from nulltable;
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;
