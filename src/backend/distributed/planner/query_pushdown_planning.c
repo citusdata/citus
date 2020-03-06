@@ -81,9 +81,9 @@ static bool ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo);
 static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RelOptInfo *relationInfo,
 												RecurringTuplesType *recurType);
-static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
-						   RecurringTuplesType *recurType);
-static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
+static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
+								 RecurringTuplesType *recurType);
+static bool ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 static List * FlattenJoinVars(List *columnList, Query *queryTree);
@@ -751,7 +751,7 @@ FromClauseRecurringTupleType(Query *queryTree)
 	 * Try to figure out which type of recurring tuples we have to produce a
 	 * relevant error message. If there are several we'll pick the first one.
 	 */
-	IsRecurringRangeTable(queryTree->rtable, &recurType);
+	ContainsRecurringRangeTable(queryTree->rtable, &recurType);
 
 	return recurType;
 }
@@ -1336,7 +1336,6 @@ static bool
 RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 										RelOptInfo *relationInfo)
 {
-	RecurringTuplesType recurType;
 	Relids relids = bms_copy(relationInfo->relids);
 	int relationId = -1;
 
@@ -1344,11 +1343,19 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
-		/* relationInfo has this range table entry */
-		if (!IsRecurringRTE(rangeTableEntry, &recurType))
+		if (FindNodeCheckInRangeTableList(list_make1(rangeTableEntry),
+										  IsDistributedTableRTE))
 		{
+			/* we already found a distributed table, no need to check further */
 			return false;
 		}
+
+		/*
+		 * If there are no distributed tables, there should be at least
+		 * one recurring rte.
+		 */
+		RecurringTuplesType recurType PG_USED_FOR_ASSERTS_ONLY;
+		Assert(ContainsRecurringRTE(rangeTableEntry, &recurType));
 	}
 
 	return true;
@@ -1376,7 +1383,7 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		/* relationInfo has this range table entry */
-		if (IsRecurringRTE(rangeTableEntry, recurType))
+		if (ContainsRecurringRTE(rangeTableEntry, recurType))
 		{
 			return true;
 		}
@@ -1387,24 +1394,24 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 
 
 /*
- * IsRecurringRTE returns whether the range table entry will generate
- * the same set of tuples when repeating it in a query on different
- * shards.
+ * ContainsRecurringRTE returns whether the range table entry contains
+ * any entry that generates the same set of tuples when repeating it in
+ * a query on different shards.
  */
 static bool
-IsRecurringRTE(RangeTblEntry *rangeTableEntry, RecurringTuplesType *recurType)
+ContainsRecurringRTE(RangeTblEntry *rangeTableEntry, RecurringTuplesType *recurType)
 {
-	return IsRecurringRangeTable(list_make1(rangeTableEntry), recurType);
+	return ContainsRecurringRangeTable(list_make1(rangeTableEntry), recurType);
 }
 
 
 /*
- * IsRecurringRangeTable returns whether the range table will generate
- * the same set of tuples when repeating it in a query on different
- * shards.
+ * ContainsRecurringRangeTable returns whether the range table list contains
+ * any entry that generates the same set of tuples when repeating it in
+ * a query on different shards.
  */
 static bool
-IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
+ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 {
 	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
 							  QTW_EXAMINE_RTES_BEFORE);
