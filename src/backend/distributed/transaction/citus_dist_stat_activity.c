@@ -329,6 +329,8 @@ CitusStatActivity(const char *statQuery)
 	 */
 	char *nodeUser = CurrentUserName();
 
+	int32 localGroupId = GetLocalGroupId();
+
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -337,7 +339,7 @@ CitusStatActivity(const char *statQuery)
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
-		if (workerNode->groupId == GetLocalGroupId())
+		if (workerNode->groupId == localGroupId)
 		{
 			/* we already get these stats via GetLocalNodeCitusDistStat() */
 			continue;
@@ -432,7 +434,7 @@ GetLocalNodeCitusDistStat(const char *statQuery)
 		return citusStatsList;
 	}
 
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 
 	/* get the current worker's node stats */
 	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);

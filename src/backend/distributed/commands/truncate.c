@@ -234,6 +234,8 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 
 	UseCoordinatedTransaction();
 
+	int32 localGroupId = GetLocalGroupId();
+
 	foreach_oid(relationId, relationIdList)
 	{
 		/*
@@ -256,7 +258,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 				int nodePort = workerNode->workerPort;
 
 				/* if local node is one of the targets, acquire the lock locally */
-				if (workerNode->groupId == GetLocalGroupId())
+				if (workerNode->groupId == localGroupId)
 				{
 					LockRelationOid(relationId, lockMode);
 					continue;

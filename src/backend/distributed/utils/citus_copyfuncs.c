@@ -86,6 +86,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(deferredPruning);
 	COPY_NODE_FIELD(partitionKeyValue);
 	COPY_NODE_FIELD(localPlannedStatements);
+	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
 }
 
 
@@ -274,6 +275,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(relationRowLockList);
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
+	COPY_SCALAR_FIELD(parametersInQueryStringResolved);
 }
 
 

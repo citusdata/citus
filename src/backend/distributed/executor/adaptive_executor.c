@@ -1609,6 +1609,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
+	int32 localGroupId = GetLocalGroupId();
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
@@ -1752,7 +1754,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			}
 
 			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
-				GetLocalGroupId())
+				localGroupId)
 			{
 				TransactionConnectedToLocalGroup = true;
 			}
@@ -3185,7 +3187,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
 
-	if (paramListInfo != NULL)
+	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;
 		Oid *parameterTypes = NULL;

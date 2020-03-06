@@ -485,13 +485,6 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 
--- test parallel aggregates
-SET parallel_setup_cost=0;
-SET parallel_tuple_cost=0;
-SET min_parallel_relation_size=0;
-SET min_parallel_table_scan_size=0;
-SET max_parallel_workers_per_gather=4;
-
 -- ensure local plans display correctly
 CREATE TABLE lineitem_clone (LIKE lineitem);
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;

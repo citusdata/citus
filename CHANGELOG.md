@@ -1,3 +1,13 @@
+### citus v9.2.2 (March 5, 2020) ###
+
+* Fixes a bug that caused some prepared stmts with function calls to fail
+
+* Fixes a bug that caused some prepared stmts with composite types to fail
+
+* Fixes a bug that caused missing subplan results in workers
+
+* Improves performance of re-partition joins
+
 ### citus v9.2.1 (February 14, 2020) ###
 
 * Fixes a bug that could cause crashes if distribution key is NULL

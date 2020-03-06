@@ -1356,7 +1356,7 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 
 	*groupId = strtol(currentCharPointer, NULL, 10);
 
-	if ((*groupId == 0 && errno == EINVAL) ||
+	if ((*groupId == COORDINATOR_GROUP_ID && errno == EINVAL) ||
 		(*groupId == INT_MAX && errno == ERANGE))
 	{
 		return false;

@@ -31,7 +31,7 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-
+/* Local functions forward declarations */
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid
 													   relationId, int pgConstraintKey,
 													   char *columnName);
@@ -96,22 +96,24 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 
 
 /*
- * ErrorIfUnsupportedForeignConstraintExists runs checks related to foreign constraints and
- * errors out if it is not possible to create one of the foreign constraint in distributed
- * environment.
+ * ErrorIfUnsupportedForeignConstraintExists runs checks related to foreign
+ * constraints and errors out if it is not possible to create one of the
+ * foreign constraint in distributed environment.
  *
  * To support foreign constraints, we require that;
  * - If referencing and referenced tables are hash-distributed
  *		- Referencing and referenced tables are co-located.
  *      - Foreign constraint is defined over distribution column.
- *		- ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *		- ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and
+ *        ON UPDATE CASCADE options
  *        are not used.
  *      - Replication factors of referencing and referenced table are 1.
  * - If referenced table is a reference table
- *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
- *        are not used on the distribution key of the referencing column.
- * - If referencing table is a reference table, error out if the referenced table is not a
- *   a reference table.
+ *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and
+ *        ON UPDATE CASCADE options are not used on the distribution key
+ *        of the referencing column.
+ * - If referencing table is a reference table, error out if the referenced
+ *   table is not a reference table.
  */
 void
 ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
@@ -122,12 +124,10 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	int scanKeyCount = 1;
 
 	Oid referencingTableId = relation->rd_id;
-	Oid referencedTableId = InvalidOid;
-	uint32 referencedColocationId = INVALID_COLOCATION_ID;
-	bool selfReferencingTable = false;
 	bool referencingNotReplicated = true;
+	bool referencingIsDistributed = IsDistributedTable(referencingTableId);
 
-	if (IsDistributedTable(referencingTableId))
+	if (referencingIsDistributed)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
 		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
@@ -150,21 +150,26 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		int referencingAttrIndex = -1;
+
 		char referencedDistMethod = 0;
 		Var *referencedDistKey = NULL;
-		int referencingAttrIndex = -1;
 		int referencedAttrIndex = -1;
+		uint32 referencedColocationId = INVALID_COLOCATION_ID;
 
+		/* not a foreign key constraint, skip to next one */
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
 
-		referencedTableId = constraintForm->confrelid;
-		selfReferencingTable = (referencingTableId == referencedTableId);
-
+		Oid referencedTableId = constraintForm->confrelid;
 		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
+
+		bool selfReferencingTable = (referencingTableId == referencedTableId);
+
 		if (!referencedIsDistributed && !selfReferencingTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -172,6 +177,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 							errdetail("Referenced table must be a distributed table"
 									  " or a reference table.")));
 		}
+
+		/* set referenced table related variables here if table is referencing itself */
 
 		if (!selfReferencingTable)
 		{
@@ -190,7 +197,6 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		bool referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
 		bool referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
-
 
 		/*
 		 * We support foreign keys between reference tables. No more checks
@@ -461,6 +467,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, AccessShareLock);
+
 	return foreignKeyToReferenceTableIncludesGivenColumn;
 }
 
@@ -562,6 +569,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 
 		if (!IsDistributedTable(referencedTableId))
 		{
+			heapTuple = systable_getnext(scanDescriptor);
 			continue;
 		}
 
@@ -605,6 +613,7 @@ TableReferenced(Oid relationId)
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -619,6 +628,8 @@ TableReferenced(Oid relationId)
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
+
+	/* clean up scan and close system catalog */
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, NoLock);

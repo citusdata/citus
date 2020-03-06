@@ -45,6 +45,11 @@ static bool ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *
 bool
 RequiresMasterEvaluation(Query *query)
 {
+	if (query->commandType == CMD_SELECT)
+	{
+		return false;
+	}
+
 	return FindNodeCheck((Node *) query, CitusIsMutableFunction);
 }
 
