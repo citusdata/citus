@@ -36,7 +36,7 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand)
 
 		if (OidIsValid(relationId))
 		{
-			showPropagationWarning = IsDistributedTable(relationId);
+			showPropagationWarning = IsCitusTable(relationId);
 		}
 	}
 

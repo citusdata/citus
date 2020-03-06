@@ -189,7 +189,7 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
-static bool IsDistributedTableViaCatalog(Oid relationId);
+static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardCacheEntry * LookupShardCacheEntry(int64 shardId);
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
 static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
@@ -268,11 +268,11 @@ EnsureModificationsCanRun(void)
 
 
 /*
- * IsDistributedTable returns whether relationId is a distributed relation or
+ * IsCitusTable returns whether relationId is a distributed relation or
  * not.
  */
 bool
-IsDistributedTable(Oid relationId)
+IsCitusTable(Oid relationId)
 {
 	DistTableCacheEntry *cacheEntry = LookupDistTableCacheEntry(relationId);
 
@@ -285,12 +285,12 @@ IsDistributedTable(Oid relationId)
 		return false;
 	}
 
-	return cacheEntry->isDistributedTable;
+	return cacheEntry->isCitusTable;
 }
 
 
 /*
- * IsDistributedTableViaCatalog returns whether the given relation is a
+ * IsCitusTableViaCatalog returns whether the given relation is a
  * distributed table or not.
  *
  * It does so by searching pg_dist_partition, explicitly bypassing caches,
@@ -302,7 +302,7 @@ IsDistributedTable(Oid relationId)
  * that, we'll have to work a bit harder.
  */
 static bool
-IsDistributedTableViaCatalog(Oid relationId)
+IsCitusTableViaCatalog(Oid relationId)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -326,11 +326,11 @@ IsDistributedTableViaCatalog(Oid relationId)
 
 
 /*
- * DistributedTableList returns a list that includes all the valid distributed table
+ * CitusTableList returns a list that includes all the valid distributed table
  * cache entries.
  */
 List *
-DistributedTableList(void)
+CitusTableList(void)
 {
 	List *distributedTableList = NIL;
 
@@ -342,7 +342,8 @@ DistributedTableList(void)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, distTableOidList)
 	{
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+		Assert(cacheEntry->isCitusTable);
 
 		distributedTableList = lappend(distributedTableList, cacheEntry);
 	}
@@ -364,7 +365,7 @@ LoadShardInterval(uint64 shardId)
 
 	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
-	Assert(tableEntry->isDistributedTable);
+	Assert(tableEntry->isCitusTable);
 
 	/* the offset better be in a valid range */
 	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
@@ -391,7 +392,7 @@ RelationIdForShard(uint64 shardId)
 
 	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 
-	Assert(tableEntry->isDistributedTable);
+	Assert(tableEntry->isCitusTable);
 
 	return tableEntry->relationId;
 }
@@ -772,18 +773,18 @@ LookupShardCacheEntry(int64 shardId)
 
 
 /*
- * DistributedTableCacheEntry looks up a pg_dist_partition entry for a
+ * CitusTableCacheEntry looks up a pg_dist_partition entry for a
  * relation.
  *
  * Errors out if no relation matching the criteria could be found.
  */
 DistTableCacheEntry *
-DistributedTableCacheEntry(Oid distributedRelationId)
+CitusTableCacheEntry(Oid distributedRelationId)
 {
 	DistTableCacheEntry *cacheEntry =
 		LookupDistTableCacheEntry(distributedRelationId);
 
-	if (cacheEntry && cacheEntry->isDistributedTable)
+	if (cacheEntry && cacheEntry->isCitusTable)
 	{
 		return cacheEntry;
 	}
@@ -832,7 +833,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	 */
 	if (!citusVersionKnownCompatible && EnableVersionChecks)
 	{
-		bool isDistributed = IsDistributedTableViaCatalog(relationId);
+		bool isCitusTable = IsCitusTableViaCatalog(relationId);
 		int reportLevel = DEBUG1;
 
 		/*
@@ -841,7 +842,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		 * want to check compatibility in the non-distributed case as well, so
 		 * future lookups can use the cache if compatible.
 		 */
-		if (isDistributed)
+		if (isCitusTable)
 		{
 			reportLevel = ERROR;
 		}
@@ -1018,12 +1019,12 @@ BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	/* not a distributed table, done */
 	if (distPartitionTuple == NULL)
 	{
-		cacheEntry->isDistributedTable = false;
+		cacheEntry->isCitusTable = false;
 		heap_close(pgDistPartition, NoLock);
 		return;
 	}
 
-	cacheEntry->isDistributedTable = true;
+	cacheEntry->isCitusTable = true;
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);

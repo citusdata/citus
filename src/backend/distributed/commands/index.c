@@ -140,7 +140,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		Relation relation = heap_openrv(createIndexStatement->relation, lockmode);
 		Oid relationId = RelationGetRelid(relation);
 
-		bool isDistributedRelation = IsDistributedTable(relationId);
+		bool isDistributedRelation = IsCitusTable(relationId);
 
 		if (createIndexStatement->relation->schemaname == NULL)
 		{
@@ -249,7 +249,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 			relationId = RelationGetRelid(relation);
 		}
 
-		isDistributedRelation = IsDistributedTable(relationId);
+		isDistributedRelation = IsCitusTable(relationId);
 
 		if (reindexStatement->relation->schemaname == NULL)
 		{
@@ -359,7 +359,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 		}
 
 		Oid relationId = IndexGetRelation(indexId, false);
-		bool isDistributedRelation = IsDistributedTable(relationId);
+		bool isDistributedRelation = IsCitusTable(relationId);
 		if (isDistributedRelation)
 		{
 			distributedIndexId = indexId;

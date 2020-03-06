@@ -1431,7 +1431,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
 			Oid relationId = rangeTableEntry->relid;
-			if (IsDistributedTable(relationId) &&
+			if (IsCitusTable(relationId) &&
 				PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 			{
 				*recurType = RECURRING_TUPLES_REFERENCE_TABLE;

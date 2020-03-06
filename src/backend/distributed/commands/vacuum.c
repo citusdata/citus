@@ -89,7 +89,7 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
-		if (IsDistributedTable(relationId))
+		if (IsCitusTable(relationId))
 		{
 			/*
 			 * VACUUM commands cannot run inside a transaction block, so we use
@@ -148,7 +148,7 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, vacuumRelationIdList)
 	{
-		if (OidIsValid(relationId) && IsDistributedTable(relationId))
+		if (OidIsValid(relationId) && IsCitusTable(relationId))
 		{
 			distributedRelationCount++;
 		}

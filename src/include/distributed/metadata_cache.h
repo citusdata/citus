@@ -52,7 +52,7 @@ typedef struct
 	 */
 	bool isValid;
 
-	bool isDistributedTable;
+	bool isCitusTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 	bool hasOverlappingShardInterval;
@@ -117,15 +117,15 @@ typedef struct DistObjectCacheEntry
 } DistObjectCacheEntry;
 
 
-extern bool IsDistributedTable(Oid relationId);
-extern List * DistributedTableList(void);
+extern bool IsCitusTable(Oid relationId);
+extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
 extern bool ReferenceTableShardId(uint64 shardId);
 extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
-extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern DistTableCacheEntry * CitusTableCacheEntry(Oid distributedRelationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);

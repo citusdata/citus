@@ -294,7 +294,7 @@ List *
 PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			Const **partitionValueConst)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	char partitionMethod = cacheEntry->partitionMethod;
 	ClauseWalkerContext context = { 0 };

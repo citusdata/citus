@@ -80,7 +80,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
 		/* we're not interested in non-valid, non-distributed relations */
-		if (relationId == InvalidOid || !IsDistributedTable(relationId))
+		if (relationId == InvalidOid || !IsCitusTable(relationId))
 		{
 			continue;
 		}
@@ -152,7 +152,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		 * If a partition is being created and if its parent is a distributed
 		 * table, we will distribute this table as well.
 		 */
-		if (IsDistributedTable(parentRelationId))
+		if (IsCitusTable(parentRelationId))
 		{
 			bool missingOk = false;
 			Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock,
@@ -219,8 +219,8 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			 * If user first distributes the table then tries to attach it to non
 			 * distributed table, we error out.
 			 */
-			if (!IsDistributedTable(relationId) &&
-				IsDistributedTable(partitionRelationId))
+			if (!IsCitusTable(relationId) &&
+				IsCitusTable(partitionRelationId))
 			{
 				char *parentRelationName = get_rel_name(partitionRelationId);
 
@@ -231,8 +231,8 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			}
 
 			/* if parent of this table is distributed, distribute this table too */
-			if (IsDistributedTable(relationId) &&
-				!IsDistributedTable(partitionRelationId))
+			if (IsCitusTable(relationId) &&
+				!IsCitusTable(partitionRelationId))
 			{
 				Var *distributionColumn = ForceDistPartitionKey(relationId);
 				char distributionMethod = DISTRIBUTE_BY_HASH;
@@ -263,7 +263,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 
 	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 
-	if (!ShouldPropagate() || !IsDistributedTable(tableAddress.objectId))
+	if (!ShouldPropagate() || !IsCitusTable(tableAddress.objectId))
 	{
 		return NIL;
 	}
@@ -314,7 +314,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		leftRelationId = IndexGetRelation(leftRelationId, missingOk);
 	}
 
-	bool referencingIsLocalTable = !IsDistributedTable(leftRelationId);
+	bool referencingIsLocalTable = !IsCitusTable(leftRelationId);
 	if (referencingIsLocalTable)
 	{
 		return NIL;
@@ -428,7 +428,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 			 * is not distributed. Because, we'll manually convert the partition into
 			 * distributed table and co-locate with its parent.
 			 */
-			if (!IsDistributedTable(rightRelationId))
+			if (!IsCitusTable(rightRelationId))
 			{
 				return NIL;
 			}
@@ -467,7 +467,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 
 	if (OidIsValid(rightRelationId))
 	{
-		bool referencedIsLocalTable = !IsDistributedTable(rightRelationId);
+		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
 		if (referencedIsLocalTable)
 		{
 			ddlJob->taskList = NIL;
@@ -531,7 +531,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	Oid relationId = address.objectId;
 
 	/* first check whether a distributed relation is affected */
-	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
 	{
 		return NIL;
 	}
@@ -567,7 +567,7 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 		return (Node *) alterTableStatement;
 	}
 
-	bool isDistributedRelation = IsDistributedTable(leftRelationId);
+	bool isDistributedRelation = IsCitusTable(leftRelationId);
 	if (!isDistributedRelation)
 	{
 		return (Node *) alterTableStatement;
@@ -654,7 +654,7 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	bool isDistributedRelation = IsDistributedTable(leftRelationId);
+	bool isDistributedRelation = IsCitusTable(leftRelationId);
 	if (!isDistributedRelation)
 	{
 		return;
@@ -1076,7 +1076,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 											"separately.")));
 				}
 
-				if (IsDistributedTable(partitionRelationId) &&
+				if (IsCitusTable(partitionRelationId) &&
 					!TablesColocated(relationId, partitionRelationId))
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1215,7 +1215,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			{
 				Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 													   false);
-				if (IsDistributedTable(rightRelationId) &&
+				if (IsCitusTable(rightRelationId) &&
 					PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
 				{
 					executeSequentially = true;
@@ -1251,7 +1251,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		{
 			Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 												   false);
-			if (IsDistributedTable(rightRelationId) &&
+			if (IsCitusTable(rightRelationId) &&
 				PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
 			{
 				executeSequentially = true;
@@ -1273,7 +1273,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * the distributed tables, thus contradicting our purpose of using
 	 * sequential mode.
 	 */
-	if (executeSequentially && IsDistributedTable(relationId) &&
+	if (executeSequentially && IsCitusTable(relationId) &&
 		PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
 		ParallelQueryExecutedInTransaction())
 	{

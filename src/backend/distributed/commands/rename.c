@@ -96,7 +96,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand)
 			return NIL;
 	}
 
-	bool isDistributedRelation = IsDistributedTable(tableRelationId);
+	bool isDistributedRelation = IsCitusTable(tableRelationId);
 	if (!isDistributedRelation)
 	{
 		return NIL;
