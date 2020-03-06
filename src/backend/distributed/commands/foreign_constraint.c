@@ -76,7 +76,7 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 
 		Oid referencedTableId = constraintForm->confrelid;
 
-		Assert(IsDistributedTable(referencedTableId));
+		Assert(IsCitusTable(referencedTableId));
 
 		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
 		{
@@ -125,9 +125,9 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 	Oid referencingTableId = relation->rd_id;
 	bool referencingNotReplicated = true;
-	bool referencingIsDistributed = IsDistributedTable(referencingTableId);
+	bool referencingIsCitus = IsCitusTable(referencingTableId);
 
-	if (referencingIsDistributed)
+	if (referencingIsCitus)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
 		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
@@ -166,11 +166,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		}
 
 		Oid referencedTableId = constraintForm->confrelid;
-		bool referencedIsDistributed = IsDistributedTable(referencedTableId);
+		bool referencedIsCitus = IsCitusTable(referencedTableId);
 
 		bool selfReferencingTable = (referencingTableId == referencedTableId);
 
-		if (!referencedIsDistributed && !selfReferencingTable)
+		if (!referencedIsCitus && !selfReferencingTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 							errmsg("cannot create foreign key constraint"),
@@ -447,7 +447,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		 * We check if the referenced table is a reference table. There cannot be
 		 * any foreign constraint from a distributed table to a local table.
 		 */
-		Assert(IsDistributedTable(referencedTableId));
+		Assert(IsCitusTable(referencedTableId));
 		if (PartitionMethod(referencedTableId) != DISTRIBUTE_BY_NONE)
 		{
 			heapTuple = systable_getnext(scanDescriptor);
@@ -567,7 +567,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 
 		Oid referencedTableId = constraintForm->confrelid;
 
-		if (!IsDistributedTable(referencedTableId))
+		if (!IsCitusTable(referencedTableId))
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;

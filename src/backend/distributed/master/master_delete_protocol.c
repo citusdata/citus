@@ -222,7 +222,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore and return -1.
 	 */
-	if (!IsDistributedTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
 	{
 		PG_RETURN_INT32(-1);
 	}

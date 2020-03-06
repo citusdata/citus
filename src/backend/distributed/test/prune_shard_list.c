@@ -241,7 +241,7 @@ SortedShardIntervalArray(Oid distributedTableId)
 {
 	Oid shardIdTypeId = INT8OID;
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(distributedTableId);
 	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;
 	int shardIdCount = cacheEntry->shardIntervalArrayLength;
 	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));

@@ -1069,7 +1069,7 @@ IsLocalTableRTE(Node *node)
 	}
 
 	Oid relationId = rangeTableEntry->relid;
-	if (IsDistributedTable(relationId))
+	if (IsCitusTable(relationId))
 	{
 		return false;
 	}

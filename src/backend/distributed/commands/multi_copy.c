@@ -2018,7 +2018,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(tableId);
 	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
@@ -2587,7 +2587,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 											  isFrom ? RowExclusiveLock :
 											  AccessShareLock);
 
-		bool isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
+		bool isDistributedRelation = IsCitusTable(RelationGetRelid(copiedRelation));
 
 		/* ensure future lookups hit the same relation */
 		char *schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));

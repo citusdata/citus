@@ -284,8 +284,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		 * If the expression belongs to a reference table continue searching for
 		 * other partition keys.
 		 */
-		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
-			DISTRIBUTE_BY_NONE)
+		if (IsCitusTable(relationId) && PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 		{
 			continue;
 		}
@@ -437,7 +436,7 @@ IsDistributedTableRTE(Node *node)
 	}
 
 	Oid relationId = rangeTableEntry->relid;
-	if (!IsDistributedTable(relationId) ||
+	if (!IsCitusTable(relationId) ||
 		PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 	{
 		return false;

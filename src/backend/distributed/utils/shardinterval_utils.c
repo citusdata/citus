@@ -239,7 +239,7 @@ ShardIndex(ShardInterval *shardInterval)
 	Oid distributedTableId = shardInterval->relationId;
 	Datum shardMinValue = shardInterval->minValue;
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*

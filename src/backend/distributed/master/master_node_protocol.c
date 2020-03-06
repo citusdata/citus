@@ -103,7 +103,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/* find partition tuple for partitioned relation */
-	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
+	DistTableCacheEntry *partitionEntry = CitusTableCacheEntry(relationId);
 
 	/* create tuple descriptor for return value */
 	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,

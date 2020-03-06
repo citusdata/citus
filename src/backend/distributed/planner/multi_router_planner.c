@@ -458,10 +458,10 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 RangeTblEntry *
 ExtractSelectRangeTableEntry(Query *query)
 {
-	Assert(InsertSelectIntoDistributedTable(query));
+	Assert(InsertSelectIntoCitusTable(query));
 
 	/*
-	 * Since we already asserted InsertSelectIntoDistributedTable() it is safe to access
+	 * Since we already asserted InsertSelectIntoCitusTable() it is safe to access
 	 * both lists
 	 */
 	List *fromList = query->jointree->fromlist;
@@ -562,7 +562,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
-	if (!IsDistributedTable(distributedTableId))
+	if (!IsCitusTable(distributedTableId))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot plan modifications of local tables involving "
@@ -697,7 +697,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			{
 				Oid relationId = rangeTableEntry->relid;
 
-				if (!IsDistributedTable(relationId))
+				if (!IsCitusTable(relationId))
 				{
 					StringInfo errorMessage = makeStringInfo();
 					char *relationName = get_rel_name(rangeTableEntry->relid);
@@ -741,7 +741,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 			{
 				StringInfo errorHint = makeStringInfo();
-				DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+				DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(
 					distributedTableId);
 				char *partitionKeyString = cacheEntry->partitionKeyString;
 				char *partitionColumnName = ColumnToColumnName(distributedTableId,
@@ -978,7 +978,7 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		return NULL;
 	}
 
-	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
+	Oid distributedTableId = ExtractFirstCitusTableId(queryTree);
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 
 	List *onConflictSet = queryTree->onConflict->onConflictSet;
@@ -1414,7 +1414,7 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 static Job *
 RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **planningError)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	List *taskList = NIL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
@@ -1570,8 +1570,8 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 	List *insertTaskList = NIL;
 	ListCell *modifyRouteCell = NULL;
 
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = ExtractFirstCitusTableId(query);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(distributedTableId);
 
 	ErrorIfNoShardsExist(cacheEntry);
 
@@ -1639,7 +1639,7 @@ CreateTask(TaskType taskType)
 
 
 /*
- * ExtractFirstDistributedTableId takes a given query, and finds the relationId
+ * ExtractFirstCitusTableId takes a given query, and finds the relationId
  * for the first distributed table in that query. If the function cannot find a
  * distributed table, it returns InvalidOid.
  *
@@ -1647,7 +1647,7 @@ CreateTask(TaskType taskType)
  * should have the first distributed table in the top-level rtable.
  */
 Oid
-ExtractFirstDistributedTableId(Query *query)
+ExtractFirstCitusTableId(Query *query)
 {
 	List *rangeTableList = query->rtable;
 	ListCell *rangeTableCell = NULL;
@@ -1657,7 +1657,7 @@ ExtractFirstDistributedTableId(Query *query)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		if (IsDistributedTable(rangeTableEntry->relid))
+		if (IsCitusTable(rangeTableEntry->relid))
 		{
 			distributedTableId = rangeTableEntry->relid;
 			break;
@@ -1944,7 +1944,7 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
 			RangeTblEntry *rangeTable = rt_fetch(rowMarkClause->rti, query->rtable);
 			Oid relationId = rangeTable->relid;
 
-			if (IsDistributedTable(relationId))
+			if (IsCitusTable(relationId))
 			{
 				RelationRowLock *relationRowLock = CitusMakeNode(RelationRowLock);
 				relationRowLock->relationId = relationId;
@@ -1978,7 +1978,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
 	Assert(updateOrDeleteRTE != NULL);
 
-	DistTableCacheEntry *modificationTableCacheEntry = DistributedTableCacheEntry(
+	DistTableCacheEntry *modificationTableCacheEntry = CitusTableCacheEntry(
 		updateOrDeleteRTE->relid);
 	char modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
 
@@ -2043,7 +2043,7 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 			continue;
 		}
 
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(
 			rangeTableEntry->relid);
 		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
@@ -2399,7 +2399,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 									Const *inputDistributionKeyValue,
 									Const **outputPartitionValueConst)
 {
-	Oid relationId = ExtractFirstDistributedTableId(query);
+	Oid relationId = ExtractFirstCitusTableId(query);
 
 	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 	{
@@ -2409,7 +2409,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 	if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
 	{
-		DistTableCacheEntry *cache = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cache = CitusTableCacheEntry(relationId);
 		ShardInterval *shardInterval =
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
 		if (shardInterval == NULL)
@@ -2495,7 +2495,7 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
 		Index tableId = relationRestriction->index;
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
 		int shardCount = cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
@@ -2659,8 +2659,8 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 static List *
 BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = ExtractFirstCitusTableId(query);
+	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 	uint32 rangeTableId = 1;
 	List *modifyRouteList = NIL;
@@ -2730,7 +2730,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
-			cacheEntry = DistributedTableCacheEntry(distributedTableId);
+			cacheEntry = CitusTableCacheEntry(distributedTableId);
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
 			if (shardInterval != NULL)
 			{
@@ -3118,7 +3118,7 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 Const *
 ExtractInsertPartitionKeyValue(Query *query)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	uint32 rangeTableId = 1;
 	Const *singlePartitionValueConst = NULL;
 
@@ -3235,7 +3235,7 @@ MultiRouterPlannableQuery(Query *query)
 			/* only hash partitioned tables are supported */
 			Oid distributedTableId = rte->relid;
 
-			if (!IsDistributedTable(distributedTableId))
+			if (!IsCitusTable(distributedTableId))
 			{
 				/* local tables cannot be read from workers */
 				return DeferredError(
