@@ -412,7 +412,7 @@ SELECT * FROM partitioning_test WHERE id = 9 OR id = 10 ORDER BY 1;
 -- create default partition
 CREATE TABLE partitioning_test_default PARTITION OF partitioning_test DEFAULT;
 \d+ partitioning_test
-                       Table "public.partitioning_test"
+                             Table "public.partitioning_test"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
 ---------------------------------------------------------------------
  id     | integer |           |          |         | plain   |              |
@@ -1584,36 +1584,27 @@ SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
-                                                                                QUERY PLAN
+                                                                           QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: One of 4
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Gather
-               Workers Planned: 2
-               ->  Parallel Hash Join
-                     Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test_1.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test_1.subid))
-                     ->  Parallel Append
-                           ->  Parallel Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
-                           ->  Parallel Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
-                           ->  Parallel Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
-                     ->  Parallel Hash
-                           ->  Parallel Append
-                                 ->  Parallel Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
-                                 ->  Parallel Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
-                                 ->  Parallel Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
-(18 rows)
+         ->  Hash Join
+               Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
+               ->  Append
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
+               ->  Hash
+                     ->  Append
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
+(16 rows)
 
 -- set partition-wise join on and parallel to off
-SELECT success FROM run_command_on_workers('alter system set max_parallel_workers_per_gather = 0');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
 SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to on');
  success
 ---------------------------------------------------------------------
@@ -1712,13 +1703,6 @@ SELECT success FROM run_command_on_workers('alter system reset enable_indexscan'
 (2 rows)
 
 SELECT success FROM run_command_on_workers('alter system reset enable_indexonlyscan');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system reset max_parallel_workers_per_gather');
  success
 ---------------------------------------------------------------------
  t

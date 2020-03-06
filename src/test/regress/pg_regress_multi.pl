@@ -320,6 +320,10 @@ if (-e $hll_control)
 }
 push(@pgOptions, '-c', "shared_preload_libraries=${sharedPreloadLibraries}");
 
+# Avoid parallelism to stabilize explain plans
+push(@pgOptions, '-c', "max_parallel_workers_per_gather=0");
+
+# Allow CREATE SUBSCRIPTION to work
 push(@pgOptions, '-c', "wal_level=logical");
 
 # Citus options set for the tests
