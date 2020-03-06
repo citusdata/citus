@@ -1,3 +1,11 @@
+### citus v9.0.2 (March 6, 2020) ###
+
+* Fixes build errors on EL/OL 6 based distros
+
+* Fixes a bug that caused maintenance daemon to fail on standby nodes
+
+* Disallows distributed function creation when replication_model is `statement`
+
 ### citus v9.0.1 (October 25, 2019) ###
 
 * Fixes a memory leak in the executor
