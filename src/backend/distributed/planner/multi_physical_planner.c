@@ -1559,7 +1559,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		hasAggregates = true;
 	}
 
-	/* distinct is not send to worker query if there are top level aggregates */
+	/* distinct is not sent to worker query if there are top level aggregates */
 	if (hasAggregates)
 	{
 		hasDistinctOn = false;

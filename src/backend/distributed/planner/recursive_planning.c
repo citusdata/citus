@@ -442,7 +442,7 @@ RecursivelyPlanNonColocatedSubqueries(Query *subquery, RecursivePlanningContext 
  * RecursivelyPlanNonColocatedJoinWalker gets a join node and walks over it to find
  * subqueries that live under the node.
  *
- * When a subquery found, its checked whether the subquery is colocated with the
+ * When a subquery found, it's checked whether the subquery is colocated with the
  * anchor subquery specified in the nonColocatedJoinContext. If not,
  * the subquery is recursively planned.
  */
@@ -518,7 +518,7 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
  * RecursivelyPlanNonColocatedJoinWalker gets a query and walks over its sublinks
  * to find subqueries that live in WHERE clause.
  *
- * When a subquery found, its checked whether the subquery is colocated with the
+ * When a subquery found, it's checked whether the subquery is colocated with the
  * anchor subquery specified in the nonColocatedJoinContext. If not,
  * the subquery is recursively planned.
  */

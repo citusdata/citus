@@ -472,7 +472,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 
 	/*
 	 * We prefer to use jobQuery (over task->query) because we don't want any
-	 * functions/params have been evaluated in the cached plan.
+	 * functions/params to have been evaluated in the cached plan.
 	 */
 	Query *shardQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
 

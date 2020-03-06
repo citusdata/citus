@@ -82,7 +82,7 @@ typedef struct
 	/*
 	 * The following two lists consists of relationIds that this distributed
 	 * relation has a foreign key to (e.g., referencedRelationsViaForeignKey) or
-	 * other relations has a foreign key to to this relation (e.g.,
+	 * other relations has a foreign key to this relation (e.g.,
 	 * referencingRelationsViaForeignKey).
 	 *
 	 * Note that we're keeping all transitive foreign key references as well
