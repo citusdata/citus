@@ -32,6 +32,26 @@ CREATE TABLE orders_hash_partitioned (
 	o_comment varchar(79) );
 SELECT create_distributed_table('orders_hash_partitioned', 'o_orderkey');
 
+CREATE TABLE lineitem_hash_partitioned (
+    l_orderkey integer not null,
+    l_partkey integer not null,
+    l_suppkey integer not null,
+    l_linenumber integer not null,
+    l_quantity decimal(15, 2) not null,
+    l_extendedprice decimal(15, 2) not null,
+    l_discount decimal(15, 2) not null,
+    l_tax decimal(15, 2) not null,
+    l_returnflag char(1) not null,
+    l_linestatus char(1) not null,
+    l_shipdate date not null,
+    l_commitdate date not null,
+    l_receiptdate date not null,
+    l_shipinstruct char(25) not null,
+    l_shipmode char(10) not null,
+    l_comment varchar(44) not null,
+    PRIMARY KEY(l_orderkey, l_linenumber) );
+SELECT create_distributed_table('lineitem_hash_partitioned', 'l_orderkey');
+
 INSERT INTO orders_hash_partitioned (o_orderkey, o_custkey, o_totalprice, o_shippriority, o_clerk) VALUES
 	(1, 11, 10, 111, 'aaa'),
 	(2, 22, 20, 222, 'bbb'),
@@ -283,6 +303,30 @@ SELECT count(*) FROM orders_hash_partitioned
 -- Check that subquery NOT is unpruned when ORed to a valid constraint
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey IN (1,2) OR o_custkey NOT IN (SELECT o_custkey FROM orders_hash_partitioned WHERE o_orderkey = 3);
+
+-- left joins should prune shards based on the left hand side of the left join
+-- it should only assign 2 tasks as there is a filter on the left table pruning to 2
+-- shards
+SELECT count(*)
+FROM orders_hash_partitioned
+         LEFT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2);
+
+-- same principle but on a right join
+SELECT count(*)
+FROM orders_hash_partitioned
+RIGHT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE l_orderkey IN (1, 2);
+
+-- full outerjoin should not prune based on filters of either side as missing shards
+-- create empty rows on the other side
+SELECT count(*)
+FROM orders_hash_partitioned
+FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2)
+   OR l_partkey = 7; -- causes lineitems to yield tuples irrespective of orders, would have been optimized to a leftjoin without
+
+DROP TABLE lineitem_hash_partitioned;
 
 SET citus.task_executor_type TO DEFAULT;
 SET client_min_messages TO DEFAULT;

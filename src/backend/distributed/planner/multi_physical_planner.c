@@ -144,7 +144,7 @@ static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 static bool DistributedPlanRouterExecutable(DistributedPlan *distributedPlan);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
-static bool IsNonOuterTableOfOuterJoin(RelationRestriction *relationRestriction);
+static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
@@ -2212,7 +2212,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
 		 * the table is part of the non-outer side of the join.
 		 */
-		if (IsNonOuterTableOfOuterJoin(relationRestriction))
+		if (IsInnerTableOfOuterJoin(relationRestriction))
 		{
 			continue;
 		}
@@ -2275,8 +2275,16 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 }
 
 
+/*
+ * IsInnerTableOfOuterJoin tests based on the join information envoded in a
+ * RelationRestriction if the table accessed for this relation is
+ *   a) in an outer join
+ *   b) on the inner part of said join
+ *
+ * The function returns true only if both conditions above hold true
+ */
 static bool
-IsNonOuterTableOfOuterJoin(RelationRestriction *relationRestriction)
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
 {
 	RestrictInfo *joinInfo = NULL;
 	foreach_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
@@ -2301,7 +2309,7 @@ IsNonOuterTableOfOuterJoin(RelationRestriction *relationRestriction)
 		}
 	}
 
-	/* we have not found any join clause for */
+	/* we have not found any join clause that satisfies both requirements */
 	return false;
 }
 
