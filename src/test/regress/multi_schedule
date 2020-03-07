@@ -200,7 +200,7 @@ test: multi_complex_count_distinct multi_select_distinct
 test: multi_modifications
 test: multi_distribution_metadata
 test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards
-test: multi_upsert multi_simple_queries multi_data_types
+test: multi_upsert multi_simple_queries multi_data_types master_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks
 # global locks
 test: multi_utilities
