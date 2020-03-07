@@ -28,6 +28,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -447,6 +448,19 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		 */
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
+	}
+
+	if (!IsReferenceTable(distributedTableId))
+	{
+		/*
+		 * When copying a shard to a new node, we should first ensure that reference
+		 * tables are present such that joins work immediately after copying the shard.
+		 * When copying a reference table, we are probably trying to achieve just that.
+		 *
+		 * Since this a long-running operation we do this after the error checks, but
+		 * before taking metadata locks.
+		 */
+		EnsureReferenceTablesExistOnAllNodes();
 	}
 
 	/*

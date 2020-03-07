@@ -268,12 +268,11 @@ WHERE
     logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
 ORDER BY logicalrelid;
 
-BEGIN;
-SET LOCAL client_min_messages TO ERROR;
+SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
 SELECT create_reference_table('replicate_reference_table_reference_two');
-COMMIT;
+RESET client_min_messages;
 
 -- status after master_add_node
 SELECT

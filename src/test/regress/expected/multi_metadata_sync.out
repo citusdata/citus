@@ -1394,7 +1394,6 @@ WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "mx_ref" to the node localhost:xxxxx
  master_add_node
 ---------------------------------------------------------------------
                7
@@ -1407,8 +1406,7 @@ ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport
 ---------------------------------------------------------------------
  1310073 | localhost |    57637
- 1310073 | localhost |    57638
-(2 rows)
+(1 row)
 
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport
@@ -1418,8 +1416,7 @@ ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport
 ---------------------------------------------------------------------
  1310073 | localhost |    57637
- 1310073 | localhost |    57638
-(2 rows)
+(1 row)
 
 -- Get the metadata back into a consistent state
 \c - - - :master_port

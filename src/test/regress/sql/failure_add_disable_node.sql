@@ -39,13 +39,6 @@ FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
--- fail activate node by failing reference table creation
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
-
-SELECT master_activate_node('localhost', :worker_2_proxy_port);
-
-SELECT citus.mitmproxy('conn.allow()');
-
 -- verify node is not activated
 SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
@@ -68,22 +61,6 @@ SELECT shardid, shardstate
 FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
-
--- fail activate node by failing reference table creation
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").cancel(' || pg_backend_pid() || ')');
-
-SELECT master_activate_node('localhost', :worker_2_proxy_port);
-
--- verify node is not activated
-SELECT * FROM master_get_active_worker_nodes()
-ORDER BY 1, 2;
-
-SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
-ORDER BY placementid;
-
-SELECT citus.mitmproxy('conn.allow()');
 
 -- master_remove_node fails when there are shards on that worker
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
@@ -113,34 +90,6 @@ FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
--- test master_add_node replicated a reference table
--- to newly added node.
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").kill()');
-
-SELECT master_add_node('localhost', :worker_2_proxy_port);
-
--- verify node is not added
-SELECT * FROM master_get_active_worker_nodes()
-ORDER BY 1, 2;
-
-SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
-ORDER BY placementid;
-
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").cancel(' || pg_backend_pid() || ')');
-
-SELECT master_add_node('localhost', :worker_2_proxy_port);
-
--- verify node is not added
-SELECT * FROM master_get_active_worker_nodes()
-ORDER BY 1, 2;
-
-SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
-ORDER BY placementid;
-
 -- reset cluster to original state
 SELECT citus.mitmproxy('conn.allow()');
 SELECT master_add_node('localhost', :worker_2_proxy_port);
@@ -153,15 +102,6 @@ SELECT shardid, shardstate
 FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
-
--- fail master_add_node by failing copy out operation
-SELECT master_remove_node('localhost', :worker_1_port);
-SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
-SELECT master_add_node('localhost', :worker_1_port);
-
--- verify node is not added
-SELECT * FROM master_get_active_worker_nodes()
-ORDER BY 1, 2;
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT master_add_node('localhost', :worker_1_port);

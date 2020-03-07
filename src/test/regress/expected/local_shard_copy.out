@@ -15,10 +15,6 @@ DEBUG:  schema "citus_mx_test_schema_join_2" already exists, skipping
 DETAIL:  NOTICE from localhost:xxxxx
 DEBUG:  schema "citus_mx_schema_for_xacts" already exists, skipping
 DETAIL:  NOTICE from localhost:xxxxx
-NOTICE:  Replicating reference table "customer_mx" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "nation_mx" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "part_mx" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "supplier_mx" to the node localhost:xxxxx
  master_add_node
 ---------------------------------------------------------------------
               32

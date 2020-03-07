@@ -173,7 +173,6 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 -- Test updating a node when another node is in readonly-mode
 ---------------------------------------------------------------------
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -383,7 +382,6 @@ SELECT verify_metadata('localhost', :worker_1_port);
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -449,7 +447,6 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -511,7 +508,6 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1

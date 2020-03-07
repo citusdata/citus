@@ -655,7 +655,6 @@ ORDER BY
 \c - - - :master_port
 -- try using the coordinator as a worker and then dropping the table
 SELECT 1 FROM master_add_node('localhost', :master_port);
-NOTICE:  Replicating reference table "transactional_drop_reference" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1

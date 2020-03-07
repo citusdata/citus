@@ -1122,7 +1122,6 @@ ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
  sum = enriched.sum + excluded.sum;
-DEBUG:  rehashing catalog cache id 14 for pg_opclass; 17 tups, 8 buckets at character 224
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
