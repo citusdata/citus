@@ -344,6 +344,12 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
 
+	/*
+	 * Make sure that existing reference tables have been replicated to all the nodes
+	 * such that we can create foreign keys and joins work immediately after creation.
+	 */
+	EnsureReferenceTablesExistOnAllNodes();
+
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = LocalTableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);

@@ -102,6 +102,10 @@ extern void UnlockShardResource(uint64 shardId, LOCKMODE lockmode);
 extern void LockJobResource(uint64 jobId, LOCKMODE lockmode);
 extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 
+/* Lock a co-location group */
+extern void LockColocationId(int colocationId, LOCKMODE lockMode);
+extern void UnlockColocationId(int colocationId, LOCKMODE lockMode);
+
 /* Lock multiple shards for safe modification */
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardsInPlacementListMetadata(List *shardPlacementList,

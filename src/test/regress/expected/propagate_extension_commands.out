@@ -247,7 +247,6 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 
 -- and add the other node
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table_2" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -443,7 +442,6 @@ BEGIN;
 COMMIT;
 -- add the node back
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "t3" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
