@@ -202,7 +202,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 
 	/* we don't want to deal with append/range distributed tables */
 	Oid distributedTableId = rangeTableEntry->relid;
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(distributedTableId);
 	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
 		  cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE))
 	{

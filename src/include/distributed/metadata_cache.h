@@ -95,7 +95,7 @@ typedef struct
 	/* pg_dist_placement metadata */
 	GroupShardPlacement **arrayOfPlacementArrays;
 	int *arrayOfPlacementArrayLengths;
-} DistTableCacheEntry;
+} CitusTableCacheEntry;
 
 typedef struct DistObjectCacheEntryKey
 {
@@ -125,7 +125,7 @@ extern bool ReferenceTableShardId(uint64 shardId);
 extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
-extern DistTableCacheEntry * CitusTableCacheEntry(Oid distributedRelationId);
+extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid distributedRelationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
@@ -152,7 +152,7 @@ extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
 extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
-extern void ErrorIfInconsistentShardIntervals(DistTableCacheEntry *cacheEntry);
+extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 

@@ -97,7 +97,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	DistTableCacheEntry *distTable = CitusTableCacheEntry(colocatedRelationId);
+	CitusTableCacheEntry *distTable = LookupCitusTableCacheEntry(colocatedRelationId);
 	Var *partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{

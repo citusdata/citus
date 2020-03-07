@@ -793,7 +793,7 @@ static void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
-	DistTableCacheEntry *sourceTableEntry = CitusTableCacheEntry(sourceRelationId);
+	CitusTableCacheEntry *sourceTableEntry = LookupCitusTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);

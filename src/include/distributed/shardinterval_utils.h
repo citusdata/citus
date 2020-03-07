@@ -48,8 +48,8 @@ extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
 extern int ShardIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
-										 DistTableCacheEntry *cacheEntry);
-extern int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
+										 CitusTableCacheEntry *cacheEntry);
+extern int FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry);
 extern int SearchCachedShardInterval(Datum partitionColumnValue,
 									 ShardInterval **shardIntervalCache,
 									 int shardCount, Oid shardIntervalCollation,

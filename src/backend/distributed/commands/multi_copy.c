@@ -2018,7 +2018,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(tableId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(tableId);
 	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
