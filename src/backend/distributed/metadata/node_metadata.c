@@ -371,8 +371,6 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		EnsureNoModificationsHaveBeenDone();
 		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 									   newWorkerNode->workerPort);
-		ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
-										  newWorkerNode->workerPort);
 
 		/*
 		 * Let the maintenance daemon do the hard work of syncing the metadata.

@@ -24,18 +24,24 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "postmaster/postmaster.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
 /* local function forward declarations */
+static List * WorkersWithoutReferenceTablePlacement(uint64 shardId);
+static void CopyShardPlacementToNewWorkerNode(ShardPlacement *sourceShardPlacement,
+											  WorkerNode *newWorkerNode);
 static void ReplicateSingleShardTableToAllNodes(Oid relationId);
 static void ReplicateShardToAllNodes(ShardInterval *shardInterval);
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
@@ -44,6 +50,173 @@ static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
+PG_FUNCTION_INFO_V1(replicate_reference_tables);
+
+
+/*
+ * IsReferenceTable returns whether the given relation ID identifies a reference
+ * table.
+ */
+bool
+IsReferenceTable(Oid relationId)
+{
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+
+	if (!tableEntry->isCitusTable)
+	{
+		return false;
+	}
+
+	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * replicate_reference_tables is a UDF to ensure that allreference tables are
+ * replicated to all nodes.
+ */
+Datum
+replicate_reference_tables(PG_FUNCTION_ARGS)
+{
+	EnsureReferenceTablesExistOnAllNodes();
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureReferenceTablesExistOnAllNodes ensures that a shard placement for every
+ * reference table exists on all nodes. If a node does not have a set of shard
+ * placements, then master_copy_shard_placement is called in a subtransaction
+ * to pull the data to the new node.
+ */
+void
+EnsureReferenceTablesExistOnAllNodes(void)
+{
+	List *referenceTableIdList = ReferenceTableOidList();
+	if (list_length(referenceTableIdList) == 0)
+	{
+		/* no reference tables exist */
+		return;
+	}
+
+	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+	if (list_length(shardIntervalList) == 0)
+	{
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+							   get_rel_name(referenceTableId))));
+	}
+
+	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+	uint64 shardId = shardInterval->shardId;
+
+	/* prevent this funcion from running concurrently with itself */
+	int colocationId = TableColocationId(referenceTableId);
+	LockColocationId(colocationId, ExclusiveLock);
+
+	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId);
+	if (list_length(newWorkersList) == 0)
+	{
+		/* nothing to do, no need for lock */
+		UnlockColocationId(colocationId, ExclusiveLock);
+		return;
+	}
+
+	/* TODO: ensure reference tables have not been modified in this transaction */
+
+	bool missingOk = false;
+	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
+	if (sourceShardPlacement == NULL)
+	{
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table shard " UINT64_FORMAT " does not "
+																	  "have an active shard placement",
+							   shardId)));
+	}
+
+	WorkerNode *newWorkerNode = NULL;
+	foreach_ptr(newWorkerNode, newWorkersList)
+	{
+		CopyShardPlacementToNewWorkerNode(sourceShardPlacement, newWorkerNode);
+	}
+
+	/*
+	 * Unblock other backends, they will probably observe that there are no
+	 * more worker nodes without placements, unless nodes were added concurrently
+	 */
+	UnlockColocationId(colocationId, ExclusiveLock);
+}
+
+
+/*
+ * WorkersWithoutReferenceTablePlacement returns a list of workers (WorkerNode) that
+ * do not yet have a placement for the given reference table shard ID, but are
+ * supposed to.
+ */
+static List *
+WorkersWithoutReferenceTablePlacement(uint64 shardId)
+{
+	List *workersWithoutPlacements = NIL;
+
+	List *shardPlacementList = ActiveShardPlacementList(shardId);
+
+	/* we only take an access share lock, otherwise we'll hold up master_add_node */
+	List *workerNodeList = ReferenceTablePlacementNodeList(AccessShareLock);
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+		bool missingWorkerOk = true;
+		ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
+																	 nodeName, nodePort,
+																	 missingWorkerOk);
+		if (targetPlacement == NULL)
+		{
+			workersWithoutPlacements = lappend(workersWithoutPlacements, workerNode);
+		}
+	}
+
+	return workersWithoutPlacements;
+}
+
+
+/*
+ * CopyShardPlacementToNewWorkerNode runs master_copy_shard_placement in a
+ * subtransaction by connecting to localhost.
+ */
+static void
+CopyShardPlacementToNewWorkerNode(ShardPlacement *sourceShardPlacement,
+								  WorkerNode *newWorkerNode)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	StringInfo queryString = makeStringInfo();
+	const char *userName = CitusExtensionOwnerName();
+
+	MultiConnection *connection = GetNodeUserDatabaseConnection(
+		connectionFlags, "localhost", PostPortNumber,
+		userName, NULL);
+
+	appendStringInfo(queryString,
+					 "SELECT master_copy_shard_placement("
+					 UINT64_FORMAT ", %s, %d, %s, %d, do_repair := false)",
+					 sourceShardPlacement->shardId,
+					 quote_literal_cstr(sourceShardPlacement->nodeName),
+					 sourceShardPlacement->nodePort,
+					 quote_literal_cstr(newWorkerNode->workerName),
+					 newWorkerNode->workerPort);
+
+	ExecuteCriticalRemoteCommand(connection, queryString->data);
+}
 
 
 /*
@@ -107,66 +280,6 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	ReplicateSingleShardTableToAllNodes(relationId);
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * ReplicateAllReferenceTablesToNode function finds all reference tables and
- * replicates them to the given worker node. It also modifies pg_dist_colocation
- * table to update the replication factor column when necessary. This function
- * skips reference tables if that node already has healthy placement of that
- * reference table to prevent unnecessary data transfer.
- */
-void
-ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
-{
-	List *referenceTableList = ReferenceTableOidList();
-
-	/* if there is no reference table, we do not need to replicate anything */
-	if (list_length(referenceTableList) > 0)
-	{
-		List *referenceShardIntervalList = NIL;
-
-		/*
-		 * We sort the reference table list to prevent deadlocks in concurrent
-		 * ReplicateAllReferenceTablesToAllNodes calls.
-		 */
-		referenceTableList = SortList(referenceTableList, CompareOids);
-		Oid referenceTableId = InvalidOid;
-		foreach_oid(referenceTableId, referenceTableList)
-		{
-			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-
-			referenceShardIntervalList = lappend(referenceShardIntervalList,
-												 shardInterval);
-		}
-
-		if (ClusterHasKnownMetadataWorkers())
-		{
-			BlockWritesToShardList(referenceShardIntervalList);
-		}
-
-		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, referenceShardIntervalList)
-		{
-			uint64 shardId = shardInterval->shardId;
-
-			LockShardDistributionMetadata(shardId, ExclusiveLock);
-
-			ReplicateShardToNode(shardInterval, nodeName, nodePort);
-		}
-
-		/* create foreign constraints between reference tables */
-		foreach_ptr(shardInterval, referenceShardIntervalList)
-		{
-			char *tableOwner = TableOwner(shardInterval->relationId);
-			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
-
-			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-													   commandList);
-		}
-	}
 }
 
 
