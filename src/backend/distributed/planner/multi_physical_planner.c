@@ -1559,7 +1559,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		hasAggregates = true;
 	}
 
-	/* distinct is not send to worker query if there are top level aggregates */
+	/* distinct is not sent to worker query if there are top level aggregates */
 	if (hasAggregates)
 	{
 		hasDistinctOn = false;
@@ -1950,7 +1950,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	else if (partitionType == SINGLE_HASH_PARTITION_TYPE || partitionType ==
 			 RANGE_PARTITION_TYPE)
 	{
-		DistTableCacheEntry *cache = CitusTableCacheEntry(baseRelationId);
+		CitusTableCacheEntry *cache = LookupCitusTableCacheEntry(baseRelationId);
 		uint32 shardCount = cache->shardIntervalArrayLength;
 		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
 
@@ -2177,7 +2177,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
 
-		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			continue;
@@ -2309,7 +2309,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			DistTableCacheEntry *distTableEntry = CitusTableCacheEntry(relationId);
+			CitusTableCacheEntry *distTableEntry = LookupCitusTableCacheEntry(relationId);
 			if (distTableEntry->hasOverlappingShardInterval)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2415,7 +2415,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		Oid relationId = relationRestriction->relationId;
 		ShardInterval *shardInterval = NULL;
 
-		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			/* reference table only has one shard */
@@ -2509,8 +2509,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	DistTableCacheEntry *firstTableCache = CitusTableCacheEntry(firstRelationId);
-	DistTableCacheEntry *secondTableCache = CitusTableCacheEntry(secondRelationId);
+	CitusTableCacheEntry *firstTableCache = LookupCitusTableCacheEntry(firstRelationId);
+	CitusTableCacheEntry *secondTableCache = LookupCitusTableCacheEntry(secondRelationId);
 
 	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
@@ -3903,8 +3903,8 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	DistTableCacheEntry *intervalRelation =
-		CitusTableCacheEntry(firstInterval->relationId);
+	CitusTableCacheEntry *intervalRelation =
+		LookupCitusTableCacheEntry(firstInterval->relationId);
 
 	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
 

@@ -336,7 +336,7 @@ IsFunctionRTE(Node *node)
  * IsNodeSubquery returns true if the given node is a Query or SubPlan or a
  * Param node with paramkind PARAM_EXEC.
  *
- * The check for SubPlan is needed whev this is used on a already rewritten
+ * The check for SubPlan is needed when this is used on a already rewritten
  * query. Such a query has SubPlan nodes instead of SubLink nodes (which
  * contain a Query node).
  * The check for PARAM_EXEC is needed because some very simple subqueries like
@@ -544,7 +544,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 			RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
 		}
 
-		/* all checks has passed, safe to create the multi plan */
+		/* all checks have passed, safe to create the multi plan */
 		multiQueryNode = MultiNodeTree(queryTree);
 	}
 
@@ -1502,7 +1502,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
  * from other parts of code although it causes some code duplication.
  *
  * Current subquery pushdown support in MultiTree logic requires a single range
- * table entry in the top most from clause. Therefore we inject an synthetic
+ * table entry in the top most from clause. Therefore we inject a synthetic
  * query derived from the top level query and make it the only range table
  * entry for the top level query. This way we can push down any subquery joins
  * down to workers without invoking join order planner.

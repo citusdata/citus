@@ -1833,7 +1833,7 @@ void
 multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 								Index restrictionIndex, RangeTblEntry *rte)
 {
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 
 	if (ReplaceCitusExtraDataContainer && IsCitusExtraDataContainerRelation(rte))
 	{
@@ -1897,7 +1897,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 */
 	if (distributedTable)
 	{
-		cacheEntry = CitusTableCacheEntry(rte->relid);
+		cacheEntry = LookupCitusTableCacheEntry(rte->relid);
 
 		relationRestrictionContext->allReferenceTables &=
 			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
@@ -2426,7 +2426,8 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
-		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(rangeTableEntry->relid);
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(
+			rangeTableEntry->relid);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			hasReferenceTable = true;
@@ -2496,7 +2497,7 @@ UpdateReferenceTablesWithShard(Node *node, void *context)
 		return false;
 	}
 
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		return false;

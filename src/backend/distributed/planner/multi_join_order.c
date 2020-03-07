@@ -1380,7 +1380,7 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 Var *
 DistPartitionKey(Oid relationId)
 {
-	DistTableCacheEntry *partitionEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *partitionEntry = LookupCitusTableCacheEntry(relationId);
 
 	/* reference tables do not have partition column */
 	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
@@ -1417,7 +1417,7 @@ char
 PartitionMethod(Oid relationId)
 {
 	/* errors out if not a distributed table */
-	DistTableCacheEntry *partitionEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *partitionEntry = LookupCitusTableCacheEntry(relationId);
 
 	char partitionMethod = partitionEntry->partitionMethod;
 
@@ -1430,7 +1430,7 @@ char
 TableReplicationModel(Oid relationId)
 {
 	/* errors out if not a distributed table */
-	DistTableCacheEntry *partitionEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *partitionEntry = LookupCitusTableCacheEntry(relationId);
 
 	char replicationModel = partitionEntry->replicationModel;
 

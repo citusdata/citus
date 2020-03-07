@@ -459,7 +459,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 		SetLocalMultiShardModifyModeToSequential();
 	}
 
-	/* fill them here as it is possible to use them in some condtional blocks below */
+	/* fill them here as it is possible to use them in some conditional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
@@ -567,8 +567,8 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 		return (Node *) alterTableStatement;
 	}
 
-	bool isDistributedRelation = IsCitusTable(leftRelationId);
-	if (!isDistributedRelation)
+	bool isCitusRelation = IsCitusTable(leftRelationId);
+	if (!isCitusRelation)
 	{
 		return (Node *) alterTableStatement;
 	}
@@ -654,8 +654,8 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	bool isDistributedRelation = IsCitusTable(leftRelationId);
-	if (!isDistributedRelation)
+	bool isCitusRelation = IsCitusTable(leftRelationId);
+	if (!isCitusRelation)
 	{
 		return;
 	}

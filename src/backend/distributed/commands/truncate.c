@@ -189,7 +189,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 		distributedRelationList = lappend_oid(distributedRelationList, relationId);
 
-		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 		Assert(cacheEntry != NULL);
 
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;

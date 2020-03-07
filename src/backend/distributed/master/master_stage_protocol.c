@@ -558,7 +558,7 @@ static List *
 RelationShardListForShardCreate(ShardInterval *shardInterval)
 {
 	Oid relationId = shardInterval->relationId;
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *referencingRelationList = cacheEntry->referencingRelationsViaForeignKey;
 	int shardIndex = -1;

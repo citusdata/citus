@@ -57,10 +57,10 @@ typedef struct NodeToNodeFragmentsTransfer
 /* forward declarations of local functions */
 static void WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 									 int partitionColumnIndex,
-									 DistTableCacheEntry *targetRelation,
+									 CitusTableCacheEntry *targetRelation,
 									 bool binaryFormat);
 static List * ExecutePartitionTaskList(List *partitionTaskList,
-									   DistTableCacheEntry *targetRelation);
+									   CitusTableCacheEntry *targetRelation);
 static ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int
 										 datumCount, Oid typeId);
 static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
@@ -68,14 +68,14 @@ static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shard
 								   ArrayType **maxValueArray);
 static char * SourceShardPrefix(const char *resultPrefix, uint64 shardId);
 static DistributedResultFragment * TupleToDistributedResultFragment(
-	TupleTableSlot *tupleSlot, DistTableCacheEntry *targetRelation);
+	TupleTableSlot *tupleSlot, CitusTableCacheEntry *targetRelation);
 static Tuplestorestate * ExecuteSelectTasksIntoTupleStore(List *taskList,
 														  TupleDesc resultDescriptor,
 														  bool errorOnAnyFailure);
 static List ** ColocateFragmentsWithRelation(List *fragmentList,
-											 DistTableCacheEntry *targetRelation);
+											 CitusTableCacheEntry *targetRelation);
 static List * ColocationTransfers(List *fragmentList,
-								  DistTableCacheEntry *targetRelation);
+								  CitusTableCacheEntry *targetRelation);
 static List * FragmentTransferTaskList(List *fragmentListTransfers);
 static char * QueryStringForFragmentsTransfer(
 	NodeToNodeFragmentsTransfer *fragmentsTransfer);
@@ -99,7 +99,7 @@ static void ExecuteFetchTaskList(List *fetchTaskList);
 List **
 RedistributeTaskListResults(const char *resultIdPrefix, List *selectTaskList,
 							int partitionColumnIndex,
-							DistTableCacheEntry *targetRelation,
+							CitusTableCacheEntry *targetRelation,
 							bool binaryFormat)
 {
 	/*
@@ -134,7 +134,7 @@ RedistributeTaskListResults(const char *resultIdPrefix, List *selectTaskList,
 List *
 PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 						 int partitionColumnIndex,
-						 DistTableCacheEntry *targetRelation,
+						 CitusTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
 	if (targetRelation->partitionMethod != DISTRIBUTE_BY_HASH &&
@@ -168,7 +168,7 @@ PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 static void
 WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						 int partitionColumnIndex,
-						 DistTableCacheEntry *targetRelation,
+						 CitusTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
 	ShardInterval **shardIntervalArray = targetRelation->sortedShardIntervalArray;
@@ -318,7 +318,7 @@ CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int datumCount, Oid t
  * and returns its results as a list of DistributedResultFragment.
  */
 static List *
-ExecutePartitionTaskList(List *taskList, DistTableCacheEntry *targetRelation)
+ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 {
 	TupleDesc resultDescriptor = NULL;
 	Tuplestorestate *resultStore = NULL;
@@ -366,7 +366,7 @@ ExecutePartitionTaskList(List *taskList, DistTableCacheEntry *targetRelation)
  */
 static DistributedResultFragment *
 TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
-								 DistTableCacheEntry *targetRelation)
+								 CitusTableCacheEntry *targetRelation)
 {
 	bool isNull = false;
 	uint32 sourceNodeId = DatumGetUInt32(slot_getattr(tupleSlot, 1, &isNull));
@@ -429,7 +429,7 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
  * done.
  */
 static List **
-ColocateFragmentsWithRelation(List *fragmentList, DistTableCacheEntry *targetRelation)
+ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRelation)
 {
 	List *fragmentListTransfers = ColocationTransfers(fragmentList, targetRelation);
 	List *fragmentTransferTaskList = FragmentTransferTaskList(fragmentListTransfers);
@@ -458,7 +458,7 @@ ColocateFragmentsWithRelation(List *fragmentList, DistTableCacheEntry *targetRel
  * target relations. This prunes away transfers with same source and target
  */
 static List *
-ColocationTransfers(List *fragmentList, DistTableCacheEntry *targetRelation)
+ColocationTransfers(List *fragmentList, CitusTableCacheEntry *targetRelation)
 {
 	HASHCTL transferHashInfo;
 	MemSet(&transferHashInfo, 0, sizeof(HASHCTL));

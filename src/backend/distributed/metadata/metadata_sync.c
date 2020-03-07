@@ -222,7 +222,7 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	DistTableCacheEntry *tableEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
 
 	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
@@ -371,7 +371,7 @@ MetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	/* create the list of tables whose metadata will be created */
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
 		if (ShouldSyncTableMetadata(cacheEntry->relationId))
@@ -466,7 +466,7 @@ MetadataCreateCommands(void)
 List *
 GetDistributedTableDDLEvents(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
@@ -618,7 +618,7 @@ NodeListInsertCommand(List *workerNodeList)
  * executed to replicate the metadata for a distributed table.
  */
 char *
-DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
+DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 {
 	StringInfo insertDistributionCommand = makeStringInfo();
 	Oid relationId = cacheEntry->relationId;
@@ -1308,7 +1308,7 @@ DetachPartitionCommandList(void)
 	List *distributedTableList = CitusTableList();
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
 		if (!PartitionedTable(cacheEntry->relationId))

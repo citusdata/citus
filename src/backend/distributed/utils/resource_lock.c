@@ -361,7 +361,7 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid citusTableId = shardInterval->relationId;
-	DistTableCacheEntry *citusTable = CitusTableCacheEntry(citusTableId);
+	CitusTableCacheEntry *citusTable = LookupCitusTableCacheEntry(citusTableId);
 	uint32 colocationId = citusTable->colocationId;
 
 	if (colocationId == INVALID_COLOCATION_ID ||
@@ -390,7 +390,7 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 {
 	Oid relationId = RelationIdForShard(shardId);
 
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
 
@@ -420,7 +420,7 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 {
 	Oid relationId = RelationIdForShard(shardId);
 
-	DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 
 	/*
 	 * Note that referencedRelationsViaForeignKey contains transitively referenced

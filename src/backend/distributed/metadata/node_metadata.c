@@ -813,7 +813,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
 	{
-		DistTableCacheEntry *cacheEntry = CitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 
 		/* if given table is not reference table, distributionValue cannot be NULL */
 		if (PG_ARGISNULL(1))
