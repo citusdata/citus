@@ -546,10 +546,10 @@ GetNextColocationId()
 void
 CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
 {
-	CitusTableCacheEntry *sourceTableEntry = LookupCitusTableCacheEntry(sourceRelationId);
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 
-	CitusTableCacheEntry *targetTableEntry = LookupCitusTableCacheEntry(targetRelationId);
+	CitusTableCacheEntry *targetTableEntry = GetCitusTableCacheEntry(targetRelationId);
 	char targetReplicationModel = targetTableEntry->replicationModel;
 
 	if (sourceReplicationModel != targetReplicationModel)
@@ -690,7 +690,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 uint32
 TableColocationId(Oid distributedTableId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 
 	return cacheEntry->colocationId;
 }
@@ -836,7 +836,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	Oid distributedTableId = shardInterval->relationId;
 	List *colocatedShardList = NIL;
 
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
@@ -864,7 +864,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	foreach_oid(colocatedTableId, colocatedTableList)
 	{
 		CitusTableCacheEntry *colocatedTableCacheEntry =
-			LookupCitusTableCacheEntry(colocatedTableId);
+			GetCitusTableCacheEntry(colocatedTableId);
 
 		/*
 		 * Since we iterate over co-located tables, shard count of each table should be
@@ -966,7 +966,7 @@ ColocatedTableId(Oid colocationId)
 uint64
 ColocatedShardIdInRelation(Oid relationId, int shardIndex)
 {
-	CitusTableCacheEntry *tableCacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(relationId);
 
 	return tableCacheEntry->sortedShardIntervalArray[shardIndex]->shardId;
 }

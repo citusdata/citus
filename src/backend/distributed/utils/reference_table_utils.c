@@ -70,7 +70,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
 	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
@@ -463,7 +463,7 @@ ReferenceTableOidList()
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, distTableOidList)
 	{
-		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{

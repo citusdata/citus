@@ -218,7 +218,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
-	CitusTableCacheEntry *targetCacheEntry = LookupCitusTableCacheEntry(targetRelationId);
+	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -426,7 +426,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 
 	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));

@@ -220,7 +220,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			char *distResultPrefix = distResultPrefixString->data;
 
 			CitusTableCacheEntry *targetRelation =
-				LookupCitusTableCacheEntry(targetRelationId);
+				GetCitusTableCacheEntry(targetRelationId);
 
 			int partitionColumnIndex =
 				PartitionColumnIndex(insertTargetList, targetRelation->partitionColumn);
@@ -484,7 +484,7 @@ TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertResultQuery);
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertResultQuery);
 
-	CitusTableCacheEntry *targetCacheEntry = LookupCitusTableCacheEntry(targetRelationId);
+	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	uint32 taskIdIndex = 1;
 	uint64 jobId = INVALID_JOB_ID;
@@ -895,7 +895,7 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 bool
 IsSupportedRedistributionTarget(Oid targetRelationId)
 {
-	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(targetRelationId);
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
 
 	/* only range and hash-distributed tables are currently supported */
 	if (tableEntry->partitionMethod != DISTRIBUTE_BY_HASH &&

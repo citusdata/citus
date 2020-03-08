@@ -222,7 +222,7 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
 	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
@@ -466,7 +466,7 @@ MetadataCreateCommands(void)
 List *
 GetDistributedTableDDLEvents(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
