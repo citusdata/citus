@@ -267,7 +267,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	distTable = LookupCitusTableCacheEntry(colocatedRelationId);
+	distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{

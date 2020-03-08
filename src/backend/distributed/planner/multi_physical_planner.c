@@ -1950,7 +1950,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	else if (partitionType == SINGLE_HASH_PARTITION_TYPE || partitionType ==
 			 RANGE_PARTITION_TYPE)
 	{
-		CitusTableCacheEntry *cache = LookupCitusTableCacheEntry(baseRelationId);
+		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
 		uint32 shardCount = cache->shardIntervalArrayLength;
 		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
 
@@ -2177,7 +2177,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
 
-		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			continue;
@@ -2309,7 +2309,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			CitusTableCacheEntry *distTableEntry = LookupCitusTableCacheEntry(relationId);
+			CitusTableCacheEntry *distTableEntry = GetCitusTableCacheEntry(relationId);
 			if (distTableEntry->hasOverlappingShardInterval)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2415,7 +2415,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		Oid relationId = relationRestriction->relationId;
 		ShardInterval *shardInterval = NULL;
 
-		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			/* reference table only has one shard */
@@ -2509,8 +2509,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	CitusTableCacheEntry *firstTableCache = LookupCitusTableCacheEntry(firstRelationId);
-	CitusTableCacheEntry *secondTableCache = LookupCitusTableCacheEntry(secondRelationId);
+	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
+	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
 
 	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
@@ -3904,7 +3904,7 @@ bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
 	CitusTableCacheEntry *intervalRelation =
-		LookupCitusTableCacheEntry(firstInterval->relationId);
+		GetCitusTableCacheEntry(firstInterval->relationId);
 
 	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
 

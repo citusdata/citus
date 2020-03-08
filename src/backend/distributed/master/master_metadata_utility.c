@@ -246,7 +246,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 List *
 GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 {
-	CitusTableCacheEntry *distTableCacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
 	List *resultList = NIL;
 
 	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
@@ -284,7 +284,7 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 static List *
 ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 {
-	CitusTableCacheEntry *distTableCacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardIntervalList = NIL;
 	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
 
@@ -486,7 +486,7 @@ TableShardReplicationFactor(Oid relationId)
 List *
 LoadShardIntervalList(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
 	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
@@ -511,7 +511,7 @@ LoadShardIntervalList(Oid relationId)
 int
 ShardIntervalCount(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	int shardIntervalCount = 0;
 
 	if (cacheEntry->isCitusTable)
@@ -533,7 +533,7 @@ ShardIntervalCount(Oid relationId)
 List *
 LoadShardList(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
 	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
