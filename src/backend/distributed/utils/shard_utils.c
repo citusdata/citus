@@ -16,11 +16,11 @@
 #include "distributed/shard_utils.h"
 
 /*
- * GetShardOid returns the oid of the shard from the given distributed relation
+ * GetShardLocalTableOid returns the oid of the shard from the given distributed relation
  * with the shardid.
  */
 Oid
-GetShardOid(Oid distRelId, uint64 shardId)
+GetShardLocalTableOid(Oid distRelId, uint64 shardId)
 {
 	char *relationName = get_rel_name(distRelId);
 	AppendShardIdToName(&relationName, shardId);

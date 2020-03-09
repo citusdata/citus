@@ -85,6 +85,8 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/local_multi_copy.h"
+#include "distributed/hash_helpers.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
 #include "libpq/libpq.h"
@@ -162,6 +164,8 @@ struct CopyPlacementState
 	/* State of shard to which the placement belongs to. */
 	CopyShardState *shardState;
 
+	int32 groupId;
+
 	/*
 	 * Buffered COPY data. When the placement is activePlacementState of
 	 * some connection, this is empty. Because in that case we directly
@@ -177,6 +181,12 @@ struct CopyShardState
 {
 	/* Used as hash key. */
 	uint64 shardId;
+
+	/* used for doing local copy */
+	StringInfo localCopyBuffer;
+
+	/* containsLocalPlacement is true if we have a local placement for the shard id of this state */
+	bool containsLocalPlacement;
 
 	/* List of CopyPlacementStates for all active placements of the shard. */
 	List *placementStateList;
@@ -232,13 +242,15 @@ static CopyConnectionState * GetConnectionState(HTAB *connectionStateHash,
 												MultiConnection *connection);
 static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
 									  HTAB *connectionStateHash, bool stopOnFailure,
-									  bool *found);
+									  bool *found, bool shouldUseLocalCopy, MemoryContext
+									  context);
 static MultiConnection * CopyGetPlacementConnection(ShardPlacement *placement,
 													bool stopOnFailure);
 static List * ConnectionStateList(HTAB *connectionStateHash);
 static void InitializeCopyShardState(CopyShardState *shardState,
 									 HTAB *connectionStateHash,
-									 uint64 shardId, bool stopOnFailure);
+									 uint64 shardId, bool stopOnFailure, bool
+									 canUseLocalCopy, MemoryContext context);
 static void StartPlacementStateCopyCommand(CopyPlacementState *placementState,
 										   CopyStmt *copyStatement,
 										   CopyOutState copyOutState);
@@ -274,6 +286,10 @@ static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
 										 DestReceiver *copyDest);
 static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
+static bool ContainsLocalPlacement(int64 shardId);
+static void FinishLocalCopy(CitusCopyDestReceiver *copyDest);
+static bool ShouldExecuteCopyLocally(void);
+static void LogLocalCopyExecution(uint64 shardId);
 
 
 /* exports for SQL callable functions */
@@ -415,9 +431,12 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		stopOnFailure = true;
 	}
 
+	bool hasCopyDataLocally = false;
+
 	/* set up the destination for the COPY */
 	copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList, partitionColumnIndex,
-										   executorState, stopOnFailure, NULL);
+										   executorState, stopOnFailure, NULL,
+										   hasCopyDataLocally);
 	dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
@@ -1960,10 +1979,12 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
 							EState *executorState, bool stopOnFailure,
-							char *intermediateResultIdPrefix)
+							char *intermediateResultIdPrefix, bool hasCopyDataLocally)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
 		sizeof(CitusCopyDestReceiver));
+
+	copyDest->shouldUseLocalCopy = !hasCopyDataLocally && ShouldExecuteCopyLocally();
 
 	/* set up the DestReceiver function pointers */
 	copyDest->pub.receiveSlot = CitusCopyDestReceiverReceive;
@@ -1982,6 +2003,44 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->memoryContext = CurrentMemoryContext;
 
 	return copyDest;
+}
+
+
+/*
+ * ShouldExecuteCopyLocally returns true if the current copy
+ * operation should be done locally for local placements.
+ */
+static bool
+ShouldExecuteCopyLocally()
+{
+	if (!EnableLocalExecution)
+	{
+		return false;
+	}
+
+	if (TransactionAccessedLocalPlacement)
+	{
+		/*
+		 * For various reasons, including the transaction visibility
+		 * rules (e.g., read-your-own-writes), we have to use local
+		 * execution again if it has already happened within this
+		 * transaction block.
+		 *
+		 * We might error out later in the execution if it is not suitable
+		 * to execute the tasks locally.
+		 */
+		Assert(IsMultiStatementTransaction() || InCoordinatedTransaction());
+
+		/*
+		 * TODO: A future improvement could be to keep track of which placements
+		 * have been locally executed. At this point, only use local execution for
+		 * those placements. That'd help to benefit more from parallelism.
+		 */
+
+		return true;
+	}
+
+	return IsMultiStatementTransaction();
 }
 
 
@@ -2012,9 +2071,6 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
-
-	/* Citus currently doesn't know how to handle COPY command locally */
-	ErrorIfTransactionAccessedPlacementsLocally();
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -2145,6 +2201,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		}
 	}
 
+
 	copyStatement->query = NULL;
 	copyStatement->attlist = attributeList;
 	copyStatement->is_from = true;
@@ -2228,7 +2285,9 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	CopyShardState *shardState = GetShardState(shardId, copyDest->shardStateHash,
 											   copyDest->connectionStateHash,
 											   stopOnFailure,
-											   &cachedShardStateFound);
+											   &cachedShardStateFound,
+											   copyDest->shouldUseLocalCopy,
+											   copyDest->memoryContext);
 	if (!cachedShardStateFound)
 	{
 		firstTupleInShard = true;
@@ -2248,6 +2307,14 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 			RecordParallelModifyAccess(relationId);
 		}
 	}
+
+	if (copyDest->shouldUseLocalCopy && shardState->containsLocalPlacement)
+	{
+		bool isEndOfCopy = false;
+		ProcessLocalCopy(slot, copyDest, shardId, shardState->localCopyBuffer,
+						 isEndOfCopy);
+	}
+
 
 	foreach(placementStateCell, shardState->placementStateList)
 	{
@@ -2276,6 +2343,7 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 		{
 			StartPlacementStateCopyCommand(currentPlacementState, copyStatement,
 										   copyOutState);
+
 			dlist_delete(&currentPlacementState->bufferedPlacementNode);
 			connectionState->activePlacementState = currentPlacementState;
 
@@ -2327,6 +2395,30 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	ResetPerTupleExprContext(executorState);
 
 	return true;
+}
+
+
+/*
+ * ContainsLocalPlacement returns true if the current node has
+ * a local placement for the given shard id.
+ */
+static bool
+ContainsLocalPlacement(int64 shardId)
+{
+	ListCell *placementCell = NULL;
+	List *activePlacementList = ActiveShardPlacementList(shardId);
+	int32 localGroupId = GetLocalGroupId();
+
+	foreach(placementCell, activePlacementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
+
+		if (placement->groupId == localGroupId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -2407,6 +2499,7 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	Relation distributedRelation = copyDest->distributedRelation;
 
 	List *connectionStateList = ConnectionStateList(connectionStateHash);
+	FinishLocalCopy(copyDest);
 
 	PG_TRY();
 	{
@@ -2431,6 +2524,28 @@ CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
 	PG_END_TRY();
 
 	heap_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * FinishLocalCopy sends the remaining copies for local placements.
+ */
+static void
+FinishLocalCopy(CitusCopyDestReceiver *copyDest)
+{
+	HTAB *shardStateHash = copyDest->shardStateHash;
+	HASH_SEQ_STATUS status;
+	CopyShardState *copyShardState;
+
+	bool isEndOfCopy = true;
+	foreach_htab(copyShardState, &status, shardStateHash)
+	{
+		if (copyShardState->localCopyBuffer->len > 0)
+		{
+			ProcessLocalCopy(NULL, copyDest, copyShardState->shardId,
+							 copyShardState->localCopyBuffer, isEndOfCopy);
+		}
+	}
 }
 
 
@@ -2864,7 +2979,6 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	/* *INDENT-OFF* */
 	bool		is_from = copyStatement->is_from;
 	Relation	rel;
-	Oid			relid;
 	List	   *range_table = NIL;
 	TupleDesc	tupDesc;
 	AclMode		required_access = (is_from ? ACL_INSERT : ACL_SELECT);
@@ -2874,15 +2988,8 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 	rel = heap_openrv(copyStatement->relation,
 	                  is_from ? RowExclusiveLock : AccessShareLock);
 
-	relid = RelationGetRelid(rel);
-
-	RangeTblEntry *rte = makeNode(RangeTblEntry);
-	rte->rtekind = RTE_RELATION;
-	rte->relid = relid;
-	rte->relkind = rel->rd_rel->relkind;
-	rte->requiredPerms = required_access;
-	range_table = list_make1(rte);
-
+	range_table = CreateRangeTable(rel, required_access);
+	RangeTblEntry *rte = (RangeTblEntry*) linitial(range_table);
 	tupDesc = RelationGetDescr(rel);
 
 	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
@@ -2906,6 +3013,21 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 	heap_close(rel, NoLock);
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * CreateRangeTable creates a range table with the given relation.
+ */
+List *
+CreateRangeTable(Relation rel, AclMode requiredAccess)
+{
+	RangeTblEntry *rte = makeNode(RangeTblEntry);
+	rte->rtekind = RTE_RELATION;
+	rte->relid = rel->rd_id;
+	rte->relkind = rel->rd_rel->relkind;
+	rte->requiredPerms = requiredAccess;
+	return list_make1(rte);
 }
 
 
@@ -3087,14 +3209,15 @@ ConnectionStateList(HTAB *connectionStateHash)
  */
 static CopyShardState *
 GetShardState(uint64 shardId, HTAB *shardStateHash,
-			  HTAB *connectionStateHash, bool stopOnFailure, bool *found)
+			  HTAB *connectionStateHash, bool stopOnFailure, bool *found, bool
+			  shouldUseLocalCopy, MemoryContext context)
 {
 	CopyShardState *shardState = (CopyShardState *) hash_search(shardStateHash, &shardId,
 																HASH_ENTER, found);
 	if (!*found)
 	{
 		InitializeCopyShardState(shardState, connectionStateHash,
-								 shardId, stopOnFailure);
+								 shardId, stopOnFailure, shouldUseLocalCopy, context);
 	}
 
 	return shardState;
@@ -3109,10 +3232,15 @@ GetShardState(uint64 shardId, HTAB *shardStateHash,
 static void
 InitializeCopyShardState(CopyShardState *shardState,
 						 HTAB *connectionStateHash, uint64 shardId,
-						 bool stopOnFailure)
+						 bool stopOnFailure, bool shouldUseLocalCopy, MemoryContext
+						 context)
 {
 	ListCell *placementCell = NULL;
 	int failedPlacementCount = 0;
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context);
+
+	MemoryContextSwitchTo(oldContext);
 
 	MemoryContext localContext =
 		AllocSetContextCreateExtended(CurrentMemoryContext,
@@ -3121,8 +3249,9 @@ InitializeCopyShardState(CopyShardState *shardState,
 									  ALLOCSET_DEFAULT_INITSIZE,
 									  ALLOCSET_DEFAULT_MAXSIZE);
 
+
 	/* release active placement list at the end of this function */
-	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+	oldContext = MemoryContextSwitchTo(localContext);
 
 	List *activePlacementList = ActiveShardPlacementList(shardId);
 
@@ -3130,10 +3259,19 @@ InitializeCopyShardState(CopyShardState *shardState,
 
 	shardState->shardId = shardId;
 	shardState->placementStateList = NIL;
+	shardState->localCopyBuffer = makeStringInfo();
+	shardState->containsLocalPlacement = ContainsLocalPlacement(shardId);
+
 
 	foreach(placementCell, activePlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
+
+		if (shouldUseLocalCopy && placement->groupId == GetLocalGroupId())
+		{
+			LogLocalCopyExecution(shardId);
+			continue;
+		}
 
 		MultiConnection *connection =
 			CopyGetPlacementConnection(placement, stopOnFailure);
@@ -3158,6 +3296,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		CopyPlacementState *placementState = palloc0(sizeof(CopyPlacementState));
 		placementState->shardState = shardState;
 		placementState->data = makeStringInfo();
+		placementState->groupId = placement->groupId;
 		placementState->connectionState = connectionState;
 
 		/*
@@ -3185,6 +3324,21 @@ InitializeCopyShardState(CopyShardState *shardState,
 	Assert(!stopOnFailure || failedPlacementCount == 0);
 
 	MemoryContextReset(localContext);
+}
+
+
+/*
+ * LogLocalCopyExecution logs that the copy will be done locally for
+ * the given shard.
+ */
+static void
+LogLocalCopyExecution(uint64 shardId)
+{
+	if (!(LogRemoteCommands || LogLocalCommands))
+	{
+		return;
+	}
+	ereport(NOTICE, (errmsg("executing the copy locally for shard")));
 }
 
 
