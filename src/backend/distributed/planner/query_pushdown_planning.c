@@ -79,10 +79,8 @@ static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
-static bool ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo);
-static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
-												RelOptInfo *relationInfo,
-												RecurringTuplesType *recurType);
+static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo, RelOptInfo *
+											   relationInfo);
 static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
 								 RecurringTuplesType *recurType);
 static bool ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
@@ -776,7 +774,6 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
 	ListCell *joinRestrictionCell = NULL;
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
-
 	foreach(joinRestrictionCell, joinRestrictionList)
 	{
 		JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
@@ -799,20 +796,33 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 				continue;
 			}
 
-			if (ShouldRecurseForRecurringTuplesJoinChecks(outerrel) &&
-				RelationInfoContainsRecurringTuples(plannerInfo, outerrel, &recurType))
+
+			/*
+			 * If the outer side of the join doesn't have any distributed tables
+			 * (e.g., contains only recurring tuples), Citus should not pushdown
+			 * the query. The reason is that recurring tuples on every shard would
+			 * be added to the result, which is wrong.
+			 */
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
 			{
+				recurType = FetchFirstRecurType(plannerInfo, outerrel);
+
 				break;
 			}
 		}
 		else if (joinType == JOIN_FULL)
 		{
-			if ((ShouldRecurseForRecurringTuplesJoinChecks(innerrel) &&
-				 RelationInfoContainsRecurringTuples(plannerInfo, innerrel,
-													 &recurType)) ||
-				(ShouldRecurseForRecurringTuplesJoinChecks(outerrel) &&
-				 RelationInfoContainsRecurringTuples(plannerInfo, outerrel, &recurType)))
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrel))
 			{
+				recurType = FetchFirstRecurType(plannerInfo, innerrel);
+
+				break;
+			}
+
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
+			{
+				recurType = FetchFirstRecurType(plannerInfo, outerrel);
+
 				break;
 			}
 		}
@@ -846,6 +856,7 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 							 "Complex subqueries and CTEs cannot be in the outer "
 							 "part of the outer join", NULL);
 	}
+
 	return NULL;
 }
 
@@ -1071,7 +1082,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 	 * Extract all range table indexes from the join tree. Note that sub-queries
 	 * that get pulled up by PostgreSQL don't appear in this join tree.
 	 */
-	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree,
+								 &joinTreeTableIndexList);
 
 	foreach_int(joinTreeTableIndex, joinTreeTableIndexList)
 	{
@@ -1180,13 +1192,15 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot push down this subquery",
-								 "Intersect and Except are currently unsupported", NULL);
+								 "Intersect and Except are currently unsupported",
+								 NULL);
 		}
 
 		if (IsA(leftArg, RangeTblRef))
 		{
 			leftArgRTI = ((RangeTblRef *) leftArg)->rtindex;
-			Query *leftArgSubquery = rt_fetch(leftArgRTI, subqueryTree->rtable)->subquery;
+			Query *leftArgSubquery = rt_fetch(leftArgRTI,
+											  subqueryTree->rtable)->subquery;
 			recurType = FromClauseRecurringTupleType(leftArgSubquery);
 			if (recurType != RECURRING_TUPLES_INVALID)
 			{
@@ -1260,78 +1274,11 @@ ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
 		(*setOperationList) = lappend(*setOperationList, setOperation);
 	}
 
-	bool walkerResult = expression_tree_walker(node, ExtractSetOperationStatmentWalker,
+	bool walkerResult = expression_tree_walker(node,
+											   ExtractSetOperationStatmentWalker,
 											   setOperationList);
 
 	return walkerResult;
-}
-
-
-/*
- * ShouldRecurseForRecurringTuplesJoinChecks is a helper function for deciding
- * on whether the input relOptInfo should be checked for table expressions that
- * generate the same tuples in every query on a shard. We use this to avoid
- * redundant checks and false positives in complex join trees.
- */
-static bool
-ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo)
-{
-	bool shouldRecurse = true;
-
-	/*
-	 * We shouldn't recursively go down for joins since we're already
-	 * going to process each join seperately. Otherwise we'd restrict
-	 * the coverage. See the below sketch where (h) denotes a hash
-	 * distributed relation, (r) denotes a reference table, (L) denotes
-	 * LEFT JOIN and (I) denotes INNER JOIN. If we're to recurse into
-	 * the inner join, we'd be preventing to push down the following
-	 * join tree, which is actually safe to push down.
-	 *
-	 *                       (L)
-	 *                      /  \
-	 *                   (I)     h
-	 *                  /  \
-	 *                r      h
-	 */
-	if (relOptInfo->reloptkind == RELOPT_JOINREL)
-	{
-		return false;
-	}
-
-	/*
-	 * Note that we treat the same query where relations appear in subqueries
-	 * differently. (i.e., use SELECT * FROM r; instead of r)
-	 *
-	 * In that case, to relax some restrictions, we do the following optimization:
-	 * If the subplan (i.e., plannerInfo corresponding to the subquery) contains any
-	 * joins, we skip reference table checks keeping in mind that the join is already
-	 * going to be processed seperately. This optimization should suffice for many
-	 * use cases.
-	 */
-	if (relOptInfo->reloptkind == RELOPT_BASEREL && relOptInfo->subroot != NULL)
-	{
-		PlannerInfo *subroot = relOptInfo->subroot;
-
-		if (list_length(subroot->join_rel_list) > 0)
-		{
-			RelOptInfo *subqueryJoin = linitial(subroot->join_rel_list);
-
-			/*
-			 * Subqueries without relations (e.g. SELECT 1) are a little funny.
-			 * They are treated as having a join, but the join is between 0
-			 * relations and won't be in the join restriction list and therefore
-			 * won't be revisited in DeferredErrorIfUnsupportedRecurringTuplesJoin.
-			 *
-			 * We therefore only skip joins with >0 relations.
-			 */
-			if (bms_num_members(subqueryJoin->relids) > 0)
-			{
-				shouldRecurse = false;
-			}
-		}
-	}
-
-	return shouldRecurse;
 }
 
 
@@ -1370,19 +1317,20 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 
 
 /*
- * RelationInfoContainsRecurringTuples checks whether the relationInfo
+ * FetchFirstRecurType checks whether the relationInfo
  * contains any recurring table expression, namely a reference table,
- * or immutable function. If found, RelationInfoContainsRecurringTuples
+ * or immutable function. If found, FetchFirstRecurType
  * returns true.
  *
  * Note that since relation ids of relationInfo indexes to the range
  * table entry list of planner info, planner info is also passed.
  */
-static bool
-RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relationInfo,
-									RecurringTuplesType *recurType)
+static RecurringTuplesType
+FetchFirstRecurType(PlannerInfo *plannerInfo, RelOptInfo *
+					relationInfo)
 {
 	Relids relids = relationInfo->relids;
+	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 	int relationId = -1;
 
 	while ((relationId = bms_next_member(relids, relationId)) >= 0)
@@ -1390,13 +1338,13 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		/* relationInfo has this range table entry */
-		if (ContainsRecurringRTE(rangeTableEntry, recurType))
+		if (ContainsRecurringRTE(rangeTableEntry, &recurType))
 		{
-			return true;
+			return recurType;
 		}
 	}
 
-	return false;
+	return recurType;
 }
 
 

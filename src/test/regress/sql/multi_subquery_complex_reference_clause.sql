@@ -1329,6 +1329,57 @@ JOIN
 ORDER BY 1
 LIMIT 5;
 
+-- outer part of the LEFT JOIN consists only reference tables, so we cannot push down
+-- we have different combinations for ON condition, true/false/two column join/single column filter
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id > 5);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 5);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
+
+
+-- outer part of the LEFT JOIN consists only reference tables within a subquery, so we cannot push down
+-- we have different combinations for ON condition, true/false/two column join/single column filter
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id > 5);
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 19);
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
+
+-- one example where unsupported outer join is deep inside a subquery
+SELECT *, random() FROM (
+SELECT *,random() FROM user_buy_test_table WHERE user_id > (
+SELECT count(*) FROM (SELECT *,random() FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as bar) as foo LEFT JOIN (SELECT *, random() FROM (SELECT *,random() FROM user_buy_test_table d1 JOIN user_buy_test_table d2 USING (user_id)) as bar_inner ) as bar ON true)) as boo;
+
+-- In theory, we should be able to pushdown this query
+-- however, as the LEFT JOIN condition is between a reference table and the distributed table
+-- Postgres generates a LEFT JOIN alternative among those tables
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
+
+-- same as the above query, but this time LEFT JOIN condition is between distributed tables
+-- so Postgres doesn't generate join restriction between reference and distributed tables
+SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.user_id = user_buy_test_table.user_id);
+
+-- again, in theory should be OK to pushdown but
+-- Postgres generates join restriction between reference and distributed tables
+-- in one of the cases
+SELECT count(*) FROM user_buy_test_table a LEFT JOIN users_ref_test_table b ON (true) RIGHT JOIN users_ref_test_table c ON (b.id = c.id);
+
+-- outer part of the LEFT JOIN consists only intermediate result due to LIMIT, so we cannot push down
+SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo LEFT JOIN user_buy_test_table ON true;
+
+-- should be fine as OUTER part is the distributed table
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON (ref1.id = user_id);
+
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;
