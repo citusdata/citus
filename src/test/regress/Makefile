@@ -116,15 +116,24 @@ check-empty: all
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-multi: all
+	${MAKE} check-multi-internal  || ${MAKE} check-multi-internal
+
+check-multi-internal:
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-multi-non-adaptive: all
+	${MAKE} check-multi-non-adaptive-internal || ${MAKE} check-multi-non-adaptive-internal
+
+check-multi-non-adaptive-internal:
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-failure-non-adaptive: all
+	${MAKE} check-failure-non-adaptive-internal  || ${MAKE} check-failure-non-adaptive-internal
+
+check-failure-non-adaptive-internal:
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
@@ -135,6 +144,9 @@ check-failure-non-adaptive-base: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
 check-isolation-non-adaptive: all  $(isolation_test_files)
+	${MAKE} check-isolation-non-adaptive-internal || ${MAKE} check-isolation-non-adaptive-internal
+
+check-isolation-non-adaptive-internal:
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	--server-option=citus.task_executor_type=real-time \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
@@ -156,8 +168,12 @@ check-vanilla: all
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
 
 check-multi-mx: all
+	${MAKE} check-multi-mx-internal  || ${MAKE} check-multi-mx-internal
+
+check-multi-mx-internal:
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
+
 
 check-multi-task-tracker-extra: all
 	$(pg_regress_multi_check) --load-extension=citus \
@@ -169,6 +185,9 @@ check-follower-cluster: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 check-failure: all
+	${MAKE} check-failure-internal  || ${MAKE} check-failure-internal
+
+check-failure-internal:
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
