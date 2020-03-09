@@ -165,6 +165,8 @@
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 
+#define SLOW_START_DISABLED 0
+
 
 /*
  * DistributedExecution represents the execution of a distributed query
@@ -2257,7 +2259,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 
-		if (newConnectionCount > 0 && ExecutorSlowStartInterval > 0)
+		if (newConnectionCount > 0 && ExecutorSlowStartInterval != SLOW_START_DISABLED)
 		{
 			if (MillisecondsPassedSince(workerPool->lastConnectionOpenTime) >=
 				ExecutorSlowStartInterval)
