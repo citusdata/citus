@@ -335,12 +335,8 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 		return true;
 	}
 
-<<<<<<< HEAD
-	Oid shardOid = GetShardLocalTableOid(relationShard->relationId, relationShard->shardId);
-=======
 	Oid shardOid = GetShardLocalTableOid(relationShard->relationId,
 										 relationShard->shardId);
->>>>>>> add the support to execute copy locally
 
 	newRte->relid = shardOid;
 

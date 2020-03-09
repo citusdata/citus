@@ -356,15 +356,7 @@ ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 
-	-- even no need to supply any data
-	COPY distributed_table FROM STDIN WITH CSV;
-ROLLBACK;
-
--- a local query is followed by a command that cannot be executed locally
-BEGIN;
-	SELECT count(*) FROM distributed_table WHERE key = 1;
-
-	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,10)i;
+	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,1) i;
 ROLLBACK;
 
 -- a local query is followed by a command that cannot be executed locally
