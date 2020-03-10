@@ -1188,13 +1188,13 @@ DEBUG:  assigned task to node localhost:xxxxx
      0
 (1 row)
 
--- full outerjoin should not prune based on filters of either side as missing shards
--- create empty rows on the other side
+-- full outerjoin should only prune partitions that will not return any rows. In short it
+-- should cause a union of the FROM and FULL OUTER JOIN tables.
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
-   OR l_partkey = 7; -- causes lineitems to yield tuples irrespective of orders, would have been optimized to a leftjoin without
+   OR l_orderkey IN (2, 3);
 DEBUG:  no valid constraints found
 DEBUG:  shard count: 4
 DEBUG:  no valid constraints found
@@ -1211,6 +1211,32 @@ DEBUG:  assigned task to node localhost:xxxxx
  count
 ---------------------------------------------------------------------
      2
+(1 row)
+
+SELECT count(*)
+FROM orders_hash_partitioned
+FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2)
+   AND l_orderkey IN (2, 3);
+DEBUG:  constraint value: 1
+DEBUG:  constraint value: 2
+DEBUG:  shard count: 2
+DEBUG:  constraint value: 2
+DEBUG:  constraint value: 3
+DEBUG:  shard count: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  constraint value: 1
+DEBUG:  constraint value: 2
+DEBUG:  shard count: 2
+DEBUG:  constraint value: 2
+DEBUG:  constraint value: 3
+DEBUG:  shard count: 2
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
+ count
+---------------------------------------------------------------------
+     0
 (1 row)
 
 DROP TABLE lineitem_hash_partitioned;

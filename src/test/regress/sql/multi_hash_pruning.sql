@@ -318,13 +318,19 @@ FROM orders_hash_partitioned
 RIGHT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE l_orderkey IN (1, 2);
 
--- full outerjoin should not prune based on filters of either side as missing shards
--- create empty rows on the other side
+-- full outerjoin should only prune partitions that will not return any rows. In short it
+-- should cause a union of the FROM and FULL OUTER JOIN tables.
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
-   OR l_partkey = 7; -- causes lineitems to yield tuples irrespective of orders, would have been optimized to a leftjoin without
+   OR l_orderkey IN (2, 3);
+
+SELECT count(*)
+FROM orders_hash_partitioned
+FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2)
+   AND l_orderkey IN (2, 3);
 
 DROP TABLE lineitem_hash_partitioned;
 
