@@ -1,6 +1,7 @@
 CREATE SCHEMA local_shard_copy;
 SET search_path TO local_shard_copy;
 SET client_min_messages TO DEBUG;
+SET citus.next_shard_id TO 1570000;
 SELECT * FROM master_add_node('localhost', :master_port, groupid := 0);
 DEBUG:  schema "public" already exists, skipping
 DETAIL:  NOTICE from localhost:xxxxx
@@ -144,15 +145,15 @@ SELECT shard_of_distribution_column_is_local(12);
 BEGIN;
     -- run select with local execution
     SELECT count(*) FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     21
@@ -160,12 +161,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
     -- the local placements should be executed locally
     COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify that the copy is successful.
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     26
@@ -175,15 +176,15 @@ ROLLBACK;
 BEGIN;
     -- run select with local execution
     SELECT count(*) FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     21
@@ -191,12 +192,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
     -- the local placements should be executed locally
     COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify the put ages.
     SELECT * FROM distributed_table;
-NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  key | age
 ---------------------------------------------------------------------
   20 |  20
@@ -231,15 +232,15 @@ ROLLBACK;
 BEGIN;
     -- run select with local execution
     SELECT count(*) FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     21
@@ -247,12 +248,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
     -- the local placements should be executed locally
     COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify that the copy is successful.
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     26
@@ -262,14 +263,14 @@ ROLLBACK;
 BEGIN;
     -- run select with local execution
     SELECT age FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT age FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  age
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT count(*) FROM collections_list;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330005 collections_list WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330007 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1570005 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1570007 collections_list WHERE true
  count
 ---------------------------------------------------------------------
      0
@@ -277,12 +278,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
     -- the local placements should be executed locally
     COPY collections_list FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY collections_list, line 1: "1, 0"
     -- verify that the copy is successful.
     SELECT count(*) FROM collections_list;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330005 collections_list WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330007 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1570005 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1570007 collections_list WHERE true
  count
 ---------------------------------------------------------------------
      5
@@ -292,14 +293,14 @@ ROLLBACK;
 BEGIN;
     -- run select with local execution
     SELECT age FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT age FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  age
 ---------------------------------------------------------------------
 (0 rows)
 
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     21
@@ -307,12 +308,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
     -- the local placements should be executed locally
     COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify that the copy is successful.
     SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
     26
@@ -322,7 +323,7 @@ ROLLBACK;
 BEGIN;
 -- Since we are in a transaction, the copy should be locally executed.
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
 ROLLBACK;
 -- Since we are not in a transaction, the copy should not be locally executed.
@@ -331,32 +332,32 @@ BEGIN;
 -- Since we are in a transaction, the copy should be locally executed. But
 -- we are putting duplicate key, so it should error.
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
-ERROR:  duplicate key value violates unique constraint "distributed_table_pkey_1330001"
+ERROR:  duplicate key value violates unique constraint "distributed_table_pkey_1570001"
 DETAIL:  Key (key)=(1) already exists.
-CONTEXT:  COPY distributed_table_1330001, line 1
+CONTEXT:  COPY distributed_table_1570001, line 1
 ROLLBACK;
 TRUNCATE distributed_table;
 COPY distributed_table FROM STDIN WITH delimiter ',';
-ERROR:  new row for relation "distributed_table_1330001" violates check constraint "distributed_table_age_check"
+ERROR:  new row for relation "distributed_table_1570001" violates check constraint "distributed_table_age_check"
 DETAIL:  Failing row contains (1, 9).
 BEGIN;
 -- Since we are in a transaction, the execution will be local, however we are putting invalid age.
 -- The constaints should give an error
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1,9"
-ERROR:  new row for relation "distributed_table_1330001" violates check constraint "distributed_table_age_check"
+ERROR:  new row for relation "distributed_table_1570001" violates check constraint "distributed_table_age_check"
 DETAIL:  Failing row contains (1, 9).
-CONTEXT:  COPY distributed_table_1330001, line 1
+CONTEXT:  COPY distributed_table_1570001, line 1
 ROLLBACK;
 TRUNCATE distributed_table;
 -- different delimiters
 BEGIN;
 -- run select with local execution
 SELECT count(*) FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      0
@@ -364,20 +365,20 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 -- initial size
 SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 COPY distributed_table FROM STDIN WITH delimiter '|';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1|10"
 -- new size
 SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
      3
@@ -387,7 +388,7 @@ ROLLBACK;
 BEGIN;
 -- run select with local execution
 SELECT count(*) FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      0
@@ -395,20 +396,20 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 
 -- initial size
 SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 COPY distributed_table FROM STDIN WITH delimiter '[';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1[10"
 -- new size
 SELECT count(*) FROM distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1330003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  count
 ---------------------------------------------------------------------
      3
@@ -418,38 +419,38 @@ ROLLBACK;
 -- multiple local copies
 BEGIN;
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1,15"
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "10,15"
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "100,15"
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 2: "200,20"
 ROLLBACK;
 -- local copy followed by local copy should see the changes
 -- and error since it is a duplicate primary key.
 BEGIN;
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1,15"
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1,16"
-ERROR:  duplicate key value violates unique constraint "distributed_table_pkey_1330001"
+ERROR:  duplicate key value violates unique constraint "distributed_table_pkey_1570001"
 DETAIL:  Key (key)=(1) already exists.
-CONTEXT:  COPY distributed_table_1330001, line 1
+CONTEXT:  COPY distributed_table_1570001, line 1
 ROLLBACK;
 -- local copy followed by local copy should see the changes
 BEGIN;
 COPY distributed_table FROM STDIN WITH delimiter ',';
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1,15"
 -- select should see the change
 SELECT key FROM distributed_table WHERE key = 1;
-NOTICE:  executing the command locally: SELECT key FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT key FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
  key
 ---------------------------------------------------------------------
    1
@@ -471,7 +472,7 @@ SET citus.enable_local_execution = 'on';
 BEGIN;
 -- copy should be executed locally
 COPY reference_table FROM STDIN;
-NOTICE:  executing the copy locally for shard
+NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY reference_table, line 1: "1"
 ROLLBACK;
 SET citus.enable_local_execution = 'off';

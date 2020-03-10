@@ -2,6 +2,7 @@ CREATE SCHEMA local_shard_copy;
 SET search_path TO local_shard_copy;
 
 SET client_min_messages TO DEBUG;
+SET citus.next_shard_id TO 1570000;
 
 SELECT * FROM master_add_node('localhost', :master_port, groupid := 0);
 
