@@ -83,6 +83,7 @@ select create_distributed_function('mx_call_func_bigint(bigint,bigint)');
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
 select create_distributed_function('squares(int)');
 
+
 -- We still don't route them to the workers, because they aren't
 -- colocated with any distributed tables.
 SET client_min_messages TO DEBUG1;
@@ -258,6 +259,14 @@ EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
+
+\c - - - :worker_1_port
+SET search_path TO multi_mx_function_call_delegation, public;
+-- create_distributed_function is disallowed from worker nodes
+select create_distributed_function('mx_call_func(int,int)');
+
+\c - - - :master_port
+SET search_path TO multi_mx_function_call_delegation, public;
 
 RESET client_min_messages;
 \set VERBOSITY terse

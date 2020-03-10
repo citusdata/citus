@@ -148,6 +148,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		colocateWithTableName = text_to_cstring(colocateWithText);
 	}
 
+	EnsureCoordinator();
 	EnsureFunctionOwner(funcOid);
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
