@@ -61,7 +61,7 @@ SELECT master_disable_node('localhost.noexist', 2345);
 CREATE USER non_super_user;
 CREATE USER node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
@@ -406,5 +406,9 @@ FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
+
+-- master_add_inactive_nodes can set activate_on_rebalance
+SELECT 1 FROM master_add_inactive_node('localhost', 12354, activate_on_rebalance => true);
+SELECT nodename, nodeport, isactive, activateonrebalance from pg_dist_node WHERE nodeport = 12354;
 
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;

@@ -69,6 +69,7 @@ typedef struct NodeMetadata
 	Oid nodeRole;
 	bool shouldHaveShards;
 	char *nodeCluster;
+	bool activateOnRebalance;
 } NodeMetadata;
 
 /* local function forward declarations */
@@ -113,6 +114,7 @@ DefaultNodeMetadata()
 		.nodeRack = WORKER_DEFAULT_RACK,
 		.shouldHaveShards = true,
 		.groupId = INVALID_GROUP_ID,
+		.activateOnRebalance = false,
 	};
 	return nodeMetadata;
 }
@@ -181,12 +183,14 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
 	Name nodeClusterName = PG_GETARG_NAME(4);
+	bool activateOnRebalance = PG_GETARG_BOOL(5);
 
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
 	nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
+	nodeMetadata.activateOnRebalance = activateOnRebalance;
 
 	CheckCitusVersion(ERROR);
 
@@ -1371,13 +1375,15 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeMetadata->nodeRack);
 	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(nodeMetadata->hasMetadata);
-	values[Anum_pg_dist_node_metadatasynced - 1] = BoolGetDatum(
-		nodeMetadata->metadataSynced);
+	values[Anum_pg_dist_node_metadatasynced - 1] =
+		BoolGetDatum(nodeMetadata->metadataSynced);
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(nodeMetadata->isActive);
 	values[Anum_pg_dist_node_noderole - 1] = ObjectIdGetDatum(nodeMetadata->nodeRole);
 	values[Anum_pg_dist_node_nodecluster - 1] = nodeClusterNameDatum;
-	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
-		nodeMetadata->shouldHaveShards);
+	values[Anum_pg_dist_node_shouldhaveshards - 1] =
+		BoolGetDatum(nodeMetadata->shouldHaveShards);
+	values[Anum_pg_dist_node_activateonrebalance] =
+		BoolGetDatum(nodeMetadata->activateOnRebalance);
 
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 
@@ -1486,9 +1492,10 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		DatumGetBool(datumArray[Anum_pg_dist_node_metadatasynced - 1]);
 	workerNode->isActive = DatumGetBool(datumArray[Anum_pg_dist_node_isactive - 1]);
 	workerNode->nodeRole = DatumGetObjectId(datumArray[Anum_pg_dist_node_noderole - 1]);
-	workerNode->shouldHaveShards = DatumGetBool(
-		datumArray[Anum_pg_dist_node_shouldhaveshards -
-				   1]);
+	workerNode->shouldHaveShards =
+		DatumGetBool(datumArray[Anum_pg_dist_node_shouldhaveshards - 1]);
+	workerNode->activateOnRebalance =
+		DatumGetBool(datumArray[Anum_pg_dist_node_activateonrebalance - 1]);
 
 	/*
 	 * nodecluster column can be missing. In the case of extension creation/upgrade,

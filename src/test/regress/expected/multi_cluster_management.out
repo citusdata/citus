@@ -143,7 +143,7 @@ CREATE USER node_metadata_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
@@ -453,10 +453,10 @@ SELECT
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | activateonrebalance
 ---------------------------------------------------------------------
-     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
-     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f              | t
+     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t                | f
+     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f              | t                | f
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -674,11 +674,11 @@ CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 a
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (24, 1000, localhost, 5000, default, f, t, primary, olap, f, t).
+DETAIL:  Failing row contains (24, 1000, localhost, 5000, default, f, t, primary, olap, f, t, f).
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
-DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap, f, t).
+DETAIL:  Failing row contains (16, 14, localhost, 57637, default, f, t, primary, olap, f, t, f).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
@@ -701,9 +701,9 @@ SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole =
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeport=8887;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           | metadatasynced | shouldhaveshards | activateonrebalance
 ---------------------------------------------------------------------
-     26 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | t
+     26 |      14 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars. | f              | t                | f
 (1 row)
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
@@ -744,9 +744,9 @@ SELECT master_update_node(:worker_1_node, 'somehost', 9000);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | activateonrebalance
 ---------------------------------------------------------------------
-     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | t
+     16 |      14 | somehost |     9000 | default  | f           | t        | primary  | default     | f              | t                | f
 (1 row)
 
 -- cleanup
@@ -757,9 +757,9 @@ SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 (1 row)
 
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | activateonrebalance
 ---------------------------------------------------------------------
-     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
+     16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t                | f
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
@@ -949,4 +949,17 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function
+-- master_add_inactive_nodes can set activate_on_rebalance
+SELECT 1 FROM master_add_inactive_node('localhost', 12354, activate_on_rebalance => true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT nodename, nodeport, isactive, activateonrebalance from pg_dist_node WHERE nodeport = 12354;
+ nodename  | nodeport | isactive | activateonrebalance
+---------------------------------------------------------------------
+ localhost |    12354 | f        | t
+(1 row)
+
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
