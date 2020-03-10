@@ -83,17 +83,17 @@ SafeStringToInt64(const char *str)
 {
 	char *endptr;
 	errno = 0;
-	int64 number = strtol(str, &endptr, 10);
+	long long number = strtoll(str, &endptr, 10);
 
 	if (str == endptr)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as int64, no digits found\n", str)));
 	}
-	else if (errno == ERANGE && number == LONG_MIN)
+	else if ((errno == ERANGE && number == LLONG_MIN) || number < INT64_MIN)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as int64, underflow occured\n", str)));
 	}
-	else if (errno == ERANGE && number == LONG_MAX)
+	else if ((errno == ERANGE && number == LLONG_MAX) || number > INT64_MAX)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as int64, overflow occured\n", str)));
 	}
@@ -130,17 +130,13 @@ SafeStringToUint64(const char *str)
 {
 	char *endptr;
 	errno = 0;
-	uint64 number = strtoul(str, &endptr, 10);
+	unsigned long long number = strtoull(str, &endptr, 10);
 
 	if (str == endptr)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as uint64, no digits found\n", str)));
 	}
-	else if (errno == ERANGE && number == LONG_MIN)
-	{
-		ereport(ERROR, (errmsg("Error parsing %s as uint64, underflow occured\n", str)));
-	}
-	else if (errno == ERANGE && number == LONG_MAX)
+	else if ((errno == ERANGE && number == ULLONG_MAX) || number > UINT64_MAX)
 	{
 		ereport(ERROR, (errmsg("Error parsing %s as uint64, overflow occured\n", str)));
 	}
