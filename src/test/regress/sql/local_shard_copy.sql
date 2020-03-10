@@ -124,6 +124,10 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+    -- run select with local execution
+    SELECT age FROM distributed_table WHERE key = 1;
+
+    SELECT count(*) FROM distributed_table;
     -- the local placements should be executed locally
     COPY distributed_table FROM STDIN WITH delimiter ',';
 1, 100
@@ -132,10 +136,7 @@ BEGIN;
 4, 400
 5, 500
 \.
-    -- run select with local execution
-    SELECT age FROM distributed_table WHERE key = 1;
 
-    SELECT count(*) FROM distributed_table;
 
     -- verify that the copy is successful.
     SELECT count(*) FROM distributed_table;
@@ -193,6 +194,8 @@ TRUNCATE distributed_table;
 
 -- different delimiters
 BEGIN;
+-- run select with local execution
+SELECT count(*) FROM distributed_table WHERE key = 1;
 -- initial size
 SELECT count(*) FROM distributed_table;
 COPY distributed_table FROM STDIN WITH delimiter '|';
@@ -205,6 +208,8 @@ SELECT count(*) FROM distributed_table;
 ROLLBACK;
 
 BEGIN;
+-- run select with local execution
+SELECT count(*) FROM distributed_table WHERE key = 1;
 -- initial size
 SELECT count(*) FROM distributed_table;
 COPY distributed_table FROM STDIN WITH delimiter '[';

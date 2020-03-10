@@ -618,7 +618,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
      0
 (1 row)
 
-	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,1)i;
+	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,1) i;
 ROLLBACK;
 -- a local query is followed by a command that cannot be executed locally
 BEGIN;

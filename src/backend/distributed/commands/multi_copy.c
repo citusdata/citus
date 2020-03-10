@@ -431,12 +431,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		stopOnFailure = true;
 	}
 
-	bool hasCopyDataLocally = false;
-
 	/* set up the destination for the COPY */
 	copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList, partitionColumnIndex,
-										   executorState, stopOnFailure, NULL,
-										   hasCopyDataLocally);
+										   executorState, stopOnFailure, NULL);
 	dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
@@ -1979,12 +1976,12 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
 							EState *executorState, bool stopOnFailure,
-							char *intermediateResultIdPrefix, bool hasCopyDataLocally)
+							char *intermediateResultIdPrefix)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
 		sizeof(CitusCopyDestReceiver));
 
-	copyDest->shouldUseLocalCopy = !hasCopyDataLocally && ShouldExecuteCopyLocally();
+	copyDest->shouldUseLocalCopy = ShouldExecuteCopyLocally();
 
 	/* set up the DestReceiver function pointers */
 	copyDest->pub.receiveSlot = CitusCopyDestReceiverReceive;
@@ -2040,7 +2037,8 @@ ShouldExecuteCopyLocally()
 		return true;
 	}
 
-	return IsMultiStatementTransaction();
+	/* if we connected to the localhost via a connection, we might not be able to see some previous changes that are done via the connection */
+	return !TransactionConnectedToLocalGroup && IsMultiStatementTransaction();
 }
 
 
