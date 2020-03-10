@@ -102,6 +102,7 @@ static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
 static HTAB *MaintenanceDaemonDBHash;
 
 static volatile sig_atomic_t got_SIGHUP = false;
+static volatile sig_atomic_t got_SIGTERM = false;
 
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
@@ -145,8 +146,7 @@ InitializeMaintenanceDaemonBackend(void)
 
 	MaintenanceDaemonDBData *dbData = (MaintenanceDaemonDBData *) hash_search(
 		MaintenanceDaemonDBHash,
-		&
-		MyDatabaseId,
+		&MyDatabaseId,
 		HASH_ENTER_NULL,
 		&found);
 
@@ -253,7 +253,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	/*
 	 * Look up this worker's configuration.
 	 */
-	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_SHARED);
+	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
@@ -305,7 +305,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	pgstat_report_appname("Citus Maintenance Daemon");
 
 	/* enter main loop */
-	for (;;)
+	while (!got_SIGTERM)
 	{
 		int rc;
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
@@ -651,7 +651,15 @@ MaintenanceDaemonShmemInit(void)
 static void
 MaintenanceDaemonSigTermHandler(SIGNAL_ARGS)
 {
-	proc_exit(0);
+	int save_errno = errno;
+
+	got_SIGTERM = true;
+	if (MyProc != NULL)
+	{
+		SetLatch(&MyProc->procLatch);
+	}
+
+	errno = save_errno;
 }
 
 
