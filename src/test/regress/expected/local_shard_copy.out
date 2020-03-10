@@ -54,6 +54,24 @@ CREATE TABLE local_table (key int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_pkey" for table "local_table"
 DEBUG:  building index "local_table_pkey" on table "local_table" serially
 INSERT INTO local_table SELECT * from generate_series(1, 10);
+-- partitioned table
+CREATE TABLE collections_list (
+	key bigserial,
+	collection_id integer
+) PARTITION BY LIST (collection_id );
+DEBUG:  CREATE TABLE will create implicit sequence "collections_list_key_seq" for serial column "collections_list.key"
+SELECT create_distributed_table('collections_list', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE collections_list_0
+	PARTITION OF collections_list (key, collection_id)
+	FOR VALUES IN ( 0 );
+CREATE TABLE collections_list_1
+	PARTITION OF collections_list (key, collection_id)
+	FOR VALUES IN ( 1 );
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_copy;
@@ -238,6 +256,36 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
  count
 ---------------------------------------------------------------------
     26
+(1 row)
+
+ROLLBACK;
+BEGIN;
+    -- run select with local execution
+    SELECT age FROM distributed_table WHERE key = 1;
+NOTICE:  executing the command locally: SELECT age FROM local_shard_copy.distributed_table_1330001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1)
+ age
+---------------------------------------------------------------------
+(0 rows)
+
+    SELECT count(*) FROM collections_list;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330005 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330007 collections_list WHERE true
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+    -- the local placements should be executed locally
+    COPY collections_list FROM STDIN WITH delimiter ',';
+NOTICE:  executing the copy locally for shard
+CONTEXT:  COPY collections_list, line 1: "1, 0"
+    -- verify that the copy is successful.
+    SELECT count(*) FROM collections_list;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330005 collections_list WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.collections_list_1330007 collections_list WHERE true
+ count
+---------------------------------------------------------------------
+     5
 (1 row)
 
 ROLLBACK;

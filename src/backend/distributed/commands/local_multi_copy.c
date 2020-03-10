@@ -45,7 +45,6 @@
 
 
 static int ReadFromLocalBufferCallback(void *outbuf, int minread, int maxread);
-static Relation CreateCopiedShard(RangeVar *distributedRel, Relation shard);
 static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,
 							bool isBinary);
 
@@ -146,13 +145,12 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 
 	Oid shardOid = GetShardLocalTableOid(relationId, shardId);
 	Relation shard = heap_open(shardOid, RowExclusiveLock);
-	Relation copiedShard = CreateCopiedShard(copyStatement->relation, shard);
 	ParseState *pState = make_parsestate(NULL);
 
 	/* p_rtable of pState is set so that we can check constraints. */
-	pState->p_rtable = CreateRangeTable(copiedShard, ACL_INSERT);
+	pState->p_rtable = CreateRangeTable(shard, ACL_INSERT);
 
-	CopyState cstate = BeginCopyFrom(pState, copiedShard, NULL, false,
+	CopyState cstate = BeginCopyFrom(pState, shard, NULL, false,
 									 ReadFromLocalBufferCallback,
 									 copyStatement->attlist, copyStatement->options);
 	CopyFrom(cstate);
@@ -180,42 +178,6 @@ ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary)
 		return false;
 	}
 	return buffer->len == 0;
-}
-
-
-/*
- * CreateCopiedShard clones deep copies the necessary fields of the given
- * relation.
- */
-Relation
-CreateCopiedShard(RangeVar *distributedRel, Relation shard)
-{
-	TupleDesc tupleDescriptor = RelationGetDescr(shard);
-
-	Relation copiedDistributedRelation = (Relation) palloc(sizeof(RelationData));
-	Form_pg_class copiedDistributedRelationTuple = (Form_pg_class) palloc(
-		CLASS_TUPLE_SIZE);
-
-	*copiedDistributedRelation = *shard;
-	*copiedDistributedRelationTuple = *shard->rd_rel;
-
-	copiedDistributedRelation->rd_rel = copiedDistributedRelationTuple;
-	copiedDistributedRelation->rd_att = CreateTupleDescCopyConstr(tupleDescriptor);
-
-	Oid tableId = RangeVarGetRelid(distributedRel, NoLock, false);
-
-	/*
-	 * BeginCopyFrom opens all partitions of given partitioned table with relation_open
-	 * and it expects its caller to close those relations. We do not have direct access
-	 * to opened relations, thus we are changing relkind of partitioned tables so that
-	 * Postgres will treat those tables as regular relations and will not open its
-	 * partitions.
-	 */
-	if (PartitionedTable(tableId))
-	{
-		copiedDistributedRelationTuple->relkind = RELKIND_RELATION;
-	}
-	return copiedDistributedRelation;
 }
 
 

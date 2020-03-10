@@ -22,6 +22,22 @@ INSERT INTO reference_table SELECT * FROM generate_series(1, 10);
 CREATE TABLE local_table (key int PRIMARY KEY);
 INSERT INTO local_table SELECT * from generate_series(1, 10);
 
+-- partitioned table
+CREATE TABLE collections_list (
+	key bigserial,
+	collection_id integer
+) PARTITION BY LIST (collection_id );
+
+SELECT create_distributed_table('collections_list', 'key');
+
+CREATE TABLE collections_list_0
+	PARTITION OF collections_list (key, collection_id)
+	FOR VALUES IN ( 0 );
+
+CREATE TABLE collections_list_1
+	PARTITION OF collections_list (key, collection_id)
+	FOR VALUES IN ( 1 );
+
 
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
@@ -120,6 +136,24 @@ BEGIN;
 \.
     -- verify that the copy is successful.
     SELECT count(*) FROM distributed_table;
+
+ROLLBACK;
+
+BEGIN;
+    -- run select with local execution
+    SELECT age FROM distributed_table WHERE key = 1;
+
+    SELECT count(*) FROM collections_list;
+    -- the local placements should be executed locally
+    COPY collections_list FROM STDIN WITH delimiter ',';
+1, 0
+2, 0
+3, 0
+4, 1
+5, 1
+\.
+    -- verify that the copy is successful.
+    SELECT count(*) FROM collections_list;
 
 ROLLBACK;
 
