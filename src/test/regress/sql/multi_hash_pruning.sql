@@ -332,7 +332,7 @@ FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
    AND l_orderkey IN (2, 3);
 
-DROP TABLE lineitem_hash_partitioned;
-
 SET citus.task_executor_type TO DEFAULT;
 SET client_min_messages TO DEFAULT;
+
+DROP TABLE lineitem_hash_partitioned;

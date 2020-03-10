@@ -1239,12 +1239,6 @@ DEBUG:  assigned task to node localhost:xxxxx
      0
 (1 row)
 
-DROP TABLE lineitem_hash_partitioned;
-DEBUG:  drop auto-cascades to type lineitem_hash_partitioned
-DEBUG:  drop auto-cascades to type lineitem_hash_partitioned[]
-DEBUG:  drop auto-cascades to constraint lineitem_hash_partitioned_pkey on table lineitem_hash_partitioned
-DEBUG:  drop auto-cascades to index lineitem_hash_partitioned_pkey
-DEBUG:  drop auto-cascades to trigger truncate_trigger_17401 on table lineitem_hash_partitioned
-DEBUG:  EventTriggerInvoke 16450
 SET citus.task_executor_type TO DEFAULT;
 SET client_min_messages TO DEFAULT;
+DROP TABLE lineitem_hash_partitioned;
