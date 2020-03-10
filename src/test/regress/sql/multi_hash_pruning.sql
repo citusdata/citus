@@ -309,7 +309,12 @@ SELECT count(*) FROM orders_hash_partitioned
 -- shards
 SELECT count(*)
 FROM orders_hash_partitioned
-         LEFT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+LEFT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
+WHERE o_orderkey IN (1, 2);
+
+SELECT count(*)
+FROM orders_hash_partitioned
+INNER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2);
 
 -- same principle but on a right join
