@@ -1178,15 +1178,15 @@ NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
 -- show that no data go through the table and shard states are good
 SET client_min_messages to 'ERROR';
@@ -1211,8 +1211,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- some placements are invalid before abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1233,8 +1233,8 @@ ORDER BY shardid, nodeport;
 ABORT;
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
  count
 ---------------------------------------------------------------------
      0
@@ -1259,8 +1259,8 @@ ORDER BY shardid, nodeport;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- check shard states before commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1298,8 +1298,8 @@ ORDER BY shardid, nodeport;
 
 -- verify data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
  count
 ---------------------------------------------------------------------
      2
@@ -1312,7 +1312,7 @@ NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 -- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;

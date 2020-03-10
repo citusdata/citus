@@ -33,8 +33,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 DELETE FROM dml_test WHERE id = 2;
@@ -96,8 +95,7 @@ BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
@@ -154,8 +152,7 @@ DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;

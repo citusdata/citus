@@ -219,8 +219,7 @@ SELECT citus.mitmproxy('conn.killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY copy_test, line 1: "0, 0"

@@ -669,10 +669,23 @@ END;
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
 -- OS-dependent host name resolution warnings
-SET client_min_messages to ERROR;
 \set VERBOSITY terse
-
-SELECT master_add_node('invalid-node-name', 9999);
+SET client_min_messages to ERROR;
+DO $$
+DECLARE
+        errors_received INTEGER;
+BEGIN
+errors_received := 0;
+        BEGIN
+		SELECT master_add_node('invalid-node-name', 9999);
+        EXCEPTION WHEN OTHERS THEN
+                IF SQLERRM LIKE 'connection to the remote node%%' THEN
+                        errors_received := errors_received + 1;
+                END IF;
+        END;
+RAISE '(%/1) failed to add node', errors_received;
+END;
+$$;
 
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;

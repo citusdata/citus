@@ -28,8 +28,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key |   value
@@ -38,8 +37,7 @@ DETAIL:  server closed the connection unexpectedly
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key |   value
@@ -57,8 +55,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key |   value
@@ -69,8 +66,7 @@ DETAIL:  server closed the connection unexpectedly
 
 INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key |     value
@@ -160,8 +156,7 @@ SELECT * FROM select_test WHERE key = 3;
 
 INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  key |     value
@@ -215,8 +210,7 @@ SELECT * FROM select_test WHERE key = 1;
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- now the same test with query cancellation

@@ -36,8 +36,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table, line 1: "1,2"
@@ -276,23 +275,19 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 1: "1,2"
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 2: "3,4"
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 3: "6,7"
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 5: "9,10"
