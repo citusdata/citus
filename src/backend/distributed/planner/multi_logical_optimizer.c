@@ -3504,6 +3504,7 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
 	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
 
 	/*
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
@@ -3511,6 +3512,8 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 	 */
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
 										   PVC_INCLUDE_WINDOWFUNCS);
+	expressionList = list_concat(expressionList,
+								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	Node *expression = NULL;
 	foreach_ptr(expression, expressionList)
@@ -3547,6 +3550,7 @@ DeferErrorIfContainsNonPushdownableAggregate(MultiNode *logicalPlanNode)
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
 	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
 
 	/*
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
@@ -3554,6 +3558,8 @@ DeferErrorIfContainsNonPushdownableAggregate(MultiNode *logicalPlanNode)
 	 */
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
 										   PVC_INCLUDE_WINDOWFUNCS);
+	expressionList = list_concat(expressionList,
+								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)

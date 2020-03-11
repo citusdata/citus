@@ -641,6 +641,20 @@ SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type > avg(2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
 ORDER BY 1;
 
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type > avg(t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+ORDER BY 1;
+
+RESET citus.coordinator_aggregation_strategy;
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type > corr(t1.value_3, t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+ORDER BY 1;
+
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type * 5 > sum(distinct t1.value_3)
+ORDER BY 1;
+SET citus.coordinator_aggregation_strategy TO 'disabled';
+
 -- Test https://github.com/citusdata/citus/issues/3433
 CREATE TABLE keyval1 (key int, value int);
 SELECT create_distributed_table('keyval1', 'key');
