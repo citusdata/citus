@@ -92,11 +92,6 @@ check-base: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
-check-base-non-adaptive: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	--server-option=citus.task_executor_type=real-time \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
-
 # check-minimal only sets up the cluster
 check-minimal: all
 	$(pg_regress_multi_check) --load-extension=citus \
@@ -118,26 +113,6 @@ check-empty: all
 check-multi: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
-
-check-multi-non-adaptive: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	--server-option=citus.task_executor_type=real-time \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
-
-check-failure-non-adaptive: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	--server-option=citus.task_executor_type=real-time \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
-
-check-failure-non-adaptive-base: all
-	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
-	--server-option=citus.task_executor_type=real-time \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
-
-check-isolation-non-adaptive: all  $(isolation_test_files)
-	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	--server-option=citus.task_executor_type=real-time \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
 check-multi-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
