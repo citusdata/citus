@@ -29,7 +29,7 @@ SELECT create_distributed_function('get_local_node_id_volatile()');
 CREATE TYPE user_data AS (name text, age int);
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
-CREATE TABLE user_info_data (user_id int, u_data user_data);
+CREATE TABLE user_info_data (user_id int, u_data user_data, user_index int);
 SELECT create_distributed_table('user_info_data', 'user_id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -44,7 +44,7 @@ SELECT get_local_node_id_volatile();
 (1 row)
 
 -- load data
-INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data FROM generate_series(0,100)i;
+INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data, i FROM generate_series(0,100)i;
 -- we expect that the function is evaluated on the worker node, so we should get a row
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 1;
  ?column?
@@ -153,6 +153,50 @@ execute fast_path_router_with_param_and_func(7);
 (1 row)
 
 execute fast_path_router_with_param_and_func(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_index = $1;
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -490,6 +534,50 @@ execute router_with_param_and_func(7);
 (1 row)
 
 execute router_with_param_and_func(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_id = 1 AND user_index = $1;
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -867,6 +955,57 @@ execute fast_path_router_with_param_and_func(8);
  t
 (1 row)
 
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_index = $1;
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3 AND u_data  = ('name3', 23)::user_data;
 NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  ?column?
@@ -1074,7 +1213,7 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 (1 row)
 
 SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE user_id  = 3;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  count
 ---------------------------------------------------------------------
      1
@@ -1083,63 +1222,63 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_ev
 -- make sure that it is also true for  fast-path router queries with paramaters
 PREPARE router_with_param(int) AS SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE user_id  = $1;
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 execute router_with_param(3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) $1)
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data m1 JOIN user_info_data m2 USING(user_id) WHERE m1.user_id  = 3;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1147,56 +1286,107 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 
 PREPARE router_with_param_and_func(int) AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data m1 JOIN user_info_data m2 USING(user_id) WHERE m1.user_id  = $1;
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 execute router_with_param_and_func(3);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_id = 3 AND user_index = $1;
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1204,21 +1394,21 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 
 -- same query as router_with_param, but with consts
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data m1 JOIN user_info_data m2 USING(user_id) WHERE m1.user_id  = 3;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE u1.user_id = 3 AND u1.u_data = ('name3', 23)::user_data;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE u1.user_id = 3 AND u1.u_data  = ('name3', 23)::user_data;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
@@ -1226,70 +1416,70 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_ev
 
 PREPARE router_with_param_on_non_dist_key(user_data) AS SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE u1.user_id = 3 AND u1.u_data  = $1;
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE u1.user_id = 3 AND u1.u_data  = ('name3', 23)::user_data;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1297,70 +1487,70 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 
 PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE u1.user_id = 3 AND u1.u_data  = $1;
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_param_on_non_dist_key_and_func(('name3', 23)::user_data);
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE user_id = 3 AND u1.u_data = ('name3', 23)::user_data;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) 3) AND (u1.u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
@@ -1368,70 +1558,70 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_ev
 
 PREPARE router_with_two_params(user_data, int) AS SELECT count(*) FROM user_info_data u1 JOIN user_info_data u2 USING (user_id) WHERE user_id = $2 AND u1.u_data  = $1;
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE ((u1.user_id OPERATOR(pg_catalog.=) $2) AND (u1.u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations.user_data))
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING(user_id) WHERE user_id = 3;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1439,56 +1629,56 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 
 PREPARE router_with_only_function AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING(user_id) WHERE user_id = 3;
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 EXECUTE router_with_only_function;
-NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 u1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 u2(user_id, u_data, user_index) USING (user_id)) WHERE (u1.user_id OPERATOR(pg_catalog.=) 3)
  ?column?
 ---------------------------------------------------------------------
  t
