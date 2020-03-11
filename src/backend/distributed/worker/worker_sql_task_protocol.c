@@ -24,8 +24,6 @@
 /* necessary to get S_IRUSR, S_IWUSR definitions on illumos */
 #include <sys/stat.h>
 
-#define COPY_BUFFER_SIZE (4 * 1024 * 1024)
-
 /* TaskFileDestReceiver can be used to stream results into a file */
 typedef struct TaskFileDestReceiver
 {
@@ -48,6 +46,9 @@ typedef struct TaskFileDestReceiver
 
 	/* state on how to copy out data types */
 	IntermediateResultEncoder *encoder;
+
+	/* buffer to which encoder writes its output */
+	StringInfo outputBuffer;
 
 	/* statistics */
 	uint64 tuplesSent;
@@ -169,9 +170,11 @@ TaskFileDestReceiverStartup(DestReceiver *dest, int operation,
 	taskFileDest->tupleDescriptor = inputTupleDescriptor;
 
 	/* define how tuples will be serialised */
+	taskFileDest->outputBuffer = makeStringInfo();
 	taskFileDest->encoder = IntermediateResultEncoderCreate(inputTupleDescriptor,
 															taskFileDest->format,
-															taskFileDest->tupleContext);
+															taskFileDest->tupleContext,
+															taskFileDest->outputBuffer);
 
 	taskFileDest->fileCompat = FileCompatFromFileStart(FileOpenForTransmit(
 														   taskFileDest->filePath,
@@ -202,11 +205,13 @@ TaskFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	StringInfo bufferToFlush = IntermediateResultEncoderReceive(encoder, columnValues,
-																columnNulls);
-	if (bufferToFlush != NULL)
+	IntermediateResultEncoderReceive(encoder, columnValues, columnNulls);
+
+	StringInfo outputBuffer = taskFileDest->outputBuffer;
+	if (outputBuffer->len > ENCODER_BUFFER_SIZE_THRESHOLD)
 	{
-		WriteToLocalFile(bufferToFlush, taskFileDest);
+		WriteToLocalFile(outputBuffer, taskFileDest);
+		resetStringInfo(outputBuffer);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -248,10 +253,12 @@ TaskFileDestReceiverShutdown(DestReceiver *destReceiver)
 	TaskFileDestReceiver *taskFileDest = (TaskFileDestReceiver *) destReceiver;
 
 	IntermediateResultEncoder *encoder = taskFileDest->encoder;
-	StringInfo bufferToFlush = IntermediateResultEncoderDone(encoder);
-	if (bufferToFlush != NULL)
+	IntermediateResultEncoderDone(encoder);
+
+	StringInfo outputBuffer = taskFileDest->outputBuffer;
+	if (outputBuffer->len > 0)
 	{
-		WriteToLocalFile(bufferToFlush, taskFileDest);
+		WriteToLocalFile(outputBuffer, taskFileDest);
 	}
 
 	FileClose(taskFileDest->fileCompat.fd);

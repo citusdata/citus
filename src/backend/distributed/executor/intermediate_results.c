@@ -71,6 +71,9 @@ typedef struct RemoteFileDestReceiver
 	/* state on how to copy out data types */
 	IntermediateResultEncoder *encoder;
 
+	/* buffer to which encoder writes its output */
+	StringInfo outputBuffer;
+
 	/* number of tuples sent */
 	uint64 tuplesSent;
 } RemoteFileDestReceiver;
@@ -238,8 +241,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	MemoryContext tupleContext = GetPerTupleMemoryContext(resultDest->executorState);
 	IntermediateResultFormat format = ResultFileFormatForTupleDesc(inputTupleDescriptor);
 
+	resultDest->outputBuffer = makeStringInfo();
 	resultDest->encoder = IntermediateResultEncoderCreate(inputTupleDescriptor,
-														  format, tupleContext);
+														  format, tupleContext,
+														  resultDest->outputBuffer);
 
 	if (resultDest->writeLocalFile)
 	{
@@ -348,18 +353,21 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	StringInfo bufferToFlush =
-		IntermediateResultEncoderReceive(resultDest->encoder, columnValues, columnNulls);
-	if (bufferToFlush != NULL)
+	IntermediateResultEncoderReceive(resultDest->encoder, columnValues, columnNulls);
+
+	StringInfo outputBuffer = resultDest->outputBuffer;
+	if (outputBuffer->len >= ENCODER_BUFFER_SIZE_THRESHOLD)
 	{
 		/* send row to nodes */
-		BroadcastCopyData(bufferToFlush, connectionList);
+		BroadcastCopyData(outputBuffer, connectionList);
 
 		/* write to local file (if applicable) */
 		if (resultDest->writeLocalFile)
 		{
-			WriteToLocalFile(bufferToFlush, &resultDest->fileCompat);
+			WriteToLocalFile(outputBuffer, &resultDest->fileCompat);
 		}
+
+		resetStringInfo(outputBuffer);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -400,17 +408,21 @@ RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
 	List *connectionList = resultDest->connectionList;
 
-	StringInfo bufferToFlush = IntermediateResultEncoderDone(resultDest->encoder);
-	if (bufferToFlush != NULL)
+	IntermediateResultEncoderDone(resultDest->encoder);
+
+	StringInfo outputBuffer = resultDest->outputBuffer;
+	if (outputBuffer->len > 0)
 	{
 		/* send row to nodes */
-		BroadcastCopyData(bufferToFlush, connectionList);
+		BroadcastCopyData(outputBuffer, connectionList);
 
 		/* write to local file (if applicable) */
 		if (resultDest->writeLocalFile)
 		{
-			WriteToLocalFile(bufferToFlush, &resultDest->fileCompat);
+			WriteToLocalFile(outputBuffer, &resultDest->fileCompat);
 		}
+
+		resetStringInfo(outputBuffer);
 	}
 
 	/* close the COPY input */

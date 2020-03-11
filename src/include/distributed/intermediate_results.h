@@ -22,6 +22,8 @@
 #include "utils/palloc.h"
 
 
+#define ENCODER_BUFFER_SIZE_THRESHOLD (4 * 1024 * 1024)
+
 /*
  * DistributedResultFragment represents a fragment of a distributed result.
  */
@@ -82,10 +84,11 @@ extern char * CreateIntermediateResultsDirectory(void);
 extern IntermediateResultEncoder * IntermediateResultEncoderCreate(TupleDesc tupleDesc,
 																   IntermediateResultFormat
 																   format, MemoryContext
-																   tupleContext);
-extern StringInfo IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
-												   Datum *values, bool *nulls);
-extern StringInfo IntermediateResultEncoderDone(IntermediateResultEncoder *encoder);
+																   tupleContext,
+																   StringInfo outputBuffer);
+extern void IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
+											 Datum *values, bool *nulls);
+extern void IntermediateResultEncoderDone(IntermediateResultEncoder *encoder);
 extern void IntermediateResultEncoderDestroy(IntermediateResultEncoder *encoder);
 extern void ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
 								   TupleDesc tupleDescriptor, Tuplestorestate *tupstore);

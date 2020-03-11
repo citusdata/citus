@@ -43,8 +43,6 @@
 #include "utils/syscache.h"
 
 
-#define ENCODER_BUFFER_SIZE (4 * 1024 * 1024)
-
 /* internal state of intermediate result file encoder */
 struct IntermediateResultEncoder
 {
@@ -56,15 +54,6 @@ struct IntermediateResultEncoder
 	 */
 	StringInfo outputBuffer;
 
-	/*
-	 * Used for returning the flushed result of encoding, at which time move the
-	 * data pointer from outputBuffer to flushBuffer before reseting length of
-	 * outputBuffer.
-	 *
-	 * This is kept here to avoid allocating it everytime we need to flush some data.
-	 */
-	StringInfo flushBuffer;
-
 	IntermediateResultFormat format;
 	TupleDesc tupleDescriptor;
 
@@ -74,7 +63,7 @@ struct IntermediateResultEncoder
 };
 
 /* forward declaration of local functions */
-static void ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
+static void ReadCopyFileIntoTupleStore(const char *fileName, const char *copyFormat,
 									   TupleDesc tupleDescriptor,
 									   Tuplestorestate *tupstore);
 static Relation StubRelation(TupleDesc tupleDescriptor);
@@ -88,13 +77,13 @@ static Relation StubRelation(TupleDesc tupleDescriptor);
 IntermediateResultEncoder *
 IntermediateResultEncoderCreate(TupleDesc tupleDesc,
 								IntermediateResultFormat format,
-								MemoryContext tupleContext)
+								MemoryContext tupleContext,
+								StringInfo outputBuffer)
 {
 	IntermediateResultEncoder *encoder = palloc0(sizeof(IntermediateResultEncoder));
 	encoder->format = format;
 	encoder->tupleDescriptor = CreateTupleDescCopy(tupleDesc);
-	encoder->outputBuffer = makeStringInfo();
-	encoder->flushBuffer = makeStringInfo();
+	encoder->outputBuffer = outputBuffer;
 
 	if (format == TEXT_COPY_FORMAT || format == BINARY_COPY_FORMAT)
 	{
@@ -141,7 +130,7 @@ IntermediateResultEncoderCreate(TupleDesc tupleDesc,
 /*
  * IntermediateResultEncoderReceive encodes the next row with the given encoder.
  */
-StringInfo
+void
 IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 								 Datum *values, bool *nulls)
 {
@@ -151,18 +140,6 @@ IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
 		AppendCopyRowData(values, nulls, encoder->tupleDescriptor,
 						  encoder->copyOutState, encoder->columnOutputFunctions, NULL);
 	}
-
-	if (encoder->outputBuffer->len > ENCODER_BUFFER_SIZE)
-	{
-		encoder->flushBuffer->data = encoder->outputBuffer->data;
-		encoder->flushBuffer->len = encoder->outputBuffer->len;
-
-		encoder->outputBuffer->len = 0;
-
-		return encoder->flushBuffer;
-	}
-
-	return NULL;
 }
 
 
@@ -170,7 +147,7 @@ IntermediateResultEncoderReceive(IntermediateResultEncoder *encoder,
  * IntermediateResultEncoderDone tells the encoder that there is no more work
  * to do. Encoder possibly can add footer data at this stage.
  */
-StringInfo
+void
 IntermediateResultEncoderDone(IntermediateResultEncoder *encoder)
 {
 	if (encoder->format == TEXT_COPY_FORMAT ||
@@ -182,18 +159,6 @@ IntermediateResultEncoderDone(IntermediateResultEncoder *encoder)
 			AppendCopyBinaryFooters(copyOutState);
 		}
 	}
-
-	if (encoder->outputBuffer->len > 0)
-	{
-		encoder->flushBuffer->data = encoder->outputBuffer->data;
-		encoder->flushBuffer->len = encoder->outputBuffer->len;
-
-		encoder->outputBuffer->len = 0;
-
-		return encoder->flushBuffer;
-	}
-
-	return NULL;
 }
 
 
@@ -237,7 +202,7 @@ ReadFileIntoTupleStore(char *fileName, IntermediateResultFormat format,
  * store.
  */
 static void
-ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
+ReadCopyFileIntoTupleStore(const char *fileName, const char *copyFormat,
 						   TupleDesc tupleDescriptor,
 						   Tuplestorestate *tupstore)
 {
@@ -258,7 +223,7 @@ ReadCopyFileIntoTupleStore(char *fileName, char *copyFormat,
 	List *copyOptions = NIL;
 
 	int location = -1; /* "unknown" token location */
-	DefElem *copyOption = makeDefElem("format", (Node *) makeString(copyFormat),
+	DefElem *copyOption = makeDefElem("format", (Node *) makeString((char *) copyFormat),
 									  location);
 	copyOptions = lappend(copyOptions, copyOption);
 
