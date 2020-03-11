@@ -318,10 +318,10 @@ execute fast_path_router_with_param_and_func(14);
 execute fast_path_router_with_param_and_func(16);
 
 
-INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable())::user_data, i FROM generate_series(0,7)i;
+INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable() > 0)::user_data, i FROM generate_series(0,7)i;
 
 PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
-	DELETE FROM user_info_data WHERE user_id = 3 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING user_id, user_index;
+	DELETE FROM user_info_data WHERE user_id = 3 AND user_index = $1 AND u_data = ('test', (get_local_node_id_stable() > 0)::int)::user_data RETURNING user_id, user_index;
 
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(0);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
@@ -403,7 +403,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data)
 EXECUTE fast_path_router_with_only_function;
 
 
-PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (3, $1, get_local_node_id_stable()) RETURNING user_id;
+PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (3, $1, (get_local_node_id_stable() > 0)::int) RETURNING user_id;
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
@@ -451,10 +451,10 @@ execute router_with_param_and_func(14);
 execute router_with_param_and_func(16);
 
 
-INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable())::user_data, i FROM generate_series(0,7)i;
+INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable() > 0)::user_data, i FROM generate_series(0,7)i;
 
 PREPARE router_with_param_and_func_on_non_dist_key(int) AS
-	DELETE FROM user_info_data WHERE user_id = 3 AND user_id = 3 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING user_id, user_index;
+	DELETE FROM user_info_data WHERE user_id = 3 AND user_id = 3 AND user_index = $1 AND u_data = ('test', (get_local_node_id_stable() > 0)::int)::user_data RETURNING user_id, user_index;
 
 EXECUTE router_with_param_and_func_on_non_dist_key(0);
 EXECUTE router_with_param_and_func_on_non_dist_key(1);
