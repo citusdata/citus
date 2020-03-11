@@ -44,7 +44,7 @@ SELECT get_local_node_id_volatile();
 (1 row)
 
 -- load data
-INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data FROM generate_series(0,100)i;
+INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data, i FROM generate_series(0,100)i;
 -- we expect that the function is evaluated on the worker node, so we should get a row
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 1;
  ?column?
@@ -153,6 +153,50 @@ execute fast_path_router_with_param_and_func(7);
 (1 row)
 
 execute fast_path_router_with_param_and_func(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_index = $1;
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -490,6 +534,50 @@ execute router_with_param_and_func(7);
 (1 row)
 
 execute router_with_param_and_func(8);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_id = 1 AND user_index = $1;
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -867,6 +955,57 @@ execute fast_path_router_with_param_and_func(8);
  t
 (1 row)
 
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_index = $1;
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3 AND u_data  = ('name3', 23)::user_data;
 NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (u_data OPERATOR(pg_catalog.=) ROW('name3'::text, 23)::master_evaluation_combinations.user_data))
  ?column?
@@ -1197,6 +1336,57 @@ NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.g
 
 execute router_with_param_and_func(3);
 NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM (master_evaluation_combinations.user_info_data_1170001 m1(user_id, u_data, user_index) JOIN master_evaluation_combinations.user_info_data_1170001 m2(user_id, u_data, user_index) USING (user_id)) WHERE (m1.user_id OPERATOR(pg_catalog.=) $1)
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_id = 3 AND user_index = $1;
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+NOTICE:  executing the command locally: SELECT (master_evaluation_combinations.get_local_node_id_volatile() OPERATOR(pg_catalog.>) 0) FROM master_evaluation_combinations.user_info_data_1170001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_index OPERATOR(pg_catalog.=) $1))
  ?column?
 ---------------------------------------------------------------------
  t
