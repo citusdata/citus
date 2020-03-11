@@ -26,4 +26,6 @@ void * SafeBsearch(const void *key, const void *ptr, rsize_t count, rsize_t size
 				   int (*comp)(const void *, const void *));
 int SafeSnprintf(char *str, rsize_t count, const char *fmt, ...);
 
+#define memset_struct_0(variable) memset(&variable, 0, sizeof(variable))
+
 #endif

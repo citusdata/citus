@@ -21,6 +21,7 @@
 #include "catalog/namespace.h"
 #include "commands/sequence.h"
 #include "distributed/citus_acquire_lock.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -109,11 +110,14 @@ PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 static NodeMetadata
 DefaultNodeMetadata()
 {
-	NodeMetadata nodeMetadata = {
-		.nodeRack = WORKER_DEFAULT_RACK,
-		.shouldHaveShards = true,
-		.groupId = INVALID_GROUP_ID,
-	};
+	NodeMetadata nodeMetadata;
+
+	/* ensure uninitialized padding doesn't escape the function */
+	memset_struct_0(nodeMetadata);
+	nodeMetadata.nodeRack = WORKER_DEFAULT_RACK;
+	nodeMetadata.shouldHaveShards = true;
+	nodeMetadata.groupId = INVALID_GROUP_ID;
+
 	return nodeMetadata;
 }
 

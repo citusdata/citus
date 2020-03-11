@@ -135,6 +135,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
@@ -1002,11 +1003,13 @@ static TransactionProperties
 DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, bool
 									   exludeFromTransaction)
 {
-	TransactionProperties xactProperties = {
-		.errorOnAnyFailure = false,
-		.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_ALLOWED,
-		.requires2PC = false
-	};
+	TransactionProperties xactProperties;
+
+	/* ensure uninitialized padding doesn't escape the function */
+	memset_struct_0(xactProperties);
+	xactProperties.errorOnAnyFailure = false;
+	xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_ALLOWED;
+	xactProperties.requires2PC = false;
 
 	if (taskList == NIL)
 	{
