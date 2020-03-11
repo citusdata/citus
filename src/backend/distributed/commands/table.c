@@ -884,7 +884,11 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 		return;
 	}
 
-	Assert(distributionColumn != NULL);
+	if (distributionColumn == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("distribution column of distributed table is NULL")));
+	}
 
 	char *relationName = RelationGetRelationName(relation);
 	List *indexOidList = RelationGetIndexList(relation);
