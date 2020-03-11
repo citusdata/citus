@@ -12,8 +12,10 @@
 #define VERSION_COMPAT_H
 
 #include "postgres.h"
+
 #include "commands/explain.h"
 #include "catalog/namespace.h"
+#include "distributed/citus_safe_lib.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"
 #if (PG_VERSION_NUM >= 120000)
@@ -71,10 +73,12 @@ FileReadCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_inf
 static inline FileCompat
 FileCompatFromFileStart(File fileDesc)
 {
-	FileCompat fc = {
-		.fd = fileDesc,
-		.offset = 0
-	};
+	FileCompat fc;
+
+	/* ensure uninitialized padding doesn't escape the function */
+	memset_struct_0(fc);
+	fc.fd = fileDesc;
+	fc.offset = 0;
 
 	return fc;
 }
