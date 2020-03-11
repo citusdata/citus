@@ -990,7 +990,7 @@ INSERT INTO
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE colocated_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
-SELECT create_distributed_table('colocated_table_test', 'value_1');
+    SELECT create_distributed_table('colocated_table_test', 'value_1');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -1533,8 +1533,7 @@ SELECT select_count_all();
 
 TRUNCATE reference_table_test;
 -- reference tables work with composite key
--- and we even do not need to create hash
--- function etc.
+-- and we even do not need to create hash function etc.
 -- first create the type on all nodes
 CREATE TYPE reference_comp_key as (key text, value text);
 CREATE TABLE reference_table_composite (id int PRIMARY KEY, data reference_comp_key);
@@ -1602,6 +1601,39 @@ BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
+-- Previous issue failed to rename reference tables in subqueries
+EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
+HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
+ORDER BY 1;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.value_1
+   InitPlan 1 (returns $0)
+     ->  Function Scan on read_intermediate_result intermediate_result
+   ->  HashAggregate
+         Group Key: remote_scan.value_1
+         ->  Result
+               One-Time Filter: ($0 > '0'::double precision)
+               ->  Custom Scan (Citus Adaptive)
+                     Filter: ($0 > '0'::double precision)
+                     ->  Distributed Subplan XXX_1
+                           ->  Custom Scan (Citus Adaptive)
+                                 Task Count: 1
+                                 Tasks Shown: All
+                                 ->  Task
+                                       Node: host=localhost port=xxxxx dbname=regression
+                                       ->  Seq Scan on reference_table_test_1250000 rt
+                                             Filter: (value_2 = '2'::double precision)
+                     Task Count: 6
+                     Tasks Shown: One of 6
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  HashAggregate
+                                 Group Key: colocated_table_test.value_1
+                                 ->  Seq Scan on colocated_table_test_1250005 colocated_table_test
+(25 rows)
+
 -- clean up tables, ...
 SET client_min_messages TO ERROR;
 DROP SEQUENCE example_ref_value_seq;

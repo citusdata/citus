@@ -108,7 +108,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Datum partitionValueDatum = 0;
 	ShardInterval *shardInterval = NULL;
 	List *placementList = NIL;
-	DistTableCacheEntry *distTable = NULL;
+	CitusTableCacheEntry *distTable = NULL;
 	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
@@ -267,7 +267,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	distTable = DistributedTableCacheEntry(colocatedRelationId);
+	distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{

@@ -34,7 +34,7 @@ PreprocessCreatePolicyStmt(Node *node, const char *queryString)
 	Oid relationId = RangeVarGetRelid(stmt->table,
 									  AccessExclusiveLock,
 									  false);
-	if (IsDistributedTable(relationId))
+	if (IsCitusTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("policies on distributed tables are only supported in "

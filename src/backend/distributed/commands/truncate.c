@@ -69,7 +69,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		char relationKind = get_rel_relkind(relationId);
-		if (IsDistributedTable(relationId) &&
+		if (IsCitusTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -94,7 +94,7 @@ EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
-		if (!IsDistributedTable(relationId))
+		if (!IsCitusTable(relationId))
 		{
 			continue;
 		}
@@ -122,7 +122,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 
-		if (IsDistributedTable(relationId) &&
+		if (IsCitusTable(relationId) &&
 			PartitionMethod(relationId) == DISTRIBUTE_BY_NONE &&
 			TableReferenced(relationId))
 		{
@@ -177,7 +177,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		Oid referencingRelationId = InvalidOid;
 
-		if (!IsDistributedTable(relationId))
+		if (!IsCitusTable(relationId))
 		{
 			continue;
 		}
@@ -189,7 +189,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 		distributedRelationList = lappend_oid(distributedRelationList, relationId);
 
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		Assert(cacheEntry != NULL);
 
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;

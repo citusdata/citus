@@ -356,7 +356,7 @@ CheckDistributedTable(Oid relationId)
 	/* check that the relationId belongs to a table */
 	EnsureRelationKindSupported(relationId);
 
-	if (!IsDistributedTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is not a distributed table",
 							   relationName)));
@@ -558,7 +558,7 @@ static List *
 RelationShardListForShardCreate(ShardInterval *shardInterval)
 {
 	Oid relationId = shardInterval->relationId;
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *referencingRelationList = cacheEntry->referencingRelationsViaForeignKey;
 	int shardIndex = -1;
@@ -587,7 +587,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	{
 		uint64 fkeyShardId = INVALID_SHARD_ID;
 
-		if (!IsDistributedTable(fkeyRelationid))
+		if (!IsCitusTable(fkeyRelationid))
 		{
 			/* we're not interested in local tables */
 			continue;

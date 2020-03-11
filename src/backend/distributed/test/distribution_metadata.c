@@ -198,9 +198,9 @@ Datum
 is_distributed_table(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
-	bool isDistributedTable = IsDistributedTable(distributedTableId);
+	bool isCitusTable = IsCitusTable(distributedTableId);
 
-	PG_RETURN_BOOL(isDistributedTable);
+	PG_RETURN_BOOL(isCitusTable);
 }
 
 

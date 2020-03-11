@@ -34,7 +34,7 @@ extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
 extern List * GetDistributedTableDDLEvents(Oid relationId);
 extern List * MetadataDropCommands(void);
-extern char * DistributionCreateCommand(DistTableCacheEntry *cacheEntry);
+extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);

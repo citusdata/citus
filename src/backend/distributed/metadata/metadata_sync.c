@@ -222,7 +222,7 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
 	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
@@ -356,7 +356,7 @@ List *
 MetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
-	List *distributedTableList = DistributedTableList();
+	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
@@ -371,7 +371,7 @@ MetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	/* create the list of tables whose metadata will be created */
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
 		if (ShouldSyncTableMetadata(cacheEntry->relationId))
@@ -391,10 +391,9 @@ MetadataCreateCommands(void)
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		/*
-		 * Distributed tables might have dependencies on different objects, since we
-		 * create shards for a distributed table via multiple sessions these objects will
-		 * be created via their own connection and committed immediately so they become
-		 * visible to all sessions creating shards.
+		 * Tables might have dependencies on different objects, since we create shards for
+		 * table via multiple sessions these objects will be created via their own connection
+		 * and committed immediately so they become visible to all sessions creating shards.
 		 */
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
@@ -467,7 +466,7 @@ MetadataCreateCommands(void)
 List *
 GetDistributedTableDDLEvents(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
@@ -619,7 +618,7 @@ NodeListInsertCommand(List *workerNodeList)
  * executed to replicate the metadata for a distributed table.
  */
 char *
-DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
+DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 {
 	StringInfo insertDistributionCommand = makeStringInfo();
 	Oid relationId = cacheEntry->relationId;
@@ -1306,10 +1305,10 @@ static List *
 DetachPartitionCommandList(void)
 {
 	List *detachPartitionCommandList = NIL;
-	List *distributedTableList = DistributedTableList();
+	List *distributedTableList = CitusTableList();
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
 		if (!PartitionedTable(cacheEntry->relationId))

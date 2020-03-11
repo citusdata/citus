@@ -692,6 +692,14 @@ DEBUG:  pushing down the function call
            28
 (1 row)
 
+\c - - - :worker_1_port
+SET search_path TO multi_mx_function_call_delegation, public;
+-- create_distributed_function is disallowed from worker nodes
+select create_distributed_function('mx_call_func(int,int)');
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
+\c - - - :master_port
+SET search_path TO multi_mx_function_call_delegation, public;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_function_call_delegation CASCADE;

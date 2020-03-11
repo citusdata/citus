@@ -1400,7 +1400,7 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
 	Oid relationId = rangeTableEntry->relid;
 
 	/* we don't consider local tables in the equality on columns */
-	if (!IsDistributedTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
 		return;
 	}
@@ -1721,7 +1721,7 @@ DistributedRelationIdList(Query *query)
 		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
 		Oid relationId = tableEntry->relationId;
 
-		if (!IsDistributedTable(relationId))
+		if (!IsCitusTable(relationId))
 		{
 			continue;
 		}

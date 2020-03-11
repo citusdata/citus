@@ -32,14 +32,14 @@ CREATE TYPE user_data AS (name text, age int);
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
 
-CREATE TABLE user_info_data (user_id int, u_data user_data);
+CREATE TABLE user_info_data (user_id int, u_data user_data, user_index int);
 SELECT create_distributed_table('user_info_data', 'user_id');
 
 -- show that local id is 0, we'll use this information
 SELECT get_local_node_id_volatile();
 
 -- load data
-INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data FROM generate_series(0,100)i;
+INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data, i FROM generate_series(0,100)i;
 
 -- we expect that the function is evaluated on the worker node, so we should get a row
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 1;
@@ -71,6 +71,17 @@ execute fast_path_router_with_param_and_func(5);
 execute fast_path_router_with_param_and_func(6);
 execute fast_path_router_with_param_and_func(7);
 execute fast_path_router_with_param_and_func(8);
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_index = $1;
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
 
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 1 AND u_data = ('name1', 21)::user_data;
@@ -151,6 +162,17 @@ execute router_with_param_and_func(5);
 execute router_with_param_and_func(6);
 execute router_with_param_and_func(7);
 execute router_with_param_and_func(8);
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_id = 1 AND user_index = $1;
+
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
 
 -- same query as router_with_param, but with consts
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data m1 JOIN user_info_data m2 USING(user_id) WHERE m1.user_id  = 1;
@@ -242,6 +264,18 @@ execute fast_path_router_with_param_and_func(3);
 execute fast_path_router_with_param_and_func(3);
 execute fast_path_router_with_param_and_func(8);
 
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_index = $1;
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3 AND u_data  = ('name3', 23)::user_data;
 
 PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3 AND u_data  = $1;
@@ -307,6 +341,18 @@ execute router_with_param_and_func(3);
 execute router_with_param_and_func(3);
 execute router_with_param_and_func(3);
 execute router_with_param_and_func(3);
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_id = 3 AND user_index = $1;
+
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+
 
 -- same query as router_with_param, but with consts
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data m1 JOIN user_info_data m2 USING(user_id) WHERE m1.user_id  = 3;

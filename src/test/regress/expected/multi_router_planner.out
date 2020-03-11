@@ -2362,6 +2362,7 @@ DETAIL:  distribution column value: 1
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 -- verify insert is successfull (not router plannable and executable)
 SELECT id
 	FROM articles_hash

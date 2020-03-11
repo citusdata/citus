@@ -246,7 +246,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 List *
 GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 {
-	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
 	List *resultList = NIL;
 
 	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
@@ -284,7 +284,7 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 static List *
 ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 {
-	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardIntervalList = NIL;
 	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
 
@@ -372,7 +372,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
 static void
 ErrorIfNotSuitableToGetSize(Oid relationId)
 {
-	if (!IsDistributedTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
 		char *relationName = get_rel_name(relationId);
 		char *escapedQueryString = quote_literal_cstr(relationName);
@@ -486,7 +486,7 @@ TableShardReplicationFactor(Oid relationId)
 List *
 LoadShardIntervalList(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
 	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
@@ -511,10 +511,10 @@ LoadShardIntervalList(Oid relationId)
 int
 ShardIntervalCount(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	int shardIntervalCount = 0;
 
-	if (cacheEntry->isDistributedTable)
+	if (cacheEntry->isCitusTable)
 	{
 		shardIntervalCount = cacheEntry->shardIntervalArrayLength;
 	}
@@ -533,7 +533,7 @@ ShardIntervalCount(Oid relationId)
 List *
 LoadShardList(Oid relationId)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
 	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)

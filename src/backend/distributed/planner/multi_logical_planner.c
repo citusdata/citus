@@ -72,6 +72,7 @@ static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join
 /* Local functions forward declarations */
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
+static Oid NodeTryGetRteRelid(Node *node);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
@@ -284,8 +285,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		 * If the expression belongs to a reference table continue searching for
 		 * other partition keys.
 		 */
-		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
-			DISTRIBUTE_BY_NONE)
+		if (IsCitusTable(relationId) && PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 		{
 			continue;
 		}
@@ -413,37 +413,55 @@ QueryContainsDistributedTableRTE(Query *query)
 
 
 /*
- * IsDistributedTableRTE gets a node and returns true if the node
- * is a range table relation entry that points to a distributed
- * relation (i.e., excluding reference tables).
+ * NodeTryGetRteRelid returns the relid of the given RTE_RELATION RangeTableEntry.
+ * Returns InvalidOid if any of these assumptions fail for given node.
  */
-bool
-IsDistributedTableRTE(Node *node)
+static Oid
+NodeTryGetRteRelid(Node *node)
 {
 	if (node == NULL)
 	{
-		return false;
+		return InvalidOid;
 	}
 
 	if (!IsA(node, RangeTblEntry))
 	{
-		return false;
+		return InvalidOid;
 	}
 
 	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
-		return false;
+		return InvalidOid;
 	}
 
-	Oid relationId = rangeTableEntry->relid;
-	if (!IsDistributedTable(relationId) ||
-		PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
-	{
-		return false;
-	}
+	return rangeTableEntry->relid;
+}
 
-	return true;
+
+/*
+ * IsCitusTableRTE gets a node and returns true if the node is a
+ * range table relation entry that points to a distributed relation.
+ */
+bool
+IsCitusTableRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return relationId != InvalidOid && IsCitusTable(relationId);
+}
+
+
+/*
+ * IsDistributedTableRTE gets a node and returns true if the node
+ * is a range table relation entry that points to a distributed relation,
+ * returning false still if the relation is a reference table.
+ */
+bool
+IsDistributedTableRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return relationId != InvalidOid && IsCitusTable(relationId) &&
+		   PartitionMethod(relationId) != DISTRIBUTE_BY_NONE;
 }
 
 

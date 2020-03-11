@@ -9,6 +9,18 @@ ANALYZE lineitem_hash_part;
 -- function calls are supported
 SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;
 
+SELECT DISTINCT l_orderkey, avg(l_linenumber)
+FROM lineitem_hash_part
+GROUP BY l_orderkey
+HAVING avg(l_linenumber) = (select avg(distinct l_linenumber))
+LIMIT 10;
+
+SELECT DISTINCT l_orderkey
+FROM lineitem_hash_part
+GROUP BY l_orderkey
+HAVING (select avg(distinct l_linenumber) = l_orderkey)
+LIMIT 10;
+
 SELECT DISTINCT l_partkey, 1 + (random() * 0)::int FROM lineitem_hash_part ORDER BY 1 DESC LIMIT 3;
 
 -- const expressions are supported

@@ -52,7 +52,7 @@ typedef struct
 	 */
 	bool isValid;
 
-	bool isDistributedTable;
+	bool isCitusTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 	bool hasOverlappingShardInterval;
@@ -82,7 +82,7 @@ typedef struct
 	/*
 	 * The following two lists consists of relationIds that this distributed
 	 * relation has a foreign key to (e.g., referencedRelationsViaForeignKey) or
-	 * other relations has a foreign key to to this relation (e.g.,
+	 * other relations has a foreign key to this relation (e.g.,
 	 * referencingRelationsViaForeignKey).
 	 *
 	 * Note that we're keeping all transitive foreign key references as well
@@ -95,7 +95,7 @@ typedef struct
 	/* pg_dist_placement metadata */
 	GroupShardPlacement **arrayOfPlacementArrays;
 	int *arrayOfPlacementArrayLengths;
-} DistTableCacheEntry;
+} CitusTableCacheEntry;
 
 typedef struct DistObjectCacheEntryKey
 {
@@ -117,15 +117,15 @@ typedef struct DistObjectCacheEntry
 } DistObjectCacheEntry;
 
 
-extern bool IsDistributedTable(Oid relationId);
-extern List * DistributedTableList(void);
+extern bool IsCitusTable(Oid relationId);
+extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
 extern bool ReferenceTableShardId(uint64 shardId);
 extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
-extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
@@ -152,13 +152,12 @@ extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
 extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
-extern void ErrorIfInconsistentShardIntervals(DistTableCacheEntry *cacheEntry);
+extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
-extern int GetWorkerNodeCount(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
 extern WorkerNode * ForceLookupNodeByNodeId(uint32 nodeId);
 extern WorkerNode * LookupNodeForGroup(int32 groupId);

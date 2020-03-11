@@ -723,7 +723,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	}
 
 	/* partitions cannot be distributed if their parent is not distributed */
-	if (PartitionTable(relationId) && !IsDistributedTable(parentRelationId))
+	if (PartitionTable(relationId) && !IsCitusTable(parentRelationId))
 	{
 		char *parentRelationName = get_rel_name(parentRelationId);
 
@@ -793,7 +793,7 @@ static void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
-	DistTableCacheEntry *sourceTableEntry = DistributedTableCacheEntry(sourceRelationId);
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
@@ -890,9 +890,9 @@ EnsureTableNotDistributed(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);
 
-	bool isDistributedTable = IsDistributedTable(relationId);
+	bool isCitusTable = IsCitusTable(relationId);
 
-	if (isDistributedTable)
+	if (isCitusTable)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("table \"%s\" is already distributed",
@@ -1030,7 +1030,7 @@ LocalTableEmpty(Oid tableId)
 	int rowId = 0;
 	int attributeId = 1;
 
-	AssertArg(!IsDistributedTable(tableId));
+	AssertArg(!IsCitusTable(tableId));
 
 	int spiConnectionResult = SPI_connect();
 	if (spiConnectionResult != SPI_OK_CONNECT)

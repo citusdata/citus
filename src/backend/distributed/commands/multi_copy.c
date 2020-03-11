@@ -2018,7 +2018,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* look up table properties */
 	Relation distributedRelation = heap_open(tableId, RowExclusiveLock);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableId);
 	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
@@ -2587,7 +2587,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 											  isFrom ? RowExclusiveLock :
 											  AccessShareLock);
 
-		bool isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
+		bool isCitusRelation = IsCitusTable(RelationGetRelid(copiedRelation));
 
 		/* ensure future lookups hit the same relation */
 		char *schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));
@@ -2600,7 +2600,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 
 		heap_close(copiedRelation, NoLock);
 
-		if (isDistributedRelation)
+		if (isCitusRelation)
 		{
 			if (copyStatement->is_from)
 			{
@@ -2710,7 +2710,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 
 
 /*
- * CitusCopyTo runs a COPY .. TO STDOUT command on each shard to to a full
+ * CitusCopyTo runs a COPY .. TO STDOUT command on each shard to do a full
  * table dump.
  */
 static void

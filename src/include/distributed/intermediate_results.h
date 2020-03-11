@@ -64,11 +64,11 @@ extern char * CreateIntermediateResultsDirectory(void);
 extern List ** RedistributeTaskListResults(const char *resultIdPrefix,
 										   List *selectTaskList,
 										   int partitionColumnIndex,
-										   DistTableCacheEntry *targetRelation,
+										   CitusTableCacheEntry *targetRelation,
 										   bool binaryFormat);
 extern List * PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 									   int partitionColumnIndex,
-									   DistTableCacheEntry *distributionScheme,
+									   CitusTableCacheEntry *distributionScheme,
 									   bool binaryFormat);
 
 #endif /* INTERMEDIATE_RESULTS_H */

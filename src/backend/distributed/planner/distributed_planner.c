@@ -364,7 +364,7 @@ ListContainsDistributedTableRTE(List *rangeTableList)
 			continue;
 		}
 
-		if (IsDistributedTable(rangeTableEntry->relid))
+		if (IsCitusTable(rangeTableEntry->relid))
 		{
 			return true;
 		}
@@ -442,7 +442,7 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 		 * value before and after dropping to the standart_planner.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			IsDistributedTable(rangeTableEntry->relid) &&
+			IsCitusTable(rangeTableEntry->relid) &&
 			PartitionedTable(rangeTableEntry->relid))
 		{
 			rangeTableEntry->inh = setPartitionedTablesInherited;
@@ -893,7 +893,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		Oid targetRelationId = ModifyQueryResultRelationId(query);
 		EnsurePartitionTableNotReplicated(targetRelationId);
 
-		if (InsertSelectIntoDistributedTable(originalQuery))
+		if (InsertSelectIntoCitusTable(originalQuery))
 		{
 			if (hasUnresolvedParams)
 			{
@@ -1833,7 +1833,7 @@ void
 multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 								Index restrictionIndex, RangeTblEntry *rte)
 {
-	DistTableCacheEntry *cacheEntry = NULL;
+	CitusTableCacheEntry *cacheEntry = NULL;
 
 	if (ReplaceCitusExtraDataContainer && IsCitusExtraDataContainerRelation(rte))
 	{
@@ -1871,7 +1871,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	MemoryContext restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
 	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
-	bool distributedTable = IsDistributedTable(rte->relid);
+	bool distributedTable = IsCitusTable(rte->relid);
 	bool localTable = !distributedTable;
 
 	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
@@ -1897,7 +1897,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 */
 	if (distributedTable)
 	{
-		cacheEntry = DistributedTableCacheEntry(rte->relid);
+		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
 		relationRestrictionContext->allReferenceTables &=
 			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
@@ -2420,13 +2420,13 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			return false;
 		}
 
-		if (!IsDistributedTable(rangeTableEntry->relid))
+		if (!IsCitusTable(rangeTableEntry->relid))
 		{
 			hasLocalTable = true;
 			continue;
 		}
 
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
@@ -2492,12 +2492,12 @@ UpdateReferenceTablesWithShard(Node *node, void *context)
 	}
 
 	Oid relationId = newRte->relid;
-	if (!IsDistributedTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
 		return false;
 	}
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		return false;

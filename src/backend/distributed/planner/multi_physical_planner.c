@@ -68,6 +68,7 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"
 #include "parser/parsetree.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/fmgroids.h"
@@ -719,8 +720,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
 	jobQuery->havingQual = havingQual;
-	jobQuery->hasAggs = contain_agg_clause((Node *) targetList) ||
-						contain_agg_clause((Node *) havingQual);
+	jobQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0) ||
+						contain_aggs_of_level((Node *) havingQual, 0);
 	jobQuery->distinctClause = distinctClause;
 	jobQuery->hasDistinctOn = hasDistinctOn;
 
@@ -805,7 +806,7 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
 	reduceQuery->limitOffset = extendedOpNode->limitOffset;
 	reduceQuery->limitCount = extendedOpNode->limitCount;
 	reduceQuery->havingQual = extendedOpNode->havingQual;
-	reduceQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	reduceQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0);
 
 	return reduceQuery;
 }
@@ -1553,13 +1554,13 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	/* build the where clause list using select predicates */
 	List *whereClauseList = QuerySelectClauseList(multiNode);
 
-	if (contain_agg_clause((Node *) targetList) ||
-		contain_agg_clause((Node *) havingQual))
+	if (contain_aggs_of_level((Node *) targetList, 0) ||
+		contain_aggs_of_level((Node *) havingQual, 0))
 	{
 		hasAggregates = true;
 	}
 
-	/* distinct is not send to worker query if there are top level aggregates */
+	/* distinct is not sent to worker query if there are top level aggregates */
 	if (hasAggregates)
 	{
 		hasDistinctOn = false;
@@ -1950,7 +1951,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	else if (partitionType == SINGLE_HASH_PARTITION_TYPE || partitionType ==
 			 RANGE_PARTITION_TYPE)
 	{
-		DistTableCacheEntry *cache = DistributedTableCacheEntry(baseRelationId);
+		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
 		uint32 shardCount = cache->shardIntervalArrayLength;
 		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
 
@@ -2177,7 +2178,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
 
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			continue;
@@ -2309,7 +2310,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			DistTableCacheEntry *distTableEntry = DistributedTableCacheEntry(relationId);
+			CitusTableCacheEntry *distTableEntry = GetCitusTableCacheEntry(relationId);
 			if (distTableEntry->hasOverlappingShardInterval)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2415,7 +2416,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		Oid relationId = relationRestriction->relationId;
 		ShardInterval *shardInterval = NULL;
 
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			/* reference table only has one shard */
@@ -2509,8 +2510,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
-	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
+	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
 
 	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
@@ -3903,8 +3904,8 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	DistTableCacheEntry *intervalRelation =
-		DistributedTableCacheEntry(firstInterval->relationId);
+	CitusTableCacheEntry *intervalRelation =
+		GetCitusTableCacheEntry(firstInterval->relationId);
 
 	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
 

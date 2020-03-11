@@ -793,7 +793,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	EnsureTablePermissions(relationId, ACL_SELECT);
 
-	if (!IsDistributedTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("relation is not distributed")));
@@ -813,7 +813,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
 	{
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 		/* if given table is not reference table, distributionValue cannot be NULL */
 		if (PG_ARGISNULL(1))

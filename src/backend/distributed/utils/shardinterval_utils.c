@@ -239,7 +239,7 @@ ShardIndex(ShardInterval *shardInterval)
 	Oid distributedTableId = shardInterval->relationId;
 	Datum shardMinValue = shardInterval->minValue;
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
@@ -275,7 +275,7 @@ ShardIndex(ShardInterval *shardInterval)
  * as NULL for them.
  */
 ShardInterval *
-FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
+FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 {
 	Datum searchedValue = partitionColumnValue;
 
@@ -310,7 +310,7 @@ FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
  * of [INT32_MIN, INT32_MAX] can fire this.
  */
 int
-FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
+FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 {
 	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
