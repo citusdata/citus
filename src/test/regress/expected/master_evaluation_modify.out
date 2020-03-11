@@ -35,7 +35,7 @@ END; $$ language plpgsql STABLE;
 CREATE TYPE user_data AS (name text, age int);
 SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
-CREATE TABLE user_info_data (user_id int, u_data user_data);
+CREATE TABLE user_info_data (user_id int, u_data user_data, user_index int);
 SELECT create_distributed_table('user_info_data', 'user_id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -49,9 +49,9 @@ SELECT get_local_node_id_stable();
                         0
 (1 row)
 
-INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data FROM generate_series(0,7)i;
+INSERT INTO user_info_data SELECT i, ('name' || i, i % 20 + 20)::user_data, i FROM generate_series(0,7)i;
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE fast_path_router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 RETURNING *;
+PREPARE fast_path_router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 RETURNING user_id, u_data;
 execute fast_path_router_with_param(0);
  user_id |   u_data
 ---------------------------------------------------------------------
@@ -101,7 +101,7 @@ execute fast_path_router_with_param(7);
 (1 row)
 
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE fast_path_router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('test', get_local_node_id_stable())::user_data AND user_id  = $1 RETURNING *;
+PREPARE fast_path_router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('test', get_local_node_id_stable())::user_data AND user_id  = $1 RETURNING user_id, u_data;
 INSERT INTO user_info_data SELECT i, ('test', 0)::user_data FROM generate_series(0,7)i;
 -- should evaluate the function on the coordinator, hence get_local_node_id_stable() returns zero
 execute fast_path_router_with_param_and_func(0);
@@ -153,7 +153,7 @@ execute fast_path_router_with_param_and_func(7);
 (1 row)
 
 INSERT INTO user_info_data SELECT 1, ('test' || i, 0)::user_data FROM generate_series(0,7)i;
-PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 1 RETURNING *;
+PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 1 RETURNING user_id, u_data;
 EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('test0', get_local_node_id_stable())::user_data);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -204,7 +204,7 @@ EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('test7', get_local
 
 INSERT INTO user_info_data SELECT 1, ('test', i)::user_data FROM generate_series(0,7)i;
 PREPARE fast_path_router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 1 RETURNING
- *;
+ user_id, u_data;
 EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 0)::user_data);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -255,7 +255,7 @@ EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 7)::user_data);
 
 INSERT INTO user_info_data SELECT i, ('test', i)::user_data FROM generate_series(0,7)i;
 PREPARE fast_path_router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 RETURNING
- *;
+ user_id, u_data;
 EXECUTE fast_path_router_with_two_params(('test', 0)::user_data, 0);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -305,7 +305,7 @@ EXECUTE fast_path_router_with_two_params(('test', 7)::user_data, 7);
 (1 row)
 
 INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
-PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_local_node_id_stable() = 0 AND user_id = 1 RETURNING *;
+PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_local_node_id_stable() = 0 AND user_id = 1 RETURNING user_id, u_data;
 EXECUTE fast_path_router_with_only_function;
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -361,7 +361,6 @@ EXECUTE fast_path_router_with_only_function;
        1 | (test,1)
 (1 row)
 
-ALTER TABLE user_info_data ADD COLUMN user_index INT;
 PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (1, $1, get_local_node_id_stable()) RETURNING user_id;
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
  user_id
@@ -405,11 +404,10 @@ EXECUTE insert_with_function_and_param(('test', 1)::user_data);
        1
 (1 row)
 
-ALTER TABLE user_info_data DROP COLUMN user_index;
 TRUNCATE user_info_data;
 INSERT INTO user_info_data SELECT i, ('test', i)::user_data FROM generate_series(0,7)i;
 -- make sure that it is also true for non fast-path router queries with paramaters
-PREPARE router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 AND user_id = $1 RETURNING *;
+PREPARE router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 AND user_id = $1 RETURNING user_id, u_data;
 execute router_with_param(0);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -459,7 +457,7 @@ execute router_with_param(7);
 (1 row)
 
 -- make sure that it is also true for non fast-path router queries with paramaters
-PREPARE router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('test', get_local_node_id_stable())::user_data AND user_id  = $1 AND user_id  = $1 RETURNING *;
+PREPARE router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('test', get_local_node_id_stable())::user_data AND user_id  = $1 AND user_id  = $1 RETURNING user_id, u_data;
 INSERT INTO user_info_data SELECT i, ('test', 0)::user_data FROM generate_series(0,7)i;
 execute router_with_param_and_func(0);
  user_id |  u_data
@@ -510,7 +508,7 @@ execute router_with_param_and_func(7);
 (1 row)
 
 INSERT INTO user_info_data SELECT 1, ('test' || i, 0)::user_data FROM generate_series(0,7)i;
-PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id = 1 AND user_id  = 1 RETURNING *;
+PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id = 1 AND user_id  = 1 RETURNING user_id, u_data;
 EXECUTE router_with_param_on_non_dist_key_and_func(('test0', get_local_node_id_stable())::user_data);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -560,7 +558,7 @@ EXECUTE router_with_param_on_non_dist_key_and_func(('test7', get_local_node_id_s
 (1 row)
 
 INSERT INTO user_info_data SELECT 1, ('test', i)::user_data FROM generate_series(0,7)i;
-PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 1 AND user_id  = 1 RETURNING *;
+PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 1 AND user_id  = 1 RETURNING user_id, u_data;
 EXECUTE router_with_param_on_non_dist_key(('test', 0)::user_data);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -611,7 +609,7 @@ EXECUTE router_with_param_on_non_dist_key(('test', 7)::user_data);
 
 INSERT INTO user_info_data SELECT i, ('test', i)::user_data FROM generate_series(0,7)i;
 PREPARE router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 AND user_id  = $2 RETURNING
- *;
+ user_id, u_data;
 EXECUTE router_with_two_params(('test', 0)::user_data, 0);
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -661,7 +659,7 @@ EXECUTE router_with_two_params(('test', 7)::user_data, 7);
 (1 row)
 
 INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
-PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_local_node_id_stable() = 0 AND user_id = 1 AND user_id = 1 RETURNING *;
+PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_local_node_id_stable() = 0 AND user_id = 1 AND user_id = 1 RETURNING user_id, u_data;
 EXECUTE router_with_only_function;
  user_id |  u_data
 ---------------------------------------------------------------------
@@ -732,7 +730,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (9, '(''test9'', 9)'), (11, '(''test11'', 11)'), (12, '(''test12'', 12)'),
 (14, '(''test14'', 14)'), (16, '(''test16'', 16)');
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE fast_path_router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 RETURNING *;
+PREPARE fast_path_router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 RETURNING user_id, u_data;
 execute fast_path_router_with_param(3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE (user_id OPERATOR(pg_catalog.=) 3) RETURNING user_id, u_data
  user_id |   u_data
@@ -794,7 +792,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (9, '(''test'', 9)'), (11, '(''test'', 2)'), (12, '(''test'', 2)'),
 (14, '(''test'', 2)'), (16, '(''test'', 2)');
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE fast_path_router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 RETURNING *;
+PREPARE fast_path_router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 RETURNING user_id, u_data;
 execute fast_path_router_with_param_and_func(3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(''test'',2)'::master_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
  user_id |   u_data
@@ -850,7 +848,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
       16 | ('test',2)
 (1 row)
 
-PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING *;
+PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)'::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, '(''test'',2)'::master_evaluation_combinations_modify.user_data)
 EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
@@ -914,7 +912,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
        3 | ('test',2)
 (1 row)
 
-PREPARE fast_path_router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING *;
+PREPARE fast_path_router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::master_evaluation_combinations_modify.user_data)
 EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
@@ -982,7 +980,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, ('test', 2)), (4, ('test', 2)), (7, ('test', 2)),
 (9, ('test', 2)), (11, ('test', 2)), (12, ('test', 2)),
 (14, ('test', 2)), (16, ('test', 2));
-PREPARE fast_path_router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 RETURNING *;
+PREPARE fast_path_router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 RETURNING user_id, u_data;
 EXECUTE fast_path_router_with_two_params(('test', 2)::user_data, 3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(test,2)'::master_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
  user_id |  u_data
@@ -1039,7 +1037,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
       16 | (test,2)
 (1 row)
 
-PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING *;
+PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 2)::master_evaluation_combinations_modify.user_data)
 EXECUTE fast_path_router_with_only_function;
@@ -1103,69 +1101,64 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
        3 | (test,2)
 (1 row)
 
----------------------------------------------------------------------
-\c - - - :master_port
-SET search_path TO master_evaluation_combinations_modify;
-ALTER TABLE user_info_data ADD COLUMN user_index INT;
-\c - - - :worker_2_port
-SET search_path TO master_evaluation_combinations_modify;
 PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (3, $1, get_local_node_id_stable()) RETURNING user_id;
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::master_evaluation_combinations_modify.user_data, 16) RETURNING user_id
  user_id
 ---------------------------------------------------------------------
        3
 (1 row)
 
-\c - - - :master_port
-SET search_path TO master_evaluation_combinations_modify;
-ALTER TABLE user_info_data DROP COLUMN user_index;
 TRUNCATE user_info_data;
-\c - - - :worker_2_port
-SET citus.log_local_commands TO ON;
-SET search_path TO master_evaluation_combinations_modify;
 -- all local values
 INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, '(''test3'', 3)'), (4, '(''test4'', 4)'), (7, '(''test7'', 7)'),
 (9, '(''test9'', 9)'), (11, '(''test11'', 11)'), (12, '(''test12'', 12)'),
 (14, '(''test14'', 14)'), (16, '(''test16'', 16)');
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 AND user_id = $1 RETURNING *;
+PREPARE router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 AND user_id = $1 RETURNING user_id, u_data;
 execute router_with_param(3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((user_id OPERATOR(pg_catalog.=) $1) AND (user_id OPERATOR(pg_catalog.=) $1)) RETURNING user_id, u_data
  user_id |   u_data
@@ -1227,7 +1220,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (9, '(''test'', 9)'), (11, '(''test'', 2)'), (12, '(''test'', 2)'),
 (14, '(''test'', 2)'), (16, '(''test'', 2)');
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 AND user_id  = $1 RETURNING *;
+PREPARE router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 AND user_id  = $1 RETURNING user_id, u_data;
 execute router_with_param_and_func(3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(''test'',2)'::master_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
  user_id |   u_data
@@ -1283,7 +1276,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
       16 | ('test',2)
 (1 row)
 
-PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING *;
+PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)'::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, '(''test'',2)'::master_evaluation_combinations_modify.user_data)
 EXECUTE router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
@@ -1347,7 +1340,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
        3 | ('test',2)
 (1 row)
 
-PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING *;
+PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::master_evaluation_combinations_modify.user_data)
 EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
@@ -1415,7 +1408,7 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, ('test', 2)), (4, ('test', 2)), (7, ('test', 2)),
 (9, ('test', 2)), (11, ('test', 2)), (12, ('test', 2)),
 (14, ('test', 2)), (16, ('test', 2));
-PREPARE router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 AND user_id  = $2 RETURNING *;
+PREPARE router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 AND user_id  = $2 RETURNING user_id, u_data;
 EXECUTE router_with_two_params(('test', 2)::user_data, 3);
 NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) $1::master_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) $2) AND (user_id OPERATOR(pg_catalog.=) $2)) RETURNING user_id, u_data
  user_id |  u_data
@@ -1472,7 +1465,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
       16 | (test,2)
 (1 row)
 
-PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING *;
+PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 NOTICE:  executing the command locally: INSERT INTO master_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 2)::master_evaluation_combinations_modify.user_data)
 EXECUTE router_with_only_function;
