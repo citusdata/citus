@@ -76,6 +76,20 @@ execute fast_path_router_with_param_and_func(5);
 execute fast_path_router_with_param_and_func(6);
 execute fast_path_router_with_param_and_func(7);
 
+INSERT INTO user_info_data SELECT 1, ('test', 0)::user_data, i FROM generate_series(0,7)i;
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	DELETE FROM user_info_data WHERE user_id = 1 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING *;
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(0);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(2);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(4);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(5);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(6);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(7);
+
 
 INSERT INTO user_info_data SELECT 1, ('test' || i, 0)::user_data FROM generate_series(0,7)i;
 
@@ -177,6 +191,20 @@ execute router_with_param_and_func(4);
 execute router_with_param_and_func(5);
 execute router_with_param_and_func(6);
 execute router_with_param_and_func(7);
+
+INSERT INTO user_info_data SELECT 1, ('test', 0)::user_data, i FROM generate_series(0,7)i;
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	DELETE FROM user_info_data WHERE user_id = 1 AND user_id = 1 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING *;
+
+EXECUTE router_with_param_and_func_on_non_dist_key(0);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(2);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(4);
+EXECUTE router_with_param_and_func_on_non_dist_key(5);
+EXECUTE router_with_param_and_func_on_non_dist_key(6);
+EXECUTE router_with_param_and_func_on_non_dist_key(7);
 
 
 INSERT INTO user_info_data SELECT 1, ('test' || i, 0)::user_data FROM generate_series(0,7)i;
@@ -288,6 +316,21 @@ execute fast_path_router_with_param_and_func(11);
 execute fast_path_router_with_param_and_func(12);
 execute fast_path_router_with_param_and_func(14);
 execute fast_path_router_with_param_and_func(16);
+
+
+INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable())::user_data, i FROM generate_series(0,7)i;
+
+PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
+	DELETE FROM user_info_data WHERE user_id = 3 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING user_id, user_index;
+
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(0);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(2);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(4);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(5);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(6);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(7);
 
 PREPARE fast_path_router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)'::user_data);
@@ -406,6 +449,21 @@ execute router_with_param_and_func(11);
 execute router_with_param_and_func(12);
 execute router_with_param_and_func(14);
 execute router_with_param_and_func(16);
+
+
+INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable())::user_data, i FROM generate_series(0,7)i;
+
+PREPARE router_with_param_and_func_on_non_dist_key(int) AS
+	DELETE FROM user_info_data WHERE user_id = 3 AND user_id = 3 AND user_index = $1 AND u_data = ('test', get_local_node_id_stable())::user_data RETURNING user_id, user_index;
+
+EXECUTE router_with_param_and_func_on_non_dist_key(0);
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
+EXECUTE router_with_param_and_func_on_non_dist_key(2);
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
+EXECUTE router_with_param_and_func_on_non_dist_key(4);
+EXECUTE router_with_param_and_func_on_non_dist_key(5);
+EXECUTE router_with_param_and_func_on_non_dist_key(6);
+EXECUTE router_with_param_and_func_on_non_dist_key(7);
 
 PREPARE router_with_param_on_non_dist_key_and_func(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)'::user_data);
