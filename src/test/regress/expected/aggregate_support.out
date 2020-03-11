@@ -432,5 +432,36 @@ select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 ERROR:  type "aggregate_support.aggdata" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+-- Test https://github.com/citusdata/citus/issues/3328
+create table nulltable(id int);
+insert into nulltable values (0);
+-- These cases are not type correct
+select pg_catalog.worker_partial_agg('string_agg(text,text)'::regprocedure, id) from nulltable;
+ERROR:  worker_partial_agg_sfunc cannot type check aggregates taking anything other than 1 argument
+select pg_catalog.worker_partial_agg('sum(int8)'::regprocedure, id) from nulltable;
+ERROR:  worker_partial_agg_sfunc could not confirm type correctness
+select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::text) from nulltable;
+ERROR:  coord_combine_agg_ffunc could not confirm type correctness
+select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::text) from nulltable;
+ERROR:  coord_combine_agg_ffunc could not confirm type correctness
+-- These cases are type correct
+select pg_catalog.worker_partial_agg('sum(int)'::regprocedure, id) from nulltable;
+ worker_partial_agg
+---------------------------------------------------------------------
+ 0
+(1 row)
+
+select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::float8) from nulltable;
+ coord_combine_agg
+---------------------------------------------------------------------
+                 0
+(1 row)
+
+select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::float8) from nulltable;
+ coord_combine_agg
+---------------------------------------------------------------------
+
+(1 row)
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;

@@ -133,7 +133,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	result->planTree = (Plan *) plan;
 	result->hasReturning = (parse->returningList != NIL);
 
-	Oid relationId = ExtractFirstDistributedTableId(parse);
+	Oid relationId = ExtractFirstCitusTableId(parse);
 	result->relationOids = list_make1_oid(relationId);
 
 	return result;
@@ -202,7 +202,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 
 	/* we don't want to deal with append/range distributed tables */
 	Oid distributedTableId = rangeTableEntry->relid;
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
 		  cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE))
 	{

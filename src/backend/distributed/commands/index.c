@@ -140,7 +140,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		Relation relation = heap_openrv(createIndexStatement->relation, lockmode);
 		Oid relationId = RelationGetRelid(relation);
 
-		bool isDistributedRelation = IsDistributedTable(relationId);
+		bool isCitusRelation = IsCitusTable(relationId);
 
 		if (createIndexStatement->relation->schemaname == NULL)
 		{
@@ -161,7 +161,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 		heap_close(relation, NoLock);
 
-		if (isDistributedRelation)
+		if (isCitusRelation)
 		{
 			char *indexName = createIndexStatement->idxname;
 			char *namespaceName = createIndexStatement->relation->schemaname;
@@ -212,7 +212,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 	{
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
-		bool isDistributedRelation = false;
+		bool isCitusRelation = false;
 #if PG_VERSION_NUM >= 120000
 		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
 							AccessExclusiveLock;
@@ -249,7 +249,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 			relationId = RelationGetRelid(relation);
 		}
 
-		isDistributedRelation = IsDistributedTable(relationId);
+		isCitusRelation = IsCitusTable(relationId);
 
 		if (reindexStatement->relation->schemaname == NULL)
 		{
@@ -277,7 +277,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 			heap_close(relation, NoLock);
 		}
 
-		if (isDistributedRelation)
+		if (isCitusRelation)
 		{
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
@@ -359,8 +359,8 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 		}
 
 		Oid relationId = IndexGetRelation(indexId, false);
-		bool isDistributedRelation = IsDistributedTable(relationId);
-		if (isDistributedRelation)
+		bool isCitusRelation = IsCitusTable(relationId);
+		if (isCitusRelation)
 		{
 			distributedIndexId = indexId;
 			distributedRelationId = relationId;

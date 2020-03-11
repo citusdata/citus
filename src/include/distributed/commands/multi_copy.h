@@ -89,7 +89,7 @@ typedef struct CitusCopyDestReceiver
 	int partitionColumnIndex;
 
 	/* distributed table metadata */
-	DistTableCacheEntry *tableMetadata;
+	CitusTableCacheEntry *tableMetadata;
 
 	/* open relation handle */
 	Relation distributedRelation;

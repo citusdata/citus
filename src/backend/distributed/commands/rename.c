@@ -96,16 +96,15 @@ PreprocessRenameStmt(Node *node, const char *renameCommand)
 			return NIL;
 	}
 
-	bool isDistributedRelation = IsDistributedTable(tableRelationId);
-	if (!isDistributedRelation)
+	bool isCitusRelation = IsCitusTable(tableRelationId);
+	if (!isCitusRelation)
 	{
 		return NIL;
 	}
 
 	/*
-	 * We might ERROR out on some commands, but only for Citus tables where
-	 * isDistributedRelation is true. That's why this test comes this late in
-	 * the function.
+	 * We might ERROR out on some commands, but only for Citus tables.
+	 * That's why this test comes this late in the function.
 	 */
 	ErrorIfUnsupportedRenameStmt(renameStmt);
 

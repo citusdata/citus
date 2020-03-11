@@ -84,7 +84,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 			Oid relationId = get_relname_relid(relationName, namespaceOid);
 
 			/* we're not interested in non-valid, non-distributed relations */
-			if (relationId == InvalidOid || !IsDistributedTable(relationId))
+			if (relationId == InvalidOid || !IsCitusTable(relationId))
 			{
 				heapTuple = systable_getnext(scanDescriptor);
 				continue;

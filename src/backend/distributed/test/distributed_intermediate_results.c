@@ -64,7 +64,7 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	DistTableCacheEntry *targetRelation = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(relationId);
 
 	/*
 	 * Here SELECT query's target list should match column list of target relation,
@@ -132,7 +132,7 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	DistTableCacheEntry *targetRelation = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(relationId);
 
 	/*
 	 * Here SELECT query's target list should match column list of target relation,

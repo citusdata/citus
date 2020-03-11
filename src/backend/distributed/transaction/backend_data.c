@@ -226,6 +226,8 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 	/* add active transactions for local node */
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
 
+	int32 localGroupId = GetLocalGroupId();
+
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -234,7 +236,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 		int nodePort = workerNode->workerPort;
 		int connectionFlags = 0;
 
-		if (workerNode->groupId == GetLocalGroupId())
+		if (workerNode->groupId == localGroupId)
 		{
 			/* we already get these transactions via GetAllActiveTransactions() */
 			continue;
@@ -726,7 +728,7 @@ AssignDistributedTransactionId(void)
 		&backendManagementShmemData->nextTransactionNumber;
 
 	uint64 nextTransactionNumber = pg_atomic_fetch_add_u64(transactionNumberSequence, 1);
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 	TimestampTz currentTimestamp = GetCurrentTimestamp();
 	Oid userId = GetUserId();
 
@@ -758,7 +760,7 @@ MarkCitusInitiatedCoordinatorBackend(void)
 	 * GetLocalGroupId may throw exception which can cause leaving spin lock
 	 * unreleased. Calling GetLocalGroupId function before the lock to avoid this.
 	 */
-	int localGroupId = GetLocalGroupId();
+	int32 localGroupId = GetLocalGroupId();
 
 	SpinLockAcquire(&MyBackendData->mutex);
 

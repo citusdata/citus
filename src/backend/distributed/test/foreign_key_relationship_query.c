@@ -38,7 +38,7 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		List *refList = cacheEntry->referencingRelationsViaForeignKey;
 
 		/* create a function context for cross-call persistence */
@@ -89,7 +89,7 @@ get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		List *refList = cacheEntry->referencedRelationsViaForeignKey;
 
 		/* create a function context for cross-call persistence */

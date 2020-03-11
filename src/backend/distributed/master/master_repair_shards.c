@@ -237,7 +237,7 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 	/*
 	 * Let's not allow repairing partitions to prevent any edge cases.
 	 * We're already not allowing any kind of modifications on the partitions
-	 * so their placements are not likely to to be marked as INVALID. The only
+	 * so their placements are not likely to be marked as INVALID. The only
 	 * possible case to mark placement of a partition as invalid is
 	 * "ALTER TABLE parent_table DETACH PARTITION partition_table". But,
 	 * given that the table would become a regular distributed table if the

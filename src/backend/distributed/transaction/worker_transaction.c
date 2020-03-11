@@ -201,6 +201,8 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
 	List *result = NIL;
 
+	int32 localGroupId = GetLocalGroupId();
+
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
@@ -208,8 +210,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 		{
 			continue;
 		}
-		if (targetWorkerSet == OTHER_WORKERS &&
-			workerNode->groupId == GetLocalGroupId())
+		if (targetWorkerSet == OTHER_WORKERS && workerNode->groupId == localGroupId)
 		{
 			continue;
 		}

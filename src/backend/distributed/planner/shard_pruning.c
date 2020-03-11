@@ -253,12 +253,12 @@ static int PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a,
 							   Datum b);
 static int PerformCompare(FunctionCallInfo compareFunctionCall);
 
-static List * PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
+static List * PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 					   PruningInstance *prune);
-static List * PruneWithBoundaries(DistTableCacheEntry *cacheEntry,
+static List * PruneWithBoundaries(CitusTableCacheEntry *cacheEntry,
 								  ClauseWalkerContext *context,
 								  PruningInstance *prune);
-static List * ExhaustivePrune(DistTableCacheEntry *cacheEntry,
+static List * ExhaustivePrune(CitusTableCacheEntry *cacheEntry,
 							  ClauseWalkerContext *context,
 							  PruningInstance *prune);
 static bool ExhaustivePruneOne(ShardInterval *curInterval,
@@ -294,7 +294,7 @@ List *
 PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			Const **partitionValueConst)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	char partitionMethod = cacheEntry->partitionMethod;
 	ClauseWalkerContext context = { 0 };
@@ -438,7 +438,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			 * We can use list_union_ptr, which is a lot faster than doing
 			 * comparing shards by value, because all the ShardIntervals are
 			 * guaranteed to be from
-			 * DistTableCacheEntry->sortedShardIntervalArray (thus having the
+			 * CitusTableCacheEntry->sortedShardIntervalArray (thus having the
 			 * same pointer values).
 			 */
 			prunedList = list_union_ptr(prunedList, pruneOneList);
@@ -495,7 +495,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	}
 
 	/*
-	 * Deep copy list, so it's independent of the DistTableCacheEntry
+	 * Deep copy list, so it's independent of the CitusTableCacheEntry
 	 * contents.
 	 */
 	return DeepCopyShardIntervalList(prunedList);
@@ -1360,7 +1360,7 @@ DeepCopyShardIntervalList(List *originalShardIntervalList)
  * PruningInstance.
  */
 static List *
-PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
+PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 		 PruningInstance *prune)
 {
 	ShardInterval *shardInterval = NULL;
@@ -1667,7 +1667,7 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
  * list of surviving shards.
  */
 static List *
-PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
+PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 					PruningInstance *prune)
 {
 	List *remainingShardList = NIL;
@@ -1782,7 +1782,7 @@ PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *contex
  * constraints, by simply checking them for each individual shard.
  */
 static List *
-ExhaustivePrune(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
+ExhaustivePrune(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 				PruningInstance *prune)
 {
 	List *remainingShardList = NIL;

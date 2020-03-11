@@ -106,7 +106,7 @@ void
 CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 								 int32 replicationFactor, bool useExclusiveConnections)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	bool colocatedShard = false;
 	List *insertedShardPlacements = NIL;
 

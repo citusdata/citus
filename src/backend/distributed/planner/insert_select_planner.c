@@ -74,22 +74,22 @@ static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSele
 
 
 /*
- * InsertSelectIntoDistributedTable returns true when the input query is an
- * INSERT INTO ... SELECT kind of query and the target is a distributed
+ * InsertSelectIntoCitusTable returns true when the input query is an
+ * INSERT INTO ... SELECT kind of query and the target is a citus
  * table.
  *
  * Note that the input query should be the original parsetree of
  * the query (i.e., not passed trough the standard planner).
  */
 bool
-InsertSelectIntoDistributedTable(Query *query)
+InsertSelectIntoCitusTable(Query *query)
 {
 	bool insertSelectQuery = CheckInsertSelectQuery(query);
 
 	if (insertSelectQuery)
 	{
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(query);
-		if (IsDistributedTable(insertRte->relid))
+		if (IsCitusTable(insertRte->relid))
 		{
 			return true;
 		}
@@ -112,7 +112,7 @@ InsertSelectIntoLocalTable(Query *query)
 	if (insertSelectQuery)
 	{
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(query);
-		if (!IsDistributedTable(insertRte->relid))
+		if (!IsCitusTable(insertRte->relid))
 		{
 			return true;
 		}
@@ -218,7 +218,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
-	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
+	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -319,7 +319,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
-	AssertArg(InsertSelectIntoDistributedTable(queryTree));
+	AssertArg(InsertSelectIntoCitusTable(queryTree));
 
 	Query *subquery = subqueryRte->subquery;
 
@@ -426,7 +426,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 
 	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
@@ -610,7 +610,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	Index insertTableId = 1;
 	int targetEntryIndex = 0;
 
-	AssertArg(InsertSelectIntoDistributedTable(originalQuery));
+	AssertArg(InsertSelectIntoCitusTable(originalQuery));
 
 	Query *subquery = subqueryRte->subquery;
 

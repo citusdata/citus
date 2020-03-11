@@ -685,12 +685,12 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 	Oid conflictingReferencingRelationId = InvalidOid;
 	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
 
-	if (!EnforceForeignKeyRestrictions || !IsDistributedTable(relationId))
+	if (!EnforceForeignKeyRestrictions || !IsCitusTable(relationId))
 	{
 		return;
 	}
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
 		  cacheEntry->referencingRelationsViaForeignKey != NIL))
@@ -806,12 +806,12 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 	Oid conflictingReferencingRelationId = InvalidOid;
 	ShardPlacementAccessType conflictingAccessType = PLACEMENT_ACCESS_SELECT;
 
-	if (!EnforceForeignKeyRestrictions || !IsDistributedTable(relationId))
+	if (!EnforceForeignKeyRestrictions || !IsCitusTable(relationId))
 	{
 		return;
 	}
 
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
 		  cacheEntry->referencedRelationsViaForeignKey != NIL))
 	{
@@ -882,7 +882,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 											ShardPlacementAccessType *
 											conflictingAccessMode)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	Oid referencedRelation = InvalidOid;
 	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
@@ -947,7 +947,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 											 ShardPlacementAccessType *
 											 conflictingAccessMode)
 {
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	bool holdsConflictingLocks = false;
 
 	Assert(PartitionMethod(relationId) == DISTRIBUTE_BY_NONE);
@@ -959,7 +959,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 		 * We're only interested in foreign keys to reference tables from
 		 * hash distributed tables.
 		 */
-		if (!IsDistributedTable(referencingRelation) ||
+		if (!IsCitusTable(referencingRelation) ||
 			PartitionMethod(referencingRelation) != DISTRIBUTE_BY_HASH)
 		{
 			continue;

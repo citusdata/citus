@@ -52,6 +52,7 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
 #include "parser/parsetree.h"
+#include "rewrite/rewriteManip.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -1434,7 +1435,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
-		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
+		bool hasAggregates = contain_aggs_of_level((Node *) originalExpression, 0);
 		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/*
@@ -2340,7 +2341,7 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 		TargetEntry *originalTargetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *originalExpression = originalTargetEntry->expr;
 		List *newExpressionList = NIL;
-		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
+		bool hasAggregates = contain_aggs_of_level((Node *) originalExpression, 0);
 		bool hasWindowFunction = contain_window_function((Node *) originalExpression);
 
 		/* reset walker context */
@@ -2682,7 +2683,7 @@ TargetListHasAggregates(List *targetEntryList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpr = targetEntry->expr;
-		bool hasAggregates = contain_agg_clause((Node *) targetExpr);
+		bool hasAggregates = contain_aggs_of_level((Node *) targetExpr, 0);
 		bool hasWindowFunction = contain_window_function((Node *) targetExpr);
 
 		/*
@@ -3503,6 +3504,7 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
 	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
 
 	/*
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
@@ -3510,6 +3512,8 @@ RequiresIntermediateRowPullUp(MultiNode *logicalPlanNode)
 	 */
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
 										   PVC_INCLUDE_WINDOWFUNCS);
+	expressionList = list_concat(expressionList,
+								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	Node *expression = NULL;
 	foreach_ptr(expression, expressionList)
@@ -3546,6 +3550,7 @@ DeferErrorIfContainsNonPushdownableAggregate(MultiNode *logicalPlanNode)
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
 	List *targetList = extendedOpNode->targetList;
+	Node *havingQual = extendedOpNode->havingQual;
 
 	/*
 	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
@@ -3553,6 +3558,8 @@ DeferErrorIfContainsNonPushdownableAggregate(MultiNode *logicalPlanNode)
 	 */
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES |
 										   PVC_INCLUDE_WINDOWFUNCS);
+	expressionList = list_concat(expressionList,
+								 pull_var_clause(havingQual, PVC_INCLUDE_AGGREGATES));
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)
@@ -4398,7 +4405,7 @@ GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
 		SortGroupClause *sgClause = (SortGroupClause *) lfirst(sortClauseCell);
 		TargetEntry *targetEntry = get_sortgroupclause_tle(sgClause, originalTargetList);
 		Expr *targetExpr = targetEntry->expr;
-		bool containsAggregate = contain_agg_clause((Node *) targetExpr);
+		bool containsAggregate = contain_aggs_of_level((Node *) targetExpr, 0);
 		bool createNewTargetEntry = false;
 
 		/* we are only interested in target entries containing aggregates */
@@ -4500,7 +4507,7 @@ HasOrderByAggregate(List *sortClauseList, List *targetList)
 		SortGroupClause *sortClause = (SortGroupClause *) lfirst(sortClauseCell);
 		Node *sortExpression = get_sortgroupclause_expr(sortClause, targetList);
 
-		bool containsAggregate = contain_agg_clause(sortExpression);
+		bool containsAggregate = contain_aggs_of_level(sortExpression, 0);
 		if (containsAggregate)
 		{
 			hasOrderByAggregate = true;
@@ -4574,7 +4581,7 @@ HasOrderByComplexExpression(List *sortClauseList, List *targetList)
 			continue;
 		}
 
-		bool nestedAggregate = contain_agg_clause(sortExpression);
+		bool nestedAggregate = contain_aggs_of_level(sortExpression, 0);
 		if (nestedAggregate)
 		{
 			hasOrderByComplexExpression = true;

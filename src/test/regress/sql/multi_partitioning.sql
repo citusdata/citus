@@ -987,7 +987,6 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
 
 -- set partition-wise join on and parallel to off
-SELECT success FROM run_command_on_workers('alter system set max_parallel_workers_per_gather = 0');
 SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to on');
 SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
@@ -1009,7 +1008,6 @@ SELECT success FROM run_command_on_workers('alter system reset enable_mergejoin'
 SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
 SELECT success FROM run_command_on_workers('alter system reset enable_indexscan');
 SELECT success FROM run_command_on_workers('alter system reset enable_indexonlyscan');
-SELECT success FROM run_command_on_workers('alter system reset max_parallel_workers_per_gather');
 SELECT success FROM run_command_on_workers('select pg_reload_conf()');
 
 RESET enable_partitionwise_join;

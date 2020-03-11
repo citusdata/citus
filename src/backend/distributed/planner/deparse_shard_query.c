@@ -17,10 +17,12 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -46,18 +48,20 @@ static char * DeparseTaskQuery(Task *task, Query *query);
  * include execution-time changes such as function evaluation.
  */
 void
-RebuildQueryStrings(Query *originalQuery, List *taskList)
+RebuildQueryStrings(Job *workerJob)
 {
-	ListCell *taskCell = NULL;
+	Query *originalQuery = workerJob->jobQuery;
+	List *taskList = workerJob->taskList;
 	Oid relationId = ((RangeTblEntry *) linitial(originalQuery->rtable))->relid;
 	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery);
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
 		Query *query = originalQuery;
 
-		if (UpdateOrDeleteQuery(query) && list_length(taskList))
+		if (UpdateOrDeleteQuery(query) && list_length(taskList) > 1)
 		{
 			query = copyObject(originalQuery);
 		}
@@ -114,6 +118,12 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 								: ApplyLogRedaction(TaskQueryString(task)))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
+
+		/*
+		 * If parameters were resolved in the job query, then they are now also
+		 * resolved in the query string.
+		 */
+		task->parametersInQueryStringResolved = workerJob->parametersInJobQueryResolved;
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
 								ApplyLogRedaction(TaskQueryString(task)))));
@@ -325,15 +335,9 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 		return true;
 	}
 
-	uint64 shardId = relationShard->shardId;
-	Oid relationId = relationShard->relationId;
+	Oid shardOid = GetShardOid(relationShard->relationId, relationShard->shardId);
 
-	char *relationName = get_rel_name(relationId);
-	AppendShardIdToName(&relationName, shardId);
-
-	Oid schemaId = get_rel_namespace(relationId);
-
-	newRte->relid = get_relname_relid(relationName, schemaId);
+	newRte->relid = shardOid;
 
 	return false;
 }

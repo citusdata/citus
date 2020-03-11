@@ -108,7 +108,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Datum partitionValueDatum = 0;
 	ShardInterval *shardInterval = NULL;
 	List *placementList = NIL;
-	DistTableCacheEntry *distTable = NULL;
+	CitusTableCacheEntry *distTable = NULL;
 	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
@@ -123,8 +123,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	int32 groupId = GetLocalGroupId();
-	if (groupId != 0 || groupId == GROUP_ID_UPGRADING)
+	int32 localGroupId = GetLocalGroupId();
+	if (localGroupId != COORDINATOR_GROUP_ID || localGroupId == GROUP_ID_UPGRADING)
 	{
 		/* do not delegate from workers, or while upgrading */
 		return NULL;
@@ -267,7 +267,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	distTable = DistributedTableCacheEntry(colocatedRelationId);
+	distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{

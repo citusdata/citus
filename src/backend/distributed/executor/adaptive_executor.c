@@ -166,6 +166,8 @@
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 
+#define SLOW_START_DISABLED 0
+
 
 /*
  * DistributedExecution represents the execution of a distributed query
@@ -1612,6 +1614,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 	bool hasReturning = execution->hasReturning;
 
+	int32 localGroupId = GetLocalGroupId();
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
@@ -1755,7 +1759,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			}
 
 			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
-				GetLocalGroupId())
+				localGroupId)
 			{
 				TransactionConnectedToLocalGroup = true;
 			}
@@ -2258,7 +2262,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 
-		if (newConnectionCount > 0 && ExecutorSlowStartInterval > 0)
+		if (newConnectionCount > 0 && ExecutorSlowStartInterval != SLOW_START_DISABLED)
 		{
 			if (MillisecondsPassedSince(workerPool->lastConnectionOpenTime) >=
 				ExecutorSlowStartInterval)
@@ -3188,7 +3192,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
 
-	if (paramListInfo != NULL)
+	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
 		int parameterCount = paramListInfo->numParams;
 		Oid *parameterTypes = NULL;

@@ -47,7 +47,8 @@ extern List * RelationShardListForShardIntervalList(List *shardIntervalList,
 													bool *shardsPresent);
 extern List * FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 								   bool replacePrunedQueryWithDummy);
-extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
+extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
+								   DeferredErrorMessage **planningError);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
 												  restrictionContext,
@@ -64,7 +65,7 @@ extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rte
 extern RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
 
-extern Oid ExtractFirstDistributedTableId(Query *query);
+extern Oid ExtractFirstCitusTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern Oid ModifyQueryResultRelationId(Query *query);
 extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
