@@ -171,7 +171,6 @@ static List * OrSelectClauseList(List *selectClauseList);
 static void PushDownNodeLoop(MultiUnaryNode *currentNode);
 static void PullUpCollectLoop(MultiCollect *collectNode);
 static void AddressProjectSpecialConditions(MultiProject *projectNode);
-static List * ListCopyDeep(List *nodeList);
 static PushDownStatus CanPushDown(MultiUnaryNode *parentNode);
 static PullUpStatus CanPullUp(MultiUnaryNode *childNode);
 static PushDownStatus Commutative(MultiUnaryNode *parentNode,
@@ -688,7 +687,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 		MultiProject *projectChildNode = (MultiProject *) childNode;
 		List *projectColumnList = projectChildNode->columnList;
 
-		childColumnList = ListCopyDeep(projectColumnList);
+		childColumnList = copyObject(projectColumnList);
 	}
 	else if (childNodeTag == T_MultiPartition)
 	{
@@ -696,7 +695,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 		Var *partitionColumn = partitionNode->partitionColumn;
 		List *partitionColumnList = list_make1(partitionColumn);
 
-		childColumnList = ListCopyDeep(partitionColumnList);
+		childColumnList = copyObject(partitionColumnList);
 	}
 	else if (childNodeTag == T_MultiSelect)
 	{
@@ -704,7 +703,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 		Node *selectClauseList = (Node *) selectNode->selectClauseList;
 		List *selectList = pull_var_clause_default(selectClauseList);
 
-		childColumnList = ListCopyDeep(selectList);
+		childColumnList = copyObject(selectList);
 	}
 	else if (childNodeTag == T_MultiJoin)
 	{
@@ -712,7 +711,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 		Node *joinClauseList = (Node *) joinNode->joinClauseList;
 		List *joinList = pull_var_clause_default(joinClauseList);
 
-		childColumnList = ListCopyDeep(joinList);
+		childColumnList = copyObject(joinList);
 	}
 
 	/*
@@ -726,25 +725,6 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 
 		projectNode->columnList = newColumnList;
 	}
-}
-
-
-/* Deep copies the given node list, and returns the deep copied list. */
-static List *
-ListCopyDeep(List *nodeList)
-{
-	List *nodeCopyList = NIL;
-	ListCell *nodeCell = NULL;
-
-	foreach(nodeCell, nodeList)
-	{
-		Node *node = (Node *) lfirst(nodeCell);
-		Node *nodeCopy = copyObject(node);
-
-		nodeCopyList = lappend(nodeCopyList, nodeCopy);
-	}
-
-	return nodeCopyList;
 }
 
 
@@ -1422,10 +1402,10 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	ListCell *targetEntryCell = NULL;
 	Node *originalHavingQual = originalOpNode->havingQual;
 	Node *newHavingQual = NULL;
-	MasterAggregateWalkerContext walkerContext = { 0 };
-
-	walkerContext.extendedOpNodeProperties = extendedOpNodeProperties;
-	walkerContext.columnId = 1;
+	MasterAggregateWalkerContext walkerContext = {
+		.extendedOpNodeProperties = extendedOpNodeProperties,
+		.columnId = 1,
+	};
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -2330,10 +2310,9 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
 								QueryGroupClause *queryGroupClause)
 {
 	ListCell *targetEntryCell = NULL;
-	WorkerAggregateWalkerContext workerAggContext = { 0 };
-
-	workerAggContext.extendedOpNodeProperties = extendedOpNodeProperties;
-	workerAggContext.expressionList = NIL;
+	WorkerAggregateWalkerContext workerAggContext = {
+		.extendedOpNodeProperties = extendedOpNodeProperties,
+	};
 
 	/* iterate over original target entries */
 	foreach(targetEntryCell, targetEntryList)
@@ -2408,19 +2387,16 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		 * If the GROUP BY or PARTITION BY is not on the distribution column
 		 * then we need to combine the aggregates in the HAVING across shards.
 		 */
-		WorkerAggregateWalkerContext *workerAggContext = palloc0(
-			sizeof(WorkerAggregateWalkerContext));
+		WorkerAggregateWalkerContext workerAggContext = {
+			.extendedOpNodeProperties = extendedOpNodeProperties,
+		};
 
-		workerAggContext->extendedOpNodeProperties = extendedOpNodeProperties;
-		workerAggContext->expressionList = NIL;
-		workerAggContext->createGroupByClause = false;
-
-		WorkerAggregateWalker(originalHavingQual, workerAggContext);
-		List *newExpressionList = workerAggContext->expressionList;
+		WorkerAggregateWalker(originalHavingQual, &workerAggContext);
+		List *newExpressionList = workerAggContext.expressionList;
 		TargetEntry *targetEntry = NULL;
 
 		ExpandWorkerTargetEntry(newExpressionList, targetEntry,
-								workerAggContext->createGroupByClause,
+								workerAggContext.createGroupByClause,
 								queryTargetList, queryGroupClause);
 	}
 
