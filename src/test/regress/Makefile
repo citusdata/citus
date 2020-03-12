@@ -128,6 +128,11 @@ check-isolation-base: all  $(isolation_test_files)
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
 check-vanilla: all
+	# it is possible that sometimes vanilla tests will fail, which is related to postgres.
+	# So we try it once more if it fails to prevent some failures in our CI.
+	${MAKE} check-vanilla-internal  || ${MAKE} check-vanilla-internal
+
+check-vanilla-internal:
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
 
 check-multi-mx: all
