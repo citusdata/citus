@@ -339,6 +339,13 @@ DETAIL:  Key (key)=(1) already exists.
 CONTEXT:  COPY distributed_table_1570001, line 1
 ROLLBACK;
 TRUNCATE distributed_table;
+BEGIN;
+-- insert a lot of data ( around 8MB),
+-- this should use local copy and it will exceed the LOCAL_COPY_FLUSH_THRESHOLD (512KB)
+INSERT INTO distributed_table SELECT * , * FROM generate_series(20, 1000000);
+NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  executing the copy locally for shard xxxxx
+ROLLBACK;
 COPY distributed_table FROM STDIN WITH delimiter ',';
 ERROR:  new row for relation "distributed_table_1570001" violates check constraint "distributed_table_age_check"
 DETAIL:  Failing row contains (1, 9).
@@ -461,6 +468,7 @@ ROLLBACK;
 SET search_path TO local_shard_copy;
 SET citus.log_local_commands TO ON;
 TRUNCATE TABLE reference_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE local_shard_copy.reference_table_xxxxx CASCADE
 TRUNCATE TABLE local_table;
 SELECT count(*) FROM reference_table, local_table WHERE reference_table.key = local_table.key;
  count

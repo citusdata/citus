@@ -212,6 +212,14 @@ ROLLBACK;
 
 TRUNCATE distributed_table;
 
+BEGIN;
+
+-- insert a lot of data ( around 8MB),
+-- this should use local copy and it will exceed the LOCAL_COPY_FLUSH_THRESHOLD (512KB)
+INSERT INTO distributed_table SELECT * , * FROM generate_series(20, 1000000);
+
+ROLLBACK;
+
 COPY distributed_table FROM STDIN WITH delimiter ',';
 1, 9
 \.

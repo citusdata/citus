@@ -102,9 +102,9 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM multi_mx_i
 (1 row)
 
     insert into target_table SELECT a FROM source_table LIMIT 10;
-ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
-DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
-HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
+NOTICE:  executing the command locally: SELECT a FROM multi_mx_insert_select_repartition.source_table_4213581 source_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a FROM multi_mx_insert_select_repartition.source_table_4213583 source_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the copy locally for shard xxxxx
 ROLLBACK;
 \c - - - :master_port
 SET search_path TO multi_mx_insert_select_repartition;

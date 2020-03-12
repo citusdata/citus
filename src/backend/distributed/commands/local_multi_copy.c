@@ -35,7 +35,7 @@
 #include "distributed/local_multi_copy.h"
 #include "distributed/shard_utils.h"
 
-static int ReadFromLocalBufferCallback(void *outbuf, int minread, int maxread);
+static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,
 							CopyOutState localCopyOutState);
 
@@ -60,7 +60,10 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 					   shardId,
 					   CopyOutState localCopyOutState)
 {
-	/* since we are doing a local copy, the following statements should use local execution to see the changes */
+	/*
+	 * Since we are doing a local copy, the following statements should
+	 * use local execution to see the changes
+	 */
 	TransactionAccessedLocalPlacement = true;
 
 	bool isBinaryCopy = localCopyOutState->binary;
@@ -76,8 +79,8 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 		if (isBinaryCopy)
 		{
 			/*
-			 * We're going to flush the buffer to disk by effectively doing a full COPY command.
-			 * Hence we also need to add footers to the current buffer.
+			 * We're going to flush the buffer to disk by effectively doing a full
+			 * COPY command. Hence we also need to add footers to the current buffer.
 			 */
 			AppendCopyBinaryFooters(localCopyOutState);
 		}
@@ -108,7 +111,8 @@ FinishLocalCopyToShard(CitusCopyDestReceiver *copyDest, int64 shardId,
 
 
 /*
- * AddSlotToBuffer serializes the given slot and adds it to the buffer in localCopyOutState.
+ * AddSlotToBuffer serializes the given slot and adds it to
+ * the buffer in localCopyOutState.
  */
 static void
 AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, CopyOutState
@@ -139,16 +143,18 @@ ShouldSendCopyNow(StringInfo buffer)
 /*
  * DoLocalCopy finds the shard table from the distributed relation id, and copies the given
  * buffer into the shard.
- * CopyFrom calls ReadFromLocalBufferCallback to read bytes from the buffer as though
- * it was reading from stdin. It then parses the tuples and writes them to the shardOid table.
+ * CopyFrom calls ReadFromLocalBufferCallback to read bytes from the buffer
+ * as though it was reading from stdin. It then parses the tuples and
+ * writes them to the shardOid table.
  */
 static void
 DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStatement,
 			bool isEndOfCopy)
 {
 	/*
-	 * Set the buffer as a global variable to allow ReadFromLocalBufferCallback to read from it.
-	 * We cannot pass additional arguments to ReadFromLocalBufferCallback.
+	 * Set the buffer as a global variable to allow ReadFromLocalBufferCallback
+	 * to read from it. We cannot pass additional arguments to
+	 * ReadFromLocalBufferCallback.
 	 */
 	LocalCopyBuffer = buffer;
 
@@ -167,11 +173,7 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 
 	heap_close(shard, NoLock);
 	free_parsestate(pState);
-	FreeStringInfo(buffer);
-	if (!isEndOfCopy)
-	{
-		buffer = makeStringInfo();
-	}
+	resetStringInfo(buffer);
 }
 
 
@@ -192,21 +194,21 @@ ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary)
 
 /*
  * ReadFromLocalBufferCallback is the copy callback.
- * It always tries to copy maxread bytes.
+ * It always tries to copy maxRead bytes.
  */
 static int
-ReadFromLocalBufferCallback(void *outbuf, int minread, int maxread)
+ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead)
 {
-	int bytesread = 0;
+	int bytesRead = 0;
 	int avail = LocalCopyBuffer->len - LocalCopyBuffer->cursor;
-	int bytesToRead = Min(avail, maxread);
+	int bytesToRead = Min(avail, maxRead);
 	if (bytesToRead > 0)
 	{
-		memcpy_s(outbuf, bytesToRead + strlen((char *) outbuf),
+		memcpy_s(outBuf, bytesToRead,
 				 &LocalCopyBuffer->data[LocalCopyBuffer->cursor], bytesToRead);
 	}
-	bytesread += bytesToRead;
+	bytesRead += bytesToRead;
 	LocalCopyBuffer->cursor += bytesToRead;
 
-	return bytesread;
+	return bytesRead;
 }

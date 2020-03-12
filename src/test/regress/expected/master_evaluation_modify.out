@@ -951,6 +951,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
 (1 row)
 
 INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable() > 0)::user_data, i FROM generate_series(0,7)i;
+NOTICE:  executing the copy locally for shard xxxxx
 PREPARE fast_path_router_with_param_and_func_on_non_dist_key(int) AS
 	DELETE FROM user_info_data WHERE user_id = 3 AND user_index = $1 AND u_data = ('test', (get_local_node_id_stable() > 0)::int)::user_data RETURNING user_id, user_index;
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(0);
@@ -1438,6 +1439,7 @@ NOTICE:  executing the command locally: DELETE FROM master_evaluation_combinatio
 (1 row)
 
 INSERT INTO user_info_data SELECT 3, ('test', get_local_node_id_stable() > 0)::user_data, i FROM generate_series(0,7)i;
+NOTICE:  executing the copy locally for shard xxxxx
 PREPARE router_with_param_and_func_on_non_dist_key(int) AS
 	DELETE FROM user_info_data WHERE user_id = 3 AND user_id = 3 AND user_index = $1 AND u_data = ('test', (get_local_node_id_stable() > 0)::int)::user_data RETURNING user_id, user_index;
 EXECUTE router_with_param_and_func_on_non_dist_key(0);

@@ -276,6 +276,8 @@ RETURNING *;
 -- that's why it is disallowed to use local execution even if the SELECT
 -- can be executed locally
 INSERT INTO distributed_table SELECT * FROM distributed_table WHERE key = 1 OFFSET 0 ON CONFLICT DO NOTHING;
+NOTICE:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) SELECT key, value, age FROM read_intermediate_result('insert_select_XXX_1470001'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint) ON CONFLICT DO NOTHING
 INSERT INTO distributed_table SELECT 1, '1',15 FROM distributed_table WHERE key = 2 LIMIT 1 ON CONFLICT DO NOTHING;
 -- sanity check: multi-shard INSERT..SELECT pushdown goes through distributed execution
 INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOTHING;
@@ -507,28 +509,7 @@ NOTICE:  truncate cascades to table "second_distributed_table"
 ROLLBACK;
 -- load some data so that foreign keys won't complain with the next tests
 INSERT INTO reference_table SELECT i FROM generate_series(500, 600) i;
--- a very similar set of operation, but this time use
--- COPY as the first command
-BEGIN;
-	INSERT INTO distributed_table SELECT i, i::text, i % 10 + 25 FROM generate_series(500, 600) i;
-	-- this could go through local execution, but doesn't because we've already
-	-- done distributed execution
-	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
- key | value | age
----------------------------------------------------------------------
- 500 | 500   |  25
-(1 row)
-
-	-- utility commands could still use distributed execution
-	TRUNCATE distributed_table CASCADE;
-NOTICE:  truncate cascades to table "second_distributed_table"
-	-- ensure that TRUNCATE made it
-	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
- key | value | age
----------------------------------------------------------------------
-(0 rows)
-
-ROLLBACK;
+NOTICE:  executing the copy locally for shard xxxxx
 -- show that cascading foreign keys just works fine with local execution
 BEGIN;
 	INSERT INTO reference_table VALUES (701);
@@ -619,6 +600,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,1) i;
+NOTICE:  executing the copy locally for shard xxxxx
 ROLLBACK;
 -- a local query is followed by a command that cannot be executed locally
 BEGIN;
@@ -1331,7 +1313,10 @@ NOTICE:  truncate cascades to table "second_distributed_table_xxxxx"
 NOTICE:  executing the command locally: TRUNCATE TABLE local_shard_execution.second_distributed_table_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE local_shard_execution.second_distributed_table_xxxxx CASCADE
 INSERT INTO reference_table SELECT i FROM generate_series(500, 600) i;
+NOTICE:  executing the copy locally for shard xxxxx
 INSERT INTO distributed_table SELECT i, i::text, i % 10 + 25 FROM generate_series(500, 600) i;
+NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  executing the copy locally for shard xxxxx
 -- show that both local, and mixed local-distributed executions
 -- calculate rows processed correctly
 BEGIN;

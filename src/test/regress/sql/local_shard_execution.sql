@@ -305,22 +305,6 @@ ROLLBACK;
 -- load some data so that foreign keys won't complain with the next tests
 INSERT INTO reference_table SELECT i FROM generate_series(500, 600) i;
 
--- a very similar set of operation, but this time use
--- COPY as the first command
-BEGIN;
-	INSERT INTO distributed_table SELECT i, i::text, i % 10 + 25 FROM generate_series(500, 600) i;
-
-	-- this could go through local execution, but doesn't because we've already
-	-- done distributed execution
-	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
-
-	-- utility commands could still use distributed execution
-	TRUNCATE distributed_table CASCADE;
-
-	-- ensure that TRUNCATE made it
-	SELECT * FROM distributed_table WHERE key = 500 ORDER BY 1,2,3;
-ROLLBACK;
-
 -- show that cascading foreign keys just works fine with local execution
 BEGIN;
 	INSERT INTO reference_table VALUES (701);
