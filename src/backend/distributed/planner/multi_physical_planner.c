@@ -144,6 +144,7 @@ static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 static bool DistributedPlanRouterExecutable(DistributedPlan *distributedPlan);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
+static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
@@ -2201,6 +2202,21 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 			maxShardOffset = -1;
 		}
 
+		/*
+		 * For left joins we don't care about the shards pruned for the right hand side.
+		 * If the right hand side would prune to a smaller set we should still send it to
+		 * all tables of the left hand side. However if the right hand side is bigger than
+		 * the left hand side we don't have to send the query to any shard that is not
+		 * matching anything on the left hand side.
+		 *
+		 * Instead we will simply skip any RelationRestriction if it is an OUTER join and
+		 * the table is part of the non-outer side of the join.
+		 */
+		if (IsInnerTableOfOuterJoin(relationRestriction))
+		{
+			continue;
+		}
+
 		foreach(shardIntervalCell, prunedShardList)
 		{
 			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
@@ -2208,15 +2224,8 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 			taskRequiredForShardIndex[shardIndex] = true;
 
-			if (shardIndex < minShardOffset)
-			{
-				minShardOffset = shardIndex;
-			}
-
-			if (shardIndex > maxShardOffset)
-			{
-				maxShardOffset = shardIndex;
-			}
+			minShardOffset = Min(minShardOffset, shardIndex);
+			maxShardOffset = Max(maxShardOffset, shardIndex);
 		}
 	}
 
@@ -2263,6 +2272,45 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	}
 
 	return sqlTaskList;
+}
+
+
+/*
+ * IsInnerTableOfOuterJoin tests based on the join information envoded in a
+ * RelationRestriction if the table accessed for this relation is
+ *   a) in an outer join
+ *   b) on the inner part of said join
+ *
+ * The function returns true only if both conditions above hold true
+ */
+static bool
+IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction)
+{
+	RestrictInfo *joinInfo = NULL;
+	foreach_ptr(joinInfo, relationRestriction->relOptInfo->joininfo)
+	{
+		if (joinInfo->outer_relids == NULL)
+		{
+			/* not an outer join */
+			continue;
+		}
+
+		/*
+		 * This join restriction info describes an outer join, we need to figure out if
+		 * our table is in the non outer part of this join. If that is the case this is a
+		 * non outer table of an outer join.
+		 */
+		bool isInOuter = bms_is_member(relationRestriction->relOptInfo->relid,
+									   joinInfo->outer_relids);
+		if (!isInOuter)
+		{
+			/* this table is joined in the inner part of an outer join */
+			return true;
+		}
+	}
+
+	/* we have not found any join clause that satisfies both requirements */
+	return false;
 }
 
 
