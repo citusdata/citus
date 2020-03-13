@@ -1,0 +1,21 @@
+--
+-- MULTI_LOAD_DATA
+--
+-- Tests for loading data in a distributed cluster. Please note that the number
+-- of shards uploaded depends on two config values: citus.shard_replication_factor and
+-- citus.shard_max_size. These values are set in pg_regress_multi.pl. Shard placement
+-- policy is left to the default value (round-robin) to test the common install case.
+SET citus.next_shard_id TO 290000;
+\copy lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy orders FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\copy orders_reference FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders_reference FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\copy customer FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\copy customer_append FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\copy nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+\copy part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
+\copy part_append FROM '@abs_srcdir@/data/part.data' with delimiter '|'
+\copy supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+\copy supplier_single_shard FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
