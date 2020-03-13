@@ -85,7 +85,8 @@ static uint32 RangePartitionId(Datum partitionValue, Oid partitionCollation,
 static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation,
 							  const void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
-static bool FileIsLink(const char *filename, struct stat filestat);
+static bool TryUnlink(const char *filename);
+static bool TryRmdir(const char *filename);
 
 
 /* exports for SQL callable functions */
@@ -688,25 +689,6 @@ CitusCreateDirectory(StringInfo directoryName)
 }
 
 
-#ifdef WIN32
-static bool
-FileIsLink(char *filename, struct stat filestat)
-{
-	return pgwin32_is_junction(filename);
-}
-
-
-#else
-static bool
-FileIsLink(const char *filename, struct stat filestat)
-{
-	return S_ISLNK(filestat.st_mode);
-}
-
-
-#endif
-
-
 /*
  * CitusRemoveDirectory first checks if the given directory exists. If it does, the
  * function recursively deletes the contents of the given directory, and then
@@ -719,87 +701,102 @@ CitusRemoveDirectory(const char *filename)
 	/* files may be added during execution, loop when that occurs */
 	while (true)
 	{
-		struct stat fileStat;
-		int removed = 0;
-
-		int fileStated = stat(filename, &fileStat);
-		if (fileStated < 0)
+		if (TryUnlink(filename) || TryRmdir(filename))
 		{
-			if (errno == ENOENT)
-			{
-				return;  /* if file does not exist, return */
-			}
-			else
-			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not stat file \"%s\": %m", filename)));
-			}
+			return;
 		}
 
 		/*
-		 * If this is a directory, iterate over all its contents and for each
-		 * content, recurse into this function. Also, make sure that we do not
-		 * recurse into symbolic links.
+		 * If both of these failed then filename is a non empty directory.
+		 * Iterate over all its contents and for each content, recurse into
+		 * this function. Also, make sure that we do not recurse into symbolic
+		 * links.
 		 */
-		if (S_ISDIR(fileStat.st_mode) && !FileIsLink(filename, fileStat))
+		const char *directoryName = filename;
+
+		DIR *directory = AllocateDir(directoryName);
+		if (errno == ENOENT)
 		{
-			const char *directoryName = filename;
-
-			DIR *directory = AllocateDir(directoryName);
-			if (directory == NULL)
-			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not open directory \"%s\": %m",
-									   directoryName)));
-			}
-
-			StringInfo fullFilename = makeStringInfo();
-			struct dirent *directoryEntry = ReadDir(directory, directoryName);
-			for (; directoryEntry != NULL; directoryEntry = ReadDir(directory,
-																	directoryName))
-			{
-				const char *baseFilename = directoryEntry->d_name;
-
-				/* if system file, skip it */
-				if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
-					strncmp(baseFilename, "..", MAXPGPATH) == 0)
-				{
-					continue;
-				}
-
-				resetStringInfo(fullFilename);
-				appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
-
-				CitusRemoveDirectory(fullFilename->data);
-			}
-
-			FreeStringInfo(fullFilename);
-			FreeDir(directory);
+			/* If directory was removed from under us we're done */
+			return;
+		}
+		if (errno == ENOTDIR)
+		{
+			/* If directory changed to a file underneath us, loop again to remove it with unlink */
+			continue;
 		}
 
-		/* we now have an empty directory or a regular file, remove it */
-		if (S_ISDIR(fileStat.st_mode))
+		/* ReadDir handles other errno from AllocateDir */
+		struct dirent *directoryEntry = ReadDir(directory, directoryName);
+		StringInfo fullFilename = makeStringInfo();
+		for (; directoryEntry != NULL; directoryEntry = ReadDir(directory,
+																directoryName))
 		{
-			removed = rmdir(filename);
+			const char *baseFilename = directoryEntry->d_name;
 
-			if (errno == ENOTEMPTY || errno == EEXIST)
+			/* if system file, skip it */
+			if (strncmp(baseFilename, ".", MAXPGPATH) == 0 ||
+				strncmp(baseFilename, "..", MAXPGPATH) == 0)
 			{
 				continue;
 			}
-		}
-		else
-		{
-			removed = unlink(filename);
+
+			resetStringInfo(fullFilename);
+			appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
+
+			CitusRemoveDirectory(fullFilename->data);
 		}
 
-		if (removed != 0 && errno != ENOENT)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not remove file \"%s\": %m", filename)));
-		}
-
-		return;
+		FreeStringInfo(fullFilename);
+		FreeDir(directory);
 	}
+}
+
+
+/*
+ * TryUnlink returns true if file is removed and false if the file is a
+ * directory. If an error occurs trying to remove the file this function calls
+ * ereport.
+ */
+static bool
+TryUnlink(const char *filename)
+{
+	errno = 0;
+	int exitcode = unlink(filename);
+	if (exitcode == 0 || errno == ENOENT)
+	{
+		return true;
+	}
+	if (errno == EISDIR)
+	{
+		return false;
+	}
+	ereport(ERROR, (errcode_for_file_access(),
+					errmsg("could not remove file \"%s\": %m", filename)));
+}
+
+
+/*
+ * TryRmdir returns true if the directory is removed. It returns false if the
+ * filename points to a file or symlink. It also returns false if the directory
+ * is not empty. The difference in these cases can be found by checking errno.
+ * For all other errors ereport is called.
+ */
+static bool
+TryRmdir(const char *filename)
+{
+	errno = 0;
+	int exitcode = rmdir(filename);
+	if (exitcode == 0 || errno == ENOENT)
+	{
+		return true;
+	}
+	if (errno == ENOTDIR || errno == ENOTEMPTY || errno == EEXIST)
+	{
+		return false;
+	}
+	ereport(ERROR, (errcode_for_file_access(),
+					errmsg("could not remove directory \"%s\": %m", filename)));
 }
 
 
