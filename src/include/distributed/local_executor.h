@@ -22,6 +22,7 @@ extern bool TransactionConnectedToLocalGroup;
 
 /* extern function declarations */
 extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
+extern void ExecuteLocalUtilityTaskList(List *localTaskList);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);

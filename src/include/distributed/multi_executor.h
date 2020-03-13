@@ -84,7 +84,8 @@ extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskL
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
 											bool hasReturning);
-extern void ExecuteUtilityTaskListWithoutResults(List *taskList);
+extern void ExecuteUtilityTaskListWithoutResults(List *taskList, bool
+												 localExecutionSupported);
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
 							  targetPoolSize);
 extern bool IsCitusCustomState(PlanState *planState);
@@ -94,6 +95,8 @@ extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *worker
 extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
 								   tupleDescriptor, Tuplestorestate *tupstore);
 extern Query * ParseQueryString(const char *queryString, Oid *paramOids, int numParams);
+extern Query * RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString,
+								   Oid *paramOids, int numParams);
 extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo
 											   params,
 											   DestReceiver *dest);

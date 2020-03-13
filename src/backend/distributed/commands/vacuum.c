@@ -108,8 +108,10 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 			List *vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
 			List *taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
 
-			/* use adaptive executor when enabled */
-			ExecuteUtilityTaskListWithoutResults(taskList);
+			/* local execution is not implemented for VACUUM commands */
+			bool localExecutionSupported = false;
+
+			ExecuteUtilityTaskListWithoutResults(taskList, localExecutionSupported);
 			executedVacuumCount++;
 		}
 		relationIndex++;

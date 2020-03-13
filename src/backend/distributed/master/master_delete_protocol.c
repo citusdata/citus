@@ -396,6 +396,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 	List *dropTaskList = DropTaskList(relationId, schemaName, relationName,
 									  deletableShardIntervalList);
+	bool shouldExecuteTasksLocally = ShouldExecuteTasksLocally(dropTaskList);
 
 	Task *task = NULL;
 	foreach_ptr(task, dropTaskList)
@@ -423,14 +424,39 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 				continue;
 			}
 
-			const char *dropShardPlacementCommand = TaskQueryString(task);
-			ExecuteDropShardPlacementCommandRemotely(shardPlacement,
-													 relationName,
-													 dropShardPlacementCommand);
-
-			if (isLocalShardPlacement)
+			/*
+			 * If it is a local placement of a distributed table or a reference table,
+			 * then execute the DROP command locally.
+			 */
+			if (isLocalShardPlacement && shouldExecuteTasksLocally)
 			{
-				TransactionConnectedToLocalGroup = true;
+				List *singleTaskList = list_make1(task);
+
+				ExecuteLocalUtilityTaskList(singleTaskList);
+			}
+			else
+			{
+				/*
+				 * Either it was not a local placement or we could not use
+				 * local execution even if it was a local placement.
+				 * If it is the second case, then it is possibly because in
+				 * current transaction, some commands or queries connected
+				 * to local group as well.
+				 *
+				 * Regardless of the node is a remote node or the current node,
+				 * try to open a new connection (or use an existing one) to
+				 * connect to that node to drop the shard placement over that
+				 * remote connection.
+				 */
+				const char *dropShardPlacementCommand = TaskQueryString(task);
+				ExecuteDropShardPlacementCommandRemotely(shardPlacement,
+														 relationName,
+														 dropShardPlacementCommand);
+
+				if (isLocalShardPlacement)
+				{
+					TransactionConnectedToLocalGroup = true;
+				}
 			}
 
 			DeleteShardPlacementRow(shardPlacementId);

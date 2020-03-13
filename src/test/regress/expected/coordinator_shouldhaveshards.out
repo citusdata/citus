@@ -107,9 +107,8 @@ NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshar
 (1 row)
 
 ALTER TABLE test DROP COLUMN z;
-ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
-DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
-HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503000, 'coordinator_shouldhaveshards', 'ALTER TABLE test DROP COLUMN z;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503003, 'coordinator_shouldhaveshards', 'ALTER TABLE test DROP COLUMN z;')
 ROLLBACK;
 BEGIN;
 ALTER TABLE test DROP COLUMN z;
