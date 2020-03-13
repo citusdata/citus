@@ -88,6 +88,7 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 		DoLocalCopy(localCopyOutState->fe_msgbuf, copyDest->distributedRelationId,
 					shardId,
 					copyDest->copyStatement, isEndOfCopy);
+		resetStringInfo(localCopyOutState->fe_msgbuf);
 	}
 }
 
@@ -173,7 +174,6 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 
 	heap_close(shard, NoLock);
 	free_parsestate(pState);
-	resetStringInfo(buffer);
 }
 
 
