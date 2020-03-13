@@ -304,20 +304,25 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey IN (1,2) OR o_custkey NOT IN (SELECT o_custkey FROM orders_hash_partitioned WHERE o_orderkey = 3);
 
+SET client_min_messages TO DEFAULT;
+
 -- left joins should prune shards based on the left hand side of the left join
 -- it should only assign 2 tasks as there is a filter on the left table pruning to 2
 -- shards
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 LEFT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2);
 
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 INNER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2);
 
 -- same principle but on a right join
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 RIGHT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
@@ -325,12 +330,14 @@ WHERE l_orderkey IN (1, 2);
 
 -- full outerjoin should only prune partitions that will not return any rows. In short it
 -- should cause a union of the FROM and FULL OUTER JOIN tables.
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
    OR l_orderkey IN (2, 3);
 
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
@@ -338,6 +345,5 @@ WHERE o_orderkey IN (1, 2)
    AND l_orderkey IN (2, 3);
 
 SET citus.task_executor_type TO DEFAULT;
-SET client_min_messages TO DEFAULT;
 
 DROP TABLE lineitem_hash_partitioned;

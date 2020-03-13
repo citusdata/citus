@@ -1140,133 +1140,127 @@ DEBUG:  assigned task to node localhost:xxxxx
      3
 (1 row)
 
+SET client_min_messages TO DEFAULT;
 -- left joins should prune shards based on the left hand side of the left join
 -- it should only assign 2 tasks as there is a filter on the left table pruning to 2
 -- shards
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 LEFT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2);
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
- count
+                                                                       QUERY PLAN
 ---------------------------------------------------------------------
-     2
-(1 row)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 2
+         Tasks Shown: One of 2
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Nested Loop Left Join
+                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                                 Filter: (o_orderkey = ANY ('{1,2}'::integer[]))
+                           ->  Index Only Scan using lineitem_hash_partitioned_pkey_630004 on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+                                 Index Cond: (l_orderkey = orders_hash_partitioned.o_orderkey)
+(12 rows)
 
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 INNER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2);
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
- count
+                                                                       QUERY PLAN
 ---------------------------------------------------------------------
-     0
-(1 row)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 2
+         Tasks Shown: One of 2
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Nested Loop
+                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                                 Filter: (o_orderkey = ANY ('{1,2}'::integer[]))
+                           ->  Index Only Scan using lineitem_hash_partitioned_pkey_630004 on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+                                 Index Cond: (l_orderkey = orders_hash_partitioned.o_orderkey)
+(12 rows)
 
 -- same principle but on a right join
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 RIGHT JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE l_orderkey IN (1, 2);
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
- count
+                                                     QUERY PLAN
 ---------------------------------------------------------------------
-     0
-(1 row)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 2
+         Tasks Shown: One of 2
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Right Join
+                           Hash Cond: (orders_hash_partitioned.o_orderkey = lineitem_hash_partitioned.l_orderkey)
+                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                           ->  Hash
+                                 ->  Bitmap Heap Scan on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+                                       Recheck Cond: (l_orderkey = ANY ('{1,2}'::integer[]))
+                                       ->  Bitmap Index Scan on lineitem_hash_partitioned_pkey_630004
+                                             Index Cond: (l_orderkey = ANY ('{1,2}'::integer[]))
+(15 rows)
 
 -- full outerjoin should only prune partitions that will not return any rows. In short it
 -- should cause a union of the FROM and FULL OUTER JOIN tables.
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
    OR l_orderkey IN (2, 3);
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  no valid constraints found
-DEBUG:  shard count: 4
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
- count
+                                                                                QUERY PLAN
 ---------------------------------------------------------------------
-     2
-(1 row)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Full Join
+                           Hash Cond: (orders_hash_partitioned.o_orderkey = lineitem_hash_partitioned.l_orderkey)
+                           Filter: ((orders_hash_partitioned.o_orderkey = ANY ('{1,2}'::integer[])) OR (lineitem_hash_partitioned.l_orderkey = ANY ('{2,3}'::integer[])))
+                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                           ->  Hash
+                                 ->  Seq Scan on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+(13 rows)
 
+EXPLAIN (COSTS OFF)
 SELECT count(*)
 FROM orders_hash_partitioned
 FULL OUTER JOIN lineitem_hash_partitioned ON (o_orderkey = l_orderkey)
 WHERE o_orderkey IN (1, 2)
    AND l_orderkey IN (2, 3);
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  constraint value: 2
-DEBUG:  constraint value: 3
-DEBUG:  shard count: 2
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count: 2
-DEBUG:  constraint value: 2
-DEBUG:  constraint value: 3
-DEBUG:  shard count: 2
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
- count
+                                                     QUERY PLAN
 ---------------------------------------------------------------------
-     0
-(1 row)
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 3
+         Tasks Shown: One of 3
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Nested Loop
+                           Join Filter: (orders_hash_partitioned.o_orderkey = lineitem_hash_partitioned.l_orderkey)
+                           ->  Seq Scan on orders_hash_partitioned_630000 orders_hash_partitioned
+                                 Filter: (o_orderkey = ANY ('{1,2}'::integer[]))
+                           ->  Materialize
+                                 ->  Bitmap Heap Scan on lineitem_hash_partitioned_630004 lineitem_hash_partitioned
+                                       Recheck Cond: (l_orderkey = ANY ('{2,3}'::integer[]))
+                                       ->  Bitmap Index Scan on lineitem_hash_partitioned_pkey_630004
+                                             Index Cond: (l_orderkey = ANY ('{2,3}'::integer[]))
+(16 rows)
 
 SET citus.task_executor_type TO DEFAULT;
-SET client_min_messages TO DEFAULT;
 DROP TABLE lineitem_hash_partitioned;
