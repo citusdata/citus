@@ -1,5 +1,5 @@
 # The basic tests runs analyze which depends on shard numbers
-test: multi_test_helpers
+test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: upgrade_basic_before
 test: upgrade_type_before upgrade_ref2ref_before upgrade_distributed_function_before upgrade_rebalance_strategy_before

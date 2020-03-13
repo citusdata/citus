@@ -2,7 +2,7 @@
 # Only run few basic tests to set up a testing environment
 # ----------
 test: multi_cluster_management
-test: multi_test_helpers
+test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 
 # the following test has to be run sequentially
