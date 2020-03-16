@@ -117,17 +117,16 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
 
-	if (!doRepair)
+	if (doRepair)
+	{
+		RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
+							 targetNodePort);
+	}
+	else
 	{
 		ReplicateColocatedShardPlacement(shardId, sourceNodeName, sourceNodePort,
 										 targetNodeName, targetNodePort,
 										 shardReplicationMode);
-	}
-	else
-	{
-		/* RepairShardPlacement function repairs only given shard */
-		RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
-							 targetNodePort);
 	}
 
 	PG_RETURN_VOID();
@@ -190,41 +189,38 @@ BlockWritesToShardList(List *shardList)
 
 /*
  * ErrorIfTableCannotBeReplicated function errors out if the given table is not suitable
- * for its shard being replicated. There are 2 cases in which shard replication is not
- * allowed:
- *
- * 1) MX tables, since RF=1 is a must MX tables
- * 2) Reference tables, since the shard should already exist in all workers
+ * for its shard being replicated. Shard replications is not allowed only for MX tables,
+ * since RF=1 is a must MX tables.
  */
 static void
 ErrorIfTableCannotBeReplicated(Oid relationId)
 {
+	/*
+	 * Note that ShouldSyncTableMetadata() returns true for both MX tables
+	 * and reference tables.
+	 */
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(relationId);
-
-	if (shouldSyncMetadata)
+	if (!shouldSyncMetadata)
 	{
-		CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-		char *relationName = get_rel_name(relationId);
-		StringInfo errorDetailString = makeStringInfo();
+		return;
+	}
 
-		if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
-		{
-			appendStringInfo(errorDetailString,
-							 "Table %s is streaming replicated. Shards "
-							 "of streaming replicated tables cannot "
-							 "be copied", relationName);
-		}
-		else if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			appendStringInfo(errorDetailString, "Table %s is a reference table. Shards "
-												"of reference tables cannot be copied",
-							 relationName);
-			return;
-		}
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	char *relationName = get_rel_name(relationId);
 
+	/*
+	 * ShouldSyncTableMetadata() returns true also for reference table,
+	 * we don't want to error in that case since reference tables aren't
+	 * automatically replicated to active nodes with no shards, and
+	 * master_copy_shard_placement() can be used to create placements in
+	 * such nodes.
+	 */
+	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
+	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot copy shard"),
-						errdetail("%s", errorDetailString->data)));
+						(errmsg("Table %s is streaming replicated. Shards "
+								"of streaming replicated tables cannot "
+								"be copied", quote_literal_cstr(relationName)))));
 	}
 }
 
@@ -381,8 +377,8 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 
 
 /*
- * ReplicateColocatedShardPlacement replicated given shard and its colocated shards
- * from a source node to target node.
+ * ReplicateColocatedShardPlacement replicates the given shard and its
+ * colocated shards from a source node to target node.
  */
 static void
 ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
@@ -394,13 +390,11 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
-	ListCell *colocatedTableCell = NULL;
+	Oid colocatedTableId = InvalidOid;
 	ListCell *colocatedShardCell = NULL;
 
-
-	foreach(colocatedTableCell, colocatedTableList)
+	foreach_oid(colocatedTableId, colocatedTableList)
 	{
-		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
 		char relationKind = '\0';
 
 		/* check that user has owner rights in all co-located tables */
@@ -411,8 +405,8 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		{
 			char *relationName = get_rel_name(colocatedTableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot repair shard"),
-							errdetail("Table %s is a foreign table. Repairing "
+							errmsg("cannot replicate shard"),
+							errdetail("Table %s is a foreign table. Replicating "
 									  "shards backed by foreign tables is "
 									  "not supported.", relationName)));
 		}
@@ -441,6 +435,9 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	 * deadlocks.
 	 */
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+
+	BlockWritesToShardList(colocatedShardList);
+
 	foreach(colocatedShardCell, colocatedShardList)
 	{
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
@@ -453,8 +450,6 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
 	}
-
-	BlockWritesToShardList(colocatedShardList);
 
 	/*
 	 * CopyColocatedShardPlacement function copies given shard with its co-located
@@ -659,7 +654,8 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 	if (targetPlacement != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("shard %ld already exist in target placement", shardId)));
+						errmsg("shard " INT64_FORMAT " already exists in the target node",
+							   shardId)));
 	}
 }
 

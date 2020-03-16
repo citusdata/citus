@@ -3,7 +3,14 @@ CREATE SCHEMA mcsp;
 SET search_path TO mcsp;
 SET citus.next_shard_id TO 8139000;
 SET citus.shard_replication_factor TO 1;
-SET citus.replicatiOn_model TO 'statement';
+SET citus.replication_model TO 'statement';
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE data (
   key text primary key,
   value text not null,
@@ -33,6 +40,28 @@ INSERT INTO data VALUES ('key-1', 'value-1');
 INSERT INTO data VALUES ('key-2', 'value-2');
 INSERT INTO history VALUES ('key-1', '2020-02-01', 'old');
 INSERT INTO history VALUES ('key-1', '2019-10-01', 'older');
+-- verify we error out if no healthy placement exists at source
+SELECT master_copy_shard_placement(
+           get_shard_id_for_distribution_column('data', 'key-1'),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false);
+ERROR:  could not find placement matching "localhost:xxxxx"
+HINT:  Confirm the placement still exists and try again.
+-- verify we error out if source and destination are the same
+SELECT master_copy_shard_placement(
+           get_shard_id_for_distribution_column('data', 'key-1'),
+           'localhost', :worker_2_port,
+           'localhost', :worker_2_port,
+           do_repair := false);
+ERROR:  shard xxxxx already exists in the target node
+-- verify we error out if target already contains a healthy placement
+SELECT master_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false);
+ERROR:  shard xxxxx already exists in the target node
 -- replicate shard that contains key-1
 SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
@@ -62,7 +91,33 @@ SELECT count(*) FROM history;
      2
 (1 row)
 
+-- test we can not replicate MX tables
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE mx_table(a int);
+SELECT create_distributed_table('mx_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_copy_shard_placement(
+           get_shard_id_for_distribution_column('mx_table', '1'),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false);
+ERROR:  Table 'mx_table' is streaming replicated. Shards of streaming replicated tables cannot be copied
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO ERROR;
 DROP SCHEMA mcsp CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table data
-drop cascades to table history
