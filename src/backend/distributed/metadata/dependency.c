@@ -806,4 +806,6 @@ DependencyDefinitionObjectAddress(DependencyDefinition *definition)
 			return address;
 		}
 	}
+
+	ereport(ERROR, (errmsg("unsupported dependency definition mode")));
 }
