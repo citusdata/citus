@@ -86,8 +86,8 @@ step s1-verify-current-xact-is-on-worker:
 
 nodeport       xact_exists
 
-57637          t
-57638          t
+xxxxx          t
+xxxxx          t
 step s1-commit:
     COMMIT;
 

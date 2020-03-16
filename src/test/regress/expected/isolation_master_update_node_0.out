@@ -9,10 +9,10 @@ step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
 step s2-begin: BEGIN;
 step s2-update-node-1:
     -- update a specific node by address
-    SELECT master_update_node(nodeid, 'localhost', nodeport + 10)
+    SELECT master_update_node(nodeid, '<host>', nodeport + 10)
       FROM pg_dist_node
-     WHERE nodename = 'localhost'
-       AND nodeport = 57637;
+     WHERE nodename = '<host>'
+       AND nodeport = xxxxx;
  <waiting ...>
 step s1-abort: ABORT;
 step s2-update-node-1: <... completed>
@@ -34,10 +34,10 @@ step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
 step s2-begin: BEGIN;
 step s2-update-node-1-force:
     -- update a specific node by address (force)
-    SELECT master_update_node(nodeid, 'localhost', nodeport + 10, force => true, lock_cooldown => 100)
+    SELECT master_update_node(nodeid, '<host>', nodeport + 10, force => true, lock_cooldown => 100)
       FROM pg_dist_node
-     WHERE nodename = 'localhost'
-       AND nodeport = 57637;
+     WHERE nodename = '<host>'
+       AND nodeport = xxxxx;
  <waiting ...>
 step s2-update-node-1-force: <... completed>
 master_update_node

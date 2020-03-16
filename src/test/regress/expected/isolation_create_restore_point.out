@@ -166,7 +166,7 @@ step s1-begin:
 	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-add-node:
-	SELECT 1 FROM master_add_inactive_node('localhost', 9999);
+	SELECT 1 FROM master_add_inactive_node('<host>', 9999);
 
 ?column?
 
@@ -191,7 +191,7 @@ step s1-begin:
 	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-remove-node:
-	SELECT master_remove_node('localhost', 9999);
+	SELECT master_remove_node('<host>', 9999);
 
 master_remove_node
 

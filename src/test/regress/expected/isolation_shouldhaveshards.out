@@ -5,7 +5,7 @@ starting permutation: s1-add-second-node s1-begin s2-begin s2-create-distributed
 
 1
 step s1-add-second-node:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -26,7 +26,7 @@ create_distributed_table
 
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+	SELECT * from master_set_node_property('<host>', xxxxx, 'shouldhaveshards', false);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -45,8 +45,8 @@ step s2-shardcounts:
 
 nodeport       count
 
-57637          2
-57638          2
+xxxxx          2
+xxxxx          2
 master_remove_node
 
 
@@ -57,7 +57,7 @@ starting permutation: s1-add-second-node s1-begin s2-begin s1-noshards s2-create
 
 1
 step s1-add-second-node:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -69,7 +69,7 @@ step s2-begin:
 	BEGIN;
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+	SELECT * from master_set_node_property('<host>', xxxxx, 'shouldhaveshards', false);
 
 master_set_node_property
 
@@ -97,7 +97,7 @@ step s2-shardcounts:
 
 nodeport       count
 
-57638          4
+xxxxx          4
 master_remove_node
 
 
@@ -114,13 +114,13 @@ step s2-begin:
 	BEGIN;
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+	SELECT * from master_set_node_property('<host>', xxxxx, 'shouldhaveshards', false);
 
 master_set_node_property
 
 
 step s2-update-node:
-	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+	select * from master_update_node((select nodeid from pg_dist_node where nodeport = xxxxx), '<host>', xxxxx)
  <waiting ...>
 step s1-commit:
 	COMMIT;
@@ -147,19 +147,19 @@ step s2-begin:
 	BEGIN;
 
 step s2-update-node:
-	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+	select * from master_update_node((select nodeid from pg_dist_node where nodeport = xxxxx), '<host>', xxxxx)
 
 master_update_node
 
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+	SELECT * from master_set_node_property('<host>', xxxxx, 'shouldhaveshards', false);
  <waiting ...>
 step s2-commit:
 	COMMIT;
 
 step s1-noshards: <... completed>
-error in steps s2-commit s1-noshards: ERROR:  node at "localhost:xxxxx" does not exist
+error in steps s2-commit s1-noshards: ERROR:  node at "<host>:xxxxx" does not exist
 step s1-commit:
 	COMMIT;
 

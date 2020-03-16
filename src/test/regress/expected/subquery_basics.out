@@ -192,7 +192,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2, 
 
 -- same query with alias in the subquery
 SELECT
-   DISTINCT ON (citus) citus, postgres, citus + 1 as c1, postgres-1 as p1
+   DISTINCT ON (citus) citus, <user>, citus + 1 as c1, <user>-1 as p1
 FROM
     (SELECT
         users_table.value_2
@@ -203,7 +203,7 @@ FROM
      event_type IN (1,2,3,4)
      GROUP BY users_table.value_2
      ORDER BY 1 DESC
-     ) as foo(postgres),
+     ) as foo(<user>),
     (SELECT
         users_table.user_id
      FROM
@@ -213,13 +213,13 @@ FROM
      event_type IN (5,6,7,8)
      ORDER BY 1 DESC
      ) as bar (citus)
-    WHERE foo.postgres = bar.citus
+    WHERE foo.<user> = bar.citus
     ORDER BY 1 DESC, 2 DESC
     LIMIT 3;
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT ON (bar.citus) bar.citus, foo.postgres, (bar.citus OPERATOR(pg_catalog.+) 1) AS c1, (foo.postgres OPERATOR(pg_catalog.-) 1) AS p1 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo(postgres), (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC) bar(citus) WHERE (foo.postgres OPERATOR(pg_catalog.=) bar.citus) ORDER BY bar.citus DESC, foo.postgres DESC LIMIT 3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT ON (bar.citus) bar.citus, foo.<user>, (bar.citus OPERATOR(pg_catalog.+) 1) AS c1, (foo.<user> OPERATOR(pg_catalog.-) 1) AS p1 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo(<user>), (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC) bar(citus) WHERE (foo.<user> OPERATOR(pg_catalog.=) bar.citus) ORDER BY bar.citus DESC, foo.<user> DESC LIMIT 3
 DEBUG:  push down of limit count: 3
- citus | postgres | c1 | p1
+ citus | <user> | c1 | p1
 ---------------------------------------------------------------------
      5 |        5 |  6 |  4
      4 |        4 |  5 |  3

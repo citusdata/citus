@@ -1191,7 +1191,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
 ERROR:  the partition column value cannot be NULL
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id * 2
@@ -1240,7 +1240,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
 ERROR:  the partition column value cannot be NULL
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1261,7 +1261,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
 ERROR:  the partition column value cannot be NULL
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- tables should be co-located
 INSERT INTO agg_events (user_id)
 SELECT

@@ -12,7 +12,7 @@ SELECT master_get_table_ddl_events('simple_table');
                           master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.simple_table (first_name text, last_name text, id bigint)
- ALTER TABLE public.simple_table OWNER TO postgres
+ ALTER TABLE public.simple_table OWNER TO <user>
 (2 rows)
 
 -- ensure not-null constraints are propagated
@@ -24,7 +24,7 @@ SELECT master_get_table_ddl_events('not_null_table');
                     master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.not_null_table (city text, id bigint NOT NULL)
- ALTER TABLE public.not_null_table OWNER TO postgres
+ ALTER TABLE public.not_null_table OWNER TO <user>
 (2 rows)
 
 -- even more complex constraints should be preserved...
@@ -37,7 +37,7 @@ SELECT master_get_table_ddl_events('column_constraint_table');
                                                        master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK (age >= 0))
- ALTER TABLE public.column_constraint_table OWNER TO postgres
+ ALTER TABLE public.column_constraint_table OWNER TO <user>
 (2 rows)
 
 -- including table constraints
@@ -51,7 +51,7 @@ SELECT master_get_table_ddl_events('table_constraint_table');
                                                                       master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK (min_bid > max_bid))
- ALTER TABLE public.table_constraint_table OWNER TO postgres
+ ALTER TABLE public.table_constraint_table OWNER TO <user>
 (2 rows)
 
 -- default values are supported
@@ -63,7 +63,7 @@ SELECT master_get_table_ddl_events('default_value_table');
                            master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.default_value_table (name text, price numeric DEFAULT 0.00)
- ALTER TABLE public.default_value_table OWNER TO postgres
+ ALTER TABLE public.default_value_table OWNER TO <user>
 (2 rows)
 
 -- of course primary keys work...
@@ -76,7 +76,7 @@ SELECT master_get_table_ddl_events('pkey_table');
                              master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.pkey_table (first_name text, last_name text, id bigint NOT NULL)
- ALTER TABLE public.pkey_table OWNER TO postgres
+ ALTER TABLE public.pkey_table OWNER TO <user>
  ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)
 (3 rows)
 
@@ -89,7 +89,7 @@ SELECT master_get_table_ddl_events('unique_table');
                                 master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.unique_table (user_id bigint NOT NULL, username text NOT NULL)
- ALTER TABLE public.unique_table OWNER TO postgres
+ ALTER TABLE public.unique_table OWNER TO <user>
  ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)
 (3 rows)
 
@@ -104,7 +104,7 @@ SELECT master_get_table_ddl_events('clustered_table');
                                         master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)
- ALTER TABLE public.clustered_table OWNER TO postgres
+ ALTER TABLE public.clustered_table OWNER TO <user>
  CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at)
  ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx
 (4 rows)
@@ -127,7 +127,7 @@ SELECT master_get_table_ddl_events('fiddly_table');
 ---------------------------------------------------------------------
  CREATE TABLE public.fiddly_table (hostname character(255) NOT NULL, os character(255) NOT NULL, ip_addr inet NOT NULL, traceroute text NOT NULL)
  ALTER TABLE ONLY public.fiddly_table ALTER COLUMN hostname SET STORAGE PLAIN, ALTER COLUMN os SET STORAGE MAIN, ALTER COLUMN ip_addr SET STORAGE EXTENDED, ALTER COLUMN ip_addr SET STATISTICS 500, ALTER COLUMN traceroute SET STORAGE EXTERNAL
- ALTER TABLE public.fiddly_table OWNER TO postgres
+ ALTER TABLE public.fiddly_table OWNER TO <user>
 (3 rows)
 
 -- test foreign tables using fake FDW
@@ -165,7 +165,7 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 ---------------------------------------------------------------------
  CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
  CREATE FOREIGN TABLE public.renamed_foreign_table (id bigint NOT NULL, rename_name character(8) DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')
- ALTER TABLE public.renamed_foreign_table OWNER TO postgres
+ ALTER TABLE public.renamed_foreign_table OWNER TO <user>
 (3 rows)
 
 -- propagating views is not supported

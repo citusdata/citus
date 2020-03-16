@@ -35,10 +35,10 @@ SELECT citus.dump_network_traffic();
                                                                                                                                                                                                                                                                                                                                                                                               dump_network_traffic
 ---------------------------------------------------------------------
  (0,coordinator,"[initial message]")
- (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
+ (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=<user>)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=<user>)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
  (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'CREATE TABLE public.copy_test (key integer, value integer)'))""]")
  (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=worker_apply_shard_ddl_command,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
- (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'ALTER TABLE public.copy_test OWNER TO postgres'))""]")
+ (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'ALTER TABLE public.copy_test OWNER TO <user>'))""]")
  (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=worker_apply_shard_ddl_command,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
  (0,coordinator,"[""Query(query=BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, XX, 'XXXX-XX-XX XX:XX:XX.XXXXXX-XX');)""]")
  (0,worker,"['CommandComplete(command=BEGIN)', ""RowDescription(fieldcount=1,fields=['F(name=assign_distributed_transaction_id,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
@@ -74,14 +74,14 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -99,15 +99,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -127,14 +127,14 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -151,14 +151,14 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
@@ -168,7 +168,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(1) FROM copy_test;
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -191,8 +191,8 @@ SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -208,17 +208,17 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -238,17 +238,17 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
 (2 rows)
 
 SELECT count(1) FROM copy_test;
@@ -266,19 +266,19 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass
   ORDER BY placementid;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue | shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |    57637 |         100
- copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | localhost |     9060 |         101
- copy_test    |  100408 | t            | 0             | 3             |  100408 |          1 |        8192 | localhost |    57637 |         112
- copy_test    |  100408 | t            | 0             | 3             |  100408 |          3 |        8192 | localhost |     9060 |         113
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |    xxxxx |         100
+ copy_test    |  100400 | t            | 0             | 3             |  100400 |          1 |        8192 | <host> |     9060 |         101
+ copy_test    |  100408 | t            | 0             | 3             |  100408 |          1 |        8192 | <host> |    xxxxx |         112
+ copy_test    |  100408 | t            | 0             | 3             |  100408 |          3 |        8192 | <host> |     9060 |         113
 (4 rows)
 
 SELECT count(1) FROM copy_test;

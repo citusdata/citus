@@ -327,7 +327,7 @@ ERROR:  could not create distributed plan
 DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
 HINT:  Consider using PL/pgSQL functions instead.
 CONTEXT:  SQL function "test_parameterized_sql_function_in_subquery_where" statement 1
--- postgres behaves slightly differently for the following
+-- <user> behaves slightly differently for the following
 -- query where the target list is empty
 SELECT test_parameterized_sql_function(1);
  test_parameterized_sql_function
@@ -354,7 +354,7 @@ $$ LANGUAGE SQL;
 SELECT insert_twice();
 ERROR:  duplicate key value violates unique constraint "table_with_unique_constraint_a_key_1230009"
 DETAIL:  Key (a)=(4) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SQL function "insert_twice" statement 2
 SELECT * FROM table_with_unique_constraint ORDER BY a;
  a

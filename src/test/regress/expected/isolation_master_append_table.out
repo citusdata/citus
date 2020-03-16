@@ -9,7 +9,7 @@ step s2-begin:
 
 step s1-master_append_table_to_shard:
     SELECT
-     master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
+     master_append_table_to_shard(shardid, 'table_to_be_appended', '<host>', xxxxx)
  FROM
   pg_dist_shard
  WHERE
@@ -20,7 +20,7 @@ master_append_table_to_shard
 0.0426667
 step s2-master_append_table_to_shard:
     SELECT
-     master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
+     master_append_table_to_shard(shardid, 'table_to_be_appended', '<host>', xxxxx)
  FROM
   pg_dist_shard
  WHERE

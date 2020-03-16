@@ -5,7 +5,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -32,16 +32,16 @@ extname        extversion     nspname
 seg            1.1            public
 run_command_on_workers
 
-(localhost,57637,t,seg)
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57637,t,1.1)
-(localhost,57638,t,1.1)
+(<host>,xxxxx,t,1.1)
+(<host>,xxxxx,t,1.1)
 run_command_on_workers
 
-(localhost,57637,t,public)
-(localhost,57638,t,public)
+(<host>,xxxxx,t,public)
+(<host>,xxxxx,t,public)
 master_remove_node
 
 
@@ -52,7 +52,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -79,16 +79,16 @@ extname        extversion     nspname
 seg            1.2            public
 run_command_on_workers
 
-(localhost,57637,t,seg)
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57637,t,1.2)
-(localhost,57638,t,1.2)
+(<host>,xxxxx,t,1.2)
+(<host>,xxxxx,t,1.2)
 run_command_on_workers
 
-(localhost,57637,t,public)
-(localhost,57638,t,public)
+(<host>,xxxxx,t,public)
+(<host>,xxxxx,t,public)
 master_remove_node
 
 
@@ -96,7 +96,7 @@ master_remove_node
 
 starting permutation: s1-add-node-1 s1-begin s1-remove-node-1 s2-drop-extension s1-commit s1-print
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -105,7 +105,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -131,13 +131,13 @@ extname        extversion     nspname
 
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -147,7 +147,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -174,16 +174,16 @@ extname        extversion     nspname
 seg            1.3            schema1
 run_command_on_workers
 
-(localhost,57637,t,seg)
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57637,t,1.2)
-(localhost,57638,t,1.3)
+(<host>,xxxxx,t,1.2)
+(<host>,xxxxx,t,1.3)
 run_command_on_workers
 
-(localhost,57637,t,public)
-(localhost,57638,t,schema1)
+(<host>,xxxxx,t,public)
+(<host>,xxxxx,t,schema1)
 master_remove_node
 
 
@@ -194,7 +194,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -220,16 +220,16 @@ extname        extversion     nspname
 
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -237,7 +237,7 @@ master_remove_node
 
 starting permutation: s1-add-node-1 s1-create-extension-with-schema2 s1-begin s1-remove-node-1 s2-alter-extension-set-schema3 s1-commit s1-print
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -249,7 +249,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -276,20 +276,20 @@ extname        extversion     nspname
 seg            1.3            schema3
 run_command_on_workers
 
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57638,t,1.3)
+(<host>,xxxxx,t,1.3)
 run_command_on_workers
 
-(localhost,57638,t,schema3)
+(<host>,xxxxx,t,schema3)
 master_remove_node
 
 
 
 starting permutation: s1-add-node-1 s2-drop-extension s1-begin s1-remove-node-1 s2-create-extension-with-schema1 s1-commit s1-print
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -301,7 +301,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -328,20 +328,20 @@ extname        extversion     nspname
 seg            1.3            schema1
 run_command_on_workers
 
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57638,t,1.3)
+(<host>,xxxxx,t,1.3)
 run_command_on_workers
 
-(localhost,57638,t,schema1)
+(<host>,xxxxx,t,schema1)
 master_remove_node
 
 
 
 starting permutation: s2-add-node-1 s2-drop-extension s2-remove-node-1 s2-begin s2-create-extension-version-11 s1-add-node-1 s2-commit s1-print
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -350,7 +350,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s2-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -362,7 +362,7 @@ step s2-create-extension-version-11:
 	CREATE extension seg VERSION "1.1";
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -385,16 +385,16 @@ extname        extversion     nspname
 seg            1.1            public
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -405,7 +405,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -414,7 +414,7 @@ step s2-create-extension-version-11:
 	CREATE extension seg VERSION "1.1";
 
 step s2-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -426,7 +426,7 @@ step s2-alter-extension-update-to-version-12:
 	ALTER extension seg update to "1.2";
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -450,16 +450,16 @@ extname        extversion     nspname
 seg            1.2            public
 run_command_on_workers
 
-(localhost,57637,t,seg)
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57637,t,1.1)
-(localhost,57638,t,1.2)
+(<host>,xxxxx,t,1.1)
+(<host>,xxxxx,t,1.2)
 run_command_on_workers
 
-(localhost,57637,t,public)
-(localhost,57638,t,public)
+(<host>,xxxxx,t,public)
+(<host>,xxxxx,t,public)
 master_remove_node
 
 
@@ -467,7 +467,7 @@ master_remove_node
 
 starting permutation: s2-add-node-1 s2-begin s2-drop-extension s1-remove-node-1 s2-commit s1-print
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -479,7 +479,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -502,13 +502,13 @@ extname        extversion     nspname
 
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -521,7 +521,7 @@ step s2-create-extension-with-schema1:
 	CREATE extension seg with schema schema1;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -544,16 +544,16 @@ extname        extversion     nspname
 seg            1.3            schema1
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -564,7 +564,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -579,7 +579,7 @@ step s2-alter-extension-version-13:
 	ALTER extension seg update to "1.3";
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -603,13 +603,13 @@ extname        extversion     nspname
 seg            1.3            schema2
 run_command_on_workers
 
-(localhost,57638,t,seg)
+(<host>,xxxxx,t,seg)
 run_command_on_workers
 
-(localhost,57638,t,1.3)
+(<host>,xxxxx,t,1.3)
 run_command_on_workers
 
-(localhost,57638,t,schema2)
+(<host>,xxxxx,t,schema2)
 master_remove_node
 
 
@@ -619,7 +619,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -631,7 +631,7 @@ step s2-create-extension-version-11:
 	CREATE extension seg VERSION "1.1";
 
 step s1-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -654,13 +654,13 @@ extname        extversion     nspname
 seg            1.1            public
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
 master_remove_node
 
 
@@ -670,7 +670,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s2-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -679,7 +679,7 @@ step s2-create-extension-version-11:
 	CREATE extension seg VERSION "1.1";
 
 step s2-remove-node-1:
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM master_remove_node('<host>', xxxxx);
 
 ?column?
 
@@ -691,7 +691,7 @@ step s2-drop-extension:
 	drop extension seg;
 
 step s1-add-node-1:
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -714,16 +714,16 @@ extname        extversion     nspname
 
 run_command_on_workers
 
-(localhost,57637,t,seg)
-(localhost,57638,t,"")
+(<host>,xxxxx,t,seg)
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,1.3)
-(localhost,57638,t,"")
+(<host>,xxxxx,t,1.3)
+(<host>,xxxxx,t,"")
 run_command_on_workers
 
-(localhost,57637,t,schema2)
-(localhost,57638,t,"")
+(<host>,xxxxx,t,schema2)
+(<host>,xxxxx,t,"")
 master_remove_node
 
 

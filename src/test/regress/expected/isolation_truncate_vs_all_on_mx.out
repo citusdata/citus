@@ -2,7 +2,7 @@ Parsed test spec with 3 sessions
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-truncate s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -20,7 +20,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -74,7 +74,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -92,7 +92,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -146,7 +146,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -164,7 +164,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -218,7 +218,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -236,7 +236,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -290,7 +290,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -308,7 +308,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -368,7 +368,7 @@ step s1-alter:
 	ALTER TABLE truncate_table DROP value;
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -413,7 +413,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -431,7 +431,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 

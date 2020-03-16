@@ -367,8 +367,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-router-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -391,8 +391,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -413,8 +413,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -436,8 +436,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-router-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -460,8 +460,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -483,8 +483,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -693,8 +693,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-router-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -717,8 +717,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -740,8 +740,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -764,8 +764,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -787,8 +787,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-router-select s1-commit s1-select-count
 create_distributed_table
@@ -1028,8 +1028,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-real-time-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -1056,8 +1056,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -1082,8 +1082,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1109,8 +1109,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-real-time-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1137,8 +1137,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1164,8 +1164,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -1370,8 +1370,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-real-time-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -1398,8 +1398,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1425,8 +1425,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1453,8 +1453,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1480,8 +1480,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-real-time-select s1-commit s1-select-count
 create_distributed_table
@@ -1718,8 +1718,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-task-tracker-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -1749,8 +1749,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -1778,8 +1778,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1808,8 +1808,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-task-tracker-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1839,8 +1839,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -1869,8 +1869,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -2105,8 +2105,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(<host>,xxxxx,t,1)
+(<host>,xxxxx,t,1)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-task-tracker-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -2136,8 +2136,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -2166,8 +2166,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -2197,8 +2197,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -2227,8 +2227,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-task-tracker-select s1-commit s1-select-count
 create_distributed_table

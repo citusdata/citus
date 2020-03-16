@@ -119,8 +119,8 @@ count
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index-on-inserted s1-begin s1-insert-select s2-ddl-drop-index-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
@@ -145,8 +145,8 @@ count
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
@@ -170,8 +170,8 @@ count
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-add-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
@@ -195,8 +195,8 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column-on-inserted s1-begin s1-insert-select s2-ddl-drop-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
@@ -221,8 +221,8 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-rename-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted s1-show-columns-inserted
 create_distributed_table
@@ -246,13 +246,13 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-table-size-on-inserted s1-commit s1-select-count
 create_distributed_table
@@ -440,8 +440,8 @@ count
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index-on-selected s1-begin s1-insert-select s2-ddl-drop-index-on-selected s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
@@ -466,8 +466,8 @@ count
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-selected s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
@@ -491,8 +491,8 @@ count
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-add-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -516,8 +516,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column-on-selected s1-begin s1-insert-select s2-ddl-drop-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -542,8 +542,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-rename-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -567,8 +567,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-table-size-on-selected s1-commit s1-select-count
 create_distributed_table
@@ -759,8 +759,8 @@ count
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index-on-inserted s1-begin s1-ddl-drop-index-on-inserted s2-insert-select s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
@@ -785,8 +785,8 @@ count
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
@@ -810,8 +810,8 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column-on-inserted s1-begin s1-ddl-drop-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
@@ -836,8 +836,8 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
@@ -861,8 +861,8 @@ count
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
@@ -1052,8 +1052,8 @@ count
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index-on-selected s1-begin s1-ddl-drop-index-on-selected s2-insert-select s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
@@ -1078,8 +1078,8 @@ count
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -1104,8 +1104,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column-on-selected s1-begin s1-ddl-drop-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -1130,8 +1130,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
@@ -1155,8 +1155,8 @@ count
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table

@@ -177,8 +177,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-copy s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -198,8 +198,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -218,8 +218,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-begin s1-copy s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -238,8 +238,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-copy-additional-column s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -259,8 +259,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-copy s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -279,8 +279,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-copy s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -611,8 +611,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-copy s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -632,8 +632,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-copy s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -653,8 +653,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-copy s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -674,8 +674,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-copy s1-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -694,8 +694,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-copy s1-commit s1-select-count
 create_distributed_table

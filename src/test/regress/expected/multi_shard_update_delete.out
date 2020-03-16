@@ -185,7 +185,7 @@ SELECT master_create_empty_shard('test_append_table');
                    1440010
 (1 row)
 
-SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -197,7 +197,7 @@ SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
       1440011
 (1 row)
 
-SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -613,7 +613,7 @@ UPDATE users_test_table as utt
 SET    value_1 = 3
 WHERE value_2 > (SELECT value_3 FROM events_test_table as ett WHERE utt.user_id = ett.user_id);
 ERROR:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- We can not pushdown a query if the target relation is reference table
 UPDATE users_reference_copy_table
 SET    value_2 = 5

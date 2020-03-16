@@ -5,8 +5,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE USER functionuser;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 CREATE SCHEMA function_tests AUTHORIZATION functionuser;
@@ -24,7 +24,7 @@ CREATE FUNCTION eq8(macaddr8, macaddr8) RETURNS bool
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
--- $function$ is what postgres escapes functions with when deparsing
+-- $function$ is what <user> escapes functions with when deparsing
 -- make sure $function$ doesn't cause invalid syntax
 CREATE FUNCTION add_text(text, text) RETURNS text
     AS 'select $function$test$function$ || $1::int || $2::int;'
@@ -97,7 +97,7 @@ CREATE AGGREGATE sum2(int) (
     minitcond = '1',
     sortop = ">"
 );
--- Test VARIADIC, example taken from postgres test suite
+-- Test VARIADIC, example taken from <user> test suite
 CREATE AGGREGATE my_rank(VARIADIC "any" ORDER BY VARIADIC "any") (
     stype = internal,
     sfunc = ordered_set_transition_multi,
@@ -172,8 +172,8 @@ WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
 SELECT * FROM run_command_on_workers($$SELECT function_tests."eq_mi'xed_param_names"('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | f
- localhost |    57638 | t       | f
+ <host> |    xxxxx | t       | f
+ <host> |    xxxxx | t       | f
 (2 rows)
 
 -- make sure that none of the active and primary nodes hasmetadata
@@ -210,8 +210,8 @@ SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'strea
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                     result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
- localhost |    57638 | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
+ <host> |    xxxxx | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
+ <host> |    xxxxx | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
 (2 rows)
 
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
@@ -223,8 +223,8 @@ SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with :=
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | f
- localhost |    57638 | t       | f
+ <host> |    xxxxx | t       | f
+ <host> |    xxxxx | t       | f
 (2 rows)
 
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
@@ -366,15 +366,15 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq2(macaddr,mac
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012346789ab','012345689ab');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                               result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
- localhost |    57638 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq2('012345689ab','012345689ab');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | t
- localhost |    57638 | t       | t
+ <host> |    xxxxx | t       | t
+ <host> |    xxxxx | t       | t
 (2 rows)
 
 ALTER ROUTINE eq2(macaddr,macaddr) RENAME TO eq;
@@ -382,8 +382,8 @@ ALTER AGGREGATE sum2(int) RENAME TO sum27;
 SELECT * FROM run_command_on_workers($$SELECT 1 from pg_proc where proname = 'sum27';$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | 1
- localhost |    57638 | t       | 1
+ <host> |    xxxxx | t       | 1
+ <host> |    xxxxx | t       | 1
 (2 rows)
 
 ALTER AGGREGATE sum27(int) RENAME TO sum2;
@@ -407,8 +407,8 @@ WHERE proname IN ('eq', 'sum2', 'my_rank');
 $$);
                                                             run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"{""(functionuser,function_tests,eq)"",""(functionuser,function_tests,my_rank)"",""(functionuser,function_tests,sum2)""}")
- (localhost,57638,t,"{""(functionuser,function_tests,eq)"",""(functionuser,function_tests,my_rank)"",""(functionuser,function_tests,sum2)""}")
+ (<host>,xxxxx,t,"{""(functionuser,function_tests,eq)"",""(functionuser,function_tests,my_rank)"",""(functionuser,function_tests,sum2)""}")
+ (<host>,xxxxx,t,"{""(functionuser,function_tests,eq)"",""(functionuser,function_tests,my_rank)"",""(functionuser,function_tests,sum2)""}")
 (2 rows)
 
 -- change the schema of the function and verify the old schema doesn't exist anymore while
@@ -423,15 +423,15 @@ SELECT public.verify_function_is_same_on_workers('function_tests2.eq(macaddr,mac
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                               result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
- localhost |    57638 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers($$SELECT function_tests2.eq('012345689ab','ba9876543210');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | f
- localhost |    57638 | t       | f
+ <host> |    xxxxx | t       | f
+ <host> |    xxxxx | t       | f
 (2 rows)
 
 ALTER ROUTINE function_tests2.eq(macaddr,macaddr) SET SCHEMA function_tests;
@@ -451,8 +451,8 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,maca
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','012345689ab');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | f
- localhost |    57638 | t       | f
+ <host> |    xxxxx | t       | f
+ <host> |    xxxxx | t       | f
 (2 rows)
 
 -- distributed functions should not be allowed to depend on an extension, also functions
@@ -468,8 +468,8 @@ DROP FUNCTION eq(macaddr,macaddr);
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                               result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
- localhost |    57638 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
 (2 rows)
 
 -- Test DROP for ROUTINE
@@ -489,8 +489,8 @@ DROP ROUTINE eq(macaddr, macaddr);
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                               result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
- localhost |    57638 | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests.eq(unknown, unknown) does not exist
 (2 rows)
 
 DROP AGGREGATE function_tests2.sum2(int);
@@ -498,11 +498,11 @@ DROP AGGREGATE function_tests2.sum2(int);
 SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (select 1 id, 2) subq;') ORDER BY 1,2;
  nodename  | nodeport | success |                            result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  function function_tests2.sum2(integer) does not exist
- localhost |    57638 | f       | ERROR:  function function_tests2.sum2(integer) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests2.sum2(integer) does not exist
+ <host> |    xxxxx | f       | ERROR:  function function_tests2.sum2(integer) does not exist
 (2 rows)
 
--- postgres doesn't accept parameter names in the regprocedure input
+-- <user> doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('eq_with_param_names(val1 macaddr, macaddr)', 'val1');
 ERROR:  invalid type name "val1 macaddr"
 -- invalid distribution_arg_name
@@ -557,8 +557,8 @@ ROLLBACK;
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,0)
- (localhost,57638,t,0)
+ (<host>,xxxxx,t,0)
+ (<host>,xxxxx,t,0)
 (2 rows)
 
 -- make sure that none of the active and primary nodes hasmetadata
@@ -586,8 +586,8 @@ select bool_and(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'p
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,1)
- (localhost,57638,t,1)
+ (<host>,xxxxx,t,1)
+ (<host>,xxxxx,t,1)
 (2 rows)
 
 -- valid distribution with distribution_arg_name -- case insensitive
@@ -703,7 +703,7 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
 
 -- function with a macaddr8 dist. arg can be colocated with macaddr
 -- column of a distributed table. In general, if there is a coercion
--- path, we rely on postgres for implicit coersions, and users for explicit coersions
+-- path, we rely on <user> for implicit coersions, and users for explicit coersions
 -- to coerce the values
 SELECT create_distributed_function('eq8(macaddr8, macaddr8)', '$1', colocate_with:='replicated_table_func_test_4');
  create_distributed_function
@@ -837,7 +837,7 @@ DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser$$);
      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
 (2 rows)
 

@@ -35,14 +35,14 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410000 |          1 | localhost |    57637
- 1410000 |          1 | localhost |    57638
- 1410001 |          1 | localhost |    57637
- 1410001 |          1 | localhost |    57638
- 1410002 |          1 | localhost |    57637
- 1410002 |          1 | localhost |    57638
- 1410003 |          1 | localhost |    57637
- 1410003 |          1 | localhost |    57638
+ 1410000 |          1 | <host> |    xxxxx
+ 1410000 |          1 | <host> |    xxxxx
+ 1410001 |          1 | <host> |    xxxxx
+ 1410001 |          1 | <host> |    xxxxx
+ 1410002 |          1 | <host> |    xxxxx
+ 1410002 |          1 | <host> |    xxxxx
+ 1410003 |          1 | <host> |    xxxxx
+ 1410003 |          1 | <host> |    xxxxx
 (8 rows)
 
 -- verify table is not dropped
@@ -50,7 +50,7 @@ ORDER BY
                    List of relations
  Schema |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards | table | postgres
+ public | transactional_drop_shards | table | <user>
 (1 row)
 
 -- verify shards are not dropped
@@ -59,10 +59,10 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410000 | table | postgres
- public | transactional_drop_shards_1410001 | table | postgres
- public | transactional_drop_shards_1410002 | table | postgres
- public | transactional_drop_shards_1410003 | table | postgres
+ public | transactional_drop_shards_1410000 | table | <user>
+ public | transactional_drop_shards_1410001 | table | <user>
+ public | transactional_drop_shards_1410002 | table | <user>
+ public | transactional_drop_shards_1410003 | table | <user>
 (4 rows)
 
 \c - - - :master_port
@@ -143,8 +143,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410004 |          1 | localhost |    57637
- 1410004 |          1 | localhost |    57638
+ 1410004 |          1 | <host> |    xxxxx
+ 1410004 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify shards are not dropped
@@ -153,7 +153,7 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410004 | table | postgres
+ public | transactional_drop_shards_1410004 | table | <user>
 (1 row)
 
 \c - - - :master_port
@@ -221,8 +221,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410005 |          1 | localhost |    57637
- 1410005 |          1 | localhost |    57638
+ 1410005 |          1 | <host> |    xxxxx
+ 1410005 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify table is not dropped
@@ -230,7 +230,7 @@ ORDER BY
                    List of relations
  Schema |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards | table | postgres
+ public | transactional_drop_shards | table | <user>
 (1 row)
 
 -- verify shards are not dropped
@@ -239,7 +239,7 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410005 | table | postgres
+ public | transactional_drop_shards_1410005 | table | <user>
 (1 row)
 
 \c - - - :master_port
@@ -270,8 +270,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410005 |          1 | localhost |    57637
- 1410005 |          1 | localhost |    57638
+ 1410005 |          1 | <host> |    xxxxx
+ 1410005 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify shards are not dropped
@@ -280,7 +280,7 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410005 | table | postgres
+ public | transactional_drop_shards_1410005 | table | <user>
 (1 row)
 
 -- test DROP table with failing worker
@@ -312,8 +312,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410005 |          1 | localhost |    57637
- 1410005 |          1 | localhost |    57638
+ 1410005 |          1 | <host> |    xxxxx
+ 1410005 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify table is not dropped
@@ -321,7 +321,7 @@ ORDER BY
                    List of relations
  Schema |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards | table | postgres
+ public | transactional_drop_shards | table | <user>
 (1 row)
 
 -- verify shards are not dropped
@@ -330,7 +330,7 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410005 | table | postgres
+ public | transactional_drop_shards_1410005 | table | <user>
 (1 row)
 
 \c - - - :master_port
@@ -363,8 +363,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410006 |          1 | localhost |    57637
- 1410006 |          1 | localhost |    57638
+ 1410006 |          1 | <host> |    xxxxx
+ 1410006 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify table is not dropped
@@ -372,7 +372,7 @@ ORDER BY
                     List of relations
  Schema |             Name             | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_reference | table | postgres
+ public | transactional_drop_reference | table | <user>
 (1 row)
 
 -- verify shards are not dropped
@@ -381,7 +381,7 @@ ORDER BY
                         List of relations
  Schema |                 Name                 | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_reference_1410006 | table | postgres
+ public | transactional_drop_reference_1410006 | table | <user>
 (1 row)
 
 \c - - - :master_port
@@ -407,8 +407,8 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410005 |          1 | localhost |    57637
- 1410005 |          1 | localhost |    57638
+ 1410005 |          1 | <host> |    xxxxx
+ 1410005 |          1 | <host> |    xxxxx
 (2 rows)
 
 -- verify shards are not dropped
@@ -417,7 +417,7 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_shards_1410005 | table | postgres
+ public | transactional_drop_shards_1410005 | table | <user>
 (1 row)
 
 DROP EVENT TRIGGER fail_drop_table;
@@ -459,22 +459,22 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410007 |          1 | localhost |    57637
- 1410007 |          1 | localhost |    57638
- 1410008 |          1 | localhost |    57637
- 1410008 |          1 | localhost |    57638
- 1410009 |          1 | localhost |    57637
- 1410009 |          1 | localhost |    57638
- 1410010 |          1 | localhost |    57637
- 1410010 |          1 | localhost |    57638
- 1410011 |          1 | localhost |    57637
- 1410011 |          1 | localhost |    57638
- 1410012 |          1 | localhost |    57637
- 1410012 |          1 | localhost |    57638
- 1410013 |          1 | localhost |    57637
- 1410013 |          1 | localhost |    57638
- 1410014 |          1 | localhost |    57637
- 1410014 |          1 | localhost |    57638
+ 1410007 |          1 | <host> |    xxxxx
+ 1410007 |          1 | <host> |    xxxxx
+ 1410008 |          1 | <host> |    xxxxx
+ 1410008 |          1 | <host> |    xxxxx
+ 1410009 |          1 | <host> |    xxxxx
+ 1410009 |          1 | <host> |    xxxxx
+ 1410010 |          1 | <host> |    xxxxx
+ 1410010 |          1 | <host> |    xxxxx
+ 1410011 |          1 | <host> |    xxxxx
+ 1410011 |          1 | <host> |    xxxxx
+ 1410012 |          1 | <host> |    xxxxx
+ 1410012 |          1 | <host> |    xxxxx
+ 1410013 |          1 | <host> |    xxxxx
+ 1410013 |          1 | <host> |    xxxxx
+ 1410014 |          1 | <host> |    xxxxx
+ 1410014 |          1 | <host> |    xxxxx
 (16 rows)
 
 -- verify table is not dropped
@@ -482,7 +482,7 @@ ORDER BY
                    List of relations
  Schema |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_serial | table | postgres
+ public | transactional_drop_serial | table | <user>
 (1 row)
 
 -- verify shards and sequence are not dropped
@@ -491,14 +491,14 @@ ORDER BY
                        List of relations
  Schema |               Name                | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_serial_1410007 | table | postgres
- public | transactional_drop_serial_1410008 | table | postgres
- public | transactional_drop_serial_1410009 | table | postgres
- public | transactional_drop_serial_1410010 | table | postgres
- public | transactional_drop_serial_1410011 | table | postgres
- public | transactional_drop_serial_1410012 | table | postgres
- public | transactional_drop_serial_1410013 | table | postgres
- public | transactional_drop_serial_1410014 | table | postgres
+ public | transactional_drop_serial_1410007 | table | <user>
+ public | transactional_drop_serial_1410008 | table | <user>
+ public | transactional_drop_serial_1410009 | table | <user>
+ public | transactional_drop_serial_1410010 | table | <user>
+ public | transactional_drop_serial_1410011 | table | <user>
+ public | transactional_drop_serial_1410012 | table | <user>
+ public | transactional_drop_serial_1410013 | table | <user>
+ public | transactional_drop_serial_1410014 | table | <user>
 (8 rows)
 
 \ds transactional_drop_serial_column2_seq
@@ -564,7 +564,7 @@ SELECT create_distributed_table('transactional_drop_mx', 'column1');
 
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='transactional_drop_mx'::regclass;
 -- make worker 1 receive metadata changes
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -591,10 +591,10 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410015 |          1 | localhost |    57637
- 1410016 |          1 | localhost |    57638
- 1410017 |          1 | localhost |    57637
- 1410018 |          1 | localhost |    57638
+ 1410015 |          1 | <host> |    xxxxx
+ 1410016 |          1 | <host> |    xxxxx
+ 1410017 |          1 | <host> |    xxxxx
+ 1410018 |          1 | <host> |    xxxxx
 (4 rows)
 
 \c - - - :master_port
@@ -622,10 +622,10 @@ ORDER BY
     shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1410015 |          1 | localhost |    57637
- 1410016 |          1 | localhost |    57638
- 1410017 |          1 | localhost |    57637
- 1410018 |          1 | localhost |    57638
+ 1410015 |          1 | <host> |    xxxxx
+ 1410016 |          1 | <host> |    xxxxx
+ 1410017 |          1 | <host> |    xxxxx
+ 1410018 |          1 | <host> |    xxxxx
 (4 rows)
 
 -- test with MX, DROP TABLE, then COMMIT
@@ -654,8 +654,8 @@ ORDER BY
 
 \c - - - :master_port
 -- try using the coordinator as a worker and then dropping the table
-SELECT 1 FROM master_add_node('localhost', :master_port);
-NOTICE:  Replicating reference table "transactional_drop_reference" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :master_port);
+NOTICE:  Replicating reference table "transactional_drop_reference" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -670,7 +670,7 @@ SELECT create_distributed_table('citus_local', 'id');
 
 INSERT INTO citus_local (k) VALUES (2);
 DROP TABLE citus_local;
-SELECT master_remove_node('localhost', :master_port);
+SELECT master_remove_node('<host>', :master_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -678,7 +678,7 @@ SELECT master_remove_node('localhost', :master_port);
 
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -691,8 +691,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 GRANT ALL ON SCHEMA public TO try_drop_table;

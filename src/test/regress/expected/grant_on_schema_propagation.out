@@ -62,14 +62,14 @@ SELECT create_distributed_table('another_dist_schema.dist_table', 'id');
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema';
    nspname   |                                                 nspacl
 ---------------------------------------------------------------------
- dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U/postgres,role_3=U*C/role_1,=UC/role_1,=U/postgres}
+ dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U/<user>,role_3=U*C/role_1,=UC/role_1,=U/<user>}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema';
    nspname   |                                                 nspacl
 ---------------------------------------------------------------------
- dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U/postgres,role_3=U*C/role_1,=UC/role_1,=U/postgres}
+ dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U/<user>,role_3=U*C/role_1,=UC/role_1,=U/<user>}
 (1 row)
 
 \c - - - :master_port
@@ -78,17 +78,17 @@ GRANT ALL ON SCHEMA dist_schema, another_dist_schema, non_dist_schema TO role_1,
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                                                             nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/postgres,role_3=U*C*/postgres}
- dist_schema         | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/postgres,role_3=U*C/role_1,=UC/role_1,=U/postgres,role_3=U*C*/postgres}
- non_dist_schema     | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/postgres,role_3=U*C*/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/<user>,role_3=U*C*/<user>}
+ dist_schema         | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/<user>,role_3=U*C/role_1,=UC/role_1,=U/<user>,role_3=U*C*/<user>}
+ non_dist_schema     | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/<user>,role_3=U*C*/<user>}
 (3 rows)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                                                             nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/postgres,role_3=U*C*/postgres}
- dist_schema         | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/postgres,role_3=U*C/role_1,=UC/role_1,=U/postgres,role_3=U*C*/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/<user>,role_3=U*C*/<user>}
+ dist_schema         | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/<user>,role_3=U*C/role_1,=UC/role_1,=U/<user>,role_3=U*C*/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -97,17 +97,17 @@ REVOKE ALL ON SCHEMA dist_schema, another_dist_schema, non_dist_schema FROM role
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |         nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres}
- dist_schema         | {postgres=UC/postgres}
- non_dist_schema     | {postgres=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>}
+ dist_schema         | {<user>=UC/<user>}
+ non_dist_schema     | {<user>=UC/<user>}
 (3 rows)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |         nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres}
- dist_schema         | {postgres=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>}
+ dist_schema         | {<user>=UC/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -116,17 +116,17 @@ GRANT USAGE, CREATE ON SCHEMA dist_schema, another_dist_schema, non_dist_schema 
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                                     nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_1=UC/postgres,role_2=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_1=UC/postgres,role_2=UC/postgres,role_3=UC/postgres}
- non_dist_schema     | {postgres=UC/postgres,role_1=UC/postgres,role_2=UC/postgres,role_3=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_1=UC/<user>,role_2=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_1=UC/<user>,role_2=UC/<user>,role_3=UC/<user>}
+ non_dist_schema     | {<user>=UC/<user>,role_1=UC/<user>,role_2=UC/<user>,role_3=UC/<user>}
 (3 rows)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                                     nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_1=UC/postgres,role_2=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_1=UC/postgres,role_2=UC/postgres,role_3=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_1=UC/<user>,role_2=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_1=UC/<user>,role_2=UC/<user>,role_3=UC/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -135,17 +135,17 @@ REVOKE USAGE, CREATE ON SCHEMA dist_schema, another_dist_schema, non_dist_schema
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                  nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=UC/postgres}
- non_dist_schema     | {postgres=UC/postgres,role_3=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_3=UC/<user>}
+ non_dist_schema     | {<user>=UC/<user>,role_3=UC/<user>}
 (3 rows)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                  nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=UC/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_3=UC/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -155,8 +155,8 @@ GRANT USAGE ON SCHEMA dist_schema TO role_1, role_3 WITH GRANT OPTION;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                            nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=U*C/postgres,role_1=U*/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_3=U*C/<user>,role_1=U*/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -166,8 +166,8 @@ REVOKE GRANT OPTION FOR USAGE ON SCHEMA dist_schema FROM role_3;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                            nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=UC/postgres,role_1=U*/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_3=UC/<user>,role_1=U*/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -181,8 +181,8 @@ GRANT CREATE ON SCHEMA dist_schema TO CURRENT_USER;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
        nspname       |                            nspacl
 ---------------------------------------------------------------------
- another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=UC/postgres,role_1=U*C/postgres}
+ another_dist_schema | {<user>=UC/<user>,role_3=UC/<user>}
+ dist_schema         | {<user>=UC/<user>,role_3=UC/<user>,role_1=U*C/<user>}
 (2 rows)
 
 \c - - - :master_port
@@ -212,7 +212,7 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA non_dist_schema');
 -- test if the grantors are propagated correctly
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -243,19 +243,19 @@ SELECT create_distributed_table('grantor_schema.grantor_table', 'id');
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
 (1 row)
 
 \c - - - :master_port
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -265,14 +265,14 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
 (1 row)
 
 \c - - - :worker_2_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=U*C/role_1,role_3=UC/role_1,=UC/role_1,role_3=U/role_2}
 (1 row)
 
 \c - - - :master_port
@@ -282,14 +282,14 @@ REVOKE USAGE ON SCHEMA grantor_schema FROM role_1 CASCADE;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                             nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=C*/postgres,=C/postgres,role_2=C/role_1,role_3=C/role_1,=C/role_1}
+ grantor_schema | {<user>=UC/<user>,role_1=C*/<user>,=C/<user>,role_2=C/role_1,role_3=C/role_1,=C/role_1}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                             nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=C*/postgres,=C/postgres,role_2=C/role_1,role_3=C/role_1,=C/role_1}
+ grantor_schema | {<user>=UC/<user>,role_1=C*/<user>,=C/<user>,role_2=C/role_1,role_3=C/role_1,=C/role_1}
 (1 row)
 
 \c - - - :master_port
@@ -305,14 +305,14 @@ RESET ROLE;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=UC/role_1,role_3=U*C/role_1,=C/role_1,role_2=U/role_3}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=UC/role_1,role_3=U*C/role_1,=C/role_1,role_2=U/role_3}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
     nspname     |                                                        nspacl
 ---------------------------------------------------------------------
- grantor_schema | {postgres=UC/postgres,role_1=U*C*/postgres,=C/postgres,role_2=UC/role_1,role_3=U*C/role_1,=C/role_1,role_2=U/role_3}
+ grantor_schema | {<user>=UC/<user>,role_1=U*C*/<user>,=C/<user>,role_2=UC/role_1,role_3=U*C/role_1,=C/role_1,role_2=U/role_3}
 (1 row)
 
 \c - - - :master_port
@@ -338,14 +338,14 @@ SELECT create_distributed_table('dist_schema.dist_table', 'id');
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema' ORDER BY nspname;
    nspname   |                             nspacl
 ---------------------------------------------------------------------
- dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/role_1}
+ dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/role_1}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema' ORDER BY nspname;
    nspname   |                             nspacl
 ---------------------------------------------------------------------
- dist_schema | {postgres=UC/postgres,role_1=U*C*/postgres,role_2=U*C*/role_1}
+ dist_schema | {<user>=UC/<user>,role_1=U*C*/<user>,role_2=U*C*/role_1}
 (1 row)
 
 \c - - - :master_port
@@ -359,7 +359,7 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE')
 -- test grants on public schema
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -382,19 +382,19 @@ RESET ROLE;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |                               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {<user>=UC/<user>,=UC/<user>,role_1=U*C*/<user>,=U/role_1}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |                               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {<user>=UC/<user>,=UC/<user>,role_1=U*C*/<user>,=U/role_1}
 (1 row)
 
 \c - - - :master_port
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -404,14 +404,14 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |                               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {<user>=UC/<user>,=UC/<user>,role_1=U*C*/<user>,=U/role_1}
 (1 row)
 
 \c - - - :worker_2_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |                               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {<user>=UC/<user>,=UC/<user>,role_1=U*C*/<user>,=U/role_1}
 (1 row)
 
 \c - - - :master_port
@@ -421,14 +421,14 @@ REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM role_1 CASCADE;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres}
+ public  | {<user>=UC/<user>,=UC/<user>}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
  nspname |               nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres}
+ public  | {<user>=UC/<user>,=UC/<user>}
 (1 row)
 
 \c - - - :master_port

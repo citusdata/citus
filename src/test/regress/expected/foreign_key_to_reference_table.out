@@ -454,7 +454,7 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFER
 INSERT INTO referencing_table VALUES(1, 1);
 ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "fkey_ref_xxxxxxx"
 DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- test insert to referencing while there is corresponding value in referenced table
 INSERT INTO referenced_table SELECT x, x from generate_series(1,1000) as f(x);
 INSERT INTO referencing_table SELECT x, x from generate_series(1,500) as f(x);
@@ -463,7 +463,7 @@ INSERT INTO referencing_table SELECT x, x from generate_series(1,500) as f(x);
 DELETE FROM referenced_table WHERE id > 3;
 ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "fkey_ref_xxxxxxx" on table "referencing_table_xxxxxxx"
 DETAIL:  Key (id)=(X) is still referenced from table "referencing_table_xxxxxxx".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referenced_table WHERE id = 501;
 -- test cascading truncate
@@ -1570,7 +1570,7 @@ INSERT INTO test_table_2 VALUES (4,2147483648);
 -- should fail since there is a bigint out of integer range > (2^32 - 1)
 ALTER TABLE test_table_2 ALTER COLUMN value_1 SET DATA TYPE int;
 ERROR:  integer out of range
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
 ---------------------------------------------------------------------
@@ -1816,7 +1816,7 @@ ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1)
 INSERT INTO referencing_table VALUES (0, 5);
 ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (id)=(X) is not present in table "referencing_table_0_xxxxxxx".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- should succeed on partitioning_test_0
 INSERT INTO referencing_table VALUES (0, 1);
 SELECT * FROM referencing_table;
@@ -1829,7 +1829,7 @@ SELECT * FROM referencing_table;
 INSERT INTO referencing_table VALUES (0, 5);
 ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_to_ref_7000540"
 DETAIL:  Key (value_1)=(5) is not present in table "referenced_table_xxxxxxx".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO referenced_table VALUES(5,5);
 -- should succeed since both of the foreign constraints are positive
 INSERT INTO referencing_table VALUES (0, 5);

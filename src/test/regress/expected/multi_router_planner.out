@@ -1732,7 +1732,7 @@ SELECT * FROM articles_range where author_id = 1;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE (author_id OPERATOR(pg_catalog.=) 1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 2
+DETAIL:  on server <user>@<host>:xxxxx connectionId: 2
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1741,7 +1741,7 @@ SELECT * FROM articles_range where author_id = 1 or author_id = 5;
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 NOTICE:  issuing SELECT id, author_id, title, word_count FROM public.articles_range_840012 articles_range WHERE ((author_id OPERATOR(pg_catalog.=) 1) OR (author_id OPERATOR(pg_catalog.=) 5))
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 2
+DETAIL:  on server <user>@<host>:xxxxx connectionId: 2
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1761,7 +1761,7 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 NOTICE:  issuing SELECT ar.id, ar.author_id, ar.title, ar.word_count, au.name, au.id FROM (public.articles_range_840012 ar JOIN public.authors_range_840008 au ON ((ar.author_id OPERATOR(pg_catalog.=) au.id))) WHERE (ar.author_id OPERATOR(pg_catalog.=) 1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: 2
+DETAIL:  on server <user>@<host>:xxxxx connectionId: 2
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -2411,7 +2411,7 @@ GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 -- we will fail to connect to worker 2, since the user does not exist
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
@@ -2421,15 +2421,15 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	ORDER BY placementid;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-  840017 |          1 | localhost |    57637
-  840017 |          3 | localhost |    57638
-  840018 |          1 | localhost |    57638
-  840018 |          1 | localhost |    57637
+  840017 |          1 | <host> |    xxxxx
+  840017 |          3 | <host> |    xxxxx
+  840018 |          1 | <host> |    xxxxx
+  840018 |          1 | <host> |    xxxxx
 (4 rows)
 
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
@@ -2439,13 +2439,13 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	ORDER BY placementid;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-  840017 |          1 | localhost |    57637
-  840017 |          1 | localhost |    57638
-  840018 |          3 | localhost |    57638
-  840018 |          1 | localhost |    57637
+  840017 |          1 | <host> |    xxxxx
+  840017 |          1 | <host> |    xxxxx
+  840018 |          3 | <host> |    xxxxx
+  840018 |          1 | <host> |    xxxxx
 (4 rows)
 
-\c - postgres - :worker_1_port
+\c - <user> - :worker_1_port
 DROP OWNED BY router_user;
 DROP USER router_user;
 \c - - - :master_port

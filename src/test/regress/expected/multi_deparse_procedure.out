@@ -60,8 +60,8 @@ ALTER PROCEDURE  raise_info CALLED ON NULL INPUT
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -69,8 +69,8 @@ ALTER PROCEDURE raise_info RETURNS NULL ON NULL INPUT
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -78,8 +78,8 @@ ALTER PROCEDURE raise_info STRICT
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -87,8 +87,8 @@ ALTER PROCEDURE raise_info IMMUTABLE
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -96,8 +96,8 @@ ALTER PROCEDURE raise_info STABLE
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -105,8 +105,8 @@ ALTER PROCEDURE raise_info VOLATILE
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -114,8 +114,8 @@ ALTER PROCEDURE raise_info LEAKPROOF
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -123,8 +123,8 @@ ALTER PROCEDURE raise_info NOT LEAKPROOF
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -132,8 +132,8 @@ ALTER  PROCEDURE raise_info EXTERNAL SECURITY INVOKER
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -141,8 +141,8 @@ ALTER PROCEDURE raise_info SECURITY INVOKER
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -150,8 +150,8 @@ ALTER  PROCEDURE raise_info EXTERNAL SECURITY DEFINER
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -159,8 +159,8 @@ ALTER PROCEDURE raise_info SECURITY DEFINER
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -168,8 +168,8 @@ ALTER PROCEDURE raise_info PARALLEL UNSAFE
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -177,8 +177,8 @@ ALTER PROCEDURE raise_info PARALLEL RESTRICTED
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -186,8 +186,8 @@ ALTER PROCEDURE raise_info PARALLEL SAFE
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 -- The COST/ROWS arguments should always be numeric
@@ -196,8 +196,8 @@ ALTER PROCEDURE raise_info COST 1234
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -205,8 +205,8 @@ ALTER  PROCEDURE raise_info COST 1234.5
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -214,8 +214,8 @@ ALTER PROCEDURE raise_info ROWS 10
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -223,8 +223,8 @@ ALTER  PROCEDURE raise_info ROWS 10.8
 $cmd$);
                        deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  invalid attribute in procedure definition")
- (localhost,57638,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
+ (<host>,xxxxx,f,"ERROR:  invalid attribute in procedure definition")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -232,8 +232,8 @@ ALTER  PROCEDURE raise_info SECURITY INVOKER SET client_min_messages TO warning;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -241,8 +241,8 @@ ALTER PROCEDURE  raise_info SET log_min_messages = ERROR
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -250,8 +250,8 @@ ALTER PROCEDURE  raise_info SET log_min_messages TO DEFAULT
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -259,8 +259,8 @@ ALTER PROCEDURE  raise_info SET log_min_messages FROM CURRENT
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -268,8 +268,8 @@ ALTER PROCEDURE raise_info RESET log_min_messages
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -277,8 +277,8 @@ ALTER PROCEDURE raise_info RESET ALL
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 -- rename and rename back to keep the nodes in sync
@@ -287,8 +287,8 @@ ALTER PROCEDURE raise_info RENAME TO summation;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 ALTER PROCEDURE raise_info RENAME TO summation;
@@ -297,8 +297,8 @@ ALTER PROCEDURE summation RENAME TO raise_info;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 ALTER PROCEDURE summation RENAME TO raise_info;
@@ -308,8 +308,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE ROLE procedure_role;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -317,8 +317,8 @@ ALTER PROCEDURE raise_info OWNER TO procedure_role
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -326,8 +326,8 @@ ALTER PROCEDURE raise_info OWNER TO missing_role
 $cmd$);
                      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  role ""missing_role"" does not exist")
- (localhost,57638,f,"ERROR:  role ""missing_role"" does not exist")
+ (<host>,xxxxx,f,"ERROR:  role ""missing_role"" does not exist")
+ (<host>,xxxxx,f,"ERROR:  role ""missing_role"" does not exist")
 (2 rows)
 
 -- move schema and back to keep the nodes in sync
@@ -336,8 +336,8 @@ ALTER PROCEDURE raise_info SET SCHEMA public;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 ALTER PROCEDURE raise_info SET SCHEMA public;
@@ -346,8 +346,8 @@ ALTER PROCEDURE public.raise_info SET SCHEMA procedure_tests;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 ALTER PROCEDURE public.raise_info SET SCHEMA procedure_tests;
@@ -356,8 +356,8 @@ ALTER PROCEDURE raise_info DEPENDS ON EXTENSION citus
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER PROCEDURE")
- (localhost,57638,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
+ (<host>,xxxxx,t,"ALTER PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -365,8 +365,8 @@ DROP PROCEDURE raise_info(text);
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP PROCEDURE")
- (localhost,57638,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
 (2 rows)
 
 -- Check that an invalid PROCEDURE name is still parsed correctly
@@ -375,8 +375,8 @@ DROP PROCEDURE IF EXISTS missing_PROCEDURE(int, text);
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP PROCEDURE")
- (localhost,57638,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -384,8 +384,8 @@ DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float);
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP PROCEDURE")
- (localhost,57638,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -393,8 +393,8 @@ DROP PROCEDURE IF EXISTS missing_schema.missing_PROCEDURE(int,float) CASCADE;
 $cmd$);
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP PROCEDURE")
- (localhost,57638,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
+ (<host>,xxxxx,t,"DROP PROCEDURE")
 (2 rows)
 
 -- clear objects
@@ -404,7 +404,7 @@ DROP ROLE procedure_role;
 SELECT run_command_on_workers($$DROP ROLE procedure_role;$$);
      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
 (2 rows)
 

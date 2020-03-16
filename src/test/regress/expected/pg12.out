@@ -257,7 +257,7 @@ CREATE TABLE collection_users
 	(used_id integer, collection_id integer, key bigint);
 ALTER TABLE collection_users
     ADD CONSTRAINT collection_users_fkey FOREIGN KEY (key, collection_id) REFERENCES collections_list (key, collection_id);
--- sanity check for postgres
+-- sanity check for <user>
 INSERT INTO collections_list VALUES (1, 0, '1.1');
 INSERT INTO collection_users VALUES (1, 0, 1);
 -- should fail because of fkey
@@ -282,7 +282,7 @@ NOTICE:  Copying data from local table...
 INSERT INTO collection_users VALUES (1, 1000, 1);
 ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
 DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');
 INSERT INTO collection_users VALUES (5, 1, 2);

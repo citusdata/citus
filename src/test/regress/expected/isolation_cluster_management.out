@@ -2,8 +2,8 @@ Parsed test spec with 1 sessions
 
 starting permutation: s1a
 step s1a:
-    SELECT 1 FROM master_add_node('localhost', 57637);
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('<host>', xxxxx);
+    SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 

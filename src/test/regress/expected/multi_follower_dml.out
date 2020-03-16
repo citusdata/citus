@@ -96,7 +96,7 @@ HINT:  Consider using CREATE TEMPORARY TABLE tmp AS SELECT ... and inserting fro
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
 ERROR:  cannot execute CREATE TABLE AS in a read-only transaction
-\c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
+\c "port=9070 dbname=<db> options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 -- separate follower formations currently cannot do writes
 SET citus.writable_standby_coordinator TO on;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 3);

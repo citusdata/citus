@@ -40,8 +40,8 @@ SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE 
 SELECT run_command_on_workers($$SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'xact_enum_type.xact_enum_edit'::regtype;$$);
     run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"yes,no")
- (localhost,57638,t,"yes,no")
+ (<host>,xxxxx,t,"yes,no")
+ (<host>,xxxxx,t,"yes,no")
 (2 rows)
 
 BEGIN;
@@ -57,8 +57,8 @@ SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE 
 SELECT run_command_on_workers($$SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'xact_enum_type.xact_enum_edit'::regtype;$$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"yes,no,maybe")
- (localhost,57638,t,"yes,no,maybe")
+ (<host>,xxxxx,t,"yes,no,maybe")
+ (<host>,xxxxx,t,"yes,no,maybe")
 (2 rows)
 
 -- clear objects
@@ -67,7 +67,7 @@ DROP SCHEMA xact_enum_type CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA xact_enum_type CASCADE;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 

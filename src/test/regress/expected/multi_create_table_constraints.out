@@ -102,7 +102,7 @@ INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
 ERROR:  duplicate key value violates unique constraint "uq_two_columns_partition_col_other_col_key_365008"
 DETAIL:  Key (partition_col, other_col)=(1, 1) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_on_part_col
 (
 	partition_col integer,
@@ -119,7 +119,7 @@ INSERT INTO ex_on_part_col (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_part_col (partition_col, other_col) VALUES (1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_partition_col_excl_365012"
 DETAIL:  Key (partition_col)=(1) conflicts with existing key (partition_col)=(1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_on_two_columns
 (
 	partition_col integer,
@@ -136,7 +136,7 @@ INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_partition_col_other_col_excl_365016"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_on_two_columns_prt
 (
 	partition_col integer,
@@ -155,7 +155,7 @@ INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
 INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_prt_partition_col_other_col_excl_365020"
 DETAIL:  Key (partition_col, other_col)=(1, 101) conflicts with existing key (partition_col, other_col)=(1, 101).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_wrong_operator
 (
 	partition_col tsrange,
@@ -181,7 +181,7 @@ INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
 ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_other_col_partition_col_excl_365027"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- now show that Citus can distribute unique and EXCLUDE constraints that
 -- include the partition column, for hash-partitioned tables.
 -- However, EXCLUDE constraints must include the partition column with
@@ -225,7 +225,7 @@ INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
 ERROR:  duplicate key value violates unique constraint "uq_two_columns_named_uniq_365036"
 DETAIL:  Key (partition_col, other_col)=(1, 1) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_on_part_col_named
 (
 	partition_col integer,
@@ -242,7 +242,7 @@ INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_named_exclude_365040"
 DETAIL:  Key (partition_col)=(1) conflicts with existing key (partition_col)=(1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_on_two_columns_named
 (
 	partition_col integer,
@@ -259,7 +259,7 @@ INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_named_exclude_365044"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_multiple_excludes
 (
 	partition_col integer,
@@ -278,11 +278,11 @@ INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VAL
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,1,2);
 ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl1_365048"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,2,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl2_365048"
 DETAIL:  Key (partition_col, other_other_col)=(1, 1) conflicts with existing key (partition_col, other_other_col)=(1, 1).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 CREATE TABLE ex_wrong_operator_named
 (
 	partition_col tsrange,
@@ -308,7 +308,7 @@ INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00
 INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
 ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_operator_named_exclude_365055"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- now show that Citus allows unique constraints on range-partitioned tables.
 CREATE TABLE uq_range_tables
 (

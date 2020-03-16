@@ -164,7 +164,7 @@ CREATE UNIQUE INDEX try_unique_append_index ON index_test_append(a);
 ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
 CREATE UNIQUE INDEX try_unique_append_index_a_b ON index_test_append(a,b);
 ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
--- Verify that we error out in case of postgres errors on supported statement
+-- Verify that we error out in case of <user> errors on supported statement
 -- types.
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 ERROR:  relation "lineitem_orderkey_index" already exists

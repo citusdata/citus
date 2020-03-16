@@ -634,7 +634,7 @@ SELECT * FROM master_get_table_ddl_events('unlogged_table');
                     master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE UNLOGGED TABLE public.unlogged_table (key text, value text)
- ALTER TABLE public.unlogged_table OWNER TO postgres
+ ALTER TABLE public.unlogged_table OWNER TO <user>
 (2 rows)
 
 \c - - - :worker_1_port
@@ -985,8 +985,8 @@ COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc3' LIMIT 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,i)
- (localhost,57638,t,i)
+ (<host>,xxxxx,t,i)
+ (<host>,xxxxx,t,i)
 (2 rows)
 
 BEGIN;
@@ -1010,8 +1010,8 @@ COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc4' LIMIT 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,i)
- (localhost,57638,t,i)
+ (<host>,xxxxx,t,i)
+ (<host>,xxxxx,t,i)
 (2 rows)
 
 SET search_path = 'public';
@@ -1035,8 +1035,8 @@ COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc5' LIMIT 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,f)
- (localhost,57638,t,f)
+ (<host>,xxxxx,t,f)
+ (<host>,xxxxx,t,f)
 (2 rows)
 
 BEGIN;
@@ -1060,8 +1060,8 @@ COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc6' LIMIT 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,i)
- (localhost,57638,t,i)
+ (<host>,xxxxx,t,i)
+ (<host>,xxxxx,t,i)
 (2 rows)
 
 BEGIN;
@@ -1084,8 +1084,8 @@ COMMIT;
 SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='public' LIMIT 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,i)
- (localhost,57638,t,i)
+ (<host>,xxxxx,t,i)
+ (<host>,xxxxx,t,i)
 (2 rows)
 
 DROP TABLE tt1;

@@ -405,7 +405,7 @@ SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
 WHERE  sp.shardid = s.shardid
-AND    sp.nodename = 'localhost'
+AND    sp.nodename = '<host>'
 AND    sp.nodeport = :worker_1_port
 AND    sp.shardstate = 1
 AND    s.logicalrelid = 'limit_orders'::regclass;

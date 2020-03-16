@@ -213,7 +213,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table
                Index Cond: (key = 1)
                Filter: (age = 20)
@@ -226,7 +226,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                Index Cond: (key = 1)
                Filter: (age = 20)
@@ -239,7 +239,7 @@ EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Delete on distributed_table_1470001 distributed_table
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table
                      Index Cond: (key = 1)
@@ -253,7 +253,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_ta
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                      Index Cond: (key = 1)
@@ -1550,7 +1550,7 @@ SELECT create_distributed_function('register_for_event(int,int,invite_resp)', 'p
 
 (1 row)
 
--- call 7 times to make sure it works after the 5th time(postgres binds values after the 5th time)
+-- call 7 times to make sure it works after the 5th time(<user> binds values after the 5th time)
 -- after 6th, the local execution caches the local plans and uses it
 -- execute it both locally and remotely
 CALL register_for_event(16, 1, 'yes');

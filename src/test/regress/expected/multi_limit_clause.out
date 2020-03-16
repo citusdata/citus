@@ -351,7 +351,7 @@ DEBUG:  push down of limit count: 5
 
 -- Don't push down limit when there is const expression in distinct on
 -- even if there is a group by on the expression
--- This is due to fact that postgres removes (1+1) from distinct on
+-- This is due to fact that <user> removes (1+1) from distinct on
 -- clause but keeps it in group by list.
 SELECT
 	DISTINCT ON (l_linenumber, 1+1, l_linenumber) l_orderkey, l_linenumber

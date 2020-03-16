@@ -5,7 +5,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -23,7 +23,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -74,7 +74,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -92,7 +92,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -149,7 +149,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -167,7 +167,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -217,7 +217,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -235,7 +235,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -286,7 +286,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -304,7 +304,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -361,7 +361,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -379,7 +379,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -427,7 +427,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -445,7 +445,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -496,7 +496,7 @@ create_reference_table
 
 
 step s1-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57637);
+        SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 

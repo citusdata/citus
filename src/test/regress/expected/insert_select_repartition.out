@@ -567,7 +567,7 @@ EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  HashAggregate  (cost=43.90..45.90 rows=200 width=8)
                      Group Key: a
                      ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..32.60 rows=2260 width=8)
@@ -747,7 +747,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table;
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Seq Scan on source_table_4213613 source_table
 (8 rows)
 
@@ -760,7 +760,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT * FROM source_table WHERE b 
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Seq Scan on source_table_4213613 source_table
                      Filter: (b IS NOT NULL)
 (9 rows)
@@ -791,14 +791,14 @@ SELECT * FROM target_table ORDER BY b;
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | 4213617 | t       | 1
- localhost |    57638 | 4213617 | t       | 1
- localhost |    57637 | 4213618 | t       | 2
- localhost |    57638 | 4213618 | t       | 2
- localhost |    57637 | 4213619 | t       | 3
- localhost |    57638 | 4213619 | t       | 3
- localhost |    57637 | 4213620 | t       | 4
- localhost |    57638 | 4213620 | t       | 4
+ <host> |    xxxxx | 4213617 | t       | 1
+ <host> |    xxxxx | 4213617 | t       | 1
+ <host> |    xxxxx | 4213618 | t       | 2
+ <host> |    xxxxx | 4213618 | t       | 2
+ <host> |    xxxxx | 4213619 | t       | 3
+ <host> |    xxxxx | 4213619 | t       | 3
+ <host> |    xxxxx | 4213620 | t       | 4
+ <host> |    xxxxx | 4213620 | t       | 4
 (8 rows)
 
 --
@@ -885,14 +885,14 @@ SELECT * FROM target_table ORDER BY a;
 SELECT * FROM run_command_on_placements('target_table', 'select count(*) from %s') ORDER BY shardid, nodeport;
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | 4213625 | t       | 2
- localhost |    57638 | 4213625 | t       | 2
- localhost |    57637 | 4213626 | t       | 3
- localhost |    57638 | 4213626 | t       | 3
- localhost |    57637 | 4213627 | t       | 3
- localhost |    57638 | 4213627 | t       | 3
- localhost |    57637 | 4213628 | t       | 2
- localhost |    57638 | 4213628 | t       | 2
+ <host> |    xxxxx | 4213625 | t       | 2
+ <host> |    xxxxx | 4213625 | t       | 2
+ <host> |    xxxxx | 4213626 | t       | 3
+ <host> |    xxxxx | 4213626 | t       | 3
+ <host> |    xxxxx | 4213627 | t       | 3
+ <host> |    xxxxx | 4213627 | t       | 3
+ <host> |    xxxxx | 4213628 | t       | 2
+ <host> |    xxxxx | 4213628 | t       | 2
 (8 rows)
 
 DROP TABLE source_table, target_table;
@@ -947,7 +947,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Seq Scan on source_table_4213629 source_table
 (8 rows)
 
@@ -973,7 +973,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a AS aa, b AS aa, 1 AS aa, 2
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Seq Scan on source_table_4213629 source_table
 (8 rows)
 
@@ -1149,7 +1149,7 @@ DO UPDATE SET
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  HashAggregate
                      Group Key: c1, c2, c3, c4, '-1'::double precision, insert_select_repartition.dist_func(c1, 4)
                      ->  Seq Scan on source_table_4213644 source_table

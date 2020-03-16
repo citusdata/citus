@@ -219,7 +219,7 @@ SELECT create_distributed_table('small','tenant_id');
 \copy small FROM STDIN DELIMITER ','
 CREATE MATERIALIZED VIEW small_view AS SELECT * from small where id < 100;
 \copy large FROM STDIN DELIMITER ','
--- running any kind of modify statements "on" materialized views is not supported by postgres
+-- running any kind of modify statements "on" materialized views is not supported by <user>
 UPDATE small_view SET id = 1;
 ERROR:  cannot change materialized view "small_view"
 -- for now, using materialized views in modify statements' FROM / WHERE clauses is not supported

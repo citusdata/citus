@@ -37,7 +37,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -71,7 +71,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -104,7 +104,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -159,10 +159,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,value}")
+ (<host>,9060,100802,t,"{key,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- manually drop & re-create the table for the next tests
@@ -203,10 +203,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- the following tests rely the column not exists, so drop manually
@@ -223,15 +223,15 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
@@ -250,10 +250,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- now cancel just after the worker sends response to
@@ -289,9 +289,9 @@ SET LOCAL client_min_messages TO WARNING;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
@@ -332,10 +332,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- now, lets test with 2PC
@@ -349,7 +349,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -383,7 +383,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -416,7 +416,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -450,7 +450,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 ALTER TABLE test_table DROP COLUMN new_column;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -466,10 +466,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- we should be able to recover the transaction and
@@ -483,10 +483,10 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- cancelling on PREPARE should be fine, everything should be rollbacked
@@ -513,10 +513,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- we should be able to recover the transaction and
@@ -530,10 +530,10 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- killing on command complete of COMMIT PREPARE, we should see that the command succeeds
@@ -560,10 +560,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,value}")
- (localhost,57637,100803,t,"{key,value}")
+ (<host>,9060,100800,t,"{key,value}")
+ (<host>,9060,100802,t,"{key,value}")
+ (<host>,xxxxx,100801,t,"{key,value}")
+ (<host>,xxxxx,100803,t,"{key,value}")
 (4 rows)
 
 -- we shouldn't have any prepared transactions in the workers
@@ -576,10 +576,10 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,value}")
- (localhost,57637,100803,t,"{key,value}")
+ (<host>,9060,100800,t,"{key,value}")
+ (<host>,9060,100802,t,"{key,value}")
+ (<host>,xxxxx,100801,t,"{key,value}")
+ (<host>,xxxxx,100803,t,"{key,value}")
 (4 rows)
 
 -- kill as soon as the coordinator sends COMMIT
@@ -607,10 +607,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,value}")
+ (<host>,9060,100802,t,"{key,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- we should be able to recover the transaction and
@@ -624,10 +624,10 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- finally, test failing on ROLLBACK with 2PC
@@ -658,10 +658,10 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- but now kill just after the worker sends response to
@@ -692,10 +692,10 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,new_column,value}")
- (localhost,9060,100802,t,"{key,new_column,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
+ (<host>,9060,100800,t,"{key,new_column,value}")
+ (<host>,9060,100802,t,"{key,new_column,value}")
+ (<host>,xxxxx,100801,t,"{key,new_column,value}")
+ (<host>,xxxxx,100803,t,"{key,new_column,value}")
 (4 rows)
 
 -- another set of tests with 2PC and replication factor = 2
@@ -720,7 +720,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -754,7 +754,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -787,7 +787,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -821,7 +821,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -842,14 +842,14 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,value}")
- (localhost,9060,100805,t,"{key,value}")
- (localhost,9060,100806,t,"{key,value}")
- (localhost,9060,100807,t,"{key,value}")
- (localhost,57637,100804,t,"{key,value}")
- (localhost,57637,100805,t,"{key,value}")
- (localhost,57637,100806,t,"{key,value}")
- (localhost,57637,100807,t,"{key,value}")
+ (<host>,9060,100804,t,"{key,value}")
+ (<host>,9060,100805,t,"{key,value}")
+ (<host>,9060,100806,t,"{key,value}")
+ (<host>,9060,100807,t,"{key,value}")
+ (<host>,xxxxx,100804,t,"{key,value}")
+ (<host>,xxxxx,100805,t,"{key,value}")
+ (<host>,xxxxx,100806,t,"{key,value}")
+ (<host>,xxxxx,100807,t,"{key,value}")
 (8 rows)
 
 -- killing on command complete of COMMIT PREPARE, we should see that the command succeeds
@@ -876,14 +876,14 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,new_column,value}")
- (localhost,9060,100805,t,"{key,new_column,value}")
- (localhost,9060,100806,t,"{key,new_column,value}")
- (localhost,9060,100807,t,"{key,new_column,value}")
- (localhost,57637,100804,t,"{key,new_column,value}")
- (localhost,57637,100805,t,"{key,new_column,value}")
- (localhost,57637,100806,t,"{key,new_column,value}")
- (localhost,57637,100807,t,"{key,new_column,value}")
+ (<host>,9060,100804,t,"{key,new_column,value}")
+ (<host>,9060,100805,t,"{key,new_column,value}")
+ (<host>,9060,100806,t,"{key,new_column,value}")
+ (<host>,9060,100807,t,"{key,new_column,value}")
+ (<host>,xxxxx,100804,t,"{key,new_column,value}")
+ (<host>,xxxxx,100805,t,"{key,new_column,value}")
+ (<host>,xxxxx,100806,t,"{key,new_column,value}")
+ (<host>,xxxxx,100807,t,"{key,new_column,value}")
 (8 rows)
 
 -- we shouldn't have any prepared transactions in the workers
@@ -896,14 +896,14 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
               run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,new_column,value}")
- (localhost,9060,100805,t,"{key,new_column,value}")
- (localhost,9060,100806,t,"{key,new_column,value}")
- (localhost,9060,100807,t,"{key,new_column,value}")
- (localhost,57637,100804,t,"{key,new_column,value}")
- (localhost,57637,100805,t,"{key,new_column,value}")
- (localhost,57637,100806,t,"{key,new_column,value}")
- (localhost,57637,100807,t,"{key,new_column,value}")
+ (<host>,9060,100804,t,"{key,new_column,value}")
+ (<host>,9060,100805,t,"{key,new_column,value}")
+ (<host>,9060,100806,t,"{key,new_column,value}")
+ (<host>,9060,100807,t,"{key,new_column,value}")
+ (<host>,xxxxx,100804,t,"{key,new_column,value}")
+ (<host>,xxxxx,100805,t,"{key,new_column,value}")
+ (<host>,xxxxx,100806,t,"{key,new_column,value}")
+ (<host>,xxxxx,100807,t,"{key,new_column,value}")
 (8 rows)
 
 -- kill as soon as the coordinator sends COMMIT
@@ -931,14 +931,14 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
              run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,new_column,value}")
- (localhost,9060,100805,t,"{key,new_column,value}")
- (localhost,9060,100806,t,"{key,new_column,value}")
- (localhost,9060,100807,t,"{key,new_column,value}")
- (localhost,57637,100804,t,"{key,value}")
- (localhost,57637,100805,t,"{key,value}")
- (localhost,57637,100806,t,"{key,value}")
- (localhost,57637,100807,t,"{key,value}")
+ (<host>,9060,100804,t,"{key,new_column,value}")
+ (<host>,9060,100805,t,"{key,new_column,value}")
+ (<host>,9060,100806,t,"{key,new_column,value}")
+ (<host>,9060,100807,t,"{key,new_column,value}")
+ (<host>,xxxxx,100804,t,"{key,value}")
+ (<host>,xxxxx,100805,t,"{key,value}")
+ (<host>,xxxxx,100806,t,"{key,value}")
+ (<host>,xxxxx,100807,t,"{key,value}")
 (8 rows)
 
 -- we should be able to recover the transaction and
@@ -952,14 +952,14 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,value}")
- (localhost,9060,100805,t,"{key,value}")
- (localhost,9060,100806,t,"{key,value}")
- (localhost,9060,100807,t,"{key,value}")
- (localhost,57637,100804,t,"{key,value}")
- (localhost,57637,100805,t,"{key,value}")
- (localhost,57637,100806,t,"{key,value}")
- (localhost,57637,100807,t,"{key,value}")
+ (<host>,9060,100804,t,"{key,value}")
+ (<host>,9060,100805,t,"{key,value}")
+ (<host>,9060,100806,t,"{key,value}")
+ (<host>,9060,100807,t,"{key,value}")
+ (<host>,xxxxx,100804,t,"{key,value}")
+ (<host>,xxxxx,100805,t,"{key,value}")
+ (<host>,xxxxx,100806,t,"{key,value}")
+ (<host>,xxxxx,100807,t,"{key,value}")
 (8 rows)
 
 -- finally, test failing on ROLLBACK with 2PC
@@ -990,14 +990,14 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,value}")
- (localhost,9060,100805,t,"{key,value}")
- (localhost,9060,100806,t,"{key,value}")
- (localhost,9060,100807,t,"{key,value}")
- (localhost,57637,100804,t,"{key,value}")
- (localhost,57637,100805,t,"{key,value}")
- (localhost,57637,100806,t,"{key,value}")
- (localhost,57637,100807,t,"{key,value}")
+ (<host>,9060,100804,t,"{key,value}")
+ (<host>,9060,100805,t,"{key,value}")
+ (<host>,9060,100806,t,"{key,value}")
+ (<host>,9060,100807,t,"{key,value}")
+ (<host>,xxxxx,100804,t,"{key,value}")
+ (<host>,xxxxx,100805,t,"{key,value}")
+ (<host>,xxxxx,100806,t,"{key,value}")
+ (<host>,xxxxx,100807,t,"{key,value}")
 (8 rows)
 
 -- but now kill just after the worker sends response to
@@ -1028,14 +1028,14 @@ SELECT recover_prepared_transactions();
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
         run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,9060,100804,t,"{key,value}")
- (localhost,9060,100805,t,"{key,value}")
- (localhost,9060,100806,t,"{key,value}")
- (localhost,9060,100807,t,"{key,value}")
- (localhost,57637,100804,t,"{key,value}")
- (localhost,57637,100805,t,"{key,value}")
- (localhost,57637,100806,t,"{key,value}")
- (localhost,57637,100807,t,"{key,value}")
+ (<host>,9060,100804,t,"{key,value}")
+ (<host>,9060,100805,t,"{key,value}")
+ (<host>,9060,100806,t,"{key,value}")
+ (<host>,9060,100807,t,"{key,value}")
+ (<host>,xxxxx,100804,t,"{key,value}")
+ (<host>,xxxxx,100805,t,"{key,value}")
+ (<host>,xxxxx,100806,t,"{key,value}")
+ (<host>,xxxxx,100807,t,"{key,value}")
 (8 rows)
 
 -- now do some tests with sequential mode
@@ -1048,7 +1048,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -1081,7 +1081,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").kil
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -1093,7 +1093,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_apply_shard_ddl_command").aft
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

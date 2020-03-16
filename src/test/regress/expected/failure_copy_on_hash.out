@@ -36,7 +36,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -69,7 +69,7 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -124,7 +124,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 1").kill()');
 (1 row)
 
 \COPY test_table FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -179,7 +179,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
 
 \COPY test_table FROM stdin delimiter ',';
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -239,7 +239,7 @@ BEGIN;
 \COPY test_table FROM stdin delimiter ',';
 ROLLBACK;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -276,22 +276,22 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 1: "1,2"
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 2: "3,4"
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  COPY test_table_2, line 3: "6,7"
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -341,7 +341,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="FROM STDIN WITH").killall()');
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COPY test_table_2, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -386,7 +386,7 @@ SELECT citus.mitmproxy('conn.onCopyData().kill()');
 (1 row)
 
 \COPY test_table_2 FROM stdin delimiter ',';
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

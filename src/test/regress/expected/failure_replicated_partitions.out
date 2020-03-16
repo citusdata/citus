@@ -29,7 +29,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO partitioned_table VALUES (0, 0);
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

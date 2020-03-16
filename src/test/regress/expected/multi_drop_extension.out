@@ -19,13 +19,13 @@ DROP EXTENSION citus CASCADE;
 RESET client_min_messages;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_add_node('<host>', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

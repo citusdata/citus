@@ -22,14 +22,14 @@ INSERT INTO mci_1.test VALUES (1,2), (3,4);
 SELECT run_command_on_placements('mci_1.test', 'ALTER TABLE %s SET SCHEMA mci_2');
          run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,57637,1601000,t,"ALTER TABLE")
- (localhost,57638,1601000,t,"ALTER TABLE")
- (localhost,57637,1601001,t,"ALTER TABLE")
- (localhost,57638,1601001,t,"ALTER TABLE")
- (localhost,57637,1601002,t,"ALTER TABLE")
- (localhost,57638,1601002,t,"ALTER TABLE")
- (localhost,57637,1601003,t,"ALTER TABLE")
- (localhost,57638,1601003,t,"ALTER TABLE")
+ (<host>,xxxxx,1601000,t,"ALTER TABLE")
+ (<host>,xxxxx,1601000,t,"ALTER TABLE")
+ (<host>,xxxxx,1601001,t,"ALTER TABLE")
+ (<host>,xxxxx,1601001,t,"ALTER TABLE")
+ (<host>,xxxxx,1601002,t,"ALTER TABLE")
+ (<host>,xxxxx,1601002,t,"ALTER TABLE")
+ (<host>,xxxxx,1601003,t,"ALTER TABLE")
+ (<host>,xxxxx,1601003,t,"ALTER TABLE")
 (8 rows)
 
 UPDATE pg_dist_shard

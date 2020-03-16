@@ -6,11 +6,11 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE ROLE alter_role_1 WITH LOGIN;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
--- postgres errors out
+-- <user> errors out
 ALTER ROLE alter_role_1 WITH SUPERUSER NOSUPERUSER;
 ERROR:  conflicting or redundant options
 -- make sure that we propagate all options accurately
@@ -24,8 +24,8 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                    run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
- (localhost,57638,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
+ (<host>,xxxxx,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
+ (<host>,xxxxx,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
 (2 rows)
 
 -- make sure that we propagate all options accurately
@@ -39,8 +39,8 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                    run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
+ (<host>,xxxxx,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
+ (<host>,xxxxx,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
 (2 rows)
 
 -- make sure that non-existent users are handled properly
@@ -59,8 +59,8 @@ SELECT rolconnlimit FROM pg_authid WHERE rolname = CURRENT_USER;
 SELECT run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = CURRENT_USER;$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,123)
- (localhost,57638,t,123)
+ (<host>,xxxxx,t,123)
+ (<host>,xxxxx,t,123)
 (2 rows)
 
 -- make sure that SESSION_USER just works fine
@@ -74,8 +74,8 @@ SELECT rolconnlimit FROM pg_authid WHERE rolname = SESSION_USER;
 SELECT run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = SESSION_USER;$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,124)
- (localhost,57638,t,124)
+ (<host>,xxxxx,t,124)
+ (<host>,xxxxx,t,124)
 (2 rows)
 
 -- now lets test the passwords in more detail
@@ -89,8 +89,8 @@ SELECT rolpassword is NULL FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT rolpassword is NULL FROM pg_authid WHERE rolname = 'alter_role_1'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
+ (<host>,xxxxx,t,t)
+ (<host>,xxxxx,t,t)
 (2 rows)
 
 ALTER ROLE alter_role_1 WITH PASSWORD 'test1';
@@ -103,8 +103,8 @@ SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
- (localhost,57638,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
+ (<host>,xxxxx,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
+ (<host>,xxxxx,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
 (2 rows)
 
 ALTER ROLE  alter_role_1 WITH ENCRYPTED PASSWORD 'test2';
@@ -117,8 +117,8 @@ SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
- (localhost,57638,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
+ (<host>,xxxxx,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
+ (<host>,xxxxx,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
 (2 rows)
 
 ALTER ROLE  alter_role_1 WITH ENCRYPTED PASSWORD 'md59cce240038b7b335c6aa9674a6f13e72';
@@ -131,8 +131,8 @@ SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,md59cce240038b7b335c6aa9674a6f13e72)
- (localhost,57638,t,md59cce240038b7b335c6aa9674a6f13e72)
+ (<host>,xxxxx,t,md59cce240038b7b335c6aa9674a6f13e72)
+ (<host>,xxxxx,t,md59cce240038b7b335c6aa9674a6f13e72)
 (2 rows)
 
 -- edge case role names
@@ -142,8 +142,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE ROLE "alter_role'1" WITH LOGIN;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 ALTER ROLE "alter_role'1" CREATEROLE;
@@ -156,8 +156,8 @@ SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role''1';
 SELECT run_command_on_workers($$SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role''1'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
+ (<host>,xxxxx,t,t)
+ (<host>,xxxxx,t,t)
 (2 rows)
 
 CREATE ROLE "alter_role""1" WITH LOGIN;
@@ -166,8 +166,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE ROLE "alter_role""1" WITH LOGIN;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 ALTER ROLE "alter_role""1" CREATEROLE;
@@ -180,8 +180,8 @@ SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role"1';
 SELECT run_command_on_workers($$SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role"1'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
+ (<host>,xxxxx,t,t)
+ (<host>,xxxxx,t,t)
 (2 rows)
 
 -- add node
@@ -195,11 +195,11 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                                      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
- (localhost,57638,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
+ (<host>,xxxxx,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
+ (<host>,xxxxx,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
 (2 rows)
 
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT master_remove_node('<host>', :worker_1_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -215,10 +215,10 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                                     run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
+ (<host>,xxxxx,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_add_node('<host>', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -233,8 +233,8 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
                                     run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
+ (<host>,xxxxx,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
+ (<host>,xxxxx,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
 (2 rows)
 
 -- table belongs to a role

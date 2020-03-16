@@ -3,8 +3,8 @@ CREATE SCHEMA type_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
 (2 rows)
 
 -- create a type on a worker that should not cause data loss once overwritten with a type

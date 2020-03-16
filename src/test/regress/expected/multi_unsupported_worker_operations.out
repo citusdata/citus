@@ -46,7 +46,7 @@ ORDER BY logicalrelid;
  mx_table_2   | s        |       150000
 (2 rows)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -113,10 +113,10 @@ DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
 -- changing isdatanode
-SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', false);
+SELECT * from master_set_node_property('<host>', 8888, 'shouldhaveshards', false);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-SELECT * from master_set_node_property('localhost', 8888, 'shouldhaveshards', true);
+SELECT * from master_set_node_property('<host>', 8888, 'shouldhaveshards', true);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 -- DDL commands
@@ -167,10 +167,10 @@ SELECT count(*) FROM mx_table;
 (1 row)
 
 -- master_add_inactive_node
-SELECT 1 FROM master_add_inactive_node('localhost', 5432);
+SELECT 1 FROM master_add_inactive_node('<host>', 5432);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
+SELECT count(1) FROM pg_dist_node WHERE nodename='<host>' AND nodeport=5432;
  count
 ---------------------------------------------------------------------
      0
@@ -179,24 +179,24 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 -- master_remove_node
 \c - - - :master_port
 DROP INDEX mx_test_uniq_index;
-SELECT 1 FROM master_add_inactive_node('localhost', 5432);
+SELECT 1 FROM master_add_inactive_node('<host>', 5432);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 \c - - - :worker_1_port
-SELECT master_remove_node('localhost', 5432);
+SELECT master_remove_node('<host>', 5432);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
+SELECT count(1) FROM pg_dist_node WHERE nodename='<host>' AND nodeport=5432;
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', 5432);
+SELECT master_remove_node('<host>', 5432);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -221,7 +221,7 @@ UPDATE pg_dist_partition
 SET colocationid = :old_colocation_id
 WHERE logicalrelid='mx_table_2'::regclass;
 -- start_metadata_sync_to_node
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_2_port);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
@@ -232,14 +232,14 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- stop_metadata_sync_to_node
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_2_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 \c - - - :worker_1_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_2_port);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
@@ -249,7 +249,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  t
 (1 row)
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_2_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -305,7 +305,7 @@ LIMIT 1 \gset
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
 VALUES (:worker_2_group, :testshardid, 3, 0);
-SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(:testshardid, '<host>', :worker_1_port, '<host>', :worker_2_port);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT shardid, nodename, nodeport, shardstate
@@ -314,8 +314,8 @@ WHERE shardid = :testshardid
 ORDER BY nodeport;
  shardid | nodename  | nodeport | shardstate
 ---------------------------------------------------------------------
- 1270000 | localhost |    57637 |          1
- 1270000 | localhost |    57638 |          3
+ 1270000 | <host> |    xxxxx |          1
+ 1270000 | <host> |    xxxxx |          3
 (2 rows)
 
 DELETE FROM pg_dist_placement WHERE groupid = :worker_2_group AND shardid = :testshardid;
@@ -355,7 +355,7 @@ ROLLBACK;
 \c - - - :master_port
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

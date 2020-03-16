@@ -1426,14 +1426,14 @@ SELECT master_update_shard_statistics(:a_shard_id);
 (1 row)
 
 CREATE TABLE append_reference_tmp_table (id INT);
-SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
+SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', '<host>', :master_port);
 ERROR:  cannot append to shardId 1250019
 DETAIL:  We currently don't support appending to shards in hash-partitioned or reference tables
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
                                                                            master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE reference_schema.reference_table_ddl (value_2 double precision DEFAULT 25.0, value_3 text NOT NULL, value_4 timestamp without time zone, value_5 double precision)
- ALTER TABLE reference_schema.reference_table_ddl OWNER TO postgres
+ ALTER TABLE reference_schema.reference_table_ddl OWNER TO <user>
 (2 rows)
 
 -- in reality, we wouldn't need to repair any reference table shard placements
@@ -1441,7 +1441,7 @@ SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 SELECT placementid AS a_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_1_port \gset
 SELECT placementid AS b_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_2_port \gset
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placement_id;
-SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(:a_shard_id, '<host>', :worker_2_port, '<host>', :worker_1_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 

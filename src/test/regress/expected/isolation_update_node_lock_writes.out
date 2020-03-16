@@ -9,9 +9,9 @@ step s1-begin:
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
-        (select nodeid from pg_dist_node where nodeport = 57637),
-        'localhost',
-        57638);
+        (select nodeid from pg_dist_node where nodeport = xxxxx),
+        '<host>',
+        xxxxx);
 
 ?column?
 
@@ -49,9 +49,9 @@ step s2-insert:
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
-        (select nodeid from pg_dist_node where nodeport = 57637),
-        'localhost',
-        57638);
+        (select nodeid from pg_dist_node where nodeport = xxxxx),
+        '<host>',
+        xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;

@@ -94,7 +94,7 @@ SELECT pg_reload_conf();
 (1 row)
 
 -- Verifies pg_dist_node and pg_dist_palcement in the given worker matches the ones in coordinator
-CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
+CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT xxxxx)
     RETURNS BOOLEAN
     LANGUAGE sql
     AS $$
@@ -104,7 +104,7 @@ WITH dist_node_summary AS (
 ), dist_node_check AS (
     SELECT count(distinct result) = 1 AS matches
     FROM dist_node_summary CROSS JOIN LATERAL
-        master_run_on_worker(ARRAY[hostname, 'localhost'], ARRAY[port, master_port],
+        master_run_on_worker(ARRAY[hostname, '<host>'], ARRAY[port, master_port],
                             ARRAY[dist_node_summary.query, dist_node_summary.query],
                             false)
 ), dist_placement_summary AS (
@@ -112,7 +112,7 @@ WITH dist_node_summary AS (
 ), dist_placement_check AS (
     SELECT count(distinct result) = 1 AS matches
     FROM dist_placement_summary CROSS JOIN LATERAL
-        master_run_on_worker(ARRAY[hostname, 'localhost'], ARRAY[port, master_port],
+        master_run_on_worker(ARRAY[hostname, '<host>'], ARRAY[port, master_port],
                             ARRAY[dist_placement_summary.query, dist_placement_summary.query],
                             false)
 )

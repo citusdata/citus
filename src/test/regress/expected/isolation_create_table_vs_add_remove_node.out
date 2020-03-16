@@ -3,12 +3,12 @@ Parsed test spec with 2 sessions
 starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-begin:
 	BEGIN;
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -38,10 +38,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -55,12 +55,12 @@ master_remove_node
 starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-begin:
 	BEGIN;
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -90,10 +90,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -106,7 +106,7 @@ master_remove_node
 starting permutation: s2-begin s2-create-table-1 s1-add-node-2 s2-commit s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s2-begin:
 	BEGIN;
 
@@ -120,7 +120,7 @@ create_distributed_table
 
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -141,10 +141,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -158,9 +158,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -169,7 +169,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
 
 master_remove_node
 
@@ -199,10 +199,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -215,9 +215,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -226,7 +226,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
 
 master_remove_node
 
@@ -256,10 +256,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -273,9 +273,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s2-begin s2-create-table-1 s1-remove-node-2 s2-commit s1-show-placements s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -293,7 +293,7 @@ create_distributed_table
 
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -312,10 +312,10 @@ step s1-show-placements:
 
 nodename       nodeport
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
+<host>      xxxxx
 step s2-select:
 	SELECT * FROM dist_table;
 
@@ -329,9 +329,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-2 s1-commit s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -340,7 +340,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
 
 master_remove_node
 
@@ -367,9 +367,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s2-begin s2-create-table-2 s1-remove-node-2 s2-commit s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -387,7 +387,7 @@ create_distributed_table
 
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;
@@ -407,9 +407,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-append-table s1-commit s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -418,7 +418,7 @@ step s1-begin:
 	BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
 
 master_remove_node
 
@@ -451,9 +451,9 @@ master_remove_node
 starting permutation: s1-add-node-2 s2-begin s2-create-append-table s1-remove-node-2 s2-commit s2-select
 node_name      node_port
 
-localhost      57637
+<host>      xxxxx
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('<host>', xxxxx);
 
 ?column?
 
@@ -474,7 +474,7 @@ create_distributed_table
 
 1
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('<host>', xxxxx);
  <waiting ...>
 step s2-commit:
 	COMMIT;

@@ -19,26 +19,26 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300000 | table1_group1 |    57637 |         1000 |          1
- 1300000 | table1_group1 |    57638 |         1000 |          3
- 1300001 | table1_group1 |    57637 |         1000 |          1
- 1300001 | table1_group1 |    57638 |         1000 |          1
- 1300002 | table1_group1 |    57637 |         1000 |          1
- 1300002 | table1_group1 |    57638 |         1000 |          1
- 1300003 | table1_group1 |    57637 |         1000 |          1
- 1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57637 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          3
- 1300005 | table2_group1 |    57637 |         1000 |          1
- 1300005 | table2_group1 |    57638 |         1000 |          1
- 1300006 | table2_group1 |    57637 |         1000 |          1
- 1300006 | table2_group1 |    57638 |         1000 |          1
- 1300007 | table2_group1 |    57637 |         1000 |          1
- 1300007 | table2_group1 |    57638 |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          3
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          3
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
 (16 rows)
 
 -- repair colocated shards
-SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300000, '<host>', :worker_1_port, '<host>', :worker_2_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 
@@ -55,22 +55,22 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300000 | table1_group1 |    57637 |         1000 |          1
- 1300000 | table1_group1 |    57638 |         1000 |          1
- 1300001 | table1_group1 |    57637 |         1000 |          1
- 1300001 | table1_group1 |    57638 |         1000 |          1
- 1300002 | table1_group1 |    57637 |         1000 |          1
- 1300002 | table1_group1 |    57638 |         1000 |          1
- 1300003 | table1_group1 |    57637 |         1000 |          1
- 1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57637 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          3
- 1300005 | table2_group1 |    57637 |         1000 |          1
- 1300005 | table2_group1 |    57638 |         1000 |          1
- 1300006 | table2_group1 |    57637 |         1000 |          1
- 1300006 | table2_group1 |    57638 |         1000 |          1
- 1300007 | table2_group1 |    57637 |         1000 |          1
- 1300007 | table2_group1 |    57638 |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          1
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          3
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
 (16 rows)
 
 -- test repairing NOT colocated shard
@@ -85,18 +85,18 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300016 | table5_groupx |    57637 |            0 |          1
- 1300016 | table5_groupx |    57638 |            0 |          3
- 1300017 | table5_groupx |    57637 |            0 |          1
- 1300017 | table5_groupx |    57638 |            0 |          1
- 1300018 | table5_groupx |    57637 |            0 |          1
- 1300018 | table5_groupx |    57638 |            0 |          1
- 1300019 | table5_groupx |    57637 |            0 |          1
- 1300019 | table5_groupx |    57638 |            0 |          1
+ 1300016 | table5_groupx |    xxxxx |            0 |          1
+ 1300016 | table5_groupx |    xxxxx |            0 |          3
+ 1300017 | table5_groupx |    xxxxx |            0 |          1
+ 1300017 | table5_groupx |    xxxxx |            0 |          1
+ 1300018 | table5_groupx |    xxxxx |            0 |          1
+ 1300018 | table5_groupx |    xxxxx |            0 |          1
+ 1300019 | table5_groupx |    xxxxx |            0 |          1
+ 1300019 | table5_groupx |    xxxxx |            0 |          1
 (8 rows)
 
 -- repair NOT colocated shard
-SELECT master_copy_shard_placement(1300016, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300016, '<host>', :worker_1_port, '<host>', :worker_2_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 
@@ -113,14 +113,14 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300016 | table5_groupx |    57637 |            0 |          1
- 1300016 | table5_groupx |    57638 |            0 |          1
- 1300017 | table5_groupx |    57637 |            0 |          1
- 1300017 | table5_groupx |    57638 |            0 |          1
- 1300018 | table5_groupx |    57637 |            0 |          1
- 1300018 | table5_groupx |    57638 |            0 |          1
- 1300019 | table5_groupx |    57637 |            0 |          1
- 1300019 | table5_groupx |    57638 |            0 |          1
+ 1300016 | table5_groupx |    xxxxx |            0 |          1
+ 1300016 | table5_groupx |    xxxxx |            0 |          1
+ 1300017 | table5_groupx |    xxxxx |            0 |          1
+ 1300017 | table5_groupx |    xxxxx |            0 |          1
+ 1300018 | table5_groupx |    xxxxx |            0 |          1
+ 1300018 | table5_groupx |    xxxxx |            0 |          1
+ 1300019 | table5_groupx |    xxxxx |            0 |          1
+ 1300019 | table5_groupx |    xxxxx |            0 |          1
 (8 rows)
 
 -- test repairing shard in append distributed table
@@ -135,14 +135,14 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300020 | table6_append |    57637 |            0 |          1
- 1300020 | table6_append |    57638 |            0 |          3
- 1300021 | table6_append |    57637 |            0 |          1
- 1300021 | table6_append |    57638 |            0 |          1
+ 1300020 | table6_append |    xxxxx |            0 |          1
+ 1300020 | table6_append |    xxxxx |            0 |          3
+ 1300021 | table6_append |    xxxxx |            0 |          1
+ 1300021 | table6_append |    xxxxx |            0 |          1
 (4 rows)
 
 -- repair  shard in append distributed table
-SELECT master_copy_shard_placement(1300020, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300020, '<host>', :worker_1_port, '<host>', :worker_2_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 
@@ -159,10 +159,10 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300020 | table6_append |    57637 |            0 |          1
- 1300020 | table6_append |    57638 |            0 |          1
- 1300021 | table6_append |    57637 |            0 |          1
- 1300021 | table6_append |    57638 |            0 |          1
+ 1300020 | table6_append |    xxxxx |            0 |          1
+ 1300020 | table6_append |    xxxxx |            0 |          1
+ 1300021 | table6_append |    xxxxx |            0 |          1
+ 1300021 | table6_append |    xxxxx |            0 |          1
 (4 rows)
 
 -- test repair while all placements of one shard in colocation group is unhealthy
@@ -179,26 +179,26 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300000 | table1_group1 |    57637 |         1000 |          3
- 1300000 | table1_group1 |    57638 |         1000 |          3
- 1300001 | table1_group1 |    57637 |         1000 |          1
- 1300001 | table1_group1 |    57638 |         1000 |          1
- 1300002 | table1_group1 |    57637 |         1000 |          1
- 1300002 | table1_group1 |    57638 |         1000 |          1
- 1300003 | table1_group1 |    57637 |         1000 |          1
- 1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57637 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          3
- 1300005 | table2_group1 |    57637 |         1000 |          1
- 1300005 | table2_group1 |    57638 |         1000 |          1
- 1300006 | table2_group1 |    57637 |         1000 |          1
- 1300006 | table2_group1 |    57638 |         1000 |          1
- 1300007 | table2_group1 |    57637 |         1000 |          1
- 1300007 | table2_group1 |    57638 |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          3
+ 1300000 | table1_group1 |    xxxxx |         1000 |          3
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          3
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
 (16 rows)
 
 -- repair while all placements of one shard in colocation group is unhealthy
-SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_copy_shard_placement(1300000, '<host>', :worker_1_port, '<host>', :worker_2_port);
 ERROR:  source placement must be in active state
 -- status after shard repair
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport, p.colocationid, sp.shardstate
@@ -211,21 +211,21 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid | logicalrelid  | nodeport | colocationid | shardstate
 ---------------------------------------------------------------------
- 1300000 | table1_group1 |    57637 |         1000 |          3
- 1300000 | table1_group1 |    57638 |         1000 |          3
- 1300001 | table1_group1 |    57637 |         1000 |          1
- 1300001 | table1_group1 |    57638 |         1000 |          1
- 1300002 | table1_group1 |    57637 |         1000 |          1
- 1300002 | table1_group1 |    57638 |         1000 |          1
- 1300003 | table1_group1 |    57637 |         1000 |          1
- 1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57637 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          3
- 1300005 | table2_group1 |    57637 |         1000 |          1
- 1300005 | table2_group1 |    57638 |         1000 |          1
- 1300006 | table2_group1 |    57637 |         1000 |          1
- 1300006 | table2_group1 |    57638 |         1000 |          1
- 1300007 | table2_group1 |    57637 |         1000 |          1
- 1300007 | table2_group1 |    57638 |         1000 |          1
+ 1300000 | table1_group1 |    xxxxx |         1000 |          3
+ 1300000 | table1_group1 |    xxxxx |         1000 |          3
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300001 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300002 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300003 | table1_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          1
+ 1300004 | table2_group1 |    xxxxx |         1000 |          3
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300005 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300006 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
+ 1300007 | table2_group1 |    xxxxx |         1000 |          1
 (16 rows)
 

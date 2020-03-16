@@ -33,7 +33,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -96,7 +96,7 @@ BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -154,7 +154,7 @@ DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -208,7 +208,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").kill()');
 -- error message that is caused during commit.
 -- we'll test for the txn side-effects to ensure it didn't run
 SELECT master_run_on_worker(
-    ARRAY['localhost']::text[],
+    ARRAY['<host>']::text[],
     ARRAY[:master_port]::int[],
     ARRAY['
 BEGIN;
@@ -223,7 +223,7 @@ COMMIT;
 );
    master_run_on_worker
 ---------------------------------------------------------------------
- (localhost,57636,t,BEGIN)
+ (<host>,xxxxx,t,BEGIN)
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');
@@ -392,10 +392,10 @@ UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 --- should see all changes, but they only went to one placement (other is unhealthy)
 SELECT * FROM dml_test ORDER BY id ASC;
  id |  name
@@ -444,7 +444,7 @@ UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 --- shouldn't see any changes after failed COMMIT
 SELECT * FROM dml_test ORDER BY id ASC;
  id | name

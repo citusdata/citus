@@ -398,8 +398,8 @@ CREATE USER rls_user;
 SELECT run_command_on_workers('CREATE USER rls_user');
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user;
@@ -407,15 +407,15 @@ GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user;
 SELECT run_command_on_workers('GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user');
   run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,GRANT)
- (localhost,57638,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
 (2 rows)
 
 SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user');
   run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,GRANT)
- (localhost,57638,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
 (2 rows)
 
 -- create trigger on one worker to reject access if GUC not

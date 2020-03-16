@@ -322,7 +322,7 @@ NOTICE:  truncate cascades to table "target_table"
 	FROM source_table_1 ON CONFLICT (col_1) DO UPDATE SET col_2 = 55 RETURNING *;
 ERROR:  insert or update on table "target_table_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (col_1)=(X) is not present in table "test_ref_table_xxxxxxx".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ROLLBACK;
 BEGIN;
 	DELETE FROM test_ref_table WHERE key > 10;

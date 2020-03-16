@@ -91,7 +91,7 @@ SELECT master_get_table_ddl_events('date_partitioned_table');
                                     master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.date_partitioned_table (id integer, "time" date) PARTITION BY RANGE ("time")
- ALTER TABLE public.date_partitioned_table OWNER TO postgres
+ ALTER TABLE public.date_partitioned_table OWNER TO <user>
 (2 rows)
 
 -- now create the partitions
@@ -173,7 +173,7 @@ SELECT master_get_table_ddl_events('date_partition_2007_100');
                       master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.date_partition_2007_100 (id integer, "time" date)
- ALTER TABLE public.date_partition_2007_100 OWNER TO postgres
+ ALTER TABLE public.date_partition_2007_100 OWNER TO <user>
 (2 rows)
 
 -- now break the partitioning hierarcy
@@ -318,7 +318,7 @@ SELECT master_get_table_ddl_events('multi_column_partitioned');
                                                              master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.multi_column_partitioned (a integer, b integer, c text) PARTITION BY RANGE (a, (((a + b) + 1)), public.some_function(upper(c)))
- ALTER TABLE public.multi_column_partitioned OWNER TO postgres
+ ALTER TABLE public.multi_column_partitioned OWNER TO <user>
 (2 rows)
 
 SELECT drop_and_recreate_partitioned_table('multi_column_partitioned');
@@ -360,7 +360,7 @@ SELECT master_get_table_ddl_events('list_partitioned');
                                                master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE public.list_partitioned (col1 numeric, col2 numeric, col3 character varying(10)) PARTITION BY LIST (col1)
- ALTER TABLE public.list_partitioned OWNER TO postgres
+ ALTER TABLE public.list_partitioned OWNER TO <user>
 (2 rows)
 
 SELECT drop_and_recreate_partitioned_table('list_partitioned');

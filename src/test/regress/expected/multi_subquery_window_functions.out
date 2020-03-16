@@ -721,7 +721,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Limit
                            Output: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
                            ->  Sort

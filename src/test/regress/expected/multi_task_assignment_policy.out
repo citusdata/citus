@@ -70,9 +70,9 @@ SET client_min_messages TO DEBUG3;
 SET citus.task_assignment_policy TO 'greedy';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -82,9 +82,9 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -96,9 +96,9 @@ DEBUG:  assigned task to node localhost:xxxxx
 SET citus.task_assignment_policy TO 'first-replica';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -108,9 +108,9 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
+DEBUG:  assigned task to node <host>:xxxxx
                               QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)

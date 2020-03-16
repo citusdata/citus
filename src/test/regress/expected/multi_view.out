@@ -757,7 +757,7 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  HashAggregate
                            Group Key: users_table.user_id
                            ->  Nested Loop
@@ -787,7 +787,7 @@ EXPLAIN (COSTS FALSE) SELECT *
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Unique
                      ->  Sort
                            Sort Key: recent_users.user_id
@@ -821,7 +821,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                                        Task Count: 4
                                        Tasks Shown: One of 4
                                        ->  Task
-                                             Node: host=localhost port=xxxxx dbname=regression
+                                             Node: host=<host> port=xxxxx dbname=<db>
                                              ->  Limit
                                                    ->  Sort
                                                          Sort Key: (max("time")) DESC
@@ -831,7 +831,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Limit
                            ->  Sort
                                  Sort Key: et."time" DESC
@@ -853,7 +853,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Limit
                            ->  Sort
                                  Sort Key: et."time" DESC

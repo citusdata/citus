@@ -63,19 +63,19 @@ CREATE TABLE distributed_result_info AS
 SELECT * FROM distributed_result_info ORDER BY resultId;
         resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------
- test_from_4213581_to_0 |    57637 |       33 |       4213584 |                0
- test_from_4213582_to_0 |    57638 |       16 |       4213584 |                0
- test_from_4213582_to_1 |    57638 |       15 |       4213585 |                1
- test_from_4213583_to_1 |    57637 |       36 |       4213585 |                1
+ test_from_4213581_to_0 |    xxxxx |       33 |       4213584 |                0
+ test_from_4213582_to_0 |    xxxxx |       16 |       4213584 |                0
+ test_from_4213582_to_1 |    xxxxx |       15 |       4213585 |                1
+ test_from_4213583_to_1 |    xxxxx |       36 |       4213585 |                1
 (4 rows)
 
 -- fetch from workers
-SELECT nodeport, fetch_intermediate_results((array_agg(resultId)), 'localhost', nodeport) > 0 AS fetched
+SELECT nodeport, fetch_intermediate_results((array_agg(resultId)), '<host>', nodeport) > 0 AS fetched
   FROM distributed_result_info GROUP BY nodeport ORDER BY nodeport;
  nodeport | fetched
 ---------------------------------------------------------------------
-    57637 | t
-    57638 | t
+    xxxxx | t
+    xxxxx | t
 (2 rows)
 
 -- read all fetched result files
@@ -169,31 +169,31 @@ CREATE TABLE distributed_result_info AS
 SELECT * FROM distributed_result_info ORDER BY resultId;
         resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------
- test_from_4213588_to_0 |    57638 |        7 |       4213592 |                0
- test_from_4213588_to_1 |    57638 |        6 |       4213593 |                1
- test_from_4213588_to_2 |    57638 |        7 |       4213594 |                2
- test_from_4213588_to_3 |    57638 |        4 |       4213595 |                3
- test_from_4213589_to_0 |    57637 |        7 |       4213592 |                0
- test_from_4213589_to_1 |    57637 |        6 |       4213593 |                1
- test_from_4213589_to_2 |    57637 |        8 |       4213594 |                2
- test_from_4213589_to_3 |    57637 |        4 |       4213595 |                3
- test_from_4213590_to_0 |    57638 |        8 |       4213592 |                0
- test_from_4213590_to_1 |    57638 |        6 |       4213593 |                1
- test_from_4213590_to_2 |    57638 |        8 |       4213594 |                2
- test_from_4213590_to_3 |    57638 |        4 |       4213595 |                3
- test_from_4213591_to_0 |    57637 |        8 |       4213592 |                0
- test_from_4213591_to_1 |    57637 |        6 |       4213593 |                1
- test_from_4213591_to_2 |    57637 |        7 |       4213594 |                2
- test_from_4213591_to_3 |    57637 |        4 |       4213595 |                3
+ test_from_4213588_to_0 |    xxxxx |        7 |       4213592 |                0
+ test_from_4213588_to_1 |    xxxxx |        6 |       4213593 |                1
+ test_from_4213588_to_2 |    xxxxx |        7 |       4213594 |                2
+ test_from_4213588_to_3 |    xxxxx |        4 |       4213595 |                3
+ test_from_4213589_to_0 |    xxxxx |        7 |       4213592 |                0
+ test_from_4213589_to_1 |    xxxxx |        6 |       4213593 |                1
+ test_from_4213589_to_2 |    xxxxx |        8 |       4213594 |                2
+ test_from_4213589_to_3 |    xxxxx |        4 |       4213595 |                3
+ test_from_4213590_to_0 |    xxxxx |        8 |       4213592 |                0
+ test_from_4213590_to_1 |    xxxxx |        6 |       4213593 |                1
+ test_from_4213590_to_2 |    xxxxx |        8 |       4213594 |                2
+ test_from_4213590_to_3 |    xxxxx |        4 |       4213595 |                3
+ test_from_4213591_to_0 |    xxxxx |        8 |       4213592 |                0
+ test_from_4213591_to_1 |    xxxxx |        6 |       4213593 |                1
+ test_from_4213591_to_2 |    xxxxx |        7 |       4213594 |                2
+ test_from_4213591_to_3 |    xxxxx |        4 |       4213595 |                3
 (16 rows)
 
 -- fetch from workers
-SELECT nodeport, fetch_intermediate_results((array_agg(resultId)), 'localhost', nodeport) > 0 AS fetched
+SELECT nodeport, fetch_intermediate_results((array_agg(resultId)), '<host>', nodeport) > 0 AS fetched
   FROM distributed_result_info GROUP BY nodeport ORDER BY nodeport;
  nodeport | fetched
 ---------------------------------------------------------------------
-    57637 | t
-    57638 | t
+    xxxxx | t
+    xxxxx | t
 (2 rows)
 
 -- Read all fetched result files. Sum(x) should be 4550, verified by

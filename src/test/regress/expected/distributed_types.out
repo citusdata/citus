@@ -5,8 +5,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE USER typeuser;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 CREATE SCHEMA type_tests AUTHORIZATION typeuser;
@@ -110,8 +110,8 @@ SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE 
 SELECT run_command_on_workers($$SELECT string_agg(enumlabel, ',' ORDER BY enumsortorder ASC) FROM pg_enum WHERE enumtypid = 'type_tests.te2'::regtype;$$);
     run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"yes,no")
- (localhost,57638,t,"yes,no")
+ (<host>,xxxxx,t,"yes,no")
+ (<host>,xxxxx,t,"yes,no")
 (2 rows)
 
 -- test some combination of types without ddl propagation, this will prevent the workers
@@ -160,8 +160,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'te4' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te4' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(te4,typeuser)")
- (localhost,57638,t,"(te4,typeuser)")
+ (<host>,xxxxx,t,"(te4,typeuser)")
+ (<host>,xxxxx,t,"(te4,typeuser)")
 (2 rows)
 
 ALTER TYPE tc6 OWNER TO typeuser;
@@ -174,8 +174,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'tc6' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc6' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(tc6,typeuser)")
- (localhost,57638,t,"(tc6,typeuser)")
+ (<host>,xxxxx,t,"(tc6,typeuser)")
+ (<host>,xxxxx,t,"(tc6,typeuser)")
 (2 rows)
 
 -- create a type as a different user
@@ -206,8 +206,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'tc7' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc7' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(tc7,typeuser)")
- (localhost,57638,t,"(tc7,typeuser)")
+ (<host>,xxxxx,t,"(tc7,typeuser)")
+ (<host>,xxxxx,t,"(tc7,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;
@@ -219,8 +219,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'te5' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te5' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(te5,typeuser)")
- (localhost,57638,t,"(te5,typeuser)")
+ (<host>,xxxxx,t,"(te5,typeuser)")
+ (<host>,xxxxx,t,"(te5,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;
@@ -232,8 +232,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'tc8' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'tc8' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(tc8,typeuser)")
- (localhost,57638,t,"(tc8,typeuser)")
+ (<host>,xxxxx,t,"(tc8,typeuser)")
+ (<host>,xxxxx,t,"(tc8,typeuser)")
 (2 rows)
 
 SELECT typname, usename FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;
@@ -245,8 +245,8 @@ SELECT typname, usename FROM pg_type, pg_user where typname = 'te6' and typowner
 SELECT run_command_on_workers($$SELECT row(typname, usename) FROM pg_type, pg_user where typname = 'te6' and typowner = usesysid;$$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(te6,typeuser)")
- (localhost,57638,t,"(te6,typeuser)")
+ (<host>,xxxxx,t,"(te6,typeuser)")
+ (<host>,xxxxx,t,"(te6,typeuser)")
 (2 rows)
 
 -- deleting the enum cascade will remove the type from the table and the workers
@@ -264,8 +264,8 @@ SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') 
 SELECT run_command_on_workers($$SELECT typname FROM pg_type, pg_user where typname IN ('te3','tc3','tc4','tc5') and typowner = usesysid ORDER BY typname;$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
+ (<host>,xxxxx,t,"")
+ (<host>,xxxxx,t,"")
 (2 rows)
 
 -- make sure attribute names are quoted correctly, no errors indicates types are propagated correctly
@@ -338,8 +338,8 @@ SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'f
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,0)
- (localhost,57638,t,0)
+ (<host>,xxxxx,t,0)
+ (<host>,xxxxx,t,0)
 (2 rows)
 
 -- verify they are still distributed when required
@@ -359,8 +359,8 @@ SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'f
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('feature_flag_composite_type', 'feature_flag_enum_type');$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,2)
- (localhost,57638,t,2)
+ (<host>,xxxxx,t,2)
+ (<host>,xxxxx,t,2)
 (2 rows)
 
 RESET citus.enable_create_type_propagation;
@@ -370,23 +370,23 @@ DROP SCHEMA type_tests CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 
 DROP SCHEMA type_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 
 DROP USER typeuser;
 SELECT run_command_on_workers($$DROP USER typeuser;$$);
      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
 (2 rows)
 

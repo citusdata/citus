@@ -390,22 +390,22 @@ VACUUM dustbunnies, second_dustbunnies;
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
+ (<host>,xxxxx,t,"")
+ (<host>,xxxxx,t,"")
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,4)
- (localhost,57638,t,4)
+ (<host>,xxxxx,t,4)
+ (<host>,xxxxx,t,4)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,3)
- (localhost,57638,t,3)
+ (<host>,xxxxx,t,3)
+ (<host>,xxxxx,t,3)
 (2 rows)
 
 -- and warning when using targeted VACUUM without DDL propagation
@@ -421,22 +421,22 @@ SET citus.enable_ddl_propagation to DEFAULT;
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
+ (<host>,xxxxx,t,"")
+ (<host>,xxxxx,t,"")
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,4)
- (localhost,57638,t,4)
+ (<host>,xxxxx,t,4)
+ (<host>,xxxxx,t,4)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,3)
- (localhost,57638,t,3)
+ (<host>,xxxxx,t,3)
+ (<host>,xxxxx,t,3)
 (2 rows)
 
 -- test worker_hash

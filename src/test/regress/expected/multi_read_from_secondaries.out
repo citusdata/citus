@@ -1,12 +1,12 @@
 SET citus.next_shard_id TO 1600000;
-\c "dbname=regression options='-c\ citus.use_secondary_nodes=always'"
+\c "dbname=<db> options='-c\ citus.use_secondary_nodes=always'"
 CREATE TABLE dest_table (a int, b int);
 CREATE TABLE source_table (a int, b int);
 -- attempts to change metadata should fail while reading from secondaries
 SELECT create_distributed_table('dest_table', 'a');
 ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
-\c "dbname=regression options='-c\ citus.use_secondary_nodes=never'"
+\c "dbname=<db> options='-c\ citus.use_secondary_nodes=never'"
 SELECT create_distributed_table('dest_table', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -26,12 +26,12 @@ INSERT INTO source_table (a, b) VALUES (10, 10);
 SELECT nodeid, groupid, nodename, nodeport, noderack, isactive, noderole, nodecluster FROM pg_dist_node;
  nodeid | groupid | nodename  | nodeport | noderack | isactive | noderole | nodecluster
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t        | primary  | default
-      2 |       2 | localhost |    57638 | default  | t        | primary  | default
+      1 |       1 | <host> |    xxxxx | default  | t        | primary  | default
+      2 |       2 | <host> |    xxxxx | default  | t        | primary  | default
 (2 rows)
 
 UPDATE pg_dist_node SET noderole = 'secondary';
-\c "dbname=regression options='-c\ citus.use_secondary_nodes=always'"
+\c "dbname=<db> options='-c\ citus.use_secondary_nodes=always'"
 -- inserts are disallowed
 INSERT INTO dest_table (a, b) VALUES (1, 2);
 ERROR:  writing to worker nodes is not currently allowed
@@ -81,6 +81,6 @@ INSERT INTO dest_table (a, b)
   SELECT a, b FROM source_table;
 ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
-\c "dbname=regression options='-c\ citus.use_secondary_nodes=never'"
+\c "dbname=<db> options='-c\ citus.use_secondary_nodes=never'"
 UPDATE pg_dist_node SET noderole = 'primary';
 DROP TABLE dest_table;

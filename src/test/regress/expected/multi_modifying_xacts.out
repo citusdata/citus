@@ -153,7 +153,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
 DETAIL:  Key (lab_id, name)=(6, Leslie Lamport) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ABORT;
 -- SELECTs may occur after a modification: First check that selecting
 -- from the modified node works.
@@ -171,7 +171,7 @@ BEGIN;
 UPDATE pg_dist_shard_placement AS sp SET shardstate = 3
 FROM   pg_dist_shard AS s
 WHERE  sp.shardid = s.shardid
-AND    sp.nodename = 'localhost'
+AND    sp.nodename = '<host>'
 AND    sp.nodeport = :worker_1_port
 AND    s.logicalrelid = 'researchers'::regclass;
 INSERT INTO labs VALUES (6, 'Bell Labs');
@@ -352,8 +352,8 @@ $rli$ LANGUAGE plpgsql;')
 ORDER BY nodeport;
  nodename  | nodeport | success |     result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | CREATE FUNCTION
- localhost |    57638 | t       | CREATE FUNCTION
+ <host> |    xxxxx | t       | CREATE FUNCTION
+ <host> |    xxxxx | t       | CREATE FUNCTION
 (2 rows)
 
 -- register after insert trigger
@@ -361,10 +361,10 @@ SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGE
 ORDER BY nodeport, shardid;
  nodename  | nodeport | shardid | success |     result
 ---------------------------------------------------------------------
- localhost |    57637 | 1200000 | t       | CREATE TRIGGER
- localhost |    57637 | 1200001 | t       | CREATE TRIGGER
- localhost |    57638 | 1200000 | t       | CREATE TRIGGER
- localhost |    57638 | 1200001 | t       | CREATE TRIGGER
+ <host> |    xxxxx | 1200000 | t       | CREATE TRIGGER
+ <host> |    xxxxx | 1200001 | t       | CREATE TRIGGER
+ <host> |    xxxxx | 1200000 | t       | CREATE TRIGGER
+ <host> |    xxxxx | 1200001 | t       | CREATE TRIGGER
 (4 rows)
 
 -- hide postgresql version dependend messages for next test only
@@ -377,9 +377,9 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 \unset VERBOSITY
@@ -397,18 +397,18 @@ SELECT * from run_command_on_placements('researchers', 'drop trigger reject_larg
 ORDER BY nodeport, shardid;
  nodename  | nodeport | shardid | success |    result
 ---------------------------------------------------------------------
- localhost |    57637 | 1200000 | t       | DROP TRIGGER
- localhost |    57637 | 1200001 | t       | DROP TRIGGER
- localhost |    57638 | 1200000 | t       | DROP TRIGGER
- localhost |    57638 | 1200001 | t       | DROP TRIGGER
+ <host> |    xxxxx | 1200000 | t       | DROP TRIGGER
+ <host> |    xxxxx | 1200001 | t       | DROP TRIGGER
+ <host> |    xxxxx | 1200000 | t       | DROP TRIGGER
+ <host> |    xxxxx | 1200001 | t       | DROP TRIGGER
 (4 rows)
 
 SELECT * FROM run_command_on_workers('drop function reject_large_id()')
 ORDER BY nodeport;
  nodename  | nodeport | success |    result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | DROP FUNCTION
- localhost |    57638 | t       | DROP FUNCTION
+ <host> |    xxxxx | t       | DROP FUNCTION
+ <host> |    xxxxx | t       | DROP FUNCTION
 (2 rows)
 
 -- ALTER and copy are compatible
@@ -485,7 +485,7 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (1, 'orange');
 ERROR:  duplicate key value violates unique constraint "objects_pkey_1200003"
 DETAIL:  Key (id)=(X) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COMMIT;
 -- data shouldn't have persisted...
 SELECT * FROM objects WHERE id = 1;
@@ -545,7 +545,7 @@ SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
 WHERE  sp.shardid = s.shardid
-AND    sp.nodename = 'localhost'
+AND    sp.nodename = '<host>'
 AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
@@ -620,7 +620,7 @@ INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 -- data should be persisted
 SELECT * FROM objects WHERE id = 2;
  id | name
@@ -633,7 +633,7 @@ SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
 WHERE  sp.shardid = s.shardid
-AND    sp.nodename = 'localhost'
+AND    sp.nodename = '<host>'
 AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
@@ -663,9 +663,9 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
@@ -704,7 +704,7 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
@@ -1177,15 +1177,15 @@ ALTER USER test_user RENAME TO test_user_new;
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 -- the same as the above, but wrapped within a transaction
 BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 COMMIT;
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 COMMIT;
 -- show that no data go through the table and shard states are good
 SET client_min_messages to 'ERROR';
@@ -1210,8 +1210,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
+WARNING:  connection error: <host>:xxxxx
 -- some placements are invalid before abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1219,21 +1219,21 @@ WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
- 1200016 |          1 | localhost |    57638
- 1200017 |          1 | localhost |    57637
- 1200017 |          1 | localhost |    57638
- 1200018 |          1 | localhost |    57637
- 1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
- 1200019 |          1 | localhost |    57638
+ 1200016 |          3 | <host> |    xxxxx
+ 1200016 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200019 |          3 | <host> |    xxxxx
+ 1200019 |          1 | <host> |    xxxxx
 (8 rows)
 
 ABORT;
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
+WARNING:  connection error: <host>:xxxxx
  count
 ---------------------------------------------------------------------
      0
@@ -1246,20 +1246,20 @@ WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          1 | localhost |    57637
- 1200016 |          1 | localhost |    57638
- 1200017 |          1 | localhost |    57637
- 1200017 |          1 | localhost |    57638
- 1200018 |          1 | localhost |    57637
- 1200018 |          1 | localhost |    57638
- 1200019 |          1 | localhost |    57637
- 1200019 |          1 | localhost |    57638
+ 1200016 |          1 | <host> |    xxxxx
+ 1200016 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200019 |          1 | <host> |    xxxxx
+ 1200019 |          1 | <host> |    xxxxx
 (8 rows)
 
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
+WARNING:  connection error: <host>:xxxxx
 -- check shard states before commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
@@ -1267,14 +1267,14 @@ WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
- 1200016 |          1 | localhost |    57638
- 1200017 |          1 | localhost |    57637
- 1200017 |          1 | localhost |    57638
- 1200018 |          1 | localhost |    57637
- 1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
- 1200019 |          1 | localhost |    57638
+ 1200016 |          3 | <host> |    xxxxx
+ 1200016 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200019 |          3 | <host> |    xxxxx
+ 1200019 |          1 | <host> |    xxxxx
 (8 rows)
 
 COMMIT;
@@ -1285,20 +1285,20 @@ WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
- 1200016 |          1 | localhost |    57638
- 1200017 |          1 | localhost |    57637
- 1200017 |          1 | localhost |    57638
- 1200018 |          1 | localhost |    57637
- 1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
- 1200019 |          1 | localhost |    57638
+ 1200016 |          3 | <host> |    xxxxx
+ 1200016 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200017 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200018 |          1 | <host> |    xxxxx
+ 1200019 |          3 | <host> |    xxxxx
+ 1200019 |          1 | <host> |    xxxxx
 (8 rows)
 
 -- verify data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
-WARNING:  connection error: localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
+WARNING:  connection error: <host>:xxxxx
  count
 ---------------------------------------------------------------------
      2
@@ -1310,7 +1310,7 @@ ALTER USER test_user RENAME TO test_user_new;
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 -- connect back to the master with the proper user to continue the tests
 \c - :default_user - :master_port
 SET citus.next_shard_id TO 1200020;
@@ -1319,8 +1319,8 @@ SET citus.next_placement_id TO 1200033;
 SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_user');
  nodename  | nodeport | success |   result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | ALTER ROLE
- localhost |    57638 | t       | ALTER ROLE
+ <host> |    xxxxx | t       | ALTER ROLE
+ <host> |    xxxxx | t       | ALTER ROLE
 (2 rows)
 
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
@@ -1328,8 +1328,8 @@ DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts
 SELECT * FROM run_command_on_workers('DROP USER test_user');
  nodename  | nodeport | success |  result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | DROP ROLE
- localhost |    57638 | t       | DROP ROLE
+ <host> |    xxxxx | t       | DROP ROLE
+ <host> |    xxxxx | t       | DROP ROLE
 (2 rows)
 
 DROP USER test_user;
@@ -1390,16 +1390,16 @@ ORDER BY
   id;
  id |  shard_name   | nodename  | nodeport
 ---------------------------------------------------------------------
-  1 | users_1200022 | localhost |    57637
-  2 | users_1200025 | localhost |    57638
-  3 | users_1200023 | localhost |    57638
-  4 | users_1200023 | localhost |    57638
-  5 | users_1200022 | localhost |    57637
-  6 | users_1200024 | localhost |    57637
-  7 | users_1200023 | localhost |    57638
-  8 | users_1200022 | localhost |    57637
-  9 | users_1200025 | localhost |    57638
- 10 | users_1200022 | localhost |    57637
+  1 | users_1200022 | <host> |    xxxxx
+  2 | users_1200025 | <host> |    xxxxx
+  3 | users_1200023 | <host> |    xxxxx
+  4 | users_1200023 | <host> |    xxxxx
+  5 | users_1200022 | <host> |    xxxxx
+  6 | users_1200024 | <host> |    xxxxx
+  7 | users_1200023 | <host> |    xxxxx
+  8 | users_1200022 | <host> |    xxxxx
+  9 | users_1200025 | <host> |    xxxxx
+ 10 | users_1200022 | <host> |    xxxxx
 (10 rows)
 
 END;

@@ -25,8 +25,8 @@ SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345
                                       List of relations
  Schema |                              Name                               | Type  |  Owner
 ---------------------------------------------------------------------
- public | too_long_12345678901234567890123456789012345678_e0119164_225000 | table | postgres
- public | too_long_12345678901234567890123456789012345678_e0119164_225001 | table | postgres
+ public | too_long_12345678901234567890123456789012345678_e0119164_225000 | table | <user>
+ public | too_long_12345678901234567890123456789012345678_e0119164_225001 | table | <user>
 (2 rows)
 
 \c - - - :master_port
@@ -169,7 +169,7 @@ CREATE TABLE sneaky_name_lengths (
                                                  List of relations
  Schema |                              Name                               | Type  |  Owner   |        Table
 ---------------------------------------------------------------------
- public | sneaky_name_lengths_int_col_1234567890123456789012345678901_key | index | postgres | sneaky_name_lengths
+ public | sneaky_name_lengths_int_col_1234567890123456789012345678901_key | index | <user> | sneaky_name_lengths
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths'::regclass ORDER BY 1 DESC, 2 DESC;
@@ -195,7 +195,7 @@ SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
                                                     List of relations
  Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
- public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225006 | index | postgres | sneaky_name_lengths_225006
+ public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225006 | index | <user> | sneaky_name_lengths_225006
 (1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass ORDER BY 1 DESC, 2 DESC;
@@ -226,7 +226,7 @@ SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
                                                     List of relations
  Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
- public | unique_1234567890123456789012345678901234567890_a5986f27_225008 | index | postgres | sneaky_name_lengths_225008
+ public | unique_1234567890123456789012345678901234567890_a5986f27_225008 | index | <user> | sneaky_name_lengths_225008
 (1 row)
 
 \c - - - :master_port
@@ -249,8 +249,8 @@ SELECT create_distributed_table('too_long_12345678901234567890123456789012345678
                                       List of relations
  Schema |                              Name                               | Type  |  Owner
 ---------------------------------------------------------------------
- public | too_long_1234567890123456789012345678901_e0119164_2250000000000 | table | postgres
- public | too_long_1234567890123456789012345678901_e0119164_2250000000001 | table | postgres
+ public | too_long_1234567890123456789012345678901_e0119164_2250000000000 | table | <user>
+ public | too_long_1234567890123456789012345678901_e0119164_2250000000001 | table | <user>
 (2 rows)
 
 \c - - - :master_port
@@ -281,16 +281,16 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
                               List of relations
  Schema |                      Name                       | Type  |  Owner
 ---------------------------------------------------------------------
- public | elephant_слонслонслонсло_c8b737c2_2250000000002 | table | postgres
- public | elephant_слонслонслонсло_c8b737c2_2250000000003 | table | postgres
+ public | elephant_слонслонслонсло_c8b737c2_2250000000002 | table | <user>
+ public | elephant_слонслонслонсло_c8b737c2_2250000000003 | table | <user>
 (2 rows)
 
 \di public.elephant_*
                                                        List of relations
  Schema |                      Name                       | Type  |  Owner   |                      Table
 ---------------------------------------------------------------------
- public | elephant_слонслонслонсло_14d34928_2250000000002 | index | postgres | elephant_слонслонслонсло_c8b737c2_2250000000002
- public | elephant_слонслонслонсло_14d34928_2250000000003 | index | postgres | elephant_слонслонслонсло_c8b737c2_2250000000003
+ public | elephant_слонслонслонсло_14d34928_2250000000002 | index | <user> | elephant_слонслонслонсло_c8b737c2_2250000000002
+ public | elephant_слонслонслонсло_14d34928_2250000000003 | index | <user> | elephant_слонслонслонсло_c8b737c2_2250000000003
 (2 rows)
 
 \c - - - :master_port

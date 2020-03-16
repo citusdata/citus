@@ -2,15 +2,15 @@
 +++ file_different.out.modified
 @@ -1,3 +1,2 @@
 -This line is missing in file_different
- Ports are replaced with xxxxx: localhost:2187
+ Ports are replaced with xxxxx: <host>:2187
  This line is the same
 @@ -7,6 +6,8 @@
- Filler 2, localhost:1111
- Filler 3, localhost:111
+ Filler 2, <host>:1111
+ Filler 3, <host>:111
 -This line is missing in file_different
 +This line has been inserted
-+This line has also been inserted, localhost:10812
- Line below will be removed, localhost:2781
++This line has also been inserted, <host>:10812
+ Line below will be removed, <host>:2781
 -This line will be changed ✓
 +This line has been changed ✇
  End of file

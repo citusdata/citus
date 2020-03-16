@@ -31,7 +31,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
 (1 row)
 
 VACUUM vacuum_test;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -42,7 +42,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
 (1 row)
 
 ANALYZE vacuum_test;
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -111,7 +111,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM.*other").kill()');
 (1 row)
 
 VACUUM vacuum_test, other_vacuum_test;
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

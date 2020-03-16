@@ -2,7 +2,7 @@ Parsed test spec with 2 sessions
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-update-table-1 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -20,15 +20,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -37,7 +37,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,1)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,1)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -46,8 +46,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -56,7 +56,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -75,7 +75,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-delete-table-1 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -93,15 +93,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -110,7 +110,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,1)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,1)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -119,8 +119,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -129,7 +129,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -148,7 +148,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-update-table-2 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -166,15 +166,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -183,7 +183,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,2)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,2)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -192,8 +192,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -202,7 +202,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -221,7 +221,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-delete-table-2 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -239,15 +239,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -256,7 +256,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,2)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,2)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -265,8 +265,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -275,7 +275,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -294,7 +294,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-update-table-3 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -312,15 +312,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -329,7 +329,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,3)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,3)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -338,8 +338,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -348,7 +348,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -367,7 +367,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-delete-table-3 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -385,15 +385,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -402,7 +402,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(ExclusiveLock,3)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(ExclusiveLock,3)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -411,8 +411,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -421,7 +421,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -440,7 +440,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-insert-table-1 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -458,15 +458,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -475,7 +475,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(RowExclusiveLock,1)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(RowExclusiveLock,1)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -484,8 +484,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -494,7 +494,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -513,7 +513,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-insert-table-2 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -531,15 +531,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -548,7 +548,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(RowExclusiveLock,2)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(RowExclusiveLock,2)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -557,8 +557,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -567,7 +567,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 
@@ -586,7 +586,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-insert-table-3 s1-start-session-level-connection s1-view-locks s2-rollback-worker s1-view-locks s1-stop-connection s2-stop-connection
 step s2-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
@@ -604,15 +604,15 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-start-session-level-connection:
-	SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('<host>', xxxxx);
 
 start_session_level_connection_to_node
 
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -621,7 +621,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t              {"(RowExclusiveLock,3)","(ShareLock,1)"}
+<host>      xxxxx          t              {"(RowExclusiveLock,3)","(ShareLock,1)"}
 step s2-rollback-worker:
     SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
@@ -630,8 +630,8 @@ run_commands_on_session_level_connection_to_node
 
 step s1-view-locks:
     SELECT * FROM master_run_on_worker(
-		ARRAY['localhost']::text[],
-		ARRAY[57637]::int[],
+		ARRAY['<host>']::text[],
+		ARRAY[xxxxx]::int[],
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
@@ -640,7 +640,7 @@ step s1-view-locks:
 
 node_name      node_port      success        result
 
-localhost      57637          t
+<host>      xxxxx          t
 step s1-stop-connection:
 	SELECT stop_session_level_connection_to_node();
 

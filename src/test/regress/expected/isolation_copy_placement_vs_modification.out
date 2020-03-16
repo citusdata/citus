@@ -18,13 +18,13 @@ count
 
 1
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -51,8 +51,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              5
-57638          t              5
+xxxxx          t              5
+xxxxx          t              5
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
 step s1-load-cache:
@@ -72,13 +72,13 @@ count
 
 1
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -105,8 +105,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t
-57638          t
+xxxxx          t
+xxxxx          t
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-load-cache:
@@ -123,13 +123,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -156,8 +156,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              10
-57638          t              10
+xxxxx          t              10
+xxxxx          t              10
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
 step s1-load-cache:
@@ -174,13 +174,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -207,8 +207,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              5
-57638          t              5
+xxxxx          t              5
+xxxxx          t              5
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
 step s1-load-cache:
@@ -225,13 +225,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -256,10 +256,10 @@ step s2-print-index-count:
 
 nodeport       success        result
 
-57637          t              1
-57637          t              1
-57638          t              1
-57638          t              1
+xxxxx          t              1
+xxxxx          t              1
+xxxxx          t              1
+xxxxx          t              1
 
 starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
 step s1-insert:
@@ -276,13 +276,13 @@ count
 
 1
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -309,8 +309,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              5
-57638          t              5
+xxxxx          t              5
+xxxxx          t              5
 
 starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
 step s1-insert:
@@ -327,13 +327,13 @@ count
 
 1
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -360,8 +360,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t
-57638          t
+xxxxx          t
+xxxxx          t
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-begin:
@@ -375,13 +375,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -408,8 +408,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              10
-57638          t              10
+xxxxx          t              10
+xxxxx          t              10
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
 step s1-begin:
@@ -423,13 +423,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -456,8 +456,8 @@ step s2-print-content:
 
 nodeport       success        result
 
-57637          t              5
-57638          t              5
+xxxxx          t              5
+xxxxx          t              5
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
 step s1-begin:
@@ -471,13 +471,13 @@ count
 
 0
 step s2-set-placement-inactive:
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = xxxxx;
 
 step s2-begin:
 	BEGIN;
 
 step s2-repair-placement:
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), '<host>', xxxxx, '<host>', xxxxx);
 
 master_copy_shard_placement
 
@@ -502,7 +502,7 @@ step s2-print-index-count:
 
 nodeport       success        result
 
-57637          t              1
-57637          t              1
-57638          t              1
-57638          t              1
+xxxxx          t              1
+xxxxx          t              1
+xxxxx          t              1
+xxxxx          t              1

@@ -36,7 +36,7 @@ SELECT citus.dump_network_traffic();
                                                                                                                                                                                                                                                                                                                                                                                               dump_network_traffic
 ---------------------------------------------------------------------
  (0,coordinator,"[initial message]")
- (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
+ (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=<user>)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=<user>)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
  (0,coordinator,"[""Query(query=BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, XX, 'XXXX-XX-XX XX:XX:XX.XXXXXX-XX');)""]")
  (0,worker,"['CommandComplete(command=BEGIN)', ""RowDescription(fieldcount=1,fields=['F(name=assign_distributed_transaction_id,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
  (0,coordinator,"['Query(query=COPY public.copy_test_XXXXXX (key, value) FROM STDIN WITH (FORMAT BINARY))']")
@@ -46,7 +46,7 @@ SELECT citus.dump_network_traffic();
  (0,coordinator,"['Query(query=COMMIT)']")
  (0,worker,"['CommandComplete(command=COMMIT)', 'ReadyForQuery(state=idle)']")
  (1,coordinator,"[initial message]")
- (1,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
+ (1,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=<user>)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=<user>)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
  (1,coordinator,"['Query(query=SELECT count(1) AS count FROM public.copy_test_XXXXXX copy_test)']")
  (1,worker,"[""RowDescription(fieldcount=1,fields=['F(name=count,tableoid=0,colattrnum=0,typoid=20,typlen=8,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
 (14 rows)
@@ -61,9 +61,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction").kil
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COPY copy_test, line 1: "0, 0"
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 -- ==== kill the connection when we try to start the COPY ====
 -- the query should abort
@@ -77,7 +77,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COPY copy_test, line 1: "0, 0"
 -- ==== kill the connection when we first start sending data ====
 -- the query should abort
@@ -88,7 +88,7 @@ SELECT citus.mitmproxy('conn.onCopyData().killall()'); -- raw rows from the clie
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 -- ==== kill the connection when the worker confirms it's received the data ====
 -- the query should abort
 SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").killall()');
@@ -98,7 +98,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY").killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 -- ==== kill the connection when we try to send COMMIT ====
 -- the query should succeed, and the placement should be marked inactive
 SELECT citus.mitmproxy('conn.allow()');
@@ -129,10 +129,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- the shard is marked invalid
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -196,8 +196,8 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-  100400 |          1 |           0 | localhost |     9060 |         100
-  100400 |          3 |           0 | localhost |    57637 |         101
+  100400 |          1 |           0 | <host> |     9060 |         100
+  100400 |          3 |           0 | <host> |    xxxxx |         101
 (2 rows)
 
 -- ==== okay, run some tests where there's only one active shard ====
@@ -219,7 +219,7 @@ SELECT citus.mitmproxy('conn.killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -250,9 +250,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COPY copy_test, line 1: "0, 0"
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 CONTEXT:  COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -280,7 +280,7 @@ COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' W
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 COPY copy_test, line 1: "0, 0"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -305,7 +305,7 @@ SELECT citus.mitmproxy('conn.onCopyData().killall()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -330,10 +330,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT$").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');
@@ -357,8 +357,8 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-  100400 |          1 |           0 | localhost |     9060 |         100
-  100400 |          3 |           0 | localhost |    57637 |         101
+  100400 |          1 |           0 | <host> |     9060 |         100
+  100400 |          3 |           0 | <host> |    xxxxx |         101
 (2 rows)
 
 -- the COMMIT makes it through but the connection dies before we get a response
@@ -370,10 +370,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COMMIT").killall()');
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+WARNING:  failed to commit transaction on <host>:xxxxx
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 WARNING:  could not commit transaction for shard xxxxx on any active node
 ERROR:  could not commit transaction on any active node
 SELECT citus.mitmproxy('conn.allow()');
@@ -387,8 +387,8 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid IN (
 ) ORDER BY nodeport, placementid;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-  100400 |          1 |           0 | localhost |     9060 |         100
-  100400 |          3 |           0 | localhost |    57637 |         101
+  100400 |          1 |           0 | <host> |     9060 |         100
+  100400 |          3 |           0 | <host> |    xxxxx |         101
 (2 rows)
 
 SELECT * FROM copy_test;

@@ -50,16 +50,16 @@ SELECT * FROM distributed_result_info ORDER BY resultId;
        resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------
  test_from_100800_to_0 |     9060 |       22 |        100805 |                0
- test_from_100801_to_0 |    57637 |        2 |        100805 |                0
- test_from_100801_to_1 |    57637 |       15 |        100806 |                1
+ test_from_100801_to_0 |    xxxxx |        2 |        100805 |                0
+ test_from_100801_to_1 |    xxxxx |       15 |        100806 |                1
  test_from_100802_to_1 |     9060 |       10 |        100806 |                1
  test_from_100802_to_2 |     9060 |        5 |        100807 |                2
- test_from_100803_to_2 |    57637 |       18 |        100807 |                2
- test_from_100803_to_3 |    57637 |        4 |        100808 |                3
+ test_from_100803_to_2 |    xxxxx |       18 |        100807 |                2
+ test_from_100803_to_3 |    xxxxx |        4 |        100808 |                3
  test_from_100804_to_3 |     9060 |       24 |        100808 |                3
 (8 rows)
 
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_2_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], '<host>', :worker_2_port) > 0 AS fetched;
  fetched
 ---------------------------------------------------------------------
  t
@@ -73,7 +73,7 @@ SELECT count(*), sum(x) FROM
 (1 row)
 
 ROLLBACk;
--- with failure, results from 100802 should be retried and succeed on 57637
+-- with failure, results from 100802 should be retried and succeed on xxxxx
 SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result.*test_from_100802").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -85,7 +85,7 @@ CREATE TABLE distributed_result_info AS
   SELECT resultId, nodeport, rowcount, targetShardId, targetShardIndex
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')
           NATURAL JOIN pg_dist_node;
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -93,23 +93,23 @@ SELECT * FROM distributed_result_info ORDER BY resultId;
        resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------
  test_from_100800_to_0 |     9060 |       22 |        100805 |                0
- test_from_100801_to_0 |    57637 |        2 |        100805 |                0
- test_from_100801_to_1 |    57637 |       15 |        100806 |                1
- test_from_100802_to_1 |    57637 |       10 |        100806 |                1
- test_from_100802_to_2 |    57637 |        5 |        100807 |                2
- test_from_100803_to_2 |    57637 |       18 |        100807 |                2
- test_from_100803_to_3 |    57637 |        4 |        100808 |                3
+ test_from_100801_to_0 |    xxxxx |        2 |        100805 |                0
+ test_from_100801_to_1 |    xxxxx |       15 |        100806 |                1
+ test_from_100802_to_1 |    xxxxx |       10 |        100806 |                1
+ test_from_100802_to_2 |    xxxxx |        5 |        100807 |                2
+ test_from_100803_to_2 |    xxxxx |       18 |        100807 |                2
+ test_from_100803_to_3 |    xxxxx |        4 |        100808 |                3
  test_from_100804_to_3 |     9060 |       24 |        100808 |                3
 (8 rows)
 
 -- fetch from worker 2 should fail
 SAVEPOINT s1;
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_2_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], '<host>', :worker_2_port) > 0 AS fetched;
 ERROR:  could not open file "base/pgsql_job_cache/xx_x_xxx/test_from_100802_to_1.data": No such file or directory
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 1 should succeed
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_1_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], '<host>', :worker_1_port) > 0 AS fetched;
  fetched
 ---------------------------------------------------------------------
  t

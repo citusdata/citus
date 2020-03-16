@@ -375,7 +375,7 @@ DETAIL:  distribution column value: 1
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Aggregate
                ->  Seq Scan on test_table_1960000 test_table
                      Filter: (key = 1)
@@ -402,12 +402,12 @@ DEBUG:  Plan is router executable
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Seq Scan on test_table_1960000 test_table
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Aggregate
                ->  Function Scan on read_intermediate_result intermediate_result
                      Filter: (key = 1)
@@ -484,12 +484,12 @@ DEBUG:  Plan is router executable
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Seq Scan on test_table_1960000 test_table
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Aggregate
                ->  Merge Join
                      Merge Cond: (intermediate_result.key = intermediate_result_1.key)
@@ -530,7 +530,7 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Aggregate
                      ->  Hash Join
                            Hash Cond: (test_table.key = test_table_1.key)
@@ -833,7 +833,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
   1021
 (1 row)
 
--- the CTEs are very simple, so postgres
+-- the CTEs are very simple, so <user>
 -- can pull-up the subqueries after inlining
 -- the CTEs, and the query that we send to workers
 -- becomes a join between two tables

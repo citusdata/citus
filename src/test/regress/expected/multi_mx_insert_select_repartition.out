@@ -70,7 +70,7 @@ EXPLAIN (costs off) INSERT INTO target_table SELECT a, max(b) FROM source_table 
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  HashAggregate
                      Group Key: a
                      ->  Seq Scan on source_table_4213581 source_table

@@ -10,15 +10,15 @@ ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
 CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 -- make worker 1 receive metadata changes
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- remove non-existing node
-SELECT master_remove_node('localhost', 55555);
-ERROR:  node at "localhost:xxxxx" does not exist
+SELECT master_remove_node('<host>', 55555);
+ERROR:  node at "<host>:xxxxx" does not exist
 -- remove a node with no reference tables
 -- verify node exist before removal
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -27,7 +27,7 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
      1
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -41,10 +41,10 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 (1 row)
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port) AS worker_2_nodeid \gset
+SELECT master_add_node('<host>', :worker_2_port) AS worker_2_nodeid \gset
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeid=:worker_2_nodeid \gset
 -- add a secondary to check we don't attempt to replicate the table to it
-SELECT 1 FROM master_add_node('localhost', 9000, groupid=>:worker_2_group, noderole=>'secondary');
+SELECT 1 FROM master_add_node('<host>', 9000, groupid=>:worker_2_group, noderole=>'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -59,7 +59,7 @@ SELECT create_reference_table('remove_node_reference_table');
 (1 row)
 
 -- make sure when we add a secondary we don't attempt to add placements to it
-SELECT 1 FROM master_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
+SELECT 1 FROM master_add_node('<host>', 9001, groupid=>:worker_2_group, noderole=>'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -72,7 +72,7 @@ SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 (1 row)
 
 -- make sure when we disable a secondary we don't remove any placements
-SELECT master_disable_node('localhost', 9001);
+SELECT master_disable_node('<host>', 9001);
  master_disable_node
 ---------------------------------------------------------------------
 
@@ -91,7 +91,7 @@ SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 (1 row)
 
 -- make sure when we activate a secondary we don't add any placements
-SELECT 1 FROM master_activate_node('localhost', 9001);
+SELECT 1 FROM master_activate_node('<host>', 9001);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -104,7 +104,7 @@ SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 (1 row)
 
 -- make sure when we remove a secondary we don't remove any placements
-SELECT master_remove_node('localhost', 9001);
+SELECT master_remove_node('<host>', 9001);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -131,7 +131,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -160,11 +160,11 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -217,32 +217,32 @@ WHERE
 
 \c - - - :master_port
 -- remove same node twice
-SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  node at "localhost:xxxxx" does not exist
+SELECT master_remove_node('<host>', :worker_2_port);
+ERROR:  node at "<host>:xxxxx" does not exist
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- try to disable the node before removing it (this used to crash)
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT master_disable_node('<host>', :worker_2_port);
  master_disable_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- re-add the node for the next test
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -264,7 +264,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -293,12 +293,12 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -320,7 +320,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -349,7 +349,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
@@ -369,7 +369,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -398,12 +398,12 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -457,8 +457,8 @@ WHERE
 
 \c - - - :master_port
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -480,7 +480,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -509,13 +509,13 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
 BEGIN;
 INSERT INTO remove_node_reference_table VALUES(1);
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -582,8 +582,8 @@ SELECT * FROM remove_node_reference_table;
 
 \c - - - :master_port
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -605,7 +605,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -634,13 +634,13 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 \c - - - :master_port
 BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -703,8 +703,8 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 (2 rows)
 
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -726,7 +726,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380000 |          1 |           0 | <host> |    xxxxx
 (1 row)
 
 SELECT *
@@ -741,7 +741,7 @@ WHERE colocationid IN
 (1 row)
 
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -772,7 +772,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
 (0 rows)
 
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -812,8 +812,8 @@ ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
+ 1380001 |          1 |           0 | <host> |    xxxxx
+ 1380002 |          1 |           0 | <host> |    xxxxx
 (2 rows)
 
 SELECT *
@@ -844,12 +844,12 @@ ORDER BY
 	shardid;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
+ 1380001 |          1 |           0 | <host> |    xxxxx
+ 1380002 |          1 |           0 | <host> |    xxxxx
 (2 rows)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('<host>', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -902,9 +902,9 @@ WHERE
 
 \c - - - :master_port
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
+NOTICE:  Replicating reference table "table1" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -928,8 +928,8 @@ ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
+ 1380001 |          1 |           0 | <host> |    xxxxx
+ 1380002 |          1 |           0 | <host> |    xxxxx
 (2 rows)
 
 SELECT *
@@ -959,12 +959,12 @@ WHERE
 ORDER BY shardid ASC;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
+ 1380001 |          1 |           0 | <host> |    xxxxx
+ 1380002 |          1 |           0 | <host> |    xxxxx
 (2 rows)
 
 \c - - - :master_port
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT master_disable_node('<host>', :worker_2_port);
  master_disable_node
 ---------------------------------------------------------------------
 
@@ -1017,9 +1017,9 @@ WHERE
 
 \c - - - :master_port
 -- re-add the node for next tests
-SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
+SELECT 1 FROM master_activate_node('<host>', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node <host>:xxxxx
+NOTICE:  Replicating reference table "table1" to the node <host>:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1029,7 +1029,7 @@ NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
 DROP TABLE remove_node_reference_table;
 DROP TABLE remove_node_reference_table_schema.table1;
 DROP SCHEMA remove_node_reference_table_schema CASCADE;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

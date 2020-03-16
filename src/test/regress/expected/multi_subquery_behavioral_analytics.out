@@ -1573,8 +1573,8 @@ SELECT * FROM  run_command_on_workers('CREATE OR REPLACE FUNCTION array_index(AN
 ORDER BY 1,2;
  nodename  | nodeport | success |     result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | CREATE FUNCTION
- localhost |    57638 | t       | CREATE FUNCTION
+ <host> |    xxxxx | t       | CREATE FUNCTION
+ <host> |    xxxxx | t       | CREATE FUNCTION
 (2 rows)
 
 CREATE OR REPLACE FUNCTION array_index(ANYARRAY, ANYELEMENT)
@@ -1747,8 +1747,8 @@ SELECT * FROM run_command_on_workers('DROP FUNCTION array_index(ANYARRAY, ANYELE
 ORDER BY 1,2;
  nodename  | nodeport | success |    result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | DROP FUNCTION
- localhost |    57638 | t       | DROP FUNCTION
+ <host> |    xxxxx | t       | DROP FUNCTION
+ <host> |    xxxxx | t       | DROP FUNCTION
 (2 rows)
 
 DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
@@ -1994,8 +1994,8 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
 $f$);
         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE FUNCTION")
- (localhost,57638,t,"CREATE FUNCTION")
+ (<host>,xxxxx,t,"CREATE FUNCTION")
+ (<host>,xxxxx,t,"CREATE FUNCTION")
 (2 rows)
 
 -- we don't support joins via functions
@@ -2288,8 +2288,8 @@ SELECT run_command_on_workers($f$
 $f$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
 (2 rows)
 
 SET citus.enable_router_execution TO TRUE;

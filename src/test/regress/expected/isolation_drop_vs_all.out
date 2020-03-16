@@ -37,8 +37,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -62,8 +62,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -84,8 +84,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -108,8 +108,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -133,8 +133,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -157,8 +157,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -220,8 +220,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -244,8 +244,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -267,8 +267,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -291,8 +291,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -314,8 +314,8 @@ ERROR:  relation "drop_hash" does not exist
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''drop_hash'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 

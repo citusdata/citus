@@ -5,8 +5,8 @@ CREATE SCHEMA subquery_prepared_statements;
 SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements;');
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
 (2 rows)
 
 SET search_path TO subquery_prepared_statements, public;

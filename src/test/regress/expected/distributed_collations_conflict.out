@@ -2,8 +2,8 @@ CREATE SCHEMA collation_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA collation_conflict;$$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
 (2 rows)
 
 \c - - - :worker_1_port
@@ -34,7 +34,7 @@ WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
     collname     |      nspname       | rolname
 ---------------------------------------------------------------------
- caseinsensitive | collation_conflict | postgres
+ caseinsensitive | collation_conflict | <user>
 (1 row)
 
 \c - - - :master_port
@@ -72,8 +72,8 @@ WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
             collname             |      nspname       | rolname
 ---------------------------------------------------------------------
- caseinsensitive                 | collation_conflict | postgres
- caseinsensitive(citus_backup_0) | collation_conflict | postgres
+ caseinsensitive                 | collation_conflict | <user>
+ caseinsensitive(citus_backup_0) | collation_conflict | <user>
 (2 rows)
 
 \c - - - :master_port

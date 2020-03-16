@@ -25,13 +25,13 @@ SET search_path TO 'mx_hide_shard_names';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('<host>', :worker_2_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -63,8 +63,8 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
        Schema        |        Name        | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table_1130000 | table | postgres
- mx_hide_shard_names | test_table_1130002 | table | postgres
+ mx_hide_shard_names | test_table_1130000 | table | <user>
+ mx_hide_shard_names | test_table_1130002 | table | <user>
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -100,15 +100,15 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
        Schema        |        Name        | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table_1130000 | table | postgres
- mx_hide_shard_names | test_table_1130002 | table | postgres
+ mx_hide_shard_names | test_table_1130000 | table | <user>
+ mx_hide_shard_names | test_table_1130002 | table | <user>
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
        Schema        |        Name        | Type  |  Owner   |       Table
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_index_1130000 | index | postgres | test_table_1130000
- mx_hide_shard_names | test_index_1130002 | index | postgres | test_table_1130002
+ mx_hide_shard_names | test_index_1130000 | index | <user> | test_table_1130000
+ mx_hide_shard_names | test_index_1130002 | index | <user> | test_table_1130002
 (2 rows)
 
 -- we should be able to select from the shards directly if we
@@ -158,19 +158,19 @@ CREATE TABLE test_table_2_1130000(id int, time date);
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
        Schema        |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table_102008_1130004 | table | postgres
- mx_hide_shard_names | test_table_102008_1130006 | table | postgres
- mx_hide_shard_names | test_table_1130000        | table | postgres
- mx_hide_shard_names | test_table_1130002        | table | postgres
+ mx_hide_shard_names | test_table_102008_1130004 | table | <user>
+ mx_hide_shard_names | test_table_102008_1130006 | table | <user>
+ mx_hide_shard_names | test_table_1130000        | table | <user>
+ mx_hide_shard_names | test_table_1130002        | table | <user>
 (4 rows)
 
 \d
                        List of relations
        Schema        |         Name         | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table           | table | postgres
- mx_hide_shard_names | test_table_102008    | table | postgres
- mx_hide_shard_names | test_table_2_1130000 | table | postgres
+ mx_hide_shard_names | test_table           | table | <user>
+ mx_hide_shard_names | test_table_102008    | table | <user>
+ mx_hide_shard_names | test_table_2_1130000 | table | <user>
 (3 rows)
 
 \c - - - :master_port
@@ -193,32 +193,32 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
        Schema        |           Name            | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table_102008_1130004 | table | postgres
- mx_hide_shard_names | test_table_102008_1130006 | table | postgres
- mx_hide_shard_names | test_table_1130000        | table | postgres
- mx_hide_shard_names | test_table_1130002        | table | postgres
+ mx_hide_shard_names | test_table_102008_1130004 | table | <user>
+ mx_hide_shard_names | test_table_102008_1130006 | table | <user>
+ mx_hide_shard_names | test_table_1130000        | table | <user>
+ mx_hide_shard_names | test_table_1130002        | table | <user>
 (4 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
        Schema        |        Name        | Type  |  Owner   |       Table
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_index_1130000 | index | postgres | test_table_1130000
- mx_hide_shard_names | test_index_1130002 | index | postgres | test_table_1130002
+ mx_hide_shard_names | test_index_1130000 | index | <user> | test_table_1130000
+ mx_hide_shard_names | test_index_1130002 | index | <user> | test_table_1130002
 (2 rows)
 
 SET search_path TO 'mx_hide_shard_names_2';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
         Schema         |        Name        | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names_2 | test_table_1130008 | table | postgres
- mx_hide_shard_names_2 | test_table_1130010 | table | postgres
+ mx_hide_shard_names_2 | test_table_1130008 | table | <user>
+ mx_hide_shard_names_2 | test_table_1130010 | table | <user>
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
         Schema         |        Name        | Type  |  Owner   |       Table
 ---------------------------------------------------------------------
- mx_hide_shard_names_2 | test_index_1130008 | index | postgres | test_table_1130008
- mx_hide_shard_names_2 | test_index_1130010 | index | postgres | test_table_1130010
+ mx_hide_shard_names_2 | test_index_1130008 | index | <user> | test_table_1130008
+ mx_hide_shard_names_2 | test_index_1130010 | index | <user> | test_table_1130010
 (2 rows)
 
 SET search_path TO 'mx_hide_shard_names_2, mx_hide_shard_names';
@@ -254,15 +254,15 @@ SET search_path TO 'mx_hide_shard_names_3';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
         Schema         |                              Name                               | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1130012 | table | postgres
- mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1130014 | table | postgres
+ mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1130012 | table | <user>
+ mx_hide_shard_names_3 | too_long_1234567890123456789012345678901234567_e0119164_1130014 | table | <user>
 (2 rows)
 
 \d
                                            List of relations
         Schema         |                            Name                             | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names_3 | too_long_12345678901234567890123456789012345678901234567890 | table | postgres
+ mx_hide_shard_names_3 | too_long_12345678901234567890123456789012345678901234567890 | table | <user>
 (1 row)
 
 -- now try weird schema names
@@ -286,29 +286,29 @@ SET search_path TO "CiTuS.TeeN";
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
    Schema   |          Name          | Type  |  Owner
 ---------------------------------------------------------------------
- CiTuS.TeeN | TeeNTabLE.1!?!_1130016 | table | postgres
- CiTuS.TeeN | TeeNTabLE.1!?!_1130018 | table | postgres
+ CiTuS.TeeN | TeeNTabLE.1!?!_1130016 | table | <user>
+ CiTuS.TeeN | TeeNTabLE.1!?!_1130018 | table | <user>
 (2 rows)
 
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
    Schema   |         Name          | Type  |  Owner   |         Table
 ---------------------------------------------------------------------
- CiTuS.TeeN | MyTenantIndex_1130016 | index | postgres | TeeNTabLE.1!?!_1130016
- CiTuS.TeeN | MyTenantIndex_1130018 | index | postgres | TeeNTabLE.1!?!_1130018
+ CiTuS.TeeN | MyTenantIndex_1130016 | index | <user> | TeeNTabLE.1!?!_1130016
+ CiTuS.TeeN | MyTenantIndex_1130018 | index | <user> | TeeNTabLE.1!?!_1130018
 (2 rows)
 
 \d
                List of relations
    Schema   |      Name      | Type  |  Owner
 ---------------------------------------------------------------------
- CiTuS.TeeN | TeeNTabLE.1!?! | table | postgres
+ CiTuS.TeeN | TeeNTabLE.1!?! | table | <user>
 (1 row)
 
 \di
                        List of relations
    Schema   |     Name      | Type  |  Owner   |     Table
 ---------------------------------------------------------------------
- CiTuS.TeeN | MyTenantIndex | index | postgres | TeeNTabLE.1!?!
+ CiTuS.TeeN | MyTenantIndex | index | <user> | TeeNTabLE.1!?!
 (1 row)
 
 -- clean-up
@@ -320,15 +320,15 @@ SET search_path TO 'mx_hide_shard_names';
                      List of relations
        Schema        |       Name        | Type  |  Owner
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_table        | table | postgres
- mx_hide_shard_names | test_table_102008 | table | postgres
+ mx_hide_shard_names | test_table        | table | <user>
+ mx_hide_shard_names | test_table_102008 | table | <user>
 (2 rows)
 
 \di
                         List of relations
        Schema        |    Name    | Type  |  Owner   |   Table
 ---------------------------------------------------------------------
- mx_hide_shard_names | test_index | index | postgres | test_table
+ mx_hide_shard_names | test_index | index | <user> | test_table
 (1 row)
 
 DROP SCHEMA mx_hide_shard_names CASCADE;

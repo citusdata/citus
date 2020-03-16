@@ -16,8 +16,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -36,8 +36,8 @@ error in steps s1-commit s2-ddl-create-index-concurrently: ERROR:  relation "ddl
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -57,13 +57,13 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -83,13 +83,13 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -109,13 +109,13 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -133,13 +133,13 @@ step s2-ddl-create-index-concurrently: <... completed>
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -159,8 +159,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -180,8 +180,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -201,13 +201,13 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -225,13 +225,13 @@ step s2-ddl-create-index-concurrently: <... completed>
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -251,8 +251,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -273,8 +273,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -296,8 +296,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -317,8 +317,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -343,8 +343,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,4)
-(localhost,57638,t,4)
+(<host>,xxxxx,t,4)
+(<host>,xxxxx,t,4)
 restore_isolation_tester_func
 
 
@@ -367,8 +367,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -388,8 +388,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -414,8 +414,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -438,8 +438,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -459,8 +459,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -485,8 +485,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -508,8 +508,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -529,8 +529,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -555,8 +555,8 @@ step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,4)
-(localhost,57638,t,4)
+(<host>,xxxxx,t,4)
+(<host>,xxxxx,t,4)
 restore_isolation_tester_func
 
 
@@ -576,8 +576,8 @@ step s1-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -595,8 +595,8 @@ step s2-ddl-create-index-concurrently: <... completed>
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,2)
-(localhost,57638,t,2)
+(<host>,xxxxx,t,2)
+(<host>,xxxxx,t,2)
 restore_isolation_tester_func
 
 
@@ -619,8 +619,8 @@ step s2-ddl-create-index-concurrently: <... completed>
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
-(localhost,57637,t,4)
-(localhost,57638,t,4)
+(<host>,xxxxx,t,4)
+(<host>,xxxxx,t,4)
 restore_isolation_tester_func
 
 
@@ -642,8 +642,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -663,8 +663,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -689,8 +689,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -712,8 +712,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -733,8 +733,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 
@@ -759,8 +759,8 @@ step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,new_column)
-(localhost,57638,t,new_column)
+(<host>,xxxxx,t,new_column)
+(<host>,xxxxx,t,new_column)
 restore_isolation_tester_func
 
 

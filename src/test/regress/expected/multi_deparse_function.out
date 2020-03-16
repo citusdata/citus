@@ -74,8 +74,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- RETURNS NULL ON NULL INPUT and STRICT are synonyms and can be used interchangeably
@@ -87,8 +87,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -98,8 +98,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -109,8 +109,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -120,8 +120,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -131,8 +131,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -142,8 +142,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -153,8 +153,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- EXTERNAL keyword is ignored by Postgres Parser. It is allowed only for SQL conformance
@@ -166,8 +166,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -177,8 +177,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -188,8 +188,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -199,8 +199,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -210,8 +210,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -221,8 +221,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -232,8 +232,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- The COST arguments should always be numeric
@@ -244,8 +244,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -255,8 +255,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -266,8 +266,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -277,8 +277,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -288,8 +288,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -299,8 +299,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -310,8 +310,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -321,8 +321,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -332,8 +332,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -343,8 +343,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- This raises an error about only accepting one item,
@@ -356,8 +356,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                         deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  SET citus.setting;' takes only one argument")
- (localhost,57638,f,"ERROR:  SET citus.setting;' takes only one argument")
+ (<host>,xxxxx,f,"ERROR:  SET citus.setting;' takes only one argument")
+ (<host>,xxxxx,f,"ERROR:  SET citus.setting;' takes only one argument")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -367,8 +367,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -378,8 +378,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- Rename the function in the workers
@@ -390,8 +390,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- Rename the function inb the coordinator as well.
@@ -405,8 +405,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.summation(integ
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- Rename the function back to the original name in the coordinator
@@ -417,8 +417,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers('CREATE ROLE function_role');
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -428,8 +428,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -439,8 +439,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  role ""missing_role"" does not exist")
- (localhost,57638,f,"ERROR:  role ""missing_role"" does not exist")
+ (<host>,xxxxx,f,"ERROR:  role ""missing_role"" does not exist")
+ (<host>,xxxxx,f,"ERROR:  role ""missing_role"" does not exist")
 (2 rows)
 
 -- SET the schema in workers as well as the coordinator so that it remains in the same schema
@@ -451,8 +451,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 ALTER FUNCTION add SET SCHEMA public;
@@ -464,8 +464,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION public.add(integer, integer) S
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 ALTER FUNCTION public.add SET SCHEMA function_tests;
@@ -476,8 +476,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- make sure "any" type is correctly deparsed
@@ -488,8 +488,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION pg_catalog.get_shard_id_for_di
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- Do not run valid drop queries in the workers
@@ -509,8 +509,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.add(integer, in
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- Check that an invalid function name is still parsed correctly
@@ -522,8 +522,8 @@ INFO:  Propagating deparsed query: DROP FUNCTION missing_function(pg_catalog.int
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
                               deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  function missing_function(integer, text) does not exist")
- (localhost,57638,f,"ERROR:  function missing_function(integer, text) does not exist")
+ (<host>,xxxxx,f,"ERROR:  function missing_function(integer, text) does not exist")
+ (<host>,xxxxx,f,"ERROR:  function missing_function(integer, text) does not exist")
 (2 rows)
 
 -- Check that an invalid function name is still parsed correctly
@@ -535,8 +535,8 @@ INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_function(pg_c
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -546,8 +546,8 @@ INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_schema.missin
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
 (2 rows)
 
 SELECT deparse_and_run_on_workers($cmd$
@@ -557,8 +557,8 @@ INFO:  Propagating deparsed query: DROP FUNCTION IF EXISTS missing_func_without_
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
 (2 rows)
 
 -- create schema with weird names
@@ -570,8 +570,8 @@ SELECT run_command_on_workers($$
 $$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
+ (<host>,xxxxx,t,"CREATE SCHEMA")
 (2 rows)
 
 -- create table with weird names
@@ -600,8 +600,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- drop 2 functions at the same time
@@ -612,8 +612,8 @@ INFO:  Propagating deparsed query: DROP FUNCTION "CiTUS.TEEN2"."TeeNFunCT10N.1!?
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
      deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
+ (<host>,xxxxx,t,"DROP FUNCTION")
 (2 rows)
 
 -- a function with a default parameter
@@ -633,8 +633,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_default_pa
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- a function with IN and OUT parameters
@@ -654,8 +654,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_out_param(
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- a function with INOUT parameter
@@ -678,8 +678,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.square(numeric)
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- a function with variadic input.
@@ -709,8 +709,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.sum_avg(numeric
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- a function with a custom type IN parameter
@@ -731,8 +731,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_custom_par
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- a function that returns TABLE
@@ -753,8 +753,8 @@ INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_returns_ta
 CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line 6 at RAISE
       deparse_and_run_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
+ (<host>,xxxxx,t,"ALTER FUNCTION")
 (2 rows)
 
 -- clear objects
@@ -769,8 +769,8 @@ SELECT run_command_on_workers($$
 $$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 
 DROP ROLE function_role;

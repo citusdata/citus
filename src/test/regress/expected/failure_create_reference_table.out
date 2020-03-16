@@ -25,7 +25,7 @@ SELECT citus.mitmproxy('conn.onQuery().kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -43,7 +43,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="BEGIN").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -76,7 +76,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection error: <host>:xxxxx
 DETAIL:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
@@ -110,7 +110,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="COPY 3").kill()');
 
 SELECT create_reference_table('ref_table');
 NOTICE:  Copying data from local table...
-ERROR:  failed to COPY to shard xxxxx on localhost:xxxxx
+ERROR:  failed to COPY to shard xxxxx on <host>:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
@@ -145,7 +145,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 
 SELECT create_reference_table('ref_table');
 ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
@@ -175,7 +175,7 @@ SELECT shardid, nodeport, shardstate FROM pg_dist_shard_placement ORDER BY shard
  shardid  | nodeport | shardstate
 ---------------------------------------------------------------------
  10000008 |     9060 |          1
- 10000008 |    57637 |          1
+ 10000008 |    xxxxx |          1
 (2 rows)
 
 SET client_min_messages TO NOTICE;
@@ -202,8 +202,8 @@ SELECT create_reference_table('ref_table');
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  failure on connection marked as essential: <host>:xxxxx
 COMMIT;
 -- kill on ROLLBACK, should be rollbacked
 SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
@@ -222,7 +222,7 @@ NOTICE:  Copying data from local table...
 
 ROLLBACK;
 WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport | placementid
 ---------------------------------------------------------------------

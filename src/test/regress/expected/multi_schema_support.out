@@ -32,7 +32,7 @@ SELECT master_create_empty_shard('test_schema_support.nation_append');
 (1 row)
 
 -- append table to shard
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+SELECT master_append_table_to_shard(1190000, 'public.nation_local', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -63,7 +63,7 @@ SELECT master_create_empty_shard('test_schema_support."nation._''append"');
                    1190001
 (1 row)
 
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+SELECT master_append_table_to_shard(1190001, 'nation_local', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -78,7 +78,7 @@ SELECT COUNT(*) FROM test_schema_support."nation._'append";
 
 -- test master_append_table_to_shard with schema with search_path is set
 SET search_path TO test_schema_support;
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+SELECT master_append_table_to_shard(1190000, 'public.nation_local', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -92,7 +92,7 @@ SELECT COUNT(*) FROM nation_append;
 (1 row)
 
 -- test with search_path is set and shard name contains special characters
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+SELECT master_append_table_to_shard(1190001, 'nation_local', '<host>', :master_port);
  master_append_table_to_shard
 ---------------------------------------------------------------------
                    0.00533333
@@ -445,7 +445,7 @@ CREATE TABLE test_schema_support.nation_hash_collation(
 SELECT master_get_table_ddl_events('test_schema_support.nation_hash_collation') ORDER BY 1;
                                                                                                master_get_table_ddl_events
 ---------------------------------------------------------------------
- ALTER TABLE test_schema_support.nation_hash_collation OWNER TO postgres
+ ALTER TABLE test_schema_support.nation_hash_collation OWNER TO <user>
  CREATE TABLE test_schema_support.nation_hash_collation (n_nationkey integer NOT NULL, n_name character(25) NOT NULL COLLATE test_schema_support.english, n_regionkey integer NOT NULL, n_comment character varying(152))
 (2 rows)
 
@@ -727,7 +727,7 @@ DROP INDEX index1;
 SET search_path TO public;
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
-SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(1190000, '<host>', :worker_2_port, '<host>', :worker_1_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 
@@ -737,15 +737,15 @@ SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localh
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
  shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-          1 | localhost |    57637
-          1 | localhost |    57638
+          1 | <host> |    xxxxx
+          1 | <host> |    xxxxx
 (2 rows)
 
 --test with search_path is set
 SET search_path TO test_schema_support;
 -- mark shard as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
-SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT master_copy_shard_placement(1190000, '<host>', :worker_2_port, '<host>', :worker_1_port);
  master_copy_shard_placement
 ---------------------------------------------------------------------
 
@@ -755,8 +755,8 @@ SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localh
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
  shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-          1 | localhost |    57637
-          1 | localhost |    57638
+          1 | <host> |    xxxxx
+          1 | <host> |    xxxxx
 (2 rows)
 
 -- test master_apply_delete_command with schemas
@@ -1239,7 +1239,7 @@ PL/pgSQL function run_command_on_coordinator_and_workers(text) line 3 at EXECUTE
 
 (1 row)
 
-SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
+SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE <user> to "test-user"');
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------
 
@@ -1269,8 +1269,8 @@ NOTICE:  drop cascades to table schema_with_user.test_table
 SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP OWNED")
- (localhost,57638,t,"DROP OWNED")
+ (<host>,xxxxx,t,"DROP OWNED")
+ (<host>,xxxxx,t,"DROP OWNED")
 (2 rows)
 
 SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');

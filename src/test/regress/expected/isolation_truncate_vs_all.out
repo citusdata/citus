@@ -77,8 +77,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''truncate_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -103,8 +103,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''truncate_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -126,8 +126,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''truncate_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -151,8 +151,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -177,8 +177,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -202,8 +202,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -379,8 +379,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''truncate_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -405,8 +405,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''truncate_append%''');
 run_command_on_workers
 
-(localhost,57637,t,0)
-(localhost,57638,t,0)
+(<host>,xxxxx,t,0)
+(<host>,xxxxx,t,0)
 restore_isolation_tester_func
 
 
@@ -430,8 +430,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -456,8 +456,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 
@@ -481,8 +481,8 @@ count
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''truncate_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(<host>,xxxxx,t,"")
+(<host>,xxxxx,t,"")
 restore_isolation_tester_func
 
 

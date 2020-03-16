@@ -22,8 +22,8 @@ SELECT run_command_on_workers($$
 $$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,on)
- (localhost,57638,t,on)
+ (<host>,xxxxx,t,on)
+ (<host>,xxxxx,t,on)
 (2 rows)
 
 SHOW citus.node_conninfo;
@@ -37,8 +37,8 @@ SELECT run_command_on_workers($$
 $$);
        run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,sslmode=require)
- (localhost,57638,t,sslmode=require)
+ (<host>,xxxxx,t,sslmode=require)
+ (<host>,xxxxx,t,sslmode=require)
 (2 rows)
 
 SELECT run_command_on_workers($$
@@ -46,8 +46,8 @@ SELECT run_command_on_workers($$
 $$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
+ (<host>,xxxxx,t,t)
+ (<host>,xxxxx,t,t)
 (2 rows)
 
 SHOW ssl_ciphers;
@@ -61,7 +61,7 @@ SELECT run_command_on_workers($$
 $$);
              run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,TLSv1.2+HIGH:!aNULL:!eNULL)
- (localhost,57638,t,TLSv1.2+HIGH:!aNULL:!eNULL)
+ (<host>,xxxxx,t,TLSv1.2+HIGH:!aNULL:!eNULL)
+ (<host>,xxxxx,t,TLSv1.2+HIGH:!aNULL:!eNULL)
 (2 rows)
 

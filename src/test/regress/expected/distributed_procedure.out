@@ -5,8 +5,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE USER procedureuser;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 CREATE SCHEMA procedure_tests AUTHORIZATION procedureuser;
@@ -58,8 +58,8 @@ SELECT wait_until_metadata_sync();
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | CALL
- localhost |    57638 | t       | CALL
+ <host> |    xxxxx | t       | CALL
+ <host> |    xxxxx | t       | CALL
 (2 rows)
 
 SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
@@ -125,15 +125,15 @@ SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info2(te
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                                result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
- localhost |    57638 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info2('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | CALL
- localhost |    57638 | t       | CALL
+ <host> |    xxxxx | t       | CALL
+ <host> |    xxxxx | t       | CALL
 (2 rows)
 
 ALTER PROCEDURE raise_info2(text) RENAME TO raise_info;
@@ -154,8 +154,8 @@ WHERE proname = 'raise_info';
 $$);
                       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(procedureuser,procedure_tests,raise_info)")
- (localhost,57638,t,"(procedureuser,procedure_tests,raise_info)")
+ (<host>,xxxxx,t,"(procedureuser,procedure_tests,raise_info)")
+ (<host>,xxxxx,t,"(procedureuser,procedure_tests,raise_info)")
 (2 rows)
 
 -- change the schema of the procedure and verify the old schema doesn't exist anymore while
@@ -170,15 +170,15 @@ SELECT public.verify_function_is_same_on_workers('procedure_tests2.raise_info(te
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                                result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
- localhost |    57638 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
 (2 rows)
 
 SELECT * FROM run_command_on_workers($$CALL procedure_tests2.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | CALL
- localhost |    57638 | t       | CALL
+ <host> |    xxxxx | t       | CALL
+ <host> |    xxxxx | t       | CALL
 (2 rows)
 
 ALTER PROCEDURE procedure_tests2.raise_info(text) SET SCHEMA procedure_tests;
@@ -187,8 +187,8 @@ DROP PROCEDURE raise_info(text);
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
  nodename  | nodeport | success |                                result
 ---------------------------------------------------------------------
- localhost |    57637 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
- localhost |    57638 | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
+ <host> |    xxxxx | f       | ERROR:  procedure procedure_tests.raise_info(unknown) does not exist
 (2 rows)
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
@@ -196,23 +196,23 @@ DROP SCHEMA procedure_tests CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA procedure_tests CASCADE;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 
 DROP SCHEMA procedure_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
+ (<host>,xxxxx,t,"DROP SCHEMA")
 (2 rows)
 
 DROP USER procedureuser;
 SELECT run_command_on_workers($$DROP USER procedureuser;$$);
      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
 (2 rows)
 

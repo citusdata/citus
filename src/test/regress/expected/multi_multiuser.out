@@ -439,7 +439,7 @@ INSERT INTO full_access_user_schema.t1 VALUES (1),(2),(3);
 -- not allowed to create a table
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 ERROR:  permission denied for schema full_access_user_schema
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 RESET ROLE;
 SET ROLE usage_access;
 CREATE TYPE usage_access_type AS ENUM ('a', 'b');
@@ -470,15 +470,15 @@ SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
 SELECT run_command_on_workers($$SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type'$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,usage_access)
- (localhost,57638,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func'$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,usage_access)
- (localhost,57638,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
 (2 rows)
 
 SELECT wait_until_metadata_sync();
@@ -539,19 +539,19 @@ SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,usage_access)
- (localhost,57638,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
+ (<host>,xxxxx,t,usage_access)
 (2 rows)
 
 -- we don't want other tests to have metadata synced
 -- that might change the test outputs, so we're just trying to be careful
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT stop_metadata_sync_to_node('<host>', :worker_2_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -683,19 +683,19 @@ RESET ROLE;
 -- all attempts for transfer are initiated from other workers
 \c - - - :worker_2_port
 -- super user should not be able to copy files created by a user
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, '<host>', :worker_1_port);
 WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.xxxx": No such file or directory
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from <host>:xxxxx
 -- different user should not be able to fetch partition file
 SET ROLE usage_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, '<host>', :worker_1_port);
 WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.xxxx": No such file or directory
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
+ERROR:  could not receive file "base/pgsql_job_cache/job_0042/task_000001/p_00001" from <host>:xxxxx
 -- only the user whom created the files should be able to fetch
 SET ROLE full_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
+SELECT worker_fetch_partition_file(42, 1, 1, 1, '<host>', :worker_1_port);
  worker_fetch_partition_file
 ---------------------------------------------------------------------
 
@@ -832,8 +832,8 @@ RESET ROLE;
 SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
+ (<host>,xxxxx,t,"")
+ (<host>,xxxxx,t,"")
 (2 rows)
 
 DROP SCHEMA full_access_user_schema CASCADE;

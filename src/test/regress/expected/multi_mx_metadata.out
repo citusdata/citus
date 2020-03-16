@@ -309,8 +309,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 SET ROLE no_access_mx;
@@ -370,7 +370,7 @@ SELECT master_drop_sequences(NULL);
 
 (1 row)
 
-\c - postgres - :master_port
+\c - <user> - :master_port
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers
@@ -418,7 +418,7 @@ HINT:  Connect to the coordinator and run it again.
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
-\c - postgres - :worker_1_port
+\c - <user> - :worker_1_port
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
   Column  |  Type  |                                Modifiers
@@ -429,7 +429,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 (3 rows)
 
 -- Resume ordinary recovery
-\c - postgres - :master_port
+\c - <user> - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
  pg_reload_conf

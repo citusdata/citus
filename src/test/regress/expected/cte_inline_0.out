@@ -342,7 +342,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+               Node: host=<host> port=xxxxx dbname=<db>
                ->  Aggregate
                      ->  Seq Scan on test_table_1960000 test_table
                            Filter: (key = 1)
@@ -409,12 +409,12 @@ DEBUG:  Plan is router executable
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
+                     Node: host=<host> port=xxxxx dbname=<db>
                      ->  Seq Scan on test_table_1960000 test_table
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
+         Node: host=<host> port=xxxxx dbname=<db>
          ->  Aggregate
                ->  Merge Join
                      Merge Cond: (intermediate_result.key = intermediate_result_1.key)
@@ -723,7 +723,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
--- the CTEs are very simple, so postgres
+-- the CTEs are very simple, so <user>
 -- can pull-up the subqueries after inlining
 -- the CTEs, and the query that we send to workers
 -- becomes a join between two tables

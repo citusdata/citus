@@ -3,8 +3,8 @@ Parsed test spec with 3 sessions
 starting permutation: s1-grant s1-begin-insert s2-begin-insert s3-as-admin s3-as-user-1 s3-as-readonly s3-as-monitor s1-commit s2-commit
 run_command_on_workers
 
-(localhost,57637,t,"GRANT ROLE")
-(localhost,57638,t,"GRANT ROLE")
+(<host>,xxxxx,t,"GRANT ROLE")
+(<host>,xxxxx,t,"GRANT ROLE")
 step s1-grant:
  GRANT ALL ON test_table TO test_user_1;
  SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_1');
@@ -82,5 +82,5 @@ step s2-commit:
 
 run_command_on_workers
 
-(localhost,57637,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")
-(localhost,57638,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")
+(<host>,xxxxx,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")
+(<host>,xxxxx,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")

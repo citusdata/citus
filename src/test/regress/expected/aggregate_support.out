@@ -220,7 +220,7 @@ create aggregate sumstring(text) (
 );
 select sumstring(valf::text) from aggdata where valf is not null;
 ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 select create_distributed_function('sumstring(text)');
  create_distributed_function
 ---------------------------------------------------------------------
@@ -264,8 +264,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 select run_command_on_workers($$create user notsuper$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 grant all on schema aggregate_support to notsuper;
@@ -276,8 +276,8 @@ grant all on all tables in schema aggregate_support to notsuper;
 $$);
   run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,GRANT)
- (localhost,57638,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
+ (<host>,xxxxx,t,GRANT)
 (2 rows)
 
 set role notsuper;
@@ -431,6 +431,6 @@ RESET citus.task_executor_type;
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 ERROR:  type "aggregate_support.aggdata" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 set client_min_messages to error;
 drop schema aggregate_support cascade;

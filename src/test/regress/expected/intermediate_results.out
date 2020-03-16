@@ -242,7 +242,7 @@ END;
 -- pipe query output into a result file and create a table to check the result
 COPY (SELECT s, s*s FROM generate_series(1,5) s)
 TO PROGRAM
-  $$psql -h localhost -p 57636 -U postgres -d regression -c "BEGIN; COPY squares FROM STDIN WITH (format result); CREATE TABLE intermediate_results.squares AS SELECT * FROM read_intermediate_result('squares', 'text') AS res(x int, x2 int); END;"$$
+  $$psql -h <host> -p xxxxx -U <user> -d regression -c "BEGIN; COPY squares FROM STDIN WITH (format result); CREATE TABLE intermediate_results.squares AS SELECT * FROM read_intermediate_result('squares', 'text') AS res(x int, x2 int); END;"$$
 WITH (FORMAT text);
 SELECT * FROM squares ORDER BY x;
  x | x2
@@ -429,7 +429,7 @@ SELECT broadcast_intermediate_result('squares_1', 'SELECT s, s*s FROM generate_s
                              5
 (1 row)
 
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], 'localhost', :worker_2_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], '<host>', :worker_2_port);
  fetch_intermediate_results
 ---------------------------------------------------------------------
                         111
@@ -445,7 +445,7 @@ SELECT * FROM read_intermediate_result('squares_1', 'binary') AS res (x int, x2 
  5 | 25
 (5 rows)
 
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1']::text[], '<host>', :worker_1_port);
  fetch_intermediate_results
 ---------------------------------------------------------------------
                         111
@@ -464,14 +464,14 @@ SELECT * FROM read_intermediate_result('squares_1', 'binary') AS res (x int, x2 
 END;
 -- multiple results, and some error cases
 BEGIN;
-SELECT store_intermediate_result_on_node('localhost', :worker_1_port,
+SELECT store_intermediate_result_on_node('<host>', :worker_1_port,
                                          'squares_1', 'SELECT s, s*s FROM generate_series(1, 2) s');
  store_intermediate_result_on_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT store_intermediate_result_on_node('localhost', :worker_1_port,
+SELECT store_intermediate_result_on_node('<host>', :worker_1_port,
                                          'squares_2', 'SELECT s, s*s FROM generate_series(3, 4) s');
  store_intermediate_result_on_node
 ---------------------------------------------------------------------
@@ -484,16 +484,16 @@ SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[],
 ERROR:  result "squares_1" does not exist
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 2 should fail
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_2_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], '<host>', :worker_2_port);
 ERROR:  could not open file "base/pgsql_job_cache/xx_x_xxx/squares_1.data": No such file or directory
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ROLLBACK TO SAVEPOINT s1;
 -- still, results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 ERROR:  result "squares_1" does not exist
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 1 should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], '<host>', :worker_1_port);
  fetch_intermediate_results
 ---------------------------------------------------------------------
                         114
@@ -509,7 +509,7 @@ SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[],
 (4 rows)
 
 -- fetching again should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], '<host>', :worker_1_port);
  fetch_intermediate_results
 ---------------------------------------------------------------------
                         114
@@ -526,14 +526,14 @@ SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[],
 
 ROLLBACK TO SAVEPOINT s1;
 -- empty result id list should succeed
-SELECT * FROM fetch_intermediate_results(ARRAY[]::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY[]::text[], '<host>', :worker_1_port);
  fetch_intermediate_results
 ---------------------------------------------------------------------
                           0
 (1 row)
 
 -- null in result id list should error gracefully
-SELECT * FROM fetch_intermediate_results(ARRAY[NULL, 'squares_1', 'squares_2']::text[], 'localhost', :worker_1_port);
+SELECT * FROM fetch_intermediate_results(ARRAY[NULL, 'squares_1', 'squares_2']::text[], '<host>', :worker_1_port);
 ERROR:  worker array object cannot contain null values
 END;
 -- results should have been deleted after transaction commit

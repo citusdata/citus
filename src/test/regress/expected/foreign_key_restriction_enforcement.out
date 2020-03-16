@@ -473,7 +473,7 @@ DETAIL:  Reference relation "transitive_reference_table" is modified, which migh
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 1;
 ERROR:  insert or update on table "on_update_fkey_table_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (value_1)=(101) is not present in table "reference_table_2380001".
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	UPDATE on_update_fkey_table SET value_1 = 101 WHERE id = 3;

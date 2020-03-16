@@ -6,8 +6,8 @@ CREATE EXTENSION isn;
 SELECT run_command_on_workers($$CREATE EXTENSION isn;$$);
          run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57636,t,"CREATE EXTENSION")
- (localhost,57637,t,"CREATE EXTENSION")
+ (<host>,xxxxx,t,"CREATE EXTENSION")
+ (<host>,xxxxx,t,"CREATE EXTENSION")
 (2 rows)
 
 CREATE TABLE isn_dist_table (key int, value issn);
@@ -22,8 +22,8 @@ CREATE EXTENSION seg;
 SELECT run_command_on_workers($$CREATE EXTENSION seg;$$);
          run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57636,t,"CREATE EXTENSION")
- (localhost,57637,t,"CREATE EXTENSION")
+ (<host>,xxxxx,t,"CREATE EXTENSION")
+ (<host>,xxxxx,t,"CREATE EXTENSION")
 (2 rows)
 
 -- schema propagation --
@@ -54,15 +54,15 @@ CREATE TYPE fooschema.footype AS (x int, y int);
 SELECT run_command_on_workers($$CREATE SCHEMA fooschema;$$);
        run_command_on_workers
 ---------------------------------------------------------------------
-  (localhost,57636,t,"CREATE SCHEMA")
-  (localhost,57637,t,"CREATE SCHEMA")
+  (<host>,xxxxx,t,"CREATE SCHEMA")
+  (<host>,xxxxx,t,"CREATE SCHEMA")
  (2 rows)
 
  SELECT run_command_on_workers($$CREATE TYPE fooschema.footype AS (x int, y int);$$);
       run_command_on_workers
 ---------------------------------------------------------------------
-  (localhost,57636,t,"CREATE TYPE")
-  (localhost,57637,t,"CREATE TYPE")
+  (<host>,xxxxx,t,"CREATE TYPE")
+  (<host>,xxxxx,t,"CREATE TYPE")
  (2 rows)
 
  CREATE TABLE fooschema.footable (f fooschema.footype);

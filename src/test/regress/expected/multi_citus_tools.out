@@ -11,20 +11,20 @@ SET client_min_messages to ERROR;
 -- for this test only to have consistent behavior
 -- b/w PG 9.6+ and PG 9.5.
 \set SHOW_CONTEXT never
-SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
+SELECT * FROM master_run_on_worker(ARRAY['<host>']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   false);
  node_name | node_port | success |               result
 ---------------------------------------------------------------------
- localhost |       666 | f       | failed to connect to localhost:xxxxx
+ <host> |       666 | f       | failed to connect to <host>:xxxxx
 (1 row)
 
-SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
+SELECT * FROM master_run_on_worker(ARRAY['<host>']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   true);
  node_name | node_port | success |               result
 ---------------------------------------------------------------------
- localhost |       666 | f       | failed to connect to localhost:xxxxx
+ <host> |       666 | f       | failed to connect to <host>:xxxxx
 (1 row)
 
 RESET client_min_messages;
@@ -39,7 +39,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 0
+ <host> |     xxxxx | t       | 0
 (1 row)
 
 -- connect to the first worker and ask for shards, should fail with
@@ -49,7 +49,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |                  result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single column in query target
+ <host> |     xxxxx | f       | expected a single column in query target
 (1 row)
 
 -- query result may only contain a single row
@@ -58,7 +58,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
 (1 row)
 
 -- send multiple queries
@@ -69,8 +69,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   false);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 1
- localhost |     57637 | t       | 2
+ <host> |     xxxxx | t       | 1
+ <host> |     xxxxx | t       | 2
 (2 rows)
 
 -- send multiple queries, one fails
@@ -81,8 +81,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   false);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 1
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | t       | 1
+ <host> |     xxxxx | f       | expected a single row in query result
 (2 rows)
 
 -- send multiple queries, both fail
@@ -93,8 +93,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   false);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single row in query result
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
 (2 rows)
 
 -- can create tables at worker
@@ -105,8 +105,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   false);
  node_name | node_port | success |    result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | CREATE TABLE
- localhost |     57637 | t       | CREATE TABLE
+ <host> |     xxxxx | t       | CREATE TABLE
+ <host> |     xxxxx | t       | CREATE TABLE
 (2 rows)
 
 -- can insert into table
@@ -115,7 +115,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -123,7 +123,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 20
+ <host> |     xxxxx | t       | 20
 (1 row)
 
 -- insert into second table twice
@@ -132,7 +132,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -140,7 +140,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 -- check inserted values at second table
@@ -149,7 +149,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 40
+ <host> |     xxxxx | t       | 40
 (1 row)
 
 -- store worker node name and port again
@@ -164,7 +164,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |    result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | CREATE INDEX
+ <host> |     xxxxx | t       | CREATE INDEX
 (1 row)
 
 -- drop created tables
@@ -173,7 +173,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | DROP TABLE
+ <host> |     xxxxx | t       | DROP TABLE
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -181,7 +181,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | DROP TABLE
+ <host> |     xxxxx | t       | DROP TABLE
 (1 row)
 
 -- verify table is dropped
@@ -190,7 +190,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   false);
  node_name | node_port | success |                     result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | ERROR:  relation "second_table" does not exist
+ <host> |     xxxxx | f       | ERROR:  relation "second_table" does not exist
 (1 row)
 
 --
@@ -202,7 +202,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 0
+ <host> |     xxxxx | t       | 0
 (1 row)
 
 -- connect to the first worker and ask for shards, should fail with
@@ -212,7 +212,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |                  result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single column in query target
+ <host> |     xxxxx | f       | expected a single column in query target
 (1 row)
 
 -- query result may only contain a single row
@@ -221,7 +221,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
 (1 row)
 
 -- send multiple queries
@@ -232,8 +232,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   true);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 1
- localhost |     57637 | t       | 2
+ <host> |     xxxxx | t       | 1
+ <host> |     xxxxx | t       | 2
 (2 rows)
 
 -- send multiple queries, one fails
@@ -244,8 +244,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   true);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 1
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | t       | 1
+ <host> |     xxxxx | f       | expected a single row in query result
 (2 rows)
 
 -- send multiple queries, both fail
@@ -256,8 +256,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   true);
  node_name | node_port | success |                result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | expected a single row in query result
- localhost |     57637 | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
+ <host> |     xxxxx | f       | expected a single row in query result
 (2 rows)
 
 -- can create tables at worker
@@ -268,8 +268,8 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name, :node_name]::text[],
 								   true);
  node_name | node_port | success |    result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | CREATE TABLE
- localhost |     57637 | t       | CREATE TABLE
+ <host> |     xxxxx | t       | CREATE TABLE
+ <host> |     xxxxx | t       | CREATE TABLE
 (2 rows)
 
 -- store worker node name and port again
@@ -284,7 +284,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -292,7 +292,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 20
+ <host> |     xxxxx | t       | 20
 (1 row)
 
 -- insert into second table twice
@@ -301,7 +301,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -309,7 +309,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | INSERT 0 20
+ <host> |     xxxxx | t       | INSERT 0 20
 (1 row)
 
 -- check inserted values at second table
@@ -318,7 +318,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success | result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | 40
+ <host> |     xxxxx | t       | 40
 (1 row)
 
 -- create index on tables
@@ -327,7 +327,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |    result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | CREATE INDEX
+ <host> |     xxxxx | t       | CREATE INDEX
 (1 row)
 
 -- drop created tables
@@ -336,7 +336,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | DROP TABLE
+ <host> |     xxxxx | t       | DROP TABLE
 (1 row)
 
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
@@ -344,7 +344,7 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |   result
 ---------------------------------------------------------------------
- localhost |     57637 | t       | DROP TABLE
+ <host> |     xxxxx | t       | DROP TABLE
 (1 row)
 
 -- verify table is dropped
@@ -353,22 +353,22 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 								   true);
  node_name | node_port | success |                     result
 ---------------------------------------------------------------------
- localhost |     57637 | f       | ERROR:  relation "second_table" does not exist
+ <host> |     xxxxx | f       | ERROR:  relation "second_table" does not exist
 (1 row)
 
 -- run_command_on_XXX tests
 SELECT * FROM run_command_on_workers('select 1') ORDER BY 2 ASC;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | 1
- localhost |    57638 | t       | 1
+ <host> |    xxxxx | t       | 1
+ <host> |    xxxxx | t       | 1
 (2 rows)
 
 SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') ORDER BY 2 ASC;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | 0
- localhost |    57638 | t       | 0
+ <host> |    xxxxx | t       | 0
+ <host> |    xxxxx | t       | 0
 (2 rows)
 
 -- make sure run_on_all_placements respects shardstate
@@ -383,16 +383,16 @@ SELECT create_distributed_table('check_placements', 'key', 'hash');
 SELECT * FROM run_command_on_placements('check_placements', 'select 1');
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | 1240000 | t       | 1
- localhost |    57638 | 1240000 | t       | 1
- localhost |    57637 | 1240001 | t       | 1
- localhost |    57638 | 1240001 | t       | 1
- localhost |    57637 | 1240002 | t       | 1
- localhost |    57638 | 1240002 | t       | 1
- localhost |    57637 | 1240003 | t       | 1
- localhost |    57638 | 1240003 | t       | 1
- localhost |    57637 | 1240004 | t       | 1
- localhost |    57638 | 1240004 | t       | 1
+ <host> |    xxxxx | 1240000 | t       | 1
+ <host> |    xxxxx | 1240000 | t       | 1
+ <host> |    xxxxx | 1240001 | t       | 1
+ <host> |    xxxxx | 1240001 | t       | 1
+ <host> |    xxxxx | 1240002 | t       | 1
+ <host> |    xxxxx | 1240002 | t       | 1
+ <host> |    xxxxx | 1240003 | t       | 1
+ <host> |    xxxxx | 1240003 | t       | 1
+ <host> |    xxxxx | 1240004 | t       | 1
+ <host> |    xxxxx | 1240004 | t       | 1
 (10 rows)
 
 UPDATE pg_dist_shard_placement SET shardstate = 3
@@ -400,13 +400,13 @@ UPDATE pg_dist_shard_placement SET shardstate = 3
 SELECT * FROM run_command_on_placements('check_placements', 'select 1');
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
- localhost |    57638 | 1240000 | t       | 1
- localhost |    57637 | 1240001 | t       | 1
- localhost |    57638 | 1240001 | t       | 1
- localhost |    57638 | 1240002 | t       | 1
- localhost |    57637 | 1240003 | t       | 1
- localhost |    57638 | 1240003 | t       | 1
- localhost |    57638 | 1240004 | t       | 1
+ <host> |    xxxxx | 1240000 | t       | 1
+ <host> |    xxxxx | 1240001 | t       | 1
+ <host> |    xxxxx | 1240001 | t       | 1
+ <host> |    xxxxx | 1240002 | t       | 1
+ <host> |    xxxxx | 1240003 | t       | 1
+ <host> |    xxxxx | 1240003 | t       | 1
+ <host> |    xxxxx | 1240004 | t       | 1
 (7 rows)
 
 DROP TABLE check_placements CASCADE;
@@ -458,16 +458,16 @@ SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_tab
 												  'select 1');
  nodename  | nodeport | shardid1 | shardid2 | success | result
 ---------------------------------------------------------------------
- localhost |    57637 |  1240005 |  1240019 | t       | 1
- localhost |    57638 |  1240005 |  1240019 | t       | 1
- localhost |    57637 |  1240006 |  1240020 | t       | 1
- localhost |    57638 |  1240006 |  1240020 | t       | 1
- localhost |    57637 |  1240007 |  1240021 | t       | 1
- localhost |    57638 |  1240007 |  1240021 | t       | 1
- localhost |    57637 |  1240008 |  1240022 | t       | 1
- localhost |    57638 |  1240008 |  1240022 | t       | 1
- localhost |    57637 |  1240009 |  1240023 | t       | 1
- localhost |    57638 |  1240009 |  1240023 | t       | 1
+ <host> |    xxxxx |  1240005 |  1240019 | t       | 1
+ <host> |    xxxxx |  1240005 |  1240019 | t       | 1
+ <host> |    xxxxx |  1240006 |  1240020 | t       | 1
+ <host> |    xxxxx |  1240006 |  1240020 | t       | 1
+ <host> |    xxxxx |  1240007 |  1240021 | t       | 1
+ <host> |    xxxxx |  1240007 |  1240021 | t       | 1
+ <host> |    xxxxx |  1240008 |  1240022 | t       | 1
+ <host> |    xxxxx |  1240008 |  1240022 | t       | 1
+ <host> |    xxxxx |  1240009 |  1240023 | t       | 1
+ <host> |    xxxxx |  1240009 |  1240023 | t       | 1
 (10 rows)
 
 DROP TABLE check_colocated CASCADE;

@@ -31,14 +31,14 @@ INSERT INTO products VALUES(1, 'product_1', 1);
 INSERT INTO products VALUES(1, 'product_1', 1);
 ERROR:  duplicate key value violates unique constraint "p_key_1450001"
 DETAIL:  Key (product_no)=(1) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ALTER TABLE products DROP CONSTRAINT p_key;
 INSERT INTO products VALUES(1, 'product_1', 1);
 -- Can not create constraint since it conflicts with the existing data
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 ERROR:  could not create unique index "p_key_1450001"
 DETAIL:  Key (product_no)=(1) is duplicated.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products;
 -- Check "PRIMARY KEY CONSTRAINT" with reference table
 CREATE TABLE products_ref (
@@ -62,7 +62,7 @@ INSERT INTO products_ref VALUES(1, 'product_1', 1);
 INSERT INTO products_ref VALUES(1, 'product_1', 1);
 ERROR:  duplicate key value violates unique constraint "p_key_1450032"
 DETAIL:  Key (product_no)=(1) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products_ref;
 -- Check "PRIMARY KEY CONSTRAINT" on append table
 CREATE TABLE products_append (
@@ -114,7 +114,7 @@ INSERT INTO unique_test_table VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450035"
 DETAIL:  Key (id)=(X) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 ALTER TABLE unique_test_table DROP CONSTRAINT unn_id;
 -- Insert row which will conflict with the next unique constraint command
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
@@ -122,7 +122,7 @@ INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id UNIQUE(id);
 ERROR:  could not create unique index "unn_id_1450035"
 DETAIL:  Key (id)=(X) is duplicated.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- Can create unique constraint over multiple columns which must include
 -- distribution column
 ALTER TABLE unique_test_table ADD CONSTRAINT unn_id_name UNIQUE(id, name);
@@ -130,7 +130,7 @@ ALTER TABLE unique_test_table ADD CONSTRAINT unn_id_name UNIQUE(id, name);
 INSERT INTO unique_test_table VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_name_1450035"
 DETAIL:  Key (id, name)=(1, Mehmet) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE unique_test_table;
 -- Check "UNIQUE CONSTRAINT" with reference table
 CREATE TABLE unique_test_table_ref(id int, name varchar(20));
@@ -148,7 +148,7 @@ INSERT INTO unique_test_table_ref VALUES(1, 'Ahmet');
 INSERT INTO unique_test_table_ref VALUES(1, 'Mehmet');
 ERROR:  duplicate key value violates unique constraint "unn_id_1450066"
 DETAIL:  Key (id)=(X) already exists.
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 -- We can add unique constraint with multiple columns
 ALTER TABLE unique_test_table_ref DROP CONSTRAINT unn_id;
 ALTER TABLE unique_test_table_ref ADD CONSTRAINT unn_id_name UNIQUE(id,name);
@@ -202,12 +202,12 @@ ALTER TABLE products ADD CONSTRAINT p_multi_check CHECK(price > discounted_price
 INSERT INTO products VALUES(1, 'product_1', -1, -2);
 ERROR:  new row for relation "products_1450069" violates check constraint "p_check_1450069"
 DETAIL:  Failing row contains (1, product_1, -1, -2).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO products VALUES(1, 'product_1', 5, 3);
 INSERT INTO products VALUES(1, 'product_1', 2, 3);
 ERROR:  new row for relation "products_1450069" violates check constraint "p_multi_check_1450069"
 DETAIL:  Failing row contains (1, product_1, 2, 3).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products;
 -- Check "CHECK CONSTRAINT" with reference table
 CREATE TABLE products_ref (
@@ -230,12 +230,12 @@ ALTER TABLE products_ref ADD CONSTRAINT p_multi_check CHECK(price > discounted_p
 INSERT INTO products_ref VALUES(1, 'product_1', -1, -2);
 ERROR:  new row for relation "products_ref_1450100" violates check constraint "p_check_1450100"
 DETAIL:  Failing row contains (1, product_1, -1, -2).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO products_ref VALUES(1, 'product_1', 5, 3);
 INSERT INTO products_ref VALUES(1, 'product_1', 2, 3);
 ERROR:  new row for relation "products_ref_1450100" violates check constraint "p_multi_check_1450100"
 DETAIL:  Failing row contains (1, product_1, 2, 3).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products_ref;
 -- Check "CHECK CONSTRAINT" with append table
 CREATE TABLE products_append (
@@ -285,7 +285,7 @@ INSERT INTO products VALUES(2,'product_2', 5);
 INSERT INTO products VALUES(2,'product_2', 5);
 ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450126"
 DETAIL:  Key (product_no, name)=(2, product_2) conflicts with existing key (product_no, name)=(2, product_2).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products;
 -- Check "EXCLUSION CONSTRAINT" with reference table
 CREATE TABLE products_ref (
@@ -309,7 +309,7 @@ INSERT INTO products_ref VALUES(1,'product_2', 10);
 INSERT INTO products_ref VALUES(2,'product_2', 5);
 ERROR:  conflicting key value violates exclusion constraint "exc_name_1450134"
 DETAIL:  Key (name)=(product_2) conflicts with existing key (name)=(product_2).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 DROP TABLE products_ref;
 -- Check "EXCLUSION CONSTRAINT" with append table
 CREATE TABLE products_append (
@@ -358,7 +358,7 @@ ALTER TABLE products ALTER COLUMN name SET NOT NULL;
 INSERT INTO products VALUES(1,NULL,5);
 ERROR:  null value in column "name" violates not-null constraint
 DETAIL:  Failing row contains (1, null, 5).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO products VALUES(NULL,'product_1', 5);
 ERROR:  cannot perform an INSERT with NULL in the partition column
 DROP TABLE products;
@@ -379,7 +379,7 @@ ALTER TABLE products_ref ALTER COLUMN name SET NOT NULL;
 INSERT INTO products_ref VALUES(1,NULL,5);
 ERROR:  null value in column "name" violates not-null constraint
 DETAIL:  Failing row contains (1, null, 5).
-CONTEXT:  while executing command on localhost:xxxxx
+CONTEXT:  while executing command on <host>:xxxxx
 INSERT INTO products_ref VALUES(NULL,'product_1', 5);
 DROP TABLE products_ref;
 -- Check "NOT NULL" with append table
@@ -518,8 +518,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | alter_pk_idx_1450234
- localhost |    57638 | t       | alter_pk_idx_1450234
+ <host> |    xxxxx | t       | alter_pk_idx_1450234
+ <host> |    xxxxx | t       | alter_pk_idx_1450234
 (2 rows)
 
 CREATE SCHEMA sc2;
@@ -549,8 +549,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | alter_pk_idx_1450236
- localhost |    57638 | t       | alter_pk_idx_1450236
+ <host> |    xxxxx | t       | alter_pk_idx_1450236
+ <host> |    xxxxx | t       | alter_pk_idx_1450236
 (2 rows)
 
 -- We are running almost the same test with a slight change on the constraint name because if the constraint has a different name than the index, Postgres renames the index.
@@ -584,8 +584,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success |        result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | a_constraint_1450238
- localhost |    57638 | t       | a_constraint_1450238
+ <host> |    xxxxx | t       | a_constraint_1450238
+ <host> |    xxxxx | t       | a_constraint_1450238
 (2 rows)
 
 ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;
@@ -605,8 +605,8 @@ ORDER BY
     1,2,3,4;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
- localhost |    57637 | t       |
- localhost |    57638 | t       |
+ <host> |    xxxxx | t       |
+ <host> |    xxxxx | t       |
 (2 rows)
 
 SET search_path TO 'public';

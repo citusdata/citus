@@ -5,8 +5,8 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 SELECT run_command_on_workers($$CREATE USER collationuser;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
+ (<host>,xxxxx,t,"CREATE ROLE")
 (2 rows)
 
 CREATE SCHEMA collation_tests AUTHORIZATION collationuser;
@@ -25,7 +25,7 @@ WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
      collname     |     nspname     | rolname
 ---------------------------------------------------------------------
- german_phonebook | collation_tests | postgres
+ german_phonebook | collation_tests | <user>
 (1 row)
 
 \c - - - :master_port
@@ -90,8 +90,8 @@ WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
            collname            |     nspname     | rolname
 ---------------------------------------------------------------------
- german_phonebook              | collation_tests | postgres
- german_phonebook_unpropagated | collation_tests | postgres
+ german_phonebook              | collation_tests | <user>
+ german_phonebook_unpropagated | collation_tests | <user>
 (2 rows)
 
 \c - - - :master_port
@@ -108,7 +108,7 @@ ORDER BY 1,2,3;
            collname            |     nspname      |    rolname
 ---------------------------------------------------------------------
  german_phonebook2             | collation_tests2 | collationuser
- german_phonebook_unpropagated | collation_tests  | postgres
+ german_phonebook_unpropagated | collation_tests  | <user>
 (2 rows)
 
 \c - - - :master_port
@@ -129,7 +129,7 @@ DROP USER collationuser;
 SELECT run_command_on_workers($$DROP USER collationuser;$$);
      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
+ (<host>,xxxxx,t,"DROP ROLE")
 (2 rows)
 

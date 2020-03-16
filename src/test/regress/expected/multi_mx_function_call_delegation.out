@@ -495,13 +495,13 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test.x, r.cou
 (0 rows)
 
 -- Test that we don't propagate to non-metadata worker nodes
-select stop_metadata_sync_to_node('localhost', :worker_1_port);
+select stop_metadata_sync_to_node('<host>', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-select stop_metadata_sync_to_node('localhost', :worker_2_port);
+select stop_metadata_sync_to_node('<host>', :worker_2_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -521,13 +521,13 @@ PL/pgSQL function mx_call_func(integer,integer) line 8 at assignment
 (1 row)
 
 SET client_min_messages TO NOTICE;
-select start_metadata_sync_to_node('localhost', :worker_1_port);
+select start_metadata_sync_to_node('<host>', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-select start_metadata_sync_to_node('localhost', :worker_2_port);
+select start_metadata_sync_to_node('<host>', :worker_2_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 

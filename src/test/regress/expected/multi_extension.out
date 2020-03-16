@@ -32,7 +32,7 @@ SELECT datname, current_database(),
 FROM test.maintenance_worker();
   datname   | current_database | usename  | extowner
 ---------------------------------------------------------------------
- regression | regression       | postgres | postgres
+ regression | regression       | <user> | <user>
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -169,12 +169,12 @@ FROM pg_catalog.pg_database d
 ORDER BY 1;
     Name    |  Owner   |   Access privileges
 ---------------------------------------------------------------------
- postgres   | postgres |
- regression | postgres |
- template0  | postgres | =c/postgres          +
-            |          | postgres=CTc/postgres
- template1  | postgres | =c/postgres          +
-            |          | postgres=CTc/postgres
+ <user>   | <user> |
+ regression | <user> |
+ template0  | <user> | =c/<user>          +
+            |          | <user>=CTc/<user>
+ template1  | <user> | =c/<user>          +
+            |          | <user>=CTc/<user>
 (4 rows)
 
 -- We should not distribute table in version mistmatch
@@ -270,7 +270,7 @@ SELECT datname, current_database(),
 FROM test.maintenance_worker();
  datname | current_database | usename  | extowner
 ---------------------------------------------------------------------
- another | another          | postgres | postgres
+ another | another          | <user> | <user>
 (1 row)
 
 -- Test that database with active worker can be dropped.
@@ -329,7 +329,7 @@ HINT:  You can manually create a database and its extensions on workers.
 \c - - - :master_port
 \c another
 CREATE EXTENSION citus;
-SELECT FROM master_add_node('localhost', :worker_1_port);
+SELECT FROM master_add_node('<host>', :worker_1_port);
 --
 (1 row)
 

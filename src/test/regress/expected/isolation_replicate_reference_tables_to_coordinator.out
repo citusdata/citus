@@ -79,10 +79,10 @@ query          query_hostname query_hostport master_query_host_namemaster_query_
 
 
     update ref_table set a = a + 1;
-coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
 
     update ref_table set a = a + 1;
-localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+<host>      xxxxx          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
 step s2-view-worker:
 	SELECT query, query_hostname, query_hostport, master_query_host_name,
            master_query_host_port, state, wait_event_type, wait_event, usename, datname
@@ -94,10 +94,10 @@ step s2-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname
 
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)<host>      xxxxx          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)<host>      xxxxx          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)<host>      xxxxx          coordinator_host57636          idle in transactionClient         ClientRead     <user>       regression
 step s2-end:
     END;
 
