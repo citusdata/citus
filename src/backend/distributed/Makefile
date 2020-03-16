@@ -7,6 +7,13 @@ safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
 safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
 safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
 
+# Use cmake3 if it exists, otherwise just use the string "cmake" and let bash
+# figure out its exact path later.
+# Using "which cmake" instead will make the error very hard to understand if
+# you have neither "cmake3" or "cmake" in path. In that case the "CMAKE3"
+# variable would be an empty string.
+CMAKE3 = $(shell which cmake3 || echo cmake)
+
 MODULE_big = citus
 EXTENSION = citus
 
@@ -56,7 +63,7 @@ $(safestringlib_a): $(safestringlib_sources)
 	@# Makefile are not used
 	+cd $(safestringlib_builddir) && \
 		export LDFLAGS='' && export CPPFLAGS='' && \
-		cmake $(safestringlib_srcdir) && make
+		$(CMAKE3) $(safestringlib_srcdir) && make
 
 citus.so: $(safestringlib_a)
 
