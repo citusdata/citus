@@ -56,7 +56,6 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
-#include "distributed/metadata/namespace.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"

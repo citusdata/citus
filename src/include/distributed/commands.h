@@ -226,6 +226,7 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 										 Var *distributionColumn, uint32 colocationId);
 extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 													   bool missing_ok);
+extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 
 
 /* truncate.c - forward declarations */
