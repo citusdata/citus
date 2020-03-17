@@ -60,6 +60,21 @@ ALTER TABLE test DROP COLUMN z;
 SELECT y FROM test WHERE x = 1;
 END;
 
+SET citus.log_remote_commands TO ON;
+BEGIN;
+-- trigger local execution
+SELECT y FROM test WHERE x = 1;
+CREATE TABLE dist_table (a int);
+INSERT INTO dist_table SELECT * FROM generate_series(1, 100);
+-- this should be run locally
+SELECT create_distributed_table('dist_table', 'a', colocate_with := 'none');
+SELECT count(*) FROM dist_table;
+END;
+
+SET citus.log_remote_commands TO OFF;
+
+
+
 DELETE FROM test;
 DROP TABLE test;
 

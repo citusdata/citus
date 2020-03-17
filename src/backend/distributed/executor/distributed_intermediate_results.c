@@ -414,9 +414,16 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 	Tuplestorestate *resultStore = tuplestore_begin_heap(randomAccess, interTransactions,
 														 work_mem);
 
+	/*
+	 * Local execution is not supported because here we use perPlacementQueryStrings.
+	 * Local execution does not know how to handle it. One solution is to extract and set
+	 * queryStringLazy from perPlacementQueryStrings. The extracted one should be the
+	 * query string for the local placement.
+	 */
+	bool localExecutionSupported = false;
 	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
 							resultStore, hasReturning, targetPoolSize, &xactProperties,
-							NIL);
+							NIL, localExecutionSupported);
 
 	return resultStore;
 }
