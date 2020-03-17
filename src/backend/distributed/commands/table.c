@@ -39,7 +39,12 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-/* Local functions forward declarations for unsupported command checks */
+/*
+ * Local functions forward declarations for unsupported command checks and
+ * processing DROP TABLE commands
+ */
+static List * ExtractCitusTableOidsFromDropStmt(DropStmt *dropTableStatement);
+static void DetachPartitionsFromMXNodes(List *citusTableOids);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
@@ -70,35 +75,81 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 
 	Assert(dropTableStatement->removeType == OBJECT_TABLE);
 
+	List *citusTableOidList = ExtractCitusTableOidsFromDropStmt(dropTableStatement);
+
+	if (list_length(citusTableOidList) <= 0)
+	{
+		/* no citus tables are to be dropped by DROP command, simply return */
+		return NIL;
+	}
+
+	/* detach partitions of tables in MX nodes if any */
+	DetachPartitionsFromMXNodes(citusTableOidList);
+
+	return NIL;
+}
+
+
+/*
+ * ExtractCitusTableOidsFromDropStmt returns OIDs of the citus tables to be
+ * dropped in a DROP TABLE command.
+ */
+static List *
+ExtractCitusTableOidsFromDropStmt(DropStmt *dropTableStatement)
+{
+	/* this function is only used for DROP TABLE commands currently */
+	Assert(IsA(dropTableStatement, DropStmt) && dropTableStatement->removeType ==
+		   OBJECT_TABLE);
+
+	List *citusTableOids = NIL;
+
 	List *tableNameList = NULL;
 	foreach_ptr(tableNameList, dropTableStatement->objects)
 	{
 		RangeVar *tableRangeVar = makeRangeVarFromNameList(tableNameList);
-		bool missingOK = true;
 
-		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
+		const bool missingOK = true;
+		Oid relationOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
-		/* we're not interested in non-valid, non-distributed relations */
-		if (relationId == InvalidOid || !IsCitusTable(relationId))
+		if (!OidIsValid(relationOid) || !IsCitusTable(relationOid))
 		{
 			continue;
 		}
 
+		citusTableOids = lappend_oid(citusTableOids, relationOid);
+	}
+
+	return citusTableOids;
+}
+
+
+/*
+ * DetachPartitionsFromMXNodes sends commands to MX nodes for each partitioned
+ * table within the given OID list to DETACH partitions of those tables from
+ * their parents on MX nodes.
+ */
+static void
+DetachPartitionsFromMXNodes(List *citusTableOids)
+{
+	Oid relationOid = InvalidOid;
+	foreach_oid(relationOid, citusTableOids)
+	{
 		/* invalidate foreign key cache if the table involved in any foreign key */
-		if ((TableReferenced(relationId) || TableReferencing(relationId)))
+		if (TableReferenced(relationOid) || TableReferencing(relationOid))
 		{
 			MarkInvalidateForeignKeyGraph();
 		}
 
 		/* we're only interested in partitioned and mx tables */
-		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
+		if (!ShouldSyncTableMetadata(relationOid) || !PartitionedTable(relationOid))
 		{
 			continue;
 		}
 
+		/* drop commands are only allowed from coordinator */
 		EnsureCoordinator();
 
-		List *partitionList = PartitionList(relationId);
+		List *partitionList = PartitionList(relationOid);
 		if (list_length(partitionList) == 0)
 		{
 			continue;
@@ -106,17 +157,15 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 
 		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
+		Oid partitionRelationOid = InvalidOid;
+		foreach_oid(partitionRelationOid, partitionList)
 		{
-			char *detachPartitionCommand =
-				GenerateDetachPartitionCommand(partitionRelationId);
+			const char *detachPartitionCommand =
+				GenerateDetachPartitionCommand(partitionRelationOid);
 
 			SendCommandToWorkersWithMetadata(detachPartitionCommand);
 		}
 	}
-
-	return NIL;
 }
 
 
@@ -840,8 +889,8 @@ ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
  * ErrorIfUnsupportedConstraint runs checks related to unique index / exclude
  * constraints.
  *
- * The function skips the uniqeness checks for reference tables (i.e., distribution
- * method is 'none').
+ * The function skips the uniqueness checks for reference tables (i.e.,
+ * distribution method is 'none').
  *
  * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned
  * tables, since currently there is no way of enforcing uniqueness for
