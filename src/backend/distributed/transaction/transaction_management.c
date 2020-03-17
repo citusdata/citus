@@ -657,12 +657,22 @@ SwallowErrors(void (*func)())
 {
 	MemoryContext savedContext = CurrentMemoryContext;
 
+	/*
+	 * Backup counters that are reset when an ERROR is thrown for us to restore if we
+	 * decide to swallow the error
+	 */
+	volatile uint32 oldInterruptHoldoffCount = InterruptHoldoffCount;
+	volatile uint32 oldQueryCancelHoldoffCount = QueryCancelHoldoffCount;
+	volatile uint32 oldCritSectionCount = CritSectionCount;
+
 	PG_TRY();
 	{
 		func();
 	}
 	PG_CATCH();
 	{
+		/* copy error data needs to copy the data into a non ErrorContext */
+		MemoryContextSwitchTo(savedContext);
 		ErrorData *edata = CopyErrorData();
 
 		/* don't try to intercept PANIC or FATAL, let those breeze past us */
@@ -677,7 +687,11 @@ SwallowErrors(void (*func)())
 
 		/* leave the error handling system */
 		FlushErrorState();
-		MemoryContextSwitchTo(savedContext);
+
+		/* reset counters that got cleared, rest of code relies on these counters */
+		InterruptHoldoffCount = oldInterruptHoldoffCount;
+		QueryCancelHoldoffCount = oldQueryCancelHoldoffCount;
+		CritSectionCount = oldCritSectionCount;
 	}
 	PG_END_TRY();
 }
