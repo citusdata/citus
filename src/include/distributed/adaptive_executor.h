@@ -11,7 +11,7 @@ extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;
 
 extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
-							  int targetPoolSize);
+							  int targetPoolSize, bool localExecutionSupported);
 extern uint64 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 												int targetPoolSize, List *jobIdList);
 

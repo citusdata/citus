@@ -553,7 +553,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 PlannedStmt *
 GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
-	if (distributedPlan->workerJob == NULL)
+	if (distributedPlan == NULL || distributedPlan->workerJob == NULL)
 	{
 		return NULL;
 	}

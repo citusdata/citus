@@ -861,7 +861,8 @@ ExecuteUtilityTaskListWithoutResults(List *taskList, bool localExecutionSupporte
 	/* execute remote tasks if any */
 	if (list_length(remoteTaskList) > 0)
 	{
-		ExecuteTaskList(rowModifyLevel, remoteTaskList, MaxAdaptiveExecutorPoolSize);
+		ExecuteTaskList(rowModifyLevel, remoteTaskList, MaxAdaptiveExecutorPoolSize,
+						false);
 	}
 }
 
@@ -884,7 +885,7 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, jobIdList);
+								   &xactProperties, jobIdList, true);
 }
 
 
@@ -893,7 +894,8 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
  * for some of the arguments.
  */
 uint64
-ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
+ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize, bool
+				localExecutionSupported)
 {
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = NULL;
@@ -904,7 +906,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize)
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, NIL);
+								   &xactProperties, NIL, localExecutionSupported);
 }
 
 
@@ -924,7 +926,7 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, NIL);
+								   &xactProperties, NIL, true);
 }
 
 
@@ -936,9 +938,30 @@ uint64
 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
 						bool hasReturning, int targetPoolSize,
-						TransactionProperties *xactProperties, List *jobIdList)
+						TransactionProperties *xactProperties,
+						List *jobIdList,
+						bool localExecutionSupported)
 {
 	ParamListInfo paramListInfo = NULL;
+	uint64 locallyProcessedRows = 0;
+	List *localTaskList = NIL;
+	List *remoteTaskList = NIL;
+
+	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
+	{
+		bool readOnlyPlan = false;
+
+		/* set local (if any) & remote tasks */
+		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
+								   &remoteTaskList);
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, NULL,
+													 NULL,
+													 tupleStore);
+	}
+	else
+	{
+		remoteTaskList = taskList;
+	}
 
 	/*
 	 * If current transaction accessed local placements and task list includes
@@ -946,7 +969,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * then we should error out as it would cause inconsistencies across the
 	 * remote connection and local execution.
 	 */
-	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(taskList))
+	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
@@ -957,7 +980,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	}
 
 	DistributedExecution *execution =
-		CreateDistributedExecution(modLevel, taskList, hasReturning, paramListInfo,
+		CreateDistributedExecution(modLevel, remoteTaskList, hasReturning, paramListInfo,
 								   tupleDescriptor, tupleStore, targetPoolSize,
 								   xactProperties, jobIdList);
 
@@ -965,7 +988,7 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	RunDistributedExecution(execution);
 	FinishDistributedExecution(execution);
 
-	return execution->rowsProcessed;
+	return execution->rowsProcessed + locallyProcessedRows;
 }
 
 

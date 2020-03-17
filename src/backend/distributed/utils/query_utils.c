@@ -133,6 +133,31 @@ ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 
 
 /*
+ * SplitIntoQueries returns a list of queries by splitting
+ * the given concatenated query string with delimiter ';'
+ */
+List *
+SplitIntoQueries(char *concatenatedQueryString)
+{
+	List *queries = NIL;
+	rsize_t len = (rsize_t) strlen(concatenatedQueryString);
+	char *delimiter = ";";
+	char *remaining = concatenatedQueryString;
+	char *query = strtok_s(concatenatedQueryString, &len, delimiter, &remaining);
+	while (query != NULL)
+	{
+		queries = lappend(queries, query);
+		if (len == 0)
+		{
+			break;
+		}
+		query = strtok_s(NULL, &len, delimiter, &remaining);
+	}
+	return queries;
+}
+
+
+/*
  * ExtractRangeTableEntryWalker walks over a query tree, and finds all range
  * table entries. For recursing into the query tree, this function uses the
  * query tree walker since the expression tree walker doesn't recurse into

@@ -413,7 +413,7 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 
 	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
 							resultStore, hasReturning, targetPoolSize, &xactProperties,
-							NIL);
+							NIL, false);
 
 	return resultStore;
 }

@@ -565,7 +565,11 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
   -- would error out
   CREATE TABLE another_dist_table(a int);
   SELECT create_distributed_table('another_dist_table', 'a', colocate_with:='dist_table');
-ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 COMMIT;
 ---------------------------------------------------------------------
 ------------ partitioned tables -------------
@@ -721,7 +725,7 @@ TRUNCATE partitioning_test;
 DROP TABLE partitioning_test;
 -- cleanup at exit
 DROP SCHEMA local_commands_test_schema CASCADE;
-NOTICE:  drop cascades to 16 other objects
+NOTICE:  drop cascades to 18 other objects
 DROP SCHEMA foo_schema;
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
  ?column?

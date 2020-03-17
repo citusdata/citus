@@ -546,7 +546,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		poolSize = MaxAdaptiveExecutorPoolSize;
 	}
 
-	ExecuteTaskList(ROW_MODIFY_NONE, taskList, poolSize);
+	ExecuteTaskList(ROW_MODIFY_NONE, taskList, poolSize, true);
 }
 
 

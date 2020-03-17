@@ -489,6 +489,38 @@ BEGIN;
 COPY reference_table FROM STDIN;
 ROLLBACK;
 SET citus.enable_local_execution = 'on';
+CREATE TABLE ref_table(a int);
+INSERT INTO ref_table VALUES(1);
+BEGIN;
+-- trigger local execution
+SELECT COUNT(*) FROM reference_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.reference_table_1570000 reference_table
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- shard creation should be done locally
+SELECT create_reference_table('ref_table');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1330000, 'local_shard_copy', 'CREATE TABLE local_shard_copy.ref_table (a integer)')
+NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  Copying data from local table...
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table VALUES(2);
+NOTICE:  executing the command locally: INSERT INTO local_shard_copy.ref_table_1330000 (a) VALUES (2)
+-- verify that it worked.
+SELECT COUNT(*) FROM ref_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.ref_table_1330000 ref_table
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+ROLLBACK;
 SET client_min_messages TO ERROR;
 SET search_path TO public;
 DROP SCHEMA local_shard_copy CASCADE;

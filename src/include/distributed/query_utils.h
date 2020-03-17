@@ -34,6 +34,7 @@ extern bool ExtractRangeTableList(Node *node, ExtractRangeTableWalkerContext *co
 /* Below two functions wrap ExtractRangeTableList function to determine the execution flow */
 extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
+extern List * SplitIntoQueries(char *concatenatedQueryString);
 
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 
