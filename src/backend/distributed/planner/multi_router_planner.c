@@ -635,11 +635,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 									 NULL, NULL);
 			}
 
-			if (cteQuery->hasForUpdate)
+			if (cteQuery->hasForUpdate &&
+				FindNodeCheckInRangeTableList(cteQuery->rtable, IsReferenceTableRTE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "Router planner doesn't support SELECT FOR UPDATE"
-									 " in common table expressions.",
+									 " in common table expressions involving reference tables.",
 									 NULL, NULL);
 			}
 
@@ -3168,7 +3169,7 @@ MultiRouterPlannableQuery(Query *query)
 
 			/*
 			 * Currently, we don't support tables with replication factor > 1,
-			 * except reference tables with SELECT ... FOR UDPATE queries. It is
+			 * except reference tables with SELECT ... FOR UPDATE queries. It is
 			 * also not supported from MX nodes.
 			 */
 			if (query->hasForUpdate)

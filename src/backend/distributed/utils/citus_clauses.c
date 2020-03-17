@@ -71,7 +71,7 @@ ExecuteMasterEvaluableFunctionsAndParameters(Query *query, PlanState *planState)
 
 
 /*
- * ExecuteMasterEvaluableParameters evaluates external paramaters that can be
+ * ExecuteMasterEvaluableParameters evaluates external parameters that can be
  * resolved to a constant.
  */
 void
@@ -87,7 +87,7 @@ ExecuteMasterEvaluableParameters(Query *query, PlanState *planState)
 
 
 /*
- * PartiallyEvaluateExpression descend into an expression tree to evaluate
+ * PartiallyEvaluateExpression descends into an expression tree to evaluate
  * expressions that can be resolved to a constant on the master. Expressions
  * containing a Var are skipped, since the value of the Var is not known
  * on the master.

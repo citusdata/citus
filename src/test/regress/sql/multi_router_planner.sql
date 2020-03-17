@@ -171,6 +171,32 @@ SELECT * FROM articles_hash WHERE author_id IN (1, NULL) ORDER BY id;
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT * FROM first_author;
 
+-- SELECT FOR UPDATE is supported if not involving reference table
+BEGIN;
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+
+WITH first_author AS (
+    SELECT id, word_count FROM articles_hash WHERE author_id = 2
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.word_count::text
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+
+-- Without FOR UPDATE this is router plannable
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+ROLLBACK;
+
 -- queries with CTEs are supported even if CTE is not referenced inside query
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT title FROM articles_hash WHERE author_id = 1;

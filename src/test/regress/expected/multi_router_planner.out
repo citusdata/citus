@@ -314,6 +314,44 @@ DETAIL:  distribution column value: 1
  41
 (5 rows)
 
+-- SELECT FOR UPDATE is supported if not involving reference table
+BEGIN;
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+DEBUG:  Router planner doesn't support SELECT FOR UPDATE in common table expressions involving reference tables.
+DEBUG:  generating subplan XXX_1 for CTE first_author: SELECT articles_hash.id, auref.name FROM public.articles_hash, public.authors_reference auref WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (auref.id OPERATOR(pg_catalog.=) articles_hash.author_id)) FOR UPDATE OF articles_hash FOR UPDATE OF auref
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE public.articles_hash SET title = first_author.name FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name character varying(20))) first_author WHERE ((articles_hash.author_id OPERATOR(pg_catalog.=) 2) AND (articles_hash.id OPERATOR(pg_catalog.=) first_author.id))
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+WITH first_author AS (
+    SELECT id, word_count FROM articles_hash WHERE author_id = 2
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.word_count::text
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+-- Without FOR UPDATE this is router plannable
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 2
+ROLLBACK;
 -- queries with CTEs are supported even if CTE is not referenced inside query
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT title FROM articles_hash WHERE author_id = 1;
