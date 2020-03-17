@@ -785,7 +785,11 @@ HasDependentJobs(Job *mainJob)
 static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
-	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
+	EState *estate = ScanStateGetExecutorState(scanState);
+	uint64 rowsProcessed = ExecuteLocalTaskList(execution->localTaskList,
+												estate->es_param_list_info,
+												scanState->distributedPlan,
+												scanState->tuplestorestate);
 
 	/*
 	 * We're deliberately not setting execution->rowsProcessed here. The main reason
