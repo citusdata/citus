@@ -655,7 +655,7 @@ ActiveSubXactContexts(void)
 static void
 SwallowErrors(void (*func)())
 {
-	MemoryContext savedContext = CurrentMemoryContext;
+	volatile MemoryContext savedContext = CurrentMemoryContext;
 
 	/*
 	 * Backup counters that are reset when an ERROR is thrown for us to restore if we
