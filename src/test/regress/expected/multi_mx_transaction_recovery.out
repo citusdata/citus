@@ -142,7 +142,7 @@ INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
 SELECT count(*) FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
-     4
+     2
 (1 row)
 
 SELECT recover_prepared_transactions();

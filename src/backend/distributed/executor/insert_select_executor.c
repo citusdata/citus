@@ -26,6 +26,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/local_executor.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_access_tracking.h"
@@ -135,15 +136,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		bool hasReturning = distributedPlan->hasReturning;
 		HTAB *shardStateHash = NULL;
 
-		/*
-		 * INSERT .. SELECT via coordinator consists of two steps, a SELECT is
-		 * followd by a COPY. If the SELECT is executed locally, then the COPY
-		 * would fail since Citus currently doesn't know how to handle COPY
-		 * locally. So, to prevent the command fail, we simply disable local
-		 * execution.
-		 */
-		DisableLocalExecution();
-
 		/* select query to execute */
 		Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
 
@@ -198,7 +190,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 				GetDistributedPlan((CustomScan *) selectPlan->planTree);
 			Job *distSelectJob = distSelectPlan->workerJob;
 			List *distSelectTaskList = distSelectJob->taskList;
-			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 			bool randomAccess = true;
 			bool interTransactions = false;
 			bool binaryFormat =
@@ -280,11 +271,10 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
-			uint64 rowsInserted = ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE,
-																taskList,
-																tupleDescriptor,
-																scanState->tuplestorestate,
-																hasReturning);
+			uint64 rowsInserted = ExtractAndExecuteLocalAndRemoteTasks(scanState,
+																	   taskList,
+																	   ROW_MODIFY_COMMUTATIVE,
+																	   hasReturning);
 
 			executorState->es_processed = rowsInserted;
 		}
@@ -335,17 +325,15 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			if (prunedTaskList != NIL)
 			{
-				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 				bool randomAccess = true;
 				bool interTransactions = false;
 
 				Assert(scanState->tuplestorestate == NULL);
 				scanState->tuplestorestate =
 					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-				ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
-											  tupleDescriptor, scanState->tuplestorestate,
-											  hasReturning);
+				ExtractAndExecuteLocalAndRemoteTasks(scanState, prunedTaskList,
+													 ROW_MODIFY_COMMUTATIVE,
+													 hasReturning);
 
 				if (SortReturning && hasReturning)
 				{
