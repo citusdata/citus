@@ -118,6 +118,8 @@ INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 SET search_path TO 'truncate_from_workers';
 -- make sure that DMLs-SELECTs works along with TRUNCATE worker fine
 BEGIN;
+	-- we can enable local execution when truncate can be executed locally.
+	SET citus.enable_local_execution = 'off';
 	INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 	SELECT count(*) FROM on_update_fkey_table;
  count

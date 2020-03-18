@@ -35,6 +35,7 @@ SELECT create_reference_table('ref_table');
 INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
 INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
 INSERT INTO ref_table  VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
+NOTICE:  executing the command locally: INSERT INTO locally_execute_intermediate_results.ref_table_1580008 AS citus_table_alias (key, value) VALUES (1,'1'::text), (2,'2'::text), (3,'3'::text), (4,'4'::text), (5,'5'::text), (6,'6'::text)
 -- prevent PG 11 - PG 12 outputs to diverge
 -- and have a lot more CTEs recursively planned for the
 -- sake of increasing the test coverage
@@ -270,6 +271,7 @@ key
 FROM a JOIN ref_table USING (key)
 GROUP BY key
 HAVING (max(ref_table.value) <= (SELECT value FROM a));
+NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
  count | key
 ---------------------------------------------------------------------
      1 |   6
@@ -328,7 +330,9 @@ DEBUG:  Subplan XXX_2 will be written to local file
 NOTICE:  executing the command locally: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key))
  key | value
 ---------------------------------------------------------------------
    4 | 4
@@ -766,6 +770,7 @@ DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT max(key) AS key FROM (SEL
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table USING (key))
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  key | value
