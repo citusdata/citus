@@ -60,7 +60,6 @@
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
@@ -96,8 +95,6 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
-static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
-											 source);
 
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
@@ -1301,24 +1298,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.enable_statistics_collection",
-		gettext_noop("Enables sending basic usage statistics to Citus."),
-		gettext_noop("Citus uploads daily anonymous usage reports containing "
-					 "rounded node count, shard size, distributed table count, "
-					 "and operating system name. This configuration value controls "
-					 "whether these reports are sent."),
-		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
-		true,
-#else
-		false,
-#endif
-		PGC_SIGHUP,
-		GUC_SUPERUSER_ONLY,
-		&StatisticsCollectionGucCheckHook,
-		NULL, NULL);
-
 	DefineCustomStringVariable(
 		"citus.node_conninfo",
 		gettext_noop("Sets parameters used for outbound connections."),
@@ -1477,26 +1456,4 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 	}
 
 	PQconninfoFree(optionArray);
-}
-
-
-static bool
-StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
-{
-#ifdef HAVE_LIBCURL
-	return true;
-#else
-
-	/* if libcurl is not installed, only accept false */
-	if (*newval)
-	{
-		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
-		GUC_check_errdetail("Citus was compiled without libcurl support.");
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-#endif
 }
