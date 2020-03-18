@@ -574,7 +574,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 				createdColocationGroup = true;
 			}
 		}
-		else if (pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0)
+		else if (IsColocateWithNone(colocateWithTableName))
 		{
 			colocationId = GetNextColocationId();
 
