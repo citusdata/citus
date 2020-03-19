@@ -7,13 +7,6 @@ safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
 safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
 safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
 
-# Use cmake3 if it exists, otherwise just use the string "cmake" and let bash
-# figure out its exact path later.
-# Using "which cmake" instead will make the error very hard to understand if
-# you have neither "cmake3" or "cmake" in path. In that case the "CMAKE3"
-# variable would be an empty string.
-CMAKE3 = $(shell which cmake3 || echo cmake)
-
 MODULE_big = citus
 EXTENSION = citus
 
@@ -23,7 +16,11 @@ generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_fi
 DATA_built = $(generated_sql_files)
 
 # directories with source files
-SUBDIRS = . commands connection ddl deparser executor master metadata planner progress relay test transaction utils worker
+SUBDIRS = . commands connection ddl deparser executor master metadata planner progress relay safeclib test transaction utils worker
+
+# Symlinks are not copied over to the build directory if a separete build
+# directory is used during configure (such as on CI)
+ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS
@@ -50,22 +47,10 @@ utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
 
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
-override LDFLAGS += $(safestringlib_a)
 override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 SQL_DEPDIR=.deps/sql
 SQL_BUILDDIR=build/sql
-
-$(safestringlib_a): $(safestringlib_sources)
-	rm -rf $(safestringlib_builddir)
-	mkdir -p $(safestringlib_builddir)
-	@# exports of LDFLAGS and CPPFLAGS are to make sure the ones from this
-	@# Makefile are not used
-	+cd $(safestringlib_builddir) && \
-		export LDFLAGS='' && export CPPFLAGS='' && \
-		$(CMAKE3) $(safestringlib_srcdir) && make
-
-citus.so: $(safestringlib_a)
 
 $(generated_sql_files): $(citus_abs_srcdir)/build/%: %
 	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
