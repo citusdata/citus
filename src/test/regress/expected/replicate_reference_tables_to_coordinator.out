@@ -17,7 +17,6 @@ SELECT create_reference_table('squares');
 (1 row)
 
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
-NOTICE:  executing the copy locally for shard xxxxx
 -- should be executed locally
 SELECT count(*) FROM squares;
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.squares_8000000 squares

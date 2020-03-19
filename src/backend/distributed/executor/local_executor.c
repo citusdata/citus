@@ -232,48 +232,6 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 
 
 /*
- * ExtractAndExecuteLocalAndRemoteTasks extracts local and remote tasks
- * if local execution can be used and executes them.
- */
-uint64
-ExtractAndExecuteLocalAndRemoteTasks(CitusScanState *scanState,
-									 List *taskList, RowModifyLevel rowModifyLevel, bool
-									 hasReturning)
-{
-	uint64 processedRows = 0;
-	List *localTaskList = NIL;
-	List *remoteTaskList = NIL;
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-
-	if (ShouldExecuteTasksLocally(taskList))
-	{
-		bool readOnlyPlan = false;
-
-		/* set local (if any) & remote tasks */
-		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
-								   &remoteTaskList);
-		processedRows += ExecuteLocalTaskList(scanState, localTaskList);
-	}
-	else
-	{
-		/* all tasks should be executed via remote connections */
-		remoteTaskList = taskList;
-	}
-
-	/* execute remote tasks if any */
-	if (list_length(remoteTaskList) > 0)
-	{
-		processedRows += ExecuteTaskListIntoTupleStore(rowModifyLevel, remoteTaskList,
-													   tupleDescriptor,
-													   scanState->tuplestorestate,
-													   hasReturning);
-	}
-
-	return processedRows;
-}
-
-
-/*
  * ExtractParametersForLocalExecution extracts parameter types and values
  * from the given ParamListInfo structure, and fills parameter type and
  * value arrays. It does not change the oid of custom types, because the

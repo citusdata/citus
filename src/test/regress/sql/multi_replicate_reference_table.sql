@@ -323,7 +323,6 @@ DROP TABLE replicate_reference_table_insert;
 CREATE TABLE replicate_reference_table_copy(column1 int);
 SELECT create_reference_table('replicate_reference_table_copy');
 
-SET citus.enable_local_execution = 'off';
 BEGIN;
 COPY replicate_reference_table_copy FROM STDIN;
 1
@@ -334,8 +333,6 @@ COPY replicate_reference_table_copy FROM STDIN;
 \.
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ROLLBACK;
-
-RESET citus.enable_local_execution;
 
 DROP TABLE replicate_reference_table_copy;
 

@@ -553,10 +553,6 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 PlannedStmt *
 GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
-	if (distributedPlan->workerJob == NULL)
-	{
-		return NULL;
-	}
 	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
 	LocalPlannedStatement *localPlannedStatement = NULL;
 

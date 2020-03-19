@@ -21,9 +21,6 @@ extern bool TransactionAccessedLocalPlacement;
 extern bool TransactionConnectedToLocalGroup;
 
 /* extern function declarations */
-extern uint64 ExtractAndExecuteLocalAndRemoteTasks(CitusScanState *scanState,
-												   List *taskList, RowModifyLevel
-												   rowModifyLevel, bool hasReturning);
 extern uint64 ExecuteLocalTaskList(CitusScanState *scanState, List *taskList);
 extern void ExecuteLocalUtilityTaskList(List *localTaskList);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,

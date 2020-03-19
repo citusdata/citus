@@ -499,13 +499,11 @@ SELECT create_reference_table('replicate_reference_table_copy');
 
 (1 row)
 
-SET citus.enable_local_execution = 'off';
 BEGIN;
 COPY replicate_reference_table_copy FROM STDIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
-RESET citus.enable_local_execution;
 DROP TABLE replicate_reference_table_copy;
 -- test executing DDL command then adding a new node in a transaction
 CREATE TABLE replicate_reference_table_ddl(column1 int);
