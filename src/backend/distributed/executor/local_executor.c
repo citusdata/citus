@@ -67,6 +67,9 @@
  *  use local query execution since local execution is sequential. Basically,
  *  we do not want to lose parallelism across local tasks by switching to local
  *  execution.
+ *  - The local execution currently only supports queries. In other words, any
+ *  utility commands like TRUNCATE, fails if the command is executed after a local
+ *  execution inside a transaction block.
  *  - The local execution cannot be mixed with the executors other than adaptive,
  *  namely task-tracker executor.
  *  - Related with the previous item, COPY command cannot be mixed with local
@@ -76,7 +79,6 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
-#include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
@@ -88,7 +90,6 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
 #include "distributed/transaction_management.h"
-#include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
 #if PG_VERSION_NUM >= 120000
@@ -117,8 +118,6 @@ static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
-static void LocallyExecuteUtilityTask(const char *utilityCommand);
-static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 
 
 /*
@@ -243,98 +242,6 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
 								   parameterValues, true);
-}
-
-
-/*
- * ExecuteLocalUtilityTaskList executes a list of tasks locally. This function
- * also logs local execution notice for each task and sets
- * TransactionAccessedLocalPlacement to true for next set of possible queries
- * & commands within the current transaction block. See the comment in function.
- */
-void
-ExecuteLocalUtilityTaskList(List *localTaskList)
-{
-	Task *localTask = NULL;
-
-	foreach_ptr(localTask, localTaskList)
-	{
-		const char *localTaskQueryCommand = TaskQueryString(localTask);
-
-		/* we do not expect tasks with INVALID_SHARD_ID for utility commands */
-		Assert(localTask->anchorShardId != INVALID_SHARD_ID);
-
-		Assert(TaskAccessesLocalNode(localTask));
-
-		/*
-		 * We should register the access to local placement to force the local
-		 * execution of the following commands withing the current transaction.
-		 */
-		TransactionAccessedLocalPlacement = true;
-
-		LogLocalCommand(localTask);
-
-		LocallyExecuteUtilityTask(localTaskQueryCommand);
-	}
-}
-
-
-/*
- * LocallyExecuteUtilityTask executes the given local task query in the current
- * session.
- */
-static void
-LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
-{
-	RawStmt *localTaskRawStmt = (RawStmt *) ParseTreeRawStmt(localTaskQueryCommand);
-
-	Node *localTaskRawParseTree = localTaskRawStmt->stmt;
-
-	/*
-	 * Actually, the query passed to this function would mostly be a
-	 * utility command to be executed locally. However, some utility
-	 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
-	 * to execute commands in a generic way. But as we support local
-	 * execution of utility commands, we should also process those udf
-	 * calls locally as well. In that case, we simply execute the query
-	 * implying the udf call in below conditional block.
-	 */
-	if (IsA(localTaskRawParseTree, SelectStmt))
-	{
-		/* we have no external parameters to rewrite the UDF call RawStmt */
-		Query *localUdfTaskQuery =
-			RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
-
-		LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
-	}
-	else
-	{
-		/*
-		 * It is a regular utility command or SELECT query with non-udf,
-		 * targets, then we should execute it locally via process utility.
-		 *
-		 * If it is a regular utility command, CitusProcessUtility is the
-		 * appropriate function to process that command. However, if it's
-		 * a SELECT query with non-udf targets, CitusProcessUtility would
-		 * error out as we are not expecting such SELECT queries triggered
-		 * by utility commands.
-		 */
-		CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
-	}
-}
-
-
-/*
- * LocallyExecuteUdfTaskQuery executes the given udf command locally. Local udf
- * command is simply a "SELECT udf_call()" query and so it cannot be executed
- * via process utility.
- */
-static void
-LocallyExecuteUdfTaskQuery(Query *localUdfTaskQuery)
-{
-	/* we do not expect any results */
-	ExecuteQueryIntoDestReceiver(localUdfTaskQuery, NULL, None_Receiver);
 }
 
 
@@ -530,33 +437,16 @@ ShouldExecuteTasksLocally(List *taskList)
 
 	if (TransactionAccessedLocalPlacement)
 	{
-		bool isValidLocalExecutionPath PG_USED_FOR_ASSERTS_ONLY = false;
-
 		/*
 		 * For various reasons, including the transaction visibility
 		 * rules (e.g., read-your-own-writes), we have to use local
 		 * execution again if it has already happened within this
 		 * transaction block.
-		 */
-		isValidLocalExecutionPath = IsMultiStatementTransaction() ||
-									InCoordinatedTransaction();
-
-		/*
-		 * In some cases, such as when a single command leads to a local
-		 * command execution followed by remote task (list) execution, we
-		 * still expect the remote execution to first try local execution
-		 * as TransactionAccessedLocalPlacement is set by the local execution.
-		 * The remote execution shouldn't create any local tasks as the local
-		 * execution should have executed all the local tasks. And, we are
-		 * ensuring it here.
-		 */
-		isValidLocalExecutionPath |= !AnyTaskAccessesLocalNode(taskList);
-
-		/*
+		 *
 		 * We might error out later in the execution if it is not suitable
 		 * to execute the tasks locally.
 		 */
-		Assert(isValidLocalExecutionPath);
+		Assert(IsMultiStatementTransaction() || InCoordinatedTransaction());
 
 		/*
 		 * TODO: A future improvement could be to keep track of which placements
@@ -601,27 +491,6 @@ ShouldExecuteTasksLocally(List *taskList)
 		Assert(!TransactionAccessedLocalPlacement);
 
 		return false;
-	}
-
-	return false;
-}
-
-
-/*
- * AnyTaskAccessesLocalNode returns true if a task within the task list accesses
- * to the local node.
- */
-bool
-AnyTaskAccessesLocalNode(List *taskList)
-{
-	Task *task = NULL;
-
-	foreach_ptr(task, taskList)
-	{
-		if (TaskAccessesLocalNode(task))
-		{
-			return true;
-		}
 	}
 
 	return false;

@@ -234,7 +234,8 @@ COPY second_distributed_table FROM STDIN WITH CSV;
 	-- (a) Unless the first query is a local query, always use distributed execution.
 	-- (b) If the executor has used local execution, it has to use local execution
 	--     for the remaining of the transaction block. If that's not possible, the
-	-- 	   executor has to error out
+	-- 	   executor has to error out (e.g., TRUNCATE is a utility command and we
+	--	   currently do not support local execution of utility commands)
 
 -- rollback should be able to rollback local execution
 BEGIN;
@@ -346,7 +347,7 @@ BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 500;
 ROLLBACK;
 
--- a local query followed by TRUNCATE command can be executed locally
+-- a local query is followed by a command that cannot be executed locally
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 	TRUNCATE distributed_table CASCADE;

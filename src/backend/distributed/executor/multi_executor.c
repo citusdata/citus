@@ -607,22 +607,6 @@ Query *
 ParseQueryString(const char *queryString, Oid *paramOids, int numParams)
 {
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-
-	/* rewrite the parsed RawStmt to produce a Query */
-	Query *query = RewriteRawQueryStmt(rawStmt, queryString, paramOids, numParams);
-
-	return query;
-}
-
-
-/*
- * RewriteRawQueryStmt rewrites the given parsed RawStmt according to the other
- * parameters and returns a Query struct.
- */
-Query *
-RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString, Oid *paramOids, int
-					numParams)
-{
 	List *queryTreeList =
 		pg_analyze_and_rewrite(rawStmt, queryString, paramOids, numParams, NULL);
 

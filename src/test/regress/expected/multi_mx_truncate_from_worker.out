@@ -76,9 +76,6 @@ INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000
 -- now, show that TRUNCATE CASCADE works expected from the worker
 TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
 SELECT count(*) FROM on_update_fkey_table;
  count
 ---------------------------------------------------------------------
@@ -99,9 +96,6 @@ ROLLBACK;
 BEGIN;
 	TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
-NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
 ROLLBACK;
 -- test with sequential mode and CASCADE
 BEGIN;

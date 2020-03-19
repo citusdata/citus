@@ -41,21 +41,6 @@ SET search_path TO multi_mx_insert_select_repartition;
 EXPLAIN (costs off) INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 
-SET citus.log_local_commands to on;
-
--- INSERT .. SELECT via repartitioning is not  yet support after a local execution,
--- hence below two blocks should fail
-
-BEGIN;
-    select count(*) from source_table WHERE a = 1;
-    insert into target_table SELECT a*2 FROM source_table;
-ROLLBACK;
-
-BEGIN;
-    select count(*) from source_table WHERE a = 1;
-    insert into target_table SELECT a FROM source_table LIMIT 10;
-ROLLBACK;
-
 \c - - - :master_port
 SET search_path TO multi_mx_insert_select_repartition;
 SELECT * FROM target_table ORDER BY a;
@@ -63,4 +48,3 @@ SELECT * FROM target_table ORDER BY a;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA multi_mx_insert_select_repartition CASCADE;
-

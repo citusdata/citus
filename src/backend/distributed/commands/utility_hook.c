@@ -684,27 +684,16 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	EnsureCoordinator();
 
-	Oid targetRelationId = ddlJob->targetRelationId;
-
-	if (OidIsValid(targetRelationId))
+	if (ddlJob->targetRelationId != InvalidOid)
 	{
 		/*
-		 * Only for ddlJobs that are targetting a relation (table) we want to sync
-		 * its metadata and verify some properties around the table.
+		 * Only for ddlJobs that are targetting a relation (table) we want to sync its
+		 * metadata and verify some properties around the table.
 		 */
-		shouldSyncMetadata = ShouldSyncTableMetadata(targetRelationId);
-		EnsurePartitionTableNotReplicated(targetRelationId);
+		shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
+		EnsurePartitionTableNotReplicated(ddlJob->targetRelationId);
 	}
 
-	/*
-	 * If it is a local placement of a distributed table or a reference table,
-	 * then execute the DDL command locally.
-	 * Here we set localExecutionSupported to true regardless of whether the
-	 * DDL command is run for/on a distributed table as
-	 * ExecuteUtilityTaskListWithoutResults would already identify those
-	 * DDL tasks not accessing any of the local placements.
-	 */
-	bool localExecutionSupported = true;
 
 	if (!ddlJob->concurrentIndexCmd)
 	{
@@ -726,7 +715,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
 		}
 
-		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList, localExecutionSupported);
+		/* use adaptive executor when enabled */
+		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
 	}
 	else
 	{
@@ -737,8 +727,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList,
-												 localExecutionSupported);
+			/* use adaptive executor when enabled */
+			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList);
 
 			if (shouldSyncMetadata)
 			{

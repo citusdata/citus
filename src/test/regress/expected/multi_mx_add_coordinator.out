@@ -129,7 +129,6 @@ DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
 -- get it ready for the next executions
 TRUNCATE ref;
-NOTICE:  executing the command locally: TRUNCATE TABLE mx_add_coordinator.ref_xxxxx CASCADE
 -- test that changes from a metadata node is reflected in the coordinator placement
 \c - - - :worker_1_port
 SET search_path TO mx_add_coordinator,public;

@@ -73,13 +73,7 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	{
 		List *taskList = TruncateTaskList(relationId);
 
-		/*
-		 * If it is a local placement of a distributed table or a reference table,
-		 * then execute TRUNCATE command locally.
-		 */
-		bool localExecutionSupported = true;
-
-		ExecuteUtilityTaskListWithoutResults(taskList, localExecutionSupported);
+		ExecuteUtilityTaskListWithoutResults(taskList);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
