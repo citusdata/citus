@@ -102,6 +102,7 @@ typedef void (*applyFn)(ObjectAddressCollector *collector,
 /* forward declaration of functions that recurse pg_depend */
 static void recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow,
 							  applyFn apply, ObjectAddressCollector *collector);
+static List * DependencyDefinitionFromPgDepend(ObjectAddress target);
 static bool FollowAllSupportedDependencies(ObjectAddressCollector *collector,
 										   DependencyDefinition *definition);
 static bool FollowNewSupportedDependencies(ObjectAddressCollector *collector,
@@ -226,8 +227,6 @@ static void
 recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyFn apply,
 				  ObjectAddressCollector *collector)
 {
-	ScanKeyData key[2];
-	HeapTuple depTup = NULL;
 	List *dependenyDefinitionList = NIL;
 
 	if (TargetObjectVisited(collector, target))
@@ -238,32 +237,7 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 
 	MarkObjectVisited(collector, target);
 
-	/*
-	 * iterate the actual pg_depend catalog
-	 */
-	Relation depRel = heap_open(DependRelationId, AccessShareLock);
-
-	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
-	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target.classId));
-	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target.objectId));
-	SysScanDesc depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2,
-											 key);
-
-	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
-	{
-		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
-
-		/* keep track of all pg_depend records as dependency definitions */
-		dependency->mode = DependencyPgDepend;
-		dependency->data.pg_depend = *pg_depend;
-		dependenyDefinitionList = lappend(dependenyDefinitionList, dependency);
-	}
-
-	systable_endscan(depScan);
-	relation_close(depRel, AccessShareLock);
+	dependenyDefinitionList = DependencyDefinitionFromPgDepend(target);
 
 	/*
 	 * concat expanded entries if applicable
@@ -299,6 +273,48 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 			apply(collector, dependencyDefinition);
 		}
 	}
+}
+
+
+/*
+ * DependencyDefinitionFromPgDepend loads all pg_depend records describing the
+ * dependencies of target.
+ */
+static List *
+DependencyDefinitionFromPgDepend(ObjectAddress target)
+{
+	ScanKeyData key[2];
+	HeapTuple depTup = NULL;
+	List *dependenyDefinitionList = NIL;
+
+	/*
+	 * iterate the actual pg_depend catalog
+	 */
+	Relation depRel = heap_open(DependRelationId, AccessShareLock);
+
+	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
+	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.classId));
+	ScanKeyInit(&key[1], Anum_pg_depend_objid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.objectId));
+	SysScanDesc depScan = systable_beginscan(depRel, DependDependerIndexId, true, NULL, 2,
+											 key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+		DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
+
+		/* keep track of all pg_depend records as dependency definitions */
+		dependency->mode = DependencyPgDepend;
+		dependency->data.pg_depend = *pg_depend;
+		dependenyDefinitionList = lappend(dependenyDefinitionList, dependency);
+	}
+
+	systable_endscan(depScan);
+	relation_close(depRel, AccessShareLock);
+
+	return dependenyDefinitionList;
 }
 
 
