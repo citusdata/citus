@@ -66,7 +66,16 @@ test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 # ----------
 # Tests for recursive subquery planning
 # ----------
-test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
+# NOTE: The next 6 were in parallel originally, but we got "too many
+# connection" errors on CI. Requires investigation before doing them in
+# parallel again.
+test: subquery_basics
+test: subquery_local_tables
+test: subquery_executors
+test: subquery_and_cte
+test: set_operations
+test: set_operation_and_local_tables
+
 test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
 test: subquery_prepared_statements pg12 cte_inline
@@ -86,7 +95,8 @@ test: multi_reference_table multi_select_for_update relation_access_tracking
 test: custom_aggregate_support aggregate_support
 test: multi_average_expression multi_working_columns multi_having_pushdown having_subquery
 test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
-test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having ch_bench_subquery_repartition chbenchmark_all_queries expression_reference_join
+test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having chbenchmark_all_queries expression_reference_join
+test: ch_bench_subquery_repartition
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning single_hash_repartition_join
 test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
