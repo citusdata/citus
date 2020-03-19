@@ -65,6 +65,20 @@ jobs:
           flags: 'test_11,multi'
 
 
+  test-12_check-multi:
+    docker:
+      - image: 'citus/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-multi)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
+      - codecov/upload:
+          flags: 'test_12,multi'
+
+
 
 workflows:
   version: 2
