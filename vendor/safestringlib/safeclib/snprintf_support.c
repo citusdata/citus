@@ -54,6 +54,7 @@
 
 #define CHK_FORMAT(X,Y)   (((X)==(Y))?1:0)
 
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 
 unsigned int
 parse_format(const char *format, char pformatList[], unsigned int maxFormats)

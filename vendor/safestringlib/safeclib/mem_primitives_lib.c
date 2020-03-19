@@ -31,6 +31,8 @@
 
 #include "mem_primitives_lib.h"
 
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 /*
  * mem_primitives_lib.c  provides unguarded memory routines
  * that are used by the safe_mem_library.   These routines
