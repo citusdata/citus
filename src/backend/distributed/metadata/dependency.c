@@ -18,11 +18,13 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_shdepend.h"
 #include "catalog/pg_type.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "miscadmin.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
@@ -47,7 +49,8 @@ typedef struct ObjectAddressCollector
 typedef enum DependencyDefinitionMode
 {
 	DependencyObjectAddress,
-	DependencyPgDepend
+	DependencyPgDepend,
+	DependencyPgShDepend
 } DependencyDefinitionMode;
 
 typedef struct DependencyDefinition
@@ -68,6 +71,14 @@ typedef struct DependencyDefinition
 		 * based on dependency type.
 		 */
 		FormData_pg_depend pg_depend;
+
+		/*
+		 * pg_shdepend is used for dependencies found in the global pg_shdepend table.
+		 * The entry is copied while scanning the table. The record can be inspected
+		 * during the chasing algorithm to follow dependencies of different classes, or
+		 * based on dependency type.
+		 */
+		FormData_pg_shdepend pg_shdepend;
 
 		/*
 		 * address is used for dependencies that are artificially added during the
@@ -103,6 +114,7 @@ typedef void (*applyFn)(ObjectAddressCollector *collector,
 static void recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow,
 							  applyFn apply, ObjectAddressCollector *collector);
 static List * DependencyDefinitionFromPgDepend(ObjectAddress target);
+static List * DependencyDefinitionFromPgShDepend(ObjectAddress target);
 static bool FollowAllSupportedDependencies(ObjectAddressCollector *collector,
 										   DependencyDefinition *definition);
 static bool FollowNewSupportedDependencies(ObjectAddressCollector *collector,
@@ -238,6 +250,8 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 	MarkObjectVisited(collector, target);
 
 	dependenyDefinitionList = DependencyDefinitionFromPgDepend(target);
+	dependenyDefinitionList = list_concat(dependenyDefinitionList,
+										  DependencyDefinitionFromPgShDepend(target));
 
 	/*
 	 * concat expanded entries if applicable
@@ -313,6 +327,53 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 
 	systable_endscan(depScan);
 	relation_close(depRel, AccessShareLock);
+
+	return dependenyDefinitionList;
+}
+
+
+/*
+ * DependencyDefinitionFromPgDepend loads all pg_shdepend records describing the
+ * dependencies of target.
+ */
+static List *
+DependencyDefinitionFromPgShDepend(ObjectAddress target)
+{
+	ScanKeyData key[3];
+	HeapTuple depTup = NULL;
+	List *dependenyDefinitionList = NIL;
+
+	/*
+	 * iterate the actual pg_shdepend catalog
+	 */
+	Relation shdepRel = heap_open(SharedDependRelationId, AccessShareLock);
+
+	/*
+	 * Scan pg_depend for dbid = $1 AND classid = $2 AND objid = $3 using
+	 * pg_shdepend_depender_index
+	 */
+	ScanKeyInit(&key[0], Anum_pg_shdepend_dbid, BTEqualStrategyNumber, F_OIDEQ,
+				MyDatabaseId);
+	ScanKeyInit(&key[1], Anum_pg_shdepend_classid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.classId));
+	ScanKeyInit(&key[2], Anum_pg_shdepend_objid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.objectId));
+	SysScanDesc shdepScan = systable_beginscan(shdepRel, SharedDependDependerIndexId,
+											   true, NULL, 3, key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(shdepScan)))
+	{
+		Form_pg_shdepend pg_shdepend = (Form_pg_shdepend) GETSTRUCT(depTup);
+		DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
+
+		/* keep track of all pg_shdepend records as dependency definitions */
+		dependency->mode = DependencyPgShDepend;
+		dependency->data.pg_shdepend = *pg_shdepend;
+		dependenyDefinitionList = lappend(dependenyDefinitionList, dependency);
+	}
+
+	systable_endscan(shdepScan);
+	relation_close(shdepRel, AccessShareLock);
 
 	return dependenyDefinitionList;
 }
@@ -819,6 +880,15 @@ DependencyDefinitionObjectAddress(DependencyDefinition *definition)
 			ObjectAddressSet(address,
 							 definition->data.pg_depend.refclassid,
 							 definition->data.pg_depend.refobjid);
+			return address;
+		}
+
+		case DependencyPgShDepend:
+		{
+			ObjectAddress address = { 0 };
+			ObjectAddressSet(address,
+							 definition->data.pg_shdepend.refclassid,
+							 definition->data.pg_shdepend.refobjid);
 			return address;
 		}
 	}
