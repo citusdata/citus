@@ -1,5 +1,5 @@
 /*------------------------------------------------------------------
- * memset8_s
+ * memset_s
  *
  * October 2008, Bo Berry
  *
@@ -37,12 +37,12 @@
 
 /**
  * NAME
- *    memset8_s
+ *    memset_s
  *
  * SYNOPSIS
  *    #include "safe_mem_lib.h"
  *    errno_t
- *    memset8_s(void *dest, rsize_t len, uint8_t value)
+ *    memset_s(void *dest, rsize_t len, uint8_t value)
  *
  * DESCRIPTION
  *    Sets len bytes starting at dest to the specified value.
@@ -78,22 +78,22 @@
  *
  */
 errno_t
-memset8_s (void *dest, rsize_t len, uint8_t value)
+memset_s (void *dest, rsize_t len, uint8_t value)
 {
     if (dest == NULL) {
-        invoke_safe_mem_constraint_handler("memset8_s: dest is null",
+        invoke_safe_mem_constraint_handler("memset_s: dest is null",
                    NULL, ESNULLP);
         return (RCNEGATE(ESNULLP));
     }
 
     if (len == 0) {
-        invoke_safe_mem_constraint_handler("memset8_s: len is 0",
+        invoke_safe_mem_constraint_handler("memset_s: len is 0",
                    NULL, ESZEROL);
         return (RCNEGATE(ESZEROL));
     }
 
     if (len > RSIZE_MAX_MEM) {
-        invoke_safe_mem_constraint_handler("memset8_s: len exceeds max",
+        invoke_safe_mem_constraint_handler("memset_s: len exceeds max",
                    NULL, ESLEMAX);
         return (RCNEGATE(ESLEMAX));
     }
@@ -102,4 +102,4 @@ memset8_s (void *dest, rsize_t len, uint8_t value)
 
     return (RCNEGATE(EOK));
 }
-EXPORT_SYMBOL(memset8_s)
+EXPORT_SYMBOL(memset_s)

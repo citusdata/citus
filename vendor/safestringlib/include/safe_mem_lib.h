@@ -97,12 +97,7 @@ extern errno_t wmemmove_s(wchar_t *dest, rsize_t dmax,
 
 
 /* set bytes */
-/* NOTE: This name is changed from memset_s to memset8_s out because it does
- * not match with the C11 declaration of memset_s on OSX. The upstream issue
- * can be found here:
- * https://github.com/intel/safestringlib/issues/14
- */
-extern errno_t memset8_s(void *dest, rsize_t dmax, uint8_t value);
+extern errno_t memset_s(void *dest, rsize_t dmax, uint8_t value);
 
 /* set uint16_t */
 extern errno_t memset16_s(uint16_t *dest, rsize_t dmax, uint16_t value);

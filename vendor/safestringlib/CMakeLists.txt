@@ -146,13 +146,13 @@ set_target_properties(${PROJECT_NAME}_objlib
 target_compile_definitions(${PROJECT_NAME}_objlib PRIVATE -DSTDC_HEADERS)
 
 target_compile_options(${PROJECT_NAME}_objlib
-                       PRIVATE -Wall -Wextra -Wsign-compare -Wformat-security)
-target_compile_options(${PROJECT_NAME}_objlib
                        PRIVATE -Wno-unknown-pragmas -Wno-unused-parameter)
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_C_COMPILER_VERSION VERSION_GREATER 7)
   target_compile_options(${PROJECT_NAME}_objlib
                          PRIVATE -Wno-implicit-fallthrough)
 endif()
+target_compile_options(${PROJECT_NAME}_objlib
+                       PRIVATE -Wall -Wextra -Wsign-compare -Wformat-security)
 target_compile_options(${PROJECT_NAME}_objlib
                        PRIVATE  -Wstack-protector -Winit-self)
 target_compile_options(${PROJECT_NAME}_objlib
@@ -166,10 +166,7 @@ target_compile_options(${PROJECT_NAME}_objlib PRIVATE -fPIE -fPIC)
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_C_COMPILER_VERSION VERSION_GREATER 6)
     target_compile_options(${PROJECT_NAME}_objlib PRIVATE -mmitigate-rop)
 endif()
-if(APPLE)
-elseif(UNIX)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -z noexecstack -z relro -z now")
-endif()
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -z noexecstack -z relro -z now")
 
 option(BUILD_ERROR_ON_WARNING "Fail compilation on warning" OFF)
 
