@@ -319,7 +319,7 @@ WITH update_article AS (
     UPDATE articles_hash SET word_count = 10 WHERE id = 1 AND word_count = 9 RETURNING *
 )
 SELECT * FROM update_article;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE fast_path_router_select.articles_hash SET word_count = 10 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 9)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -334,7 +334,7 @@ WITH delete_article AS (
     DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
 )
 SELECT * FROM delete_article;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE delete_article: DELETE FROM fast_path_router_select.articles_hash WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

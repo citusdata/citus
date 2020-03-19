@@ -146,7 +146,7 @@ ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause
 -- modifying ctes are not supported via fast-path
 WITH t1 AS (DELETE FROM modify_fast_path WHERE key = 1), t2 AS  (SELECT * FROM modify_fast_path) SELECT * FROM t2;
 DEBUG:  CTE t2 is going to be inlined via distributed planning
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan

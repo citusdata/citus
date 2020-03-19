@@ -198,6 +198,33 @@ FROM
 WHERE
 	events_user_id IN (SELECT user_id FROM users_table);
 
+-- Prepare routable modifying CTEs
+PREPARE prepared_test_7 AS
+WITH basic_delete AS (
+	DELETE FROM users_table WHERE user_id=6 RETURNING *
+)
+SELECT
+	*
+FROM
+	basic_delete
+ORDER BY
+	user_id,
+	time
+LIMIT 10;
+
+PREPARE prepared_test_8 AS
+WITH basic_delete AS (
+	UPDATE users_table SET value_1 = value_1 + 1 WHERE user_id=6 RETURNING *
+)
+SELECT
+	*
+FROM
+	basic_delete
+ORDER BY
+	user_id,
+	time
+LIMIT 10;
+
 EXECUTE prepared_test_1;
 EXECUTE prepared_test_1;
 EXECUTE prepared_test_1;
@@ -239,6 +266,40 @@ EXECUTE prepared_test_6;
 EXECUTE prepared_test_6;
 EXECUTE prepared_test_6;
 EXECUTE prepared_test_6;
+
+BEGIN;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+ROLLBACK;
+BEGIN;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+EXECUTE prepared_test_7;
+ROLLBACK;
+
+BEGIN;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+ROLLBACK;
+BEGIN;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+EXECUTE prepared_test_8;
+ROLLBACK;
 
 EXECUTE prepared_partition_column_insert(1);
 EXECUTE prepared_partition_column_insert(2);

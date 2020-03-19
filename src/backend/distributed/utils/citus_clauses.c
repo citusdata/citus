@@ -38,14 +38,14 @@ static bool ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *
 													evaluationContext);
 
 /*
- * RequiresMastereEvaluation returns the executor needs to reparse and
+ * RequiresMasterEvaluation returns the executor needs to reparse and
  * try to execute this query, which is the case if the query contains
  * any stable or volatile function.
  */
 bool
 RequiresMasterEvaluation(Query *query)
 {
-	if (query->commandType == CMD_SELECT)
+	if (query->commandType == CMD_SELECT && !query->hasModifyingCTE)
 	{
 		return false;
 	}
@@ -55,32 +55,23 @@ RequiresMasterEvaluation(Query *query)
 
 
 /*
- * ExecuteMasterEvaluableFunctionsAndParameters evaluates expressions and parameters
+ * ExecuteMasterEvaluableExpressions evaluates expressions and parameters
  * that can be resolved to a constant.
  */
 void
-ExecuteMasterEvaluableFunctionsAndParameters(Query *query, PlanState *planState)
+ExecuteMasterEvaluableExpressions(Query *query, PlanState *planState)
 {
 	MasterEvaluationContext masterEvaluationContext;
 
 	masterEvaluationContext.planState = planState;
-	masterEvaluationContext.evaluationMode = EVALUATE_FUNCTIONS_PARAMS;
-
-	PartiallyEvaluateExpression((Node *) query, &masterEvaluationContext);
-}
-
-
-/*
- * ExecuteMasterEvaluableParameters evaluates external parameters that can be
- * resolved to a constant.
- */
-void
-ExecuteMasterEvaluableParameters(Query *query, PlanState *planState)
-{
-	MasterEvaluationContext masterEvaluationContext;
-
-	masterEvaluationContext.planState = planState;
-	masterEvaluationContext.evaluationMode = EVALUATE_PARAMS;
+	if (query->commandType == CMD_SELECT)
+	{
+		masterEvaluationContext.evaluationMode = EVALUATE_PARAMS;
+	}
+	else
+	{
+		masterEvaluationContext.evaluationMode = EVALUATE_FUNCTIONS_PARAMS;
+	}
 
 	PartiallyEvaluateExpression((Node *) query, &masterEvaluationContext);
 }
@@ -146,9 +137,22 @@ PartiallyEvaluateExpression(Node *expression,
 	}
 	else if (nodeTag == T_Query)
 	{
-		return (Node *) query_tree_mutator((Query *) expression,
+		Query *query = (Query *) expression;
+		MasterEvaluationContext subContext = *masterEvaluationContext;
+		if (query->commandType != CMD_SELECT)
+		{
+			/*
+			 * Currently INSERT SELECT evaluates stable functions on master,
+			 * while a plain SELECT does not. For evaluating SELECT evaluationMode is
+			 * EVALUATE_PARAMS, but if recursing into a modifying CTE switch into
+			 * EVALUATE_FUNCTIONS_PARAMS.
+			 */
+			subContext.evaluationMode = EVALUATE_FUNCTIONS_PARAMS;
+		}
+
+		return (Node *) query_tree_mutator(query,
 										   PartiallyEvaluateExpression,
-										   masterEvaluationContext,
+										   &subContext,
 										   QTW_DONT_COPY_QUERY);
 	}
 	else
@@ -359,6 +363,8 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 							  resultTypByVal);
 }
 
+/* *INDENT-ON* */
+
 
 /*
  * CitusIsVolatileFunctionIdChecker checks if the given function id is
@@ -446,6 +452,3 @@ CitusIsMutableFunction(Node *node)
 
 	return false;
 }
-
-
-/* *INDENT-ON* */

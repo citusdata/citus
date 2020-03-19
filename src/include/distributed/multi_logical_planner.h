@@ -193,6 +193,8 @@ extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsCitusTableRTE(Node *node);
 extern bool IsDistributedTableRTE(Node *node);
+extern bool IsReferenceTableRTE(Node *node);
+extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool IsCitusExtraDataContainerRelation(RangeTblEntry *rte);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern bool ContainsReadIntermediateResultArrayFunction(Node *node);

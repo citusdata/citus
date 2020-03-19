@@ -1467,11 +1467,6 @@ ReadOnlyTask(TaskType taskType)
 		case MAP_TASK:
 		case MERGE_TASK:
 		{
-			/*
-			 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
-			 * When we implement it, we should either not use the mentioned task types for
-			 * modifying CTEs detect them here.
-			 */
 			return true;
 		}
 

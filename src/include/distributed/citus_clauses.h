@@ -44,9 +44,7 @@ typedef struct MasterEvaluationContext
 
 
 extern bool RequiresMasterEvaluation(Query *query);
-extern void ExecuteMasterEvaluableFunctionsAndParameters(Query *query,
-														 PlanState *planState);
-extern void ExecuteMasterEvaluableParameters(Query *query, PlanState *planState);
+extern void ExecuteMasterEvaluableExpressions(Query *query, PlanState *planState);
 extern Node * PartiallyEvaluateExpression(Node *expression,
 										  MasterEvaluationContext *masterEvaluationContext);
 extern bool CitusIsVolatileFunction(Node *node);
