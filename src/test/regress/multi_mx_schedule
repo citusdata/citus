@@ -39,13 +39,13 @@ test: multi_mx_metadata
 test: master_evaluation master_evaluation_modify master_evaluation_select
 test: multi_mx_call
 test: multi_mx_function_call_delegation
-test: multi_mx_modifications local_shard_execution local_shard_copy
+test: multi_mx_modifications local_shard_execution
 test: multi_mx_transaction_recovery
 test: multi_mx_modifying_xacts
 test: multi_mx_explain
 test: multi_mx_reference_table
 test: multi_mx_insert_select_repartition
-test: locally_execute_intermediate_results
+test: locally_execute_intermediate_results local_shard_copy
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
