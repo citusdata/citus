@@ -186,7 +186,7 @@ void
 RemoveJobDirectory(uint64 jobId)
 {
 	StringInfo jobDirectoryName = MasterJobDirectoryName(jobId);
-	CitusRemoveDirectory(jobDirectoryName->data);
+	CitusRemoveDirectory(jobDirectoryName->data, ERROR);
 
 	ResourceOwnerForgetJobDirectory(CurrentResourceOwner, jobId);
 }

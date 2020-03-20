@@ -347,7 +347,7 @@ TrackerCleanupJobDirectories(void)
 	StringInfo jobCacheDirectory = makeStringInfo();
 	appendStringInfo(jobCacheDirectory, "base/%s", PG_JOB_CACHE_DIR);
 
-	CitusRemoveDirectory(jobCacheDirectory->data);
+	CitusRemoveDirectory(jobCacheDirectory->data, ERROR);
 	CitusCreateDirectory(jobCacheDirectory);
 
 	FreeStringInfo(jobCacheDirectory);
@@ -1028,7 +1028,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 			if (workerTask->taskId == JOB_CLEANUP_TASK_ID)
 			{
 				StringInfo jobDirectoryName = JobDirectoryName(workerTask->jobId);
-				CitusRemoveDirectory(jobDirectoryName->data);
+				CitusRemoveDirectory(jobDirectoryName->data, ERROR);
 			}
 
 			workerTask->taskStatus = TASK_TO_REMOVE;

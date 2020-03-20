@@ -158,7 +158,7 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	CitusRemoveDirectory(taskDirectory->data);
+	CitusRemoveDirectory(taskDirectory->data, ERROR);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -232,7 +232,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	CitusRemoveDirectory(taskDirectory->data);
+	CitusRemoveDirectory(taskDirectory->data, ERROR);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -712,9 +712,16 @@ FileIsLink(const char *filename, struct stat filestat)
  * function recursively deletes the contents of the given directory, and then
  * deletes the directory itself. This function is modeled on the Boost file
  * system library's remove_all() method.
+ *
+ * elevel indicates the level to use for reporting errors that prevent the file from being
+ * deleted. If elevel is lower than ERROR this function might return false after having
+ * reported to problem with elevel.
+ *
+ * Returns true if operation finished without any error, no files are present after this
+ * call, returns false if an error occured during the removal
  */
-void
-CitusRemoveDirectory(const char *filename)
+bool
+CitusRemoveDirectory(const char *filename, int elevel)
 {
 	/* files may be added during execution, loop when that occurs */
 	while (true)
@@ -727,12 +734,13 @@ CitusRemoveDirectory(const char *filename)
 		{
 			if (errno == ENOENT)
 			{
-				return;  /* if file does not exist, return */
+				return true;  /* if file does not exist, return */
 			}
 			else
 			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not stat file \"%s\": %m", filename)));
+				ereport(elevel, (errcode_for_file_access(),
+								 errmsg("could not stat file \"%s\": %m", filename)));
+				return false;
 			}
 		}
 
@@ -748,9 +756,10 @@ CitusRemoveDirectory(const char *filename)
 			DIR *directory = AllocateDir(directoryName);
 			if (directory == NULL)
 			{
-				ereport(ERROR, (errcode_for_file_access(),
-								errmsg("could not open directory \"%s\": %m",
-									   directoryName)));
+				ereport(elevel, (errcode_for_file_access(),
+								 errmsg("could not open directory \"%s\": %m",
+										directoryName)));
+				return false;
 			}
 
 			StringInfo fullFilename = makeStringInfo();
@@ -770,7 +779,14 @@ CitusRemoveDirectory(const char *filename)
 				resetStringInfo(fullFilename);
 				appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
 
-				CitusRemoveDirectory(fullFilename->data);
+				if (!CitusRemoveDirectory(fullFilename->data, elevel))
+				{
+					/*
+					 * Recursive operation failed, if elevel was lower than ERROR we need
+					 * to bail out our self
+					 */
+					return false;
+				}
 			}
 
 			FreeStringInfo(fullFilename);
@@ -794,11 +810,12 @@ CitusRemoveDirectory(const char *filename)
 
 		if (removed != 0 && errno != ENOENT)
 		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not remove file \"%s\": %m", filename)));
+			ereport(elevel, (errcode_for_file_access(),
+							 errmsg("could not remove file \"%s\": %m", filename)));
+			return false;
 		}
 
-		return;
+		return true;
 	}
 }
 

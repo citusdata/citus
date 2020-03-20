@@ -23,7 +23,7 @@ citus_rm_job_directory(PG_FUNCTION_ARGS)
 	appendStringInfo(jobCacheDirectory, "base/%s/%s%0*" INT64_MODIFIER "u",
 					 PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX,
 					 MIN_JOB_DIRNAME_WIDTH, jobId);
-	CitusRemoveDirectory(jobCacheDirectory->data);
+	CitusRemoveDirectory(jobCacheDirectory->data, ERROR);
 	FreeStringInfo(jobCacheDirectory);
 
 	PG_RETURN_VOID();

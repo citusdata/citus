@@ -100,7 +100,7 @@ worker_repartition_cleanup(PG_FUNCTION_ARGS)
 	Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
 
 	EnsureSchemaOwner(schemaId);
-	CitusRemoveDirectory(jobDirectoryName->data);
+	CitusRemoveDirectory(jobDirectoryName->data, ERROR);
 	RemoveJobSchema(jobSchemaName);
 	PG_RETURN_VOID();
 }

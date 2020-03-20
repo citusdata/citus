@@ -231,7 +231,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * schema drop call can block if another process is creating the schema or
 	 * writing to a table within the schema.
 	 */
-	CitusRemoveDirectory(jobDirectoryName->data);
+	CitusRemoveDirectory(jobDirectoryName->data, ERROR);
 
 	RemoveJobSchema(jobSchemaName);
 	UnlockJobResource(jobId, AccessExclusiveLock);

@@ -662,9 +662,20 @@ RemoveIntermediateResultsDirectory(void)
 {
 	if (CreatedResultsDirectory)
 	{
-		CitusRemoveDirectory(IntermediateResultsDirectory());
-
-		CreatedResultsDirectory = false;
+		/* this routine is called during transaction abort, we do want to finish the abort
+		 * even if we fail to remove the files, warnings will be shown if it failed anyway
+		 */
+		if (CitusRemoveDirectory(IntermediateResultsDirectory(), WARNING))
+		{
+			/*
+			 * TODO verify if it is ok to keep this variable set to true if the removal
+			 * failed during xact abort. This is the same behaviour as we had with
+			 * SwallowError, however I guess the next transaction will have a different
+			 * return value for IntermediateResultsDirectory() in the next xact.
+			 * If that is the case we should just always set this variable to false.
+			 */
+			CreatedResultsDirectory = false;
+		}
 	}
 }
 
