@@ -221,6 +221,7 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 const char *database);
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
+extern void ShutdownAllConnections(void);
 extern void ShutdownConnection(MultiConnection *connection);
 
 /* dealing with a connection */

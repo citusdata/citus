@@ -495,6 +495,37 @@ CloseConnection(MultiConnection *connection)
 
 
 /*
+ * ShutdownAllConnections shutdowns all the MultiConnections in the
+ * ConnectionHash.
+ *
+ * This function is intended to be called atexit() of the backend, so
+ * that the cached connections are closed properly. Calling this function
+ * at another point in the code could be dangerous, so think twice if you
+ * need to call this function.
+ */
+void
+ShutdownAllConnections(void)
+{
+	ConnectionHashEntry *entry = NULL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != NULL)
+	{
+		dlist_iter iter;
+
+		dlist_foreach(iter, entry->connections)
+		{
+			MultiConnection *connection =
+				dlist_container(MultiConnection, connectionNode, iter.cur);
+
+			ShutdownConnection(connection);
+		}
+	}
+}
+
+
+/*
  * ShutdownConnection, if necessary cancels the currently running statement,
  * and then closes the underlying libpq connection.  The MultiConnection
  * itself is left intact.
