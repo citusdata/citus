@@ -195,6 +195,23 @@ typedef FunctionCallInfoData FunctionCall2InfoData;
 #endif
 
 /*
+ * We also ignore this warning in ./configure, but that's not always enough.
+ * The flags that are used during compilation by ./configure are determined by
+ * the compiler support it detects. This is usually GCC. This warning is only
+ * present in clang. So it would normally be fine to not use it with GCC. The
+ * problem is that clang is used to compile the JIT bitcode when postgres is
+ * compiled with -with-llvm. So in the end both clang and GCC are used to
+ * compile the project.
+ *
+ * So the flag is not provided on the command line, because ./configure notices
+ * that GCC doesn't support it. But this warning persists when compiling the
+ * bitcode. So that's why we ignore it here explicitly.
+ */
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wgnu-variable-sized-type-not-at-end"
+#endif /* __clang__ */
+
+/*
  * Data necessary to perform a single PruneShards().
  */
 typedef struct ClauseWalkerContext
