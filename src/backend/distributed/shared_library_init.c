@@ -87,6 +87,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void CitusBackendAtExit(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void CreateRequiredDirectories(void);
@@ -270,12 +271,26 @@ _PG_init(void)
 	InitPlacementConnectionManagement();
 	InitializeCitusQueryStats();
 
+	atexit(CitusBackendAtExit);
+
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+}
+
+
+/*
+ * CitusBackendAtExit is called atexit of the backend for the purposes of
+ * any clean-up needed.
+ */
+static void
+CitusBackendAtExit(void)
+{
+	/* properly close all the cached connections */
+	ShutdownAllConnections();
 }
 
 
