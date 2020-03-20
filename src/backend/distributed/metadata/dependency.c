@@ -239,8 +239,6 @@ static void
 recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyFn apply,
 				  ObjectAddressCollector *collector)
 {
-	List *dependenyDefinitionList = NIL;
-
 	if (TargetObjectVisited(collector, target))
 	{
 		/* prevent infinite loops due to circular dependencies */
@@ -249,7 +247,7 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 
 	MarkObjectVisited(collector, target);
 
-	dependenyDefinitionList = DependencyDefinitionFromPgDepend(target);
+	List *dependenyDefinitionList = DependencyDefinitionFromPgDepend(target);
 	dependenyDefinitionList = list_concat(dependenyDefinitionList,
 										  DependencyDefinitionFromPgShDepend(target));
 
@@ -349,7 +347,7 @@ DependencyDefinitionFromPgShDepend(ObjectAddress target)
 	Relation shdepRel = heap_open(SharedDependRelationId, AccessShareLock);
 
 	/*
-	 * Scan pg_depend for dbid = $1 AND classid = $2 AND objid = $3 using
+	 * Scan pg_shdepend for dbid = $1 AND classid = $2 AND objid = $3 using
 	 * pg_shdepend_depender_index
 	 */
 	ScanKeyInit(&key[0], Anum_pg_shdepend_dbid, BTEqualStrategyNumber, F_OIDEQ,
