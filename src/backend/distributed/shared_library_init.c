@@ -56,6 +56,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
@@ -271,6 +272,7 @@ _PG_init(void)
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
 	InitializeCitusQueryStats();
+	InitializeSharedConnectionStats();
 
 	atexit(CitusBackendAtExit);
 
@@ -1010,6 +1012,23 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_tracked_worker_nodes",
+		gettext_noop("Sets the maximum number of worker tracked."),
+		gettext_noop("Citus doesn't have any limitations in terms of the "
+					 "number of worker nodes allowed in the cluster. But, "
+					 "Citus keeps some information about the worker nodes "
+					 "in the shared memory for certain optimizations. The "
+					 "optimizations are enforced up to this number of worker "
+					 "nodes. Any additional worker nodes may not benefit from"
+					 "the optimizations."),
+		&MaxTrackedWorkerNodes,
+		1024, 256, INT_MAX,
+		PGC_POSTMASTER,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 
 	DefineCustomIntVariable(
 		"citus.max_running_tasks_per_node",
