@@ -51,17 +51,17 @@ $$);
 (2 rows)
 
 SHOW ssl_ciphers;
-        ssl_ciphers
+                                                                                                       ssl_ciphers
 ---------------------------------------------------------------------
- TLSv1.2+HIGH:!aNULL:!eNULL
+ ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384
 (1 row)
 
 SELECT run_command_on_workers($$
     SHOW ssl_ciphers;
 $$);
-             run_command_on_workers
+                                                                                                           run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,TLSv1.2+HIGH:!aNULL:!eNULL)
- (localhost,57638,t,TLSv1.2+HIGH:!aNULL:!eNULL)
+ (localhost,57637,t,ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384)
+ (localhost,57638,t,ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384)
 (2 rows)
 
