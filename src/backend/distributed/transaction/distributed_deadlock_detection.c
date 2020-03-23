@@ -368,11 +368,7 @@ ResetVisitedFields(HTAB *adjacencyList)
 static bool
 AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 {
-#ifdef USE_ASSERT_CHECKING
-
-	/* if assertions are disabled, it would give unused variable warning */
-	int32 localGroupId = GetLocalGroupId();
-#endif
+	int32 localGroupId PG_USED_FOR_ASSERTS_ONLY = GetLocalGroupId();
 
 	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
