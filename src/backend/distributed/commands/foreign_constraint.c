@@ -74,11 +74,11 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
 			continue;
 		}
 
-		Oid referencedTableId = constraintForm->confrelid;
+		Oid referencedRelationOid = constraintForm->confrelid;
 
-		Assert(IsCitusTable(referencedTableId));
+		Assert(IsCitusTable(referencedRelationOid));
 
-		if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+		if (PartitionMethod(referencedRelationOid) == DISTRIBUTE_BY_NONE)
 		{
 			foreignKeyToReferenceTable = true;
 			break;
@@ -116,21 +116,22 @@ ConstraintIsAForeignKeyToReferenceTable(char *constraintName, Oid relationId)
  *   table is not a reference table.
  */
 void
-ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
+ErrorIfUnsupportedForeignConstraintExists(Relation referencingRelation,
+										  char referencingDistMethod,
 										  Var *referencingDistKey,
 										  uint32 referencingColocationId)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Oid referencingTableId = relation->rd_id;
+	Oid referencingRelationOid = referencingRelation->rd_id;
 	bool referencingNotReplicated = true;
-	bool referencingIsCitus = IsCitusTable(referencingTableId);
+	bool referencingIsCitusTable = IsCitusTable(referencingRelationOid);
 
-	if (referencingIsCitus)
+	if (referencingIsCitusTable)
 	{
 		/* ALTER TABLE command is applied over single replicated table */
-		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
+		referencingNotReplicated = SingleReplicatedTable(referencingRelationOid);
 	}
 	else
 	{
@@ -140,13 +141,14 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
-				relation->rd_id);
+				referencingRelation->rd_id);
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
 													ConstraintRelidTypidNameIndexId,
 													true, NULL,
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
@@ -165,12 +167,12 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			continue;
 		}
 
-		Oid referencedTableId = constraintForm->confrelid;
-		bool referencedIsCitus = IsCitusTable(referencedTableId);
+		Oid referencedRelationOid = constraintForm->confrelid;
+		bool referencedIsCitusTable = IsCitusTable(referencedRelationOid);
 
-		bool selfReferencingTable = (referencingTableId == referencedTableId);
+		bool selfReferencingTable = (referencingRelationOid == referencedRelationOid);
 
-		if (!referencedIsCitus && !selfReferencingTable)
+		if (!referencedIsCitusTable && !selfReferencingTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 							errmsg("cannot create foreign key constraint"),
@@ -182,11 +184,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		if (!selfReferencingTable)
 		{
-			referencedDistMethod = PartitionMethod(referencedTableId);
+			referencedDistMethod = PartitionMethod(referencedRelationOid);
 			referencedDistKey = (referencedDistMethod == DISTRIBUTE_BY_NONE) ?
 								NULL :
-								DistPartitionKey(referencedTableId);
-			referencedColocationId = TableColocationId(referencedTableId);
+								DistPartitionKey(referencedRelationOid);
+			referencedColocationId = TableColocationId(referencedRelationOid);
 		}
 		else
 		{

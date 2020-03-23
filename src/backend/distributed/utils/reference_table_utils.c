@@ -47,9 +47,9 @@ PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
 
 
 /*
- * upgrade_to_reference_table accepts a broadcast table which has only one shard and
- * replicates it across all nodes to create a reference table. It also modifies related
- * metadata to mark the table as reference.
+ * upgrade_to_reference_table accepts a broadcast table which has only one
+ * shard and replicates it across all nodes to create a reference table. It
+ * also modifies related metadata to mark the table as reference.
  */
 Datum
 upgrade_to_reference_table(PG_FUNCTION_ARGS)
@@ -197,35 +197,35 @@ ReplicateSingleShardTableToAllNodes(Oid relationId)
 	}
 
 	/*
-	 * ReplicateShardToAllNodes function opens separate transactions (i.e., not part
-	 * of any coordinated transactions) to each worker and replicates given shard to all
-	 * workers. If a worker already has a healthy replica of given shard, it skips that
-	 * worker to prevent copying unnecessary data.
+	 * ReplicateShardToAllNodes function opens separate transactions (i.e., not
+	 * part of any coordinated transactions) to each worker and replicates given
+	 * shard to all workers. If a worker already has a healthy replica of given
+	 * shard, it skips that worker to prevent copying unnecessary data.
 	 */
 	ReplicateShardToAllNodes(shardInterval);
 
 	/*
-	 * We need to update metadata tables to mark this table as reference table. We modify
-	 * pg_dist_partition, pg_dist_colocation and pg_dist_shard tables in
-	 * ConvertToReferenceTableMetadata function.
+	 * We need to update metadata tables to mark this table as reference table.
+	 * We modify pg_dist_partition, pg_dist_colocation and pg_dist_shard tables
+	 * in ConvertToReferenceTableMetadata function.
 	 */
 	ConvertToReferenceTableMetadata(relationId, shardId);
 
 	/*
-	 * After the table has been officially marked as a reference table, we need to create
-	 * the reference table itself and insert its pg_dist_partition, pg_dist_shard and
-	 * existing pg_dist_placement rows.
+	 * After the table has been officially marked as a reference table, we need
+	 * to create the reference table itself and insert its pg_dist_partition,
+	 * pg_dist_shard and existing pg_dist_placement rows.
 	 */
 	CreateTableMetadataOnWorkers(relationId);
 }
 
 
 /*
- * ReplicateShardToAllNodes function replicates given shard to all nodes
- * in separate transactions. While replicating, it only replicates the shard to the
- * nodes which does not have a healthy replica of the shard. However, this function
- * does not obtain any lock on shard resource and shard metadata. It is caller's
- * responsibility to take those locks.
+ * ReplicateShardToAllNodes function replicates given shard to all nodes in
+ * separate transactions. While replicating, it only replicates the shard to
+ * the nodes which does not have a healthy replica of the shard. However, this
+ * function does not obtain any lock on shard resource and shard metadata. It
+ * is caller's responsibility to take those locks.
  */
 static void
 ReplicateShardToAllNodes(ShardInterval *shardInterval)
@@ -234,9 +234,9 @@ ReplicateShardToAllNodes(ShardInterval *shardInterval)
 	List *workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
 
 	/*
-	 * We will iterate over all worker nodes and if a healthy placement does not exist
-	 * at given node we will copy the shard to that node. Then we will also modify
-	 * the metadata to reflect newly copied shard.
+	 * We will iterate over all worker nodes and if a healthy placement does
+	 * not exist at given node we will copy the shard to that node. Then we
+	 * will also modify the metadata to reflect newly copied shard.
 	 */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 	WorkerNode *workerNode = NULL;
@@ -251,10 +251,11 @@ ReplicateShardToAllNodes(ShardInterval *shardInterval)
 
 
 /*
- * ReplicateShardToNode function replicates given shard to the given worker node
- * in a separate transaction. While replicating, it only replicates the shard to the
- * workers which does not have a healthy replica of the shard. This function also modifies
- * metadata by inserting/updating related rows in pg_dist_placement.
+ * ReplicateShardToNode function replicates given shard to the given worker
+ * node in a separate transaction. While replicating, it only replicates the
+ * shard to the workers which does not have a healthy replica of the shard.
+ * This function also modifies metadata by inserting/updating related rows in
+ * pg_dist_placement.
  */
 static void
 ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
@@ -277,10 +278,11 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
 	/*
-	 * Although this function is used for reference tables, and reference table shard
-	 * placements always have shardState = SHARD_STATE_ACTIVE, in case of an upgrade
-	 * of a non-reference table to reference table, unhealty placements may exist.
-	 * In this case, repair the shard placement and update its state in pg_dist_placement.
+	 * Although this function is used for reference tables, and reference table
+	 * shard placements always have shardState = SHARD_STATE_ACTIVE, in case of
+	 * an upgrade of a non-reference table to reference table, unhealty placements
+	 * may exist. In this case, repair the shard placement and update its state
+	 * in pg_dist_placement.
 	 */
 	if (targetPlacement == NULL || targetPlacement->shardState != SHARD_STATE_ACTIVE)
 	{
@@ -329,10 +331,10 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 
 
 /*
- * ConvertToReferenceTableMetadata accepts a broadcast table and modifies its metadata to
- * reference table metadata. To do this, this function updates pg_dist_partition,
- * pg_dist_colocation and pg_dist_shard. This function assumes that caller ensures that
- * given broadcast table has only one shard.
+ * ConvertToReferenceTableMetadata accepts a broadcast table and modifies its
+ * metadata to reference table metadata. To do this, this function updates
+ * pg_dist_partition, pg_dist_colocation and pg_dist_shard. This function assumes
+ * that caller ensures that given broadcast table has only one shard.
  */
 static void
 ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
@@ -357,11 +359,11 @@ ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
 
 
 /*
- * CreateReferenceTableColocationId creates a new co-location id for reference tables and
- * writes it into pg_dist_colocation, then returns the created co-location id. Since there
- * can be only one colocation group for all kinds of reference tables, if a co-location id
- * is already created for reference tables, this function returns it without creating
- * anything.
+ * CreateReferenceTableColocationId creates a new co-location id for reference
+ * tables and writes it into pg_dist_colocation, then returns the created
+ * co-location id. Since there can be only one colocation group for all kinds
+ * of reference tables, if a co-location id is already created for reference
+ * tables, this function returns it without creating anything.
  */
 uint32
 CreateReferenceTableColocationId()
@@ -393,18 +395,17 @@ CreateReferenceTableColocationId()
 
 
 /*
- * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
- * tables and deletes all reference table placements from pg_dist_placement table
- * for given group.
+ * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list
+ * of reference tables and deletes all reference table placements from
+ * pg_dist_placement table for given group.
  */
 void
 DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 {
-	List *referenceTableList = ReferenceTableOidList();
-	List *referenceShardIntervalList = NIL;
+	List *referenceTableOids = ReferenceTableOidList();
 
 	/* if there are no reference tables, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	if (list_length(referenceTableOids) == 0)
 	{
 		return;
 	}
@@ -413,17 +414,18 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 	 * We sort the reference table list to prevent deadlocks in concurrent
 	 * DeleteAllReferenceTablePlacementsFromNodeGroup calls.
 	 */
-	referenceTableList = SortList(referenceTableList, CompareOids);
+	referenceTableOids = SortList(referenceTableOids, CompareOids);
 	if (ClusterHasKnownMetadataWorkers())
 	{
-		referenceShardIntervalList = GetSortedReferenceShardIntervals(referenceTableList);
+		List *referenceShardIntervalList = GetSortedReferenceShardIntervals(
+			referenceTableOids);
 
 		BlockWritesToShardList(referenceShardIntervalList);
 	}
 
 	StringInfo deletePlacementCommand = makeStringInfo();
 	Oid referenceTableId = InvalidOid;
-	foreach_oid(referenceTableId, referenceTableList)
+	foreach_oid(referenceTableId, referenceTableOids)
 	{
 		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
 															   groupId);
@@ -434,12 +436,14 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 		}
 
 		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
+		uint64 referenceTableShardId = placement->shardId;
 
-		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+		LockShardDistributionMetadata(referenceTableShardId, ExclusiveLock);
 
 		DeleteShardPlacementRow(placement->placementId);
 
 		resetStringInfo(deletePlacementCommand);
+
 		appendStringInfo(deletePlacementCommand,
 						 "DELETE FROM pg_dist_placement WHERE placementid = "
 						 UINT64_FORMAT,
@@ -450,16 +454,16 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 
 
 /*
- * ReferenceTableOidList function scans pg_dist_partition to create a list of all
- * reference tables. To create the list, it performs sequential scan. Since it is not
- * expected that this function will be called frequently, it is OK not to use index scan.
- * If this function becomes performance bottleneck, it is possible to modify this function
- * to perform index scan.
+ * ReferenceTableOidList function scans pg_dist_partition to create a list of
+ * all reference tables. To create the list, it performs sequential scan. Since
+ * it is not expected that this function will be called frequently, it is OK
+ * not to use index scan. If this function becomes performance bottleneck, it
+ * is possible to modify this function to perform index scan.
  */
 List *
 ReferenceTableOidList()
 {
-	List *referenceTableList = NIL;
+	List *referenceTableOids = NIL;
 
 	List *distTableOidList = DistTableOidList();
 	Oid relationId = InvalidOid;
@@ -469,11 +473,11 @@ ReferenceTableOidList()
 
 		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
-			referenceTableList = lappend_oid(referenceTableList, relationId);
+			referenceTableOids = lappend_oid(referenceTableOids, relationId);
 		}
 	}
 
-	return referenceTableList;
+	return referenceTableOids;
 }
 
 

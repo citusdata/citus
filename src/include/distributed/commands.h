@@ -95,10 +95,10 @@ extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
 													Oid leftRelationId);
-extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
-													  char distributionMethod,
-													  Var *distributionColumn,
-													  uint32 colocationId);
+extern void ErrorIfUnsupportedForeignConstraintExists(Relation referencingRelation,
+													  char referencingDistMethod,
+													  Var *referencingDistKey,
+													  uint32 referencingColocationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
