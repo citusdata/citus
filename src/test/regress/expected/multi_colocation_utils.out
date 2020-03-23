@@ -1032,6 +1032,407 @@ SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
 SELECT mark_tables_colocated('table1_groupG', ARRAY['table2_groupG']);
 ERROR:  cannot colocate tables table1_groupg and table2_groupg
 DETAIL:  Replication models don't match for table1_groupg and table2_groupg.
+CREATE TABLE d1(a int, b int);
+CREATE TABLE d2(a int, b int);
+CREATE TABLE d3(a int, b int);
+CREATE TABLE d4(a int, b int);
+CREATE TABLE different_d1(ch char);
+CREATE TABLE append_table(a int, b int);
+CREATE TABLE range_table(a int, b int);
+-- special keyword none
+CREATE TABLE none(a int, b int);
+CREATE TABLE ref(a int);
+CREATE TABLE local_table(a int);
+SELECT create_distributed_table('d1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('d2', 'a', colocate_with => 'd1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('d3', 'a', colocate_with => 'd2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('d4', 'a', colocate_with => 'd3');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('none', 'a', colocate_with => 'd4');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('different_d1', 'ch');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('append_table', 'a', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('range_table', 'a', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check d1, d2, d3 and d4 has the same colocation id => they are colocated.
+SELECT get_table_colocation_id('d1');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d2');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d3');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d4');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT tables_colocated('d1', 'd2');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d2', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d2', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d3', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- break colocation of d2
+SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
+SELECT get_table_colocation_id('d1');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d2');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                      11
+(1 row)
+
+SELECT get_table_colocation_id('d3');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d4');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT tables_colocated('d1', 'd2');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d2', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d1', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- break colocation of d2
+-- update colocation should not error if d2 doesn't have any colocated table.
+SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
+SELECT get_table_colocation_id('d1');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d2');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                      12
+(1 row)
+
+SELECT get_table_colocation_id('d3');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d4');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT tables_colocated('d1', 'd2');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d2', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d1', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT update_distributed_table_colocation('d3', colocate_with => 'd2');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- d1 and d4 should be colocated, d2 and d3 should be colocated.
+SELECT get_table_colocation_id('d1');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d2');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                      12
+(1 row)
+
+SELECT get_table_colocation_id('d3');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                      12
+(1 row)
+
+SELECT get_table_colocation_id('d4');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT tables_colocated('d1', 'd2');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d2', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d1', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- special case, colocate with a table named "none".
+SELECT update_distributed_table_colocation('d3', colocate_with => '"none"');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- d1, d4, d3 and "none" should be colocated;
+SELECT get_table_colocation_id('d1');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d2');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                      12
+(1 row)
+
+SELECT get_table_colocation_id('d3');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('d4');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT get_table_colocation_id('none');
+ get_table_colocation_id
+---------------------------------------------------------------------
+                       8
+(1 row)
+
+SELECT tables_colocated('d1', 'd2');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d2', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT tables_colocated('d1', 'd3');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'd4');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d1', 'none');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d4', 'none');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d3', 'none');
+ tables_colocated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT tables_colocated('d2', 'none');
+ tables_colocated
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- make sure reference and local tables return an error.
+SELECT update_distributed_table_colocation('ref', colocate_with => 'none');
+ERROR:  relation ref should be a hash distributed table
+SELECT update_distributed_table_colocation('local_table', colocate_with => 'none');
+ERROR:  relation local_table is not distributed
+-- make sure that different types cannot be colocated
+SELECT update_distributed_table_colocation('different_d1', colocate_with => 'd1');
+ERROR:  cannot colocate tables d1 and different_d1
+DETAIL:  Distribution column types don't match for d1 and different_d1.
+SELECT update_distributed_table_colocation('d1', colocate_with => 'different_d1');
+ERROR:  cannot colocate tables different_d1 and d1
+DETAIL:  Distribution column types don't match for different_d1 and d1.
+-- make sure that append distributed tables cannot be colocated
+SELECT update_distributed_table_colocation('append_table', colocate_with => 'd1');
+ERROR:  relation append_table should be a hash distributed table
+SELECT update_distributed_table_colocation('d1', colocate_with => 'append_table');
+ERROR:  relation append_table should be a hash distributed table
+SELECT update_distributed_table_colocation('range_table', colocate_with => 'd1');
+ERROR:  relation range_table should be a hash distributed table
+SELECT update_distributed_table_colocation('d1', colocate_with => 'range_table');
+ERROR:  relation range_table should be a hash distributed table
 -- drop tables to clean test space
 DROP TABLE table1_groupb;
 DROP TABLE table2_groupb;
@@ -1055,3 +1456,13 @@ DROP TABLE table1_group_none_3;
 DROP TABLE table1_group_none;
 DROP TABLE table2_group_none;
 DROP TABLE table1_group_default;
+DROP TABLE d1;
+DROP TABLE d2;
+DROP TABLE d3;
+DROP TABLE d4;
+DROP TABLE different_d1;
+DROP TABLE append_table;
+DROP TABLE range_table;
+DROP TABLE none;
+DROP TABLE ref;
+DROP TABLE local_table;

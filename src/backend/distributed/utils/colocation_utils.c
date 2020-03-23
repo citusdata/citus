@@ -50,11 +50,13 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
 static List * ColocationGroupTableList(Oid colocationId);
 static void DeleteColocationGroup(uint32 colocationId);
-
+static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
+static void BreakColocation(Oid sourceRelationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
 PG_FUNCTION_INFO_V1(get_colocated_shard_array);
+PG_FUNCTION_INFO_V1(update_distributed_table_colocation);
 
 
 /*
@@ -97,6 +99,74 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 
 
 /*
+ * update_distributed_table_colocation updates the colocation of a table.
+ * if colocate_with -> 'none' then the table is assigned a new
+ * colocation group.
+ */
+Datum
+update_distributed_table_colocation(PG_FUNCTION_ARGS)
+{
+	Oid targetRelationId = PG_GETARG_OID(0);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(1);
+
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(targetRelationId);
+	EnsureHashDistributedTable(targetRelationId);
+
+	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	if (IsColocateWithNone(colocateWithTableName))
+	{
+		BreakColocation(targetRelationId);
+	}
+	else
+	{
+		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+		EnsureHashDistributedTable(colocateWithTableId);
+		MarkTablesColocated(colocateWithTableId, targetRelationId);
+	}
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * IsColocateWithNone returns true if the given table is
+ * the special keyword "none".
+ */
+bool
+IsColocateWithNone(char *colocateWithTableName)
+{
+	return pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0;
+}
+
+
+/*
+ * BreakColocation breaks the colocations of the given relation id.
+ * If t1, t2 and t3 are colocated and we call this function with t2,
+ * t1 and t3 will stay colocated but t2 will have a new colocation id.
+ * Note that this function does not move any data around for the new colocation.
+ */
+static void
+BreakColocation(Oid sourceRelationId)
+{
+	/*
+	 * Get an exclusive lock on the colocation system catalog. Therefore, we
+	 * can be sure that there will no modifications on the colocation table
+	 * until this transaction is committed.
+	 */
+	Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+
+	uint32 newColocationId = GetNextColocationId();
+	UpdateRelationColocationGroup(sourceRelationId, newColocationId);
+
+	/* if there is not any remaining table in the colocation group, delete it */
+	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
+
+	heap_close(pgDistColocation, NoLock);
+}
+
+
+/*
  * get_colocated_shards_array returns array of shards ids which are co-located with given
  * shard.
  */
@@ -132,6 +202,36 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 
 
 /*
+ * CreateColocationGroupForRelation creates colocation entry in
+ * pg_dist_colocation and updated the colocation id in pg_dist_partition
+ * for the given relation.
+ */
+static uint32
+CreateColocationGroupForRelation(Oid sourceRelationId)
+{
+	uint32 shardCount = ShardIntervalCount(sourceRelationId);
+	uint32 shardReplicationFactor = TableShardReplicationFactor(sourceRelationId);
+
+	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
+	Oid sourceDistributionColumnType = InvalidOid;
+	Oid sourceDistributionColumnCollation = InvalidOid;
+
+	/* reference tables has NULL distribution column */
+	if (sourceDistributionColumn != NULL)
+	{
+		sourceDistributionColumnType = sourceDistributionColumn->vartype;
+		sourceDistributionColumnCollation = sourceDistributionColumn->varcollid;
+	}
+
+	uint32 sourceColocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
+													  sourceDistributionColumnType,
+													  sourceDistributionColumnCollation);
+	UpdateRelationColocationGroup(sourceRelationId, sourceColocationId);
+	return sourceColocationId;
+}
+
+
+/*
  * MarkTablesColocated puts both tables to same colocation group. If the
  * source table is in INVALID_COLOCATION_ID group, then it creates a new
  * colocation group and assigns both tables to same colocation group. Otherwise,
@@ -160,24 +260,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	uint32 sourceColocationId = TableColocationId(sourceRelationId);
 	if (sourceColocationId == INVALID_COLOCATION_ID)
 	{
-		uint32 shardCount = ShardIntervalCount(sourceRelationId);
-		uint32 shardReplicationFactor = TableShardReplicationFactor(sourceRelationId);
-
-		Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
-		Oid sourceDistributionColumnType = InvalidOid;
-		Oid sourceDistributionColumnCollation = InvalidOid;
-
-		/* reference tables has NULL distribution column */
-		if (sourceDistributionColumn != NULL)
-		{
-			sourceDistributionColumnType = sourceDistributionColumn->vartype;
-			sourceDistributionColumnCollation = sourceDistributionColumn->varcollid;
-		}
-
-		sourceColocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
-												   sourceDistributionColumnType,
-												   sourceDistributionColumnCollation);
-		UpdateRelationColocationGroup(sourceRelationId, sourceColocationId);
+		sourceColocationId = CreateColocationGroupForRelation(sourceRelationId);
 	}
 
 	uint32 targetColocationId = TableColocationId(targetRelationId);
