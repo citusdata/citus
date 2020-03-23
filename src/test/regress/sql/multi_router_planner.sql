@@ -1096,10 +1096,14 @@ SELECT id
 -- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 
--- verify insert is successfull (not router plannable and executable)
+-- verify insert is successful (not router plannable and executable)
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
+
+-- https://github.com/citusdata/citus/issues/3624
+UPDATE articles_hash SET id = id
+WHERE author_id = 1 AND title IN (SELECT name FROM authors_reference WHERE random() > 0.5);
 
 SET client_min_messages to 'NOTICE';
 
