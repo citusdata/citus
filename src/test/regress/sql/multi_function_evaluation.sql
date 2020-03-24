@@ -1,6 +1,8 @@
 --
 -- MULTI_FUNCTION_EVALUATION
 --
+CREATE SCHEMA multi_function_evaluation;
+SET search_path TO multi_function_evaluation;
 
 SET citus.next_shard_id TO 1200000;
 
@@ -129,6 +131,18 @@ $function$;
 INSERT INTO example VALUES (44, (ARRAY[stable_fn(),stable_fn()])[1]);
 SELECT * FROM example WHERE key = 44;
 
-DROP FUNCTION stable_fn();
+-- unnest is a set-returning function, which should not be evaluated
+UPDATE example SET value = stable_fn() + interval '2 hours' FROM UNNEST(ARRAY[44, 4]) AS k (key) WHERE example.key = k.key;
+SELECT * FROM example WHERE key = 44;
 
-DROP TABLE example;
+-- create a table with multiple shards to trigger recursive planning
+CREATE TABLE table_1 (key int, value timestamptz);
+SELECT create_distributed_table('table_1', 'key');
+
+-- the following query will have a read_intermediate_result call, but it should be skipped
+DELETE
+FROM table_1
+WHERE key >= (SELECT min(KEY) FROM table_1)
+AND value > now() - interval '1 hour';
+
+DROP SCHEMA multi_function_evaluation CASCADE;

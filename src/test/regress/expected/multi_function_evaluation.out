@@ -1,6 +1,8 @@
 --
 -- MULTI_FUNCTION_EVALUATION
 --
+CREATE SCHEMA multi_function_evaluation;
+SET search_path TO multi_function_evaluation;
 SET citus.next_shard_id TO 1200000;
 -- many of the tests in this file is intended for testing non-fast-path
 -- router planner, so we're explicitly disabling it in this file.
@@ -138,5 +140,32 @@ SELECT * FROM example WHERE key = 44;
   44 | Tue Oct 10 00:00:00 2000 PDT
 (1 row)
 
-DROP FUNCTION stable_fn();
-DROP TABLE example;
+-- unnest is a set-returning function, which should not be evaluated
+UPDATE example SET value = stable_fn() + interval '2 hours' FROM UNNEST(ARRAY[44, 4]) AS k (key) WHERE example.key = k.key;
+NOTICE:  stable_fn called
+CONTEXT:  PL/pgSQL function stable_fn() line 3 at RAISE
+SELECT * FROM example WHERE key = 44;
+ key |            value
+---------------------------------------------------------------------
+  44 | Tue Oct 10 02:00:00 2000 PDT
+(1 row)
+
+-- create a table with multiple shards to trigger recursive planning
+CREATE TABLE table_1 (key int, value timestamptz);
+SELECT create_distributed_table('table_1', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- the following query will have a read_intermediate_result call, but it should be skipped
+DELETE
+FROM table_1
+WHERE key >= (SELECT min(KEY) FROM table_1)
+AND value > now() - interval '1 hour';
+DROP SCHEMA multi_function_evaluation CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table example
+drop cascades to sequence example_value_seq
+drop cascades to function stable_fn()
+drop cascades to table table_1
