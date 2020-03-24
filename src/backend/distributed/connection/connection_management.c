@@ -28,6 +28,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
@@ -321,6 +322,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 * Either no caching desired, or no pre-established, non-claimed,
 	 * connection present. Initiate connection establishment.
 	 */
+	TryToIncrementSharedConnectionCounter(hostname, port);
 
 	connection = StartConnectionEstablishment(&key);
 
