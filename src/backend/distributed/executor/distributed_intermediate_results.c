@@ -228,7 +228,6 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 							 binaryFormatString);
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
-
 		SetTaskQueryString(selectTask, NULL);
 		selectTask->perPlacementQueryStrings = perPlacementQueries;
 	}
@@ -413,7 +412,7 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 
 	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
 							resultStore, hasReturning, targetPoolSize, &xactProperties,
-							NIL, false);
+							NIL, true);
 
 	return resultStore;
 }
