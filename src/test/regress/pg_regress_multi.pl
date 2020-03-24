@@ -80,7 +80,7 @@ my $pgCtlTimeout = undef;
 my $connectionTimeout = 5000;
 my $useMitmproxy = 0;
 my $mitmFifoPath = catfile($TMP_CHECKDIR, "mitmproxy.fifo");
-my $constr = "";
+my $conninfo = "";
 my $hoststr = "";
 
 my $serversAreShutdown = "TRUE";
@@ -110,7 +110,7 @@ GetOptions(
     'pg_ctl-timeout=s' => \$pgCtlTimeout,
     'connection-timeout=s' => \$connectionTimeout,
     'mitmproxy' => \$useMitmproxy,
-    'constr=s' => \$constr,
+    'conninfo=s' => \$conninfo,
     'hoststr=s' => \$hoststr,
     'help' => sub { Usage() });
 
@@ -285,9 +285,9 @@ my $workerCount = 2;
 my @workerHosts = ();
 my @workerPorts = ();
 
-if ( $constr )
+if ( $conninfo )
 {
-    my %convals = split /=|\s/, $constr;
+    my %convals = split /=|\s/, $conninfo;
     if (exists $convals{user})
     {
         $user = $convals{user};
@@ -322,10 +322,10 @@ if ( $constr )
     print $out "s/$host/<host>/g\n";
     print $out "s/", substr("$masterPort", 0, length("$masterPort")-2), "[0-9][0-9]/xxxxx/g\n";
 
-    my $worker1host = `psql "$constr" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
-    my $worker1port = `psql "$constr" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
-    my $worker2host = `psql "$constr" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
-    my $worker2port = `psql "$constr" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
+    my $worker1host = `psql "$conninfo" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
+    my $worker1port = `psql "$conninfo" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
+    my $worker2host = `psql "$conninfo" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
+    my $worker2port = `psql "$conninfo" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
 
     $worker1host =~ s/^\s+|\s+$//g;
     $worker1port =~ s/^\s+|\s+$//g;
@@ -475,7 +475,7 @@ for my $option (@userPgOptions)
 
 # define functions as signature->definition
 %functions = ();
-if (!$constr)
+if (!$conninfo)
 {
     %functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;');
 }
@@ -589,7 +589,7 @@ else
 close $fh;
 
 
-if (!$constr)
+if (!$conninfo)
 {
     make_path(catfile($TMP_CHECKDIR, $MASTERDIR, 'log')) or die "Could not create $MASTERDIR directory";
     for my $port (@workerPorts)
@@ -633,7 +633,7 @@ if (!$constr)
 # Routine to shutdown servers at failure/exit
 sub ShutdownServers()
 {
-    if (!$constr && $serversAreShutdown eq "FALSE")
+    if (!$conninfo && $serversAreShutdown eq "FALSE")
     {
         system(catfile("$bindir", "pg_ctl"),
                ('stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'))) == 0
@@ -760,7 +760,7 @@ if ($followercluster)
 }
 
 # Start servers
-if (!$constr)
+if (!$conninfo)
 {
     if(system(catfile("$bindir", "pg_ctl"),
         ('start', '-w',
@@ -830,7 +830,7 @@ if ($followercluster)
 # Create database, extensions, types, functions and fdws on the workers,
 # pg_regress won't know to create them for us.
 ###
-if (!$constr)
+if (!$conninfo)
 {
     for my $port (@workerPorts)
     {
@@ -956,7 +956,7 @@ elsif ($isolationtester)
 }
 else
 {
-    if ($constr)
+    if ($conninfo)
     {
         push(@arguments, "--dbname=$dbname");
         push(@arguments, "--use-existing");
