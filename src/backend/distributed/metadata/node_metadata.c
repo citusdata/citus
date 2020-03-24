@@ -39,6 +39,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -292,6 +293,9 @@ master_disable_node(PG_FUNCTION_ARGS)
 	bool isActive = false;
 	bool onlyConsiderActivePlacements = false;
 	MemoryContext savedContext = CurrentMemoryContext;
+
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
 
 	PG_TRY();
 	{
@@ -604,6 +608,9 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
+
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -646,6 +653,9 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
+
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
 	if (workerNodeWithSameAddress != NULL)
@@ -671,6 +681,7 @@ master_update_node(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
 						errmsg("node %u not found", nodeId)));
 	}
+
 
 	/*
 	 * If the node is a primary node we block reads and writes.
@@ -715,8 +726,9 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
-	strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
-	workerNode->workerPort = newNodePort;
+	/* we should be able to find the new node from the metadata */
+	workerNode = FindWorkerNode(newNodeNameString, newNodePort);
+	Assert(workerNode->nodeId == nodeId);
 
 	/*
 	 * Propagate the updated pg_dist_node entry to all metadata workers.
@@ -1012,8 +1024,10 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
 
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{
 		bool onlyConsiderActivePlacements = false;

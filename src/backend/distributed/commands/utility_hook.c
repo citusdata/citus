@@ -64,7 +64,6 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;

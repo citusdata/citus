@@ -62,6 +62,7 @@ test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict
 test: isolation_ref2ref_foreign_keys
 test: isolation_multiuser_locking
+test: shared_connection_waits
 
 # MX tests
 test: isolation_reference_on_mx

@@ -28,11 +28,13 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/placement_connection.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
 #include "portability/instr_time.h"
+#include "storage/ipc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -46,7 +48,8 @@ MemoryContext ConnectionContext = NULL;
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
-static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
+static void StartConnectionEstablishment(MultiConnection *connectionn,
+										 ConnectionHashKey *key);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
@@ -78,7 +81,7 @@ static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 															int *waitCount);
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
 static uint32 MultiConnectionStateEventMask(MultiConnectionPollState *connectionState);
-
+static void CitusPQFinish(MultiConnection *connection);
 
 static int CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
 
@@ -257,7 +260,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 								const char *user, const char *database)
 {
 	ConnectionHashKey key;
-	MultiConnection *connection;
 	bool found;
 
 	/* do some minimal input checks */
@@ -310,23 +312,74 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	if (!(flags & FORCE_NEW_CONNECTION))
 	{
 		/* check connection cache for a connection that's not already in use */
-		connection = FindAvailableConnection(entry->connections, flags);
+		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
 		if (connection)
 		{
 			return connection;
 		}
 	}
 
+
 	/*
 	 * Either no caching desired, or no pre-established, non-claimed,
 	 * connection present. Initiate connection establishment.
 	 */
-
-	connection = StartConnectionEstablishment(&key);
-
+	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
+														 sizeof(MultiConnection));
+	connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
 	dlist_push_tail(entry->connections, &connection->connectionNode);
 
+	/* these two flags are by nature cannot happen at the same time */
+	Assert(!((flags & WAIT_FOR_CONNECTION) && (flags & OPTIONAL_CONNECTION)));
+
+	if (flags & WAIT_FOR_CONNECTION)
+	{
+		WaitLoopForSharedConnection(hostname, port);
+	}
+	else if (flags & OPTIONAL_CONNECTION)
+	{
+		/*
+		 * We can afford to skip establishing an optional connection. For
+		 * non-optional connections, we first retry for some time. If we still
+		 * cannot reserve the right to establish a connection, we prefer to
+		 * error out.
+		 */
+		if (!TryToIncrementSharedConnectionCounter(hostname, port))
+		{
+			/* do not track the connection anymore */
+			dlist_delete(&connection->connectionNode);
+			pfree(connection);
+
+			return NULL;
+		}
+	}
+	else
+	{
+		/*
+		 * The caller doesn't want the connection manager to wait
+		 * until a connection slot is available on the remote node.
+		 * In the end, we might fail to establish connection to the
+		 * remote node as it might not have any space in
+		 * max_connections for this connection establishment.
+		 *
+		 * Still, we keep track of the connnection counter.
+		 */
+		IncrementSharedConnectionCounter(hostname, port);
+	}
+
+
+	/*
+	 * We've already incremented the counter above, so we should decrement
+	 * when we're done with the connection.
+	 */
+	connection->initilizationState = POOL_STATE_COUNTER_INCREMENTED;
+
+	StartConnectionEstablishment(connection, &key);
+
 	ResetShardPlacementAssociation(connection);
+
+	/* fully initialized the connection, record it */
+	connection->initilizationState = POOL_STATE_INITIALIZED;
 
 	return connection;
 }
@@ -456,8 +509,7 @@ CloseConnection(MultiConnection *connection)
 	bool found;
 
 	/* close connection */
-	PQfinish(connection->pgConn);
-	connection->pgConn = NULL;
+	CitusPQFinish(connection);
 
 	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
 	key.port = connection->port;
@@ -537,8 +589,7 @@ ShutdownConnection(MultiConnection *connection)
 	{
 		SendCancelationRequest(connection);
 	}
-	PQfinish(connection->pgConn);
-	connection->pgConn = NULL;
+	CitusPQFinish(connection);
 }
 
 
@@ -903,8 +954,29 @@ CloseNotReadyMultiConnectionStates(List *connectionStates)
 		}
 
 		/* close connection, otherwise we take up resource on the other side */
+		CitusPQFinish(connection);
+	}
+}
+
+
+/*
+ * CitusPQFinish is a wrapper around PQfinish and does book keeping on shared connection
+ * counters.
+ */
+static void
+CitusPQFinish(MultiConnection *connection)
+{
+	if (connection->pgConn != NULL)
+	{
 		PQfinish(connection->pgConn);
 		connection->pgConn = NULL;
+	}
+
+	/* behave idempotently, there is no gurantee that CitusPQFinish() is called once */
+	if (connection->initilizationState >= POOL_STATE_COUNTER_INCREMENTED)
+	{
+		DecrementSharedConnectionCounter(connection->hostname, connection->port);
+		connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
 	}
 }
 
@@ -985,8 +1057,8 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
  * Asynchronously establish connection to a remote node, but don't wait for
  * that to finish. DNS lookups etc. are performed synchronously though.
  */
-static MultiConnection *
-StartConnectionEstablishment(ConnectionHashKey *key)
+static void
+StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key)
 {
 	bool found = false;
 	static uint64 connectionId = 1;
@@ -1018,9 +1090,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 		entry->isValid = true;
 	}
 
-	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
-														 sizeof(MultiConnection));
-
 	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
@@ -1040,8 +1109,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	PQsetnonblocking(connection->pgConn, true);
 
 	SetCitusNoticeProcessor(connection);
-
-	return connection;
 }
 
 
@@ -1166,6 +1233,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	}
 
 	return isCitusInitiatedBackend ||
+		   connection->initilizationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
