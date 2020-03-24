@@ -31,6 +31,8 @@ if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
 	normalize_file="$BASEDIR/normalize.sed"
+	# when running tests on an existing cluster some changes need to be done on
+	# normalize.sed file. So a new file is used.
 	if [[ -f "$BASEDIR/normalize_modified.sed" ]]
 	then
 		normalize_file="$BASEDIR/normalize_modified.sed"
