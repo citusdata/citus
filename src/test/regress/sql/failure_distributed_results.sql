@@ -42,7 +42,7 @@ CREATE TABLE distributed_result_info AS
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')
           NATURAL JOIN pg_dist_node;
 SELECT * FROM distributed_result_info ORDER BY resultId;
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], :'worker_2_host', :worker_2_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_2_port) > 0 AS fetched;
 SELECT count(*), sum(x) FROM
   read_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[],'binary') AS res (x int);
 ROLLBACk;
@@ -57,10 +57,10 @@ CREATE TABLE distributed_result_info AS
 SELECT * FROM distributed_result_info ORDER BY resultId;
 -- fetch from worker 2 should fail
 SAVEPOINT s1;
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], :'worker_2_host', :worker_2_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_2_port) > 0 AS fetched;
 ROLLBACK TO SAVEPOINT s1;
 -- fetch from worker 1 should succeed
-SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], :'worker_1_host', :worker_1_port) > 0 AS fetched;
+SELECT fetch_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[], 'localhost', :worker_1_port) > 0 AS fetched;
 -- make sure the results read are same as the previous transaction block
 SELECT count(*), sum(x) FROM
   read_intermediate_results('{test_from_100802_to_1,test_from_100802_to_2}'::text[],'binary') AS res (x int);
