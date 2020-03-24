@@ -31,7 +31,7 @@
 
 /*
  * ObjectAddressCollector keeps track of collected ObjectAddresses. This can be used
- * together with recurse_pg_depend.
+ * together with RecurseObjectDependencies.
  *
  * We keep three different datastructures for the following reasons
  *  - A List ordered by insert/collect order
@@ -46,17 +46,21 @@ typedef struct ObjectAddressCollector
 	HTAB *visitedObjects;
 } ObjectAddressCollector;
 
-typedef enum DependencyDefinitionMode
+/*
+ * DependencyMode distinguishes the data stored in DependencyDefinition. For details see
+ * DependencyDefinition's inline comments in the data union.
+ */
+typedef enum DependencyMode
 {
 	DependencyObjectAddress,
 	DependencyPgDepend,
 	DependencyPgShDepend
-} DependencyDefinitionMode;
+} DependencyMode;
 
 typedef struct DependencyDefinition
 {
 	/* describe how the dependency data is stored in the data field */
-	DependencyDefinitionMode mode;
+	DependencyMode mode;
 
 	/*
 	 * Dependencies can be found in different ways and therefore stored differently on the
@@ -111,8 +115,9 @@ typedef void (*applyFn)(ObjectAddressCollector *collector,
 						DependencyDefinition *definition);
 
 /* forward declaration of functions that recurse pg_depend */
-static void recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow,
-							  applyFn apply, ObjectAddressCollector *collector);
+static void RecurseObjectDependencies(ObjectAddress target, expandFn expand,
+									  followFn follow, applyFn apply,
+									  ObjectAddressCollector *collector);
 static List * DependencyDefinitionFromPgDepend(ObjectAddress target);
 static List * DependencyDefinitionFromPgShDepend(ObjectAddress target);
 static bool FollowAllSupportedDependencies(ObjectAddressCollector *collector,
@@ -162,11 +167,11 @@ GetDependenciesForObject(const ObjectAddress *target)
 	ObjectAddressCollector collector = { 0 };
 	InitObjectAddressCollector(&collector);
 
-	recurse_pg_depend(*target,
-					  &ExpandCitusSupportedTypes,
-					  &FollowNewSupportedDependencies,
-					  &ApplyAddToDependencyList,
-					  &collector);
+	RecurseObjectDependencies(*target,
+							  &ExpandCitusSupportedTypes,
+							  &FollowNewSupportedDependencies,
+							  &ApplyAddToDependencyList,
+							  &collector);
 
 	return collector.dependencyList;
 }
@@ -199,11 +204,11 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 			continue;
 		}
 
-		recurse_pg_depend(*objectAddress,
-						  &ExpandCitusSupportedTypes,
-						  &FollowAllSupportedDependencies,
-						  &ApplyAddToDependencyList,
-						  &collector);
+		RecurseObjectDependencies(*objectAddress,
+								  &ExpandCitusSupportedTypes,
+								  &FollowAllSupportedDependencies,
+								  &ApplyAddToDependencyList,
+								  &collector);
 
 		CollectObjectAddress(&collector, objectAddress);
 	}
@@ -213,22 +218,20 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 
 
 /*
- * recurse_pg_depend recursively visits pg_depend entries.
+ * RecurseObjectDependencies recursively visits all dependencies of an object. It sources
+ * the dependencies from pg_depend and pg_shdepend while 'expanding' the list via an
+ * optional `expand` function.
  *
- * `expand` allows based on the target ObjectAddress to generate extra entries for ease of
- * traversal.
- *
- * Starting from the target ObjectAddress. For every existing and generated entry the
- * `follow` function will be called. When `follow` returns true it will recursively visit
- * the dependencies for that object. recurse_pg_depend will visit therefore all pg_depend
- * entries.
+ * Starting from the target ObjectAddress. For every dependency found the `follow`
+ * function will be called. When `follow` returns true it will recursively visit the
+ * dependencies for that object.
  *
  * Visiting will happen in depth first order, which is useful to create or sorted lists of
  * dependencies to create.
  *
- * For all pg_depend entries that should be visited the apply function will be called.
- * This function is designed to be the mutating function for the context being passed.
- * Although nothing prevents the follow function to also mutate the context.
+ * For all dependencies that should be visited the apply function will be called. This
+ * function is designed to be the mutating function for the context being passed. Although
+ * nothing prevents the follow function to also mutate the context.
  *
  *  - follow will be called on the way down, so the invocation order is top to bottom of
  *    the dependency tree
@@ -236,8 +239,8 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
  *    not called for entries for which follow has returned false.
  */
 static void
-recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyFn apply,
-				  ObjectAddressCollector *collector)
+RecurseObjectDependencies(ObjectAddress target, expandFn expand, followFn follow,
+						  applyFn apply, ObjectAddressCollector *collector)
 {
 	if (TargetObjectVisited(collector, target))
 	{
@@ -247,22 +250,20 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 
 	MarkObjectVisited(collector, target);
 
-	List *dependenyDefinitionList = DependencyDefinitionFromPgDepend(target);
-	dependenyDefinitionList = list_concat(dependenyDefinitionList,
-										  DependencyDefinitionFromPgShDepend(target));
+	/* lookup both pg_depend and pg_shdepend for dependencies */
+	List *pgDependDefinitions = DependencyDefinitionFromPgDepend(target);
+	List *pgShDependDefinitions = DependencyDefinitionFromPgShDepend(target);
+	List *dependenyDefinitionList = list_concat(pgDependDefinitions,
+												pgShDependDefinitions);
 
-	/*
-	 * concat expanded entries if applicable
-	 */
+	/* concat expanded entries if applicable */
 	if (expand != NULL)
 	{
 		List *expandedEntries = expand(collector, target);
 		dependenyDefinitionList = list_concat(dependenyDefinitionList, expandedEntries);
 	}
 
-	/*
-	 * Iterate all entries and recurse depth first
-	 */
+	/* iterate all entries and recurse depth first */
 	DependencyDefinition *dependencyDefinition = NULL;
 	foreach_ptr(dependencyDefinition, dependenyDefinitionList)
 	{
@@ -277,7 +278,7 @@ recurse_pg_depend(ObjectAddress target, expandFn expand, followFn follow, applyF
 		 * first.
 		 */
 		ObjectAddress address = DependencyDefinitionObjectAddress(dependencyDefinition);
-		recurse_pg_depend(address, expand, follow, apply, collector);
+		RecurseObjectDependencies(address, expand, follow, apply, collector);
 
 		/* now apply changes for current entry */
 		if (apply != NULL)
@@ -768,7 +769,7 @@ FollowAllSupportedDependencies(ObjectAddressCollector *collector,
 
 
 /*
- * ApplyAddToDependencyList is an apply function for recurse_pg_depend that will collect
+ * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will collect
  * all the ObjectAddresses for pg_depend entries to the context. The context here is
  * assumed to be a (ObjectAddressCollector *) to the location where all ObjectAddresses
  * will be collected.
