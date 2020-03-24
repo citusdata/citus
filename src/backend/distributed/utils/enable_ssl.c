@@ -39,7 +39,12 @@
 #define POSTGRES_DEFAULT_SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
 #define CITUS_DEFAULT_SSL_CIPHERS_OLD "TLSv1.2+HIGH:!aNULL:!eNULL"
 
-/* Microsoft approved cipher string */
+/*
+ * Microsoft approved cipher string.
+ * This cipher string implicitely enables only TLSv1.2+, because these ciphers
+ * were all added in TLSv1.2. This can be confirmed by running:
+ * openssl -v <below strings concatenated>
+ */
 #define CITUS_DEFAULT_SSL_CIPHERS "ECDHE-ECDSA-AES128-GCM-SHA256:" \
 								  "ECDHE-ECDSA-AES256-GCM-SHA384:" \
 								  "ECDHE-RSA-AES128-GCM-SHA256:" \
