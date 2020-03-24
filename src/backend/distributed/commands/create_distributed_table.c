@@ -619,7 +619,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
  * distributing table here. If there is an unsatisfied requirement, we error out
  * and do not distribute the table.
  *
- * This function assumes, callers have already acquried necessary locks to ensure
+ * This function assumes, callers have already acquired necessary locks to ensure
  * there will not be any change in the given relation.
  */
 static void

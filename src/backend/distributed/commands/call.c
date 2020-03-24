@@ -167,7 +167,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		Task *task = CitusMakeNode(Task);
 
 		task->jobId = INVALID_JOB_ID;
-		task->taskId = 0;
+		task->taskId = INVALID_TASK_ID;
 		task->taskType = DDL_TASK;
 		SetTaskQueryString(task, callCommand->data);
 		task->replicationModel = REPLICATION_MODEL_INVALID;
