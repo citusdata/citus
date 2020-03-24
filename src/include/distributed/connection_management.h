@@ -11,6 +11,8 @@
 #ifndef CONNECTION_MANAGMENT_H
 #define CONNECTION_MANAGMENT_H
 
+#include "postgres.h"
+
 #include "distributed/transaction_management.h"
 #include "distributed/remote_transaction.h"
 #include "lib/ilist.h"
@@ -219,6 +221,7 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 int32 port,
 														 const char *user,
 														 const char *database);
+extern void CloseAllConnectionsAfterTransaction(void);
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownAllConnections(void);
