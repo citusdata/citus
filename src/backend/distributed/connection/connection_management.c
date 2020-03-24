@@ -372,6 +372,16 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
+		if (connection->forceCloseAtTransactionEnd)
+		{
+			/*
+			 * This is a connection that should be closed, probabably because
+			 * of old connection options. So we ignore it. It will
+			 * automatically be closed at the end of the transaction.
+			 */
+			continue;
+		}
+
 		if ((flags & REQUIRE_SIDECHANNEL) != 0)
 		{
 			if (connection->purpose == CONNECTION_PURPOSE_SIDECHANNEL ||
@@ -418,6 +428,37 @@ GivePurposeToConnection(MultiConnection *connection, int flags)
 	{
 		/* connection should be used for data access */
 		connection->purpose = CONNECTION_PURPOSE_DATA_ACCESS;
+	}
+}
+
+
+/*
+ * CloseAllConnectionsAfterTransaction sets the forceClose flag of all the
+ * connections. This is mainly done when citus.node_conninfo changes.
+ */
+void
+CloseAllConnectionsAfterTransaction(void)
+{
+	if (ConnectionHash == NULL)
+	{
+		return;
+	}
+	HASH_SEQ_STATUS status;
+	ConnectionHashEntry *entry;
+
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		dlist_iter iter;
+
+		dlist_head *connections = entry->connections;
+		dlist_foreach(iter, connections)
+		{
+			MultiConnection *connection =
+				dlist_container(MultiConnection, connectionNode, iter.cur);
+
+			connection->forceCloseAtTransactionEnd = true;
+		}
 	}
 }
 
@@ -1145,7 +1186,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 /*
  * ShouldShutdownConnection returns true if either one of the followings is true:
  * - The connection is citus initiated.
- * - Current cached connections is already at MaxCachedConnectionPerWorker
+ * - Current cached connections is already at MaxCachedConnectionsPerWorker
  * - Connection is forced to close at the end of transaction
  * - Connection is not in OK state
  * - A transaction is still in progress (usually because we are cancelling a distributed transaction)

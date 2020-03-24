@@ -1471,6 +1471,12 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 		newval = "";
 	}
 
+	if (strcmp(newval, NodeConninfo) == 0)
+	{
+		/* It did not change, no need to do anything */
+		return;
+	}
+
 	PQconninfoOption *optionArray = PQconninfoParse(newval, NULL);
 	if (optionArray == NULL)
 	{
@@ -1492,6 +1498,14 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 	}
 
 	PQconninfoFree(optionArray);
+
+	/*
+	 * Mark all connections for shutdown, since they have been opened using old
+	 * connection settings. This is mostly important when changing SSL
+	 * parameters, otherwise these would not be applied and connections could
+	 * be unencrypted when the user doesn't want that.
+	 */
+	CloseAllConnectionsAfterTransaction();
 }
 
 
