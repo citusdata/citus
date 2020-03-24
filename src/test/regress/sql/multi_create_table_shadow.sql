@@ -2,6 +2,9 @@
 -- MULTI_CREATE_TABLE
 --
 
+-- Some of the tests fail but without them some other tests fail. So failing parts
+-- are removed to create shadow tests. This is one of them.
+
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 

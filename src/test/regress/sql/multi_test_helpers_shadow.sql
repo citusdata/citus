@@ -1,5 +1,8 @@
 -- File to create functions and helpers needed for subsequent tests
 
+-- Some of the tests fail but without them some other tests fail. So failing parts
+-- are removed to create shadow tests. This is one of them.
+
 -- create a helper function to create objects on each node
 CREATE OR REPLACE FUNCTION run_command_on_master_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$

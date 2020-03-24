@@ -2,6 +2,8 @@
 -- multi behavioral analytics
 -- this file is intended to create the table requires for the tests
 --
+-- Some of the tests fail but without them some other tests fail. So failing parts
+-- are removed to create shadow tests. This is one of them.
 SET citus.next_shard_id TO 1400000;
 SET citus.shard_replication_factor = 1;
 SET citus.shard_count = 32;
