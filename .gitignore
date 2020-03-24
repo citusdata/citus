@@ -39,6 +39,9 @@ lib*.pc
 /src/Makefile.custom
 /compile_commands.json
 
+# Autoconf version may vary
+configure
+
 # temporary files vim creates
 *.swp
 
