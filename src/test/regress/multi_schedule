@@ -268,6 +268,11 @@ test: multi_colocated_shard_transfer
 test: multi_citus_tools
 
 # ----------
+# node_conninfo_reload tests that node_conninfo changes take effect
+# ----------
+test: node_conninfo_reload
+
+# ----------
 # multi_foreign_key tests foreign key push down on distributed tables
 # ----------
 test: multi_foreign_key multi_foreign_key_relation_graph
