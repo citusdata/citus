@@ -481,6 +481,8 @@ if (!$constr)
 }
 else
 {
+    # when running the tests on a cluster these will be created with run_command_on_workers
+    # so extra single quotes are needed
     %functions = ('fake_fdw_handler()', 'fdw_handler AS \'\'citus\'\' LANGUAGE C STRICT;');
 }
 
