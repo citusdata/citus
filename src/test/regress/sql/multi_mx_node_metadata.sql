@@ -68,7 +68,7 @@ SELECT verify_metadata(:'worker_1_host', :worker_1_port);
 -- a unwriteable node.
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
-SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+SELECT 1 FROM master_update_node(:nodeid_1, :'worker_1_host', 12345);
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
 END;
 
@@ -97,13 +97,13 @@ SELECT mark_node_readonly(:'worker_2_host', :worker_2_port, TRUE);
 
 -- Now updating the other node will mark worker 2 as not synced.
 BEGIN;
-SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+SELECT 1 FROM master_update_node(:nodeid_1, :'worker_1_host', 12345);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 COMMIT;
 
 -- worker_2 is out of sync, so further updates aren't sent to it and
 -- we shouldn't see the warnings.
-SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 23456);
+SELECT 1 FROM master_update_node(:nodeid_1, :'worker_1_host', 23456);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 -- Make the node writeable.
@@ -133,7 +133,7 @@ SELECT verify_metadata(:'worker_1_host', :worker_1_port),
 -- Test that master_update_node rolls back properly
 --------------------------------------------------------------------------
 BEGIN;
-SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+SELECT 1 FROM master_update_node(:nodeid_1, :'worker_1_host', 12345);
 ROLLBACK;
 
 SELECT verify_metadata(:'worker_1_host', :worker_1_port),
@@ -143,7 +143,7 @@ SELECT verify_metadata(:'worker_1_host', :worker_1_port),
 -- Test that master_update_node can appear in a prepared transaction.
 --------------------------------------------------------------------------
 BEGIN;
-SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
+SELECT 1 FROM master_update_node(:nodeid_1, :'worker_1_host', 12345);
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
 
@@ -176,7 +176,7 @@ SELECT verify_metadata(:'worker_1_host', :worker_1_port);
 ------------------------------------------------------------------------------------
 -- Test master_disable_node() when the node that is being disabled is actually down
 ------------------------------------------------------------------------------------
-SELECT master_update_node(:nodeid_2, 'localhost', 1);
+SELECT master_update_node(:nodeid_2, :'worker_2_host', 1);
 SELECT wait_until_metadata_sync();
 
 -- set metadatasynced so we try porpagating metadata changes
@@ -202,7 +202,7 @@ SELECT verify_metadata(:'worker_1_host', :worker_1_port);
 -- Test master_disable_node() when the other node is down
 ------------------------------------------------------------------------------------
 -- node 1 is down.
-SELECT master_update_node(:nodeid_1, 'localhost', 1);
+SELECT master_update_node(:nodeid_1, :'worker_1_host', 1);
 SELECT wait_until_metadata_sync();
 
 -- set metadatasynced so we try porpagating metadata changes
