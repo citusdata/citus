@@ -30,7 +30,7 @@ INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
 SELECT create_distributed_table('partitioning_test', 'id');
 
 -- see from MX node, the data is loaded to shards
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT * FROM partitioning_test ORDER BY 1;
 
@@ -55,7 +55,7 @@ ORDER BY
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
@@ -63,7 +63,7 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
 
 -- see from MX node, new partition is automatically distributed as well
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT
 	logicalrelid
@@ -85,7 +85,7 @@ ORDER BY
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
@@ -99,7 +99,7 @@ INSERT INTO partitioning_test_2012 VALUES (6, '2012-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES FROM ('2012-01-01') TO ('2013-01-01');
 
 -- see from MX node, attached partition is distributed as well
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT
 	logicalrelid
@@ -124,7 +124,7 @@ SELECT * FROM partitioning_test ORDER BY 1;
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
@@ -139,27 +139,27 @@ INSERT INTO partitioning_test_2013 VALUES (8, '2013-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2013 FOR VALUES FROM ('2013-01-01') TO ('2014-01-01');
 
 -- see from MX node, see the data is loaded to shards
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT * FROM partitioning_test ORDER BY 1;
 
 -- see from MX node, partitioning hierarchy is built
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- 5-) Detaching partition of the partitioned table
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 
 -- see from MX node, partitioning hierarchy is built
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 -- make sure DROPping from worker node is not allowed
 DROP TABLE partitioning_test;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- make sure we can repeatedly call start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node(:'worker_1_host', :worker_1_port);

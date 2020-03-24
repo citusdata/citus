@@ -1,4 +1,4 @@
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
@@ -76,5 +76,5 @@ SET citus.writable_standby_coordinator TO on;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 3);
 SELECT * FROM the_table ORDER BY a;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 DROP TABLE the_table;

@@ -4,7 +4,7 @@
 
 
 -- connect to the coordinator
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 
@@ -58,7 +58,7 @@ ORDER BY
 	l_year;
 
 -- connect to one of the workers
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 
@@ -112,7 +112,7 @@ ORDER BY
 	l_year;
 
 -- connect to the coordinator
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- Query #7 from the TPC-H benchmark; modified to include sub-selects
 

@@ -20,7 +20,7 @@ SELECT pg_reload_conf();
 SELECT recover_prepared_transactions();
 
 -- Create some "fake" prepared transactions to recover
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 BEGIN;
 CREATE TABLE should_abort (value int);
@@ -34,7 +34,7 @@ BEGIN;
 CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 BEGIN;
 CREATE TABLE should_abort (value int);
@@ -62,11 +62,11 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
 -- Confirm that transactions were correctly rolled forward
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.force_max_query_parallelization TO ON;
 SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;

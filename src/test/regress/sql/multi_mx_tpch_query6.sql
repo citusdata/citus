@@ -4,7 +4,7 @@
 
 
 -- connect to the coordinator
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Query #6 from the TPC-H decision support benchmark
 
@@ -19,7 +19,7 @@ WHERE
 	and l_quantity < 24;
 
 -- connect to one of the worker nodes
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Query #6 from the TPC-H decision support benchmark
 
@@ -34,7 +34,7 @@ WHERE
 	and l_quantity < 24;
 
 -- connect to the other worker node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- Query #6 from the TPC-H decision support benchmark
 

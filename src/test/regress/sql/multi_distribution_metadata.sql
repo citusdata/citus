@@ -195,11 +195,11 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 2);
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 3);
 
 -- verify result of the get_shard_id_for_distribution_column
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT * FROM get_shardid_test_table1_540006;
 SELECT * FROM get_shardid_test_table1_540009;
 SELECT * FROM get_shardid_test_table1_540007;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test non-existing value
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
@@ -216,10 +216,10 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}');
 
 -- verify result of the get_shard_id_for_distribution_column
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT * FROM get_shardid_test_table2_540013;
 SELECT * FROM get_shardid_test_table2_540011;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test mismatching data type
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a');

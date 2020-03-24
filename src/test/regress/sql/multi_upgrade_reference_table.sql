@@ -533,9 +533,9 @@ GROUP BY shardid
 ORDER BY shardid;
 
 -- verify that shard is replicated to other worker
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 \dt upgrade_reference_table_transaction_commit_*
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP TABLE upgrade_reference_table_transaction_commit;
 
@@ -697,7 +697,7 @@ GROUP BY shardid
 ORDER BY shardid;
 
 -- situation on metadata worker
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT
     partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
 FROM
@@ -722,7 +722,7 @@ WHERE shardid IN
 GROUP BY shardid
 ORDER BY shardid;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 DROP TABLE upgrade_reference_table_mx;
 SELECT stop_metadata_sync_to_node(:'worker_1_host', :worker_1_port);
 RESET client_min_messages;

@@ -2,7 +2,7 @@
 -- This test runs the below query from the :worker_2_port and the
 -- concurrent test runs the same query on :worker_1_port. Note that, both
 -- tests use the same sequence ids but the queries should not fail.
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 SET citus.task_executor_type TO "task-tracker";
 CREATE TEMP TABLE t1 AS

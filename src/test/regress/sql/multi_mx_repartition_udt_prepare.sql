@@ -65,7 +65,7 @@ CREATE TABLE repartition_udt_other (
 -- proceed with type creation as above; thus the OIDs will be different.
 -- so that the OID is off.
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- START type creation
 -- ... as well as a function to use as its comparator...
@@ -109,7 +109,7 @@ FUNCTION 1 test_udt_hash(test_udt);
 
 -- END type creation
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- START type creation
 -- ... as well as a function to use as its comparator...
@@ -155,7 +155,7 @@ FUNCTION 1 test_udt_hash(test_udt);
 
 -- Connect to master
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Distribute and populate the two tables.
 SET citus.shard_replication_factor TO 1;
@@ -201,5 +201,5 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
     WHERE repartition_udt.pk > 1
     ORDER BY repartition_udt.pk;
 
-\c - - :real_worker_1_host :worker_1_port
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_1_host :worker_1_port
+\c - - :public_worker_2_host :worker_2_port

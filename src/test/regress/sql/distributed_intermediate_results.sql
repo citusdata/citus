@@ -218,15 +218,15 @@ END;
 -- of result files in both nodes were same when calling read_intermediate_results()
 -- in the above UPDATE calls).
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT * FROM distributed_intermediate_results.colocated_with_target_4213604 ORDER BY key;
 SELECT * FROM distributed_intermediate_results.colocated_with_target_4213605 ORDER BY key;
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SELECT * FROM distributed_intermediate_results.colocated_with_target_4213604 ORDER BY key;
 SELECT * FROM distributed_intermediate_results.colocated_with_target_4213605 ORDER BY key;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET search_path TO 'distributed_intermediate_results';
 DROP TABLE source_table, target_table, colocated_with_target, distributed_result_info;

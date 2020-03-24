@@ -37,7 +37,7 @@ CREATE TABLE collections_list_0
 	FOR VALUES IN ( 0 );
 
 -- connection worker and get ready for the tests
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO local_shard_execution;
 
 -- returns true of the distribution key filter
@@ -772,7 +772,7 @@ WHERE distributed_table.key = 1
 RESET client_min_messages;
 RESET citus.log_local_commands;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.next_shard_id TO 1480000;
 -- local execution with custom type
 SET citus.replication_model TO "streaming";
@@ -818,7 +818,7 @@ CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
@@ -875,7 +875,7 @@ INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET client_min_messages TO ERROR;
 SET search_path TO public;

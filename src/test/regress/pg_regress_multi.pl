@@ -268,8 +268,8 @@ revert_replace_postgres();
 my $host = "localhost";
 my $user = "postgres";
 my $dbname = "postgres";
-my $realWorker1Host = "localhost";
-my $realWorker2Host = "localhost";
+my $publicWorker1Host = "localhost";
+my $publicWorker2Host = "localhost";
 
 # n.b. previously this was on port 57640, which caused issues because that's in the
 # ephemeral port range, it was sometimes in the TIME_WAIT state which prevented us from
@@ -358,8 +358,8 @@ else
 if ($hoststr)
 {
     my %hostvals = split /=|\s/, $hoststr;
-    $realWorker1Host = $hostvals{worker1host};
-    $realWorker2Host = $hostvals{worker2host};
+    $publicWorker1Host = $hostvals{worker1host};
+    $publicWorker2Host = $hostvals{worker2host};
 }
 
 my $followerCoordPort = 9070;
@@ -553,9 +553,9 @@ for my $workeroff (0 .. $#workerHosts)
 	my $host = $workerHosts[$workeroff];
 	print $fh "--variable=worker_".($workeroff+1)."_host=\"$host\" ";
 }
-print $fh "--variable=real_master_host=\"$host\" ";
-print $fh "--variable=real_worker_1_host=\"$realWorker1Host\" ";
-print $fh "--variable=real_worker_2_host=\"$realWorker2Host\" ";
+print $fh "--variable=master_host=\"$host\" ";
+print $fh "--variable=public_worker_1_host=\"$publicWorker1Host\" ";
+print $fh "--variable=public_worker_2_host=\"$publicWorker2Host\" ";
 for my $workeroff (0 .. $#followerWorkerPorts)
 {
 	my $port = $followerWorkerPorts[$workeroff];

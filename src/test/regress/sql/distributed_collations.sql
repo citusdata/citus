@@ -16,14 +16,14 @@ CREATE COLLATION german_phonebook_unpropagated (provider = icu, locale = 'de-u-c
 
 SET citus.enable_ddl_propagation TO on;
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c
 JOIN pg_namespace nsp ON nsp.oid = c.collnamespace
 JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path to collation_tests;
 
 CREATE TABLE test_propagate(id int, t1 text COLLATE german_phonebook,
@@ -55,27 +55,27 @@ INSERT INTO test_range VALUES (U&'\00E4sop', 1), (U&'Vo\1E9Er', 2);
 SET client_min_messages TO debug;
 SELECT * FROM test_range WHERE key > 'Ab' AND key < U&'\00E4z';
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c
 JOIN pg_namespace nsp ON nsp.oid = c.collnamespace
 JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 ALTER COLLATION collation_tests.german_phonebook RENAME TO german_phonebook2;
 ALTER COLLATION collation_tests.german_phonebook2 SET SCHEMA collation_tests2;
 ALTER COLLATION collation_tests2.german_phonebook2 OWNER TO collationuser;
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c
 JOIN pg_namespace nsp ON nsp.oid = c.collnamespace
 JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'german_phonebook%'
 ORDER BY 1,2,3;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA collation_tests CASCADE;
@@ -83,17 +83,17 @@ DROP SCHEMA collation_tests2 CASCADE;
 
 -- This is hacky, but we should clean-up the resources as below
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA collation_tests CASCADE;
 DROP SCHEMA collation_tests2 CASCADE;
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA collation_tests CASCADE;
 DROP SCHEMA collation_tests2 CASCADE;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP USER collationuser;
 SELECT run_command_on_workers($$DROP USER collationuser;$$);

@@ -638,9 +638,9 @@ SET citus.shard_count to 4;
 CREATE TABLE numbers_hash(a int, b int);
 SELECT create_distributed_table('numbers_hash', 'a');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 ALTER TABLE numbers_hash_560180 DROP COLUMN b;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- operation will fail to modify a shard and roll back
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
@@ -714,9 +714,9 @@ SELECT * FROM drop_copy_test_table WHERE col3 = 1;
 DROP TABLE drop_copy_test_table;
 
 -- There should be no "tt1" shard on the worker nodes
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'tt1%';
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- copy >8MB to a single worker to trigger a flush in PutRemoteCopyData
 BEGIN;

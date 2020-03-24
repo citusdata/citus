@@ -7,7 +7,7 @@ SET citus.replication_model TO streaming;
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Disable auto-recovery for the initial tests
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
@@ -108,7 +108,7 @@ SELECT pg_reload_conf();
 
 DROP TABLE table_should_commit;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;

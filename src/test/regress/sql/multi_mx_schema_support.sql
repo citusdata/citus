@@ -3,7 +3,7 @@
 --
 
 -- connect to a worker node and run some queries
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- test very basic queries
 SELECT * FROM nation_hash ORDER BY n_nationkey LIMIT 4;
@@ -223,7 +223,7 @@ SET citus.task_executor_type TO "adaptive";
 -- connect to the master and do some test
 -- regarding DDL support on schemas where
 -- the search_path is set
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 CREATE SCHEMA mx_ddl_schema_1;
 CREATE SCHEMA mx_ddl_schema_2;
@@ -311,26 +311,26 @@ CREATE SCHEMA mx_new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%'
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%'
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SELECT * FROM mx_new_schema.table_set_schema;
 
 DROP SCHEMA mx_old_schema CASCADE;

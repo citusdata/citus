@@ -171,7 +171,7 @@ $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- create UDF in worker node 1
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE OR REPLACE FUNCTION dummyFunction(theValue integer)
     RETURNS text AS
 $$
@@ -184,7 +184,7 @@ $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- create UDF in worker node 2
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 CREATE OR REPLACE FUNCTION dummyFunction(theValue integer)
     RETURNS text AS
 $$
@@ -196,7 +196,7 @@ END;
 $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- UDF in public, table in a schema other than public, search_path is not set
 SELECT dummyFunction(n_nationkey) FROM test_schema_support.nation_hash GROUP BY 1 ORDER BY 1;
@@ -219,7 +219,7 @@ $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- create UDF in worker node 1 in schema
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO test_schema_support;
 CREATE OR REPLACE FUNCTION dummyFunction2(theValue integer)
     RETURNS text AS
@@ -233,7 +233,7 @@ $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- create UDF in worker node 2 in schema
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SET search_path TO test_schema_support;
 CREATE OR REPLACE FUNCTION dummyFunction2(theValue integer)
     RETURNS text AS
@@ -246,7 +246,7 @@ END;
 $$
 LANGUAGE 'plpgsql' IMMUTABLE;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- UDF in schema, table in a schema other than public, search_path is not set
 SET search_path TO public;
@@ -271,7 +271,7 @@ CREATE OPERATOR test_schema_support.=== (
 );
 
 -- create operator in worker node 1
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE OPERATOR test_schema_support.=== (
     LEFTARG = int,
     RIGHTARG = int,
@@ -282,7 +282,7 @@ CREATE OPERATOR test_schema_support.=== (
 );
 
 -- create operator in worker node 2
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 CREATE OPERATOR test_schema_support.=== (
     LEFTARG = int,
     RIGHTARG = int,
@@ -292,7 +292,7 @@ CREATE OPERATOR test_schema_support.=== (
     HASHES, MERGES
 );
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test with search_path is not set
 SELECT * FROM test_schema_support.nation_hash  WHERE n_nationkey OPERATOR(test_schema_support.===) 1;
@@ -322,7 +322,7 @@ SET search_path TO public;
 SELECT quote_ident(current_setting('lc_collate')) as current_locale \gset
 CREATE COLLATION test_schema_support.english (LOCALE = :current_locale);
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 CREATE TABLE test_schema_support.nation_hash_collation(
     n_nationkey integer not null,
@@ -406,18 +406,18 @@ ALTER TABLE test_schema_support.nation_hash ADD COLUMN new_col INT;
 
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS non_existent_column;
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
 
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 --test with search_path is set
 SET search_path TO test_schema_support;
@@ -425,9 +425,9 @@ ALTER TABLE nation_hash ADD COLUMN new_col INT;
 
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET search_path TO test_schema_support;
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS non_existent_column;
@@ -435,9 +435,9 @@ ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
 
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 
 -- test CREATE/DROP INDEX with schemas
@@ -449,19 +449,19 @@ CREATE INDEX index1 ON test_schema_support.nation_hash(n_name);
 --verify INDEX is created
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- DROP index
 DROP INDEX test_schema_support.index1;
 
 --verify INDEX is dropped
 \d test_schema_support.index1
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 \d test_schema_support.index1_1190003
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 --test with search_path is set
 SET search_path TO test_schema_support;
@@ -472,10 +472,10 @@ CREATE INDEX index1 ON nation_hash(n_name);
 --verify INDEX is created
 SELECT "Column", "Type", "Definition" FROM public.index_attrs WHERE
     relid = 'test_schema_support.index1'::regclass;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'test_schema_support.index1_1190003'::regclass;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- DROP index
 SET search_path TO test_schema_support;
@@ -483,9 +483,9 @@ DROP INDEX index1;
 
 --verify INDEX is dropped
 \d test_schema_support.index1
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 \d test_schema_support.index1_1190003
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 
 -- test master_copy_shard_placement with schemas
@@ -515,10 +515,10 @@ SET search_path TO public;
 SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
 
 -- verify shard is dropped
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 \d test_schema_support.nation_append_119*
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test with search_path is set
 SET search_path TO test_schema_support;
@@ -535,10 +535,10 @@ SET search_path TO test_schema_support;
 SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 
 -- verify shard is dropped
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 \d test_schema_support.nation_append_119*
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- check joins of tables which are in schemas other than public
 -- we create new tables with replication factor of 1
@@ -731,26 +731,26 @@ CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('old_schema', 'new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('old_schema', 'new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SELECT * FROM new_schema.table_set_schema;
 
 DROP SCHEMA old_schema CASCADE;
@@ -765,26 +765,26 @@ CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid='new_schema'::regnamespace::oid;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid='new_schema'::regnamespace::oid;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SELECT * FROM new_schema.table_set_schema;
 
 DROP SCHEMA new_schema CASCADE;
@@ -801,13 +801,13 @@ CREATE SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('old_schema', 'new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET search_path TO old_schema;
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
@@ -815,13 +815,13 @@ ALTER TABLE table_set_schema SET SCHEMA new_schema;
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%' AND
           table_schema IN ('old_schema', 'new_schema', 'public')
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SELECT * FROM new_schema.table_set_schema;
 
 SET search_path to public;
@@ -856,12 +856,12 @@ SELECT create_distributed_table('"cItuS.T E E N''sSchema"."be$t''''t*ble"', 'id'
 
 ALTER TABLE "cItuS.T E E N'sSchema"."be$t''t*ble" SET SCHEMA "citus-teen's scnd schm.";
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'be$t''''t*ble%'
     GROUP BY table_schema;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SELECT * FROM "citus-teen's scnd schm."."be$t''t*ble";
 
@@ -877,10 +877,10 @@ CREATE TABLE schema_with_user.test_table(column1 int);
 SELECT create_reference_table('schema_with_user.test_table');
 
 -- verify that owner of the created schema is test-user
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 \dn schema_with_user
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;

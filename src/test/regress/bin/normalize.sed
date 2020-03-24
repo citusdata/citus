@@ -98,6 +98,6 @@ s/\blocalhost\b/<host>/g
 s/:'worker_2_host'/'<host>'/g
 s/:'worker_1_host'/'<host>'/g
 s/\bpostgres\b/<user>/g
-s/:real_worker_1_host/-/g
-s/:real_worker_2_host/-/g
-s/:real_master_host/-/g
+s/:public_worker_1_host/-/g
+s/:public_worker_2_host/-/g
+s/:master_host/-/g

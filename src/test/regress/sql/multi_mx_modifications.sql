@@ -12,13 +12,13 @@ INSERT INTO limit_orders_mx VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32743;
 
 -- now singe-row INSERT from a worker
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 INSERT INTO limit_orders_mx VALUES (32744, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 								 20.69);
 SELECT COUNT(*) FROM limit_orders_mx WHERE id = 32744;
 
 -- now singe-row INSERT to the other worker
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 \set VERBOSITY terse
 
 INSERT INTO limit_orders_mx VALUES (32745, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
@@ -84,7 +84,7 @@ INSERT INTO limit_orders_mx VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
                                    (2039, 'GOOG', 5634, now(), 'buy', random());
 
 -- connect back to the other node
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- commands containing a CTE are supported
 WITH deleted_orders AS (DELETE FROM limit_orders_mx WHERE id < 0 RETURNING *)
@@ -184,11 +184,11 @@ SELECT symbol, bidder_id FROM limit_orders_mx WHERE id = 246;
 UPDATE limit_orders_mx SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, LOWER(symbol), symbol;
 
 -- connect coordinator to run the DDL
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 ALTER TABLE limit_orders_mx ADD COLUMN array_of_values integer[];
 
 -- connect back to the other node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- updates referencing STABLE functions are allowed
 UPDATE limit_orders_mx SET placed_at = LEAST(placed_at, now()::timestamp) WHERE id = 246;
@@ -196,7 +196,7 @@ UPDATE limit_orders_mx SET placed_at = LEAST(placed_at, now()::timestamp) WHERE 
 UPDATE limit_orders_mx SET array_of_values = 1 || array_of_values WHERE id = 246;
 
 -- connect back to the other node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- immutable function calls with vars are also allowed
 UPDATE limit_orders_mx
@@ -220,11 +220,11 @@ UPDATE limit_orders_mx SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
 SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
 
 -- connect coordinator to run the DDL
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 ALTER TABLE limit_orders_mx DROP array_of_values;
 
 -- connect back to the other node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- even in RETURNING
 UPDATE limit_orders_mx SET placed_at = placed_at WHERE id = 246 RETURNING NOW();

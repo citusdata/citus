@@ -1,7 +1,7 @@
 CREATE SCHEMA collation_conflict;
 SELECT run_command_on_workers($$CREATE SCHEMA collation_conflict;$$);
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO collation_conflict;
 
 CREATE COLLATION caseinsensitive (
@@ -9,7 +9,7 @@ CREATE COLLATION caseinsensitive (
 	locale = 'und-u-ks-level2'
 );
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO collation_conflict;
 
 CREATE COLLATION caseinsensitive (
@@ -19,14 +19,14 @@ CREATE COLLATION caseinsensitive (
 CREATE TABLE tblcoll(val text COLLATE caseinsensitive);
 SELECT create_reference_table('tblcoll');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c
 JOIN pg_namespace nsp ON nsp.oid = c.collnamespace
 JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO collation_conflict;
 
 -- Now drop & recreate in order to make sure rename detects the existing renamed objects
@@ -35,7 +35,7 @@ SET search_path TO collation_conflict;
 DROP TABLE tblcoll;
 DROP COLLATION caseinsensitive;
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO collation_conflict;
 
 CREATE COLLATION caseinsensitive (
@@ -43,7 +43,7 @@ CREATE COLLATION caseinsensitive (
 	locale = 'und-u-ks-level1'
 );
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO collation_conflict;
 
 CREATE COLLATION caseinsensitive (
@@ -53,14 +53,14 @@ CREATE COLLATION caseinsensitive (
 CREATE TABLE tblcoll(val text COLLATE caseinsensitive);
 SELECT create_reference_table('tblcoll');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT c.collname, nsp.nspname, a.rolname
 FROM pg_collation c
 JOIN pg_namespace nsp ON nsp.oid = c.collnamespace
 JOIN pg_authid a ON a.oid = c.collowner
 WHERE collname like 'caseinsensitive%'
 ORDER BY 1,2,3;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO collation_conflict;
 
 -- now test worker_create_or_replace_object directly

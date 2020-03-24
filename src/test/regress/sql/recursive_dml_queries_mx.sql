@@ -60,7 +60,7 @@ WHERE
 	AND second_distributed_table.dept IN (2);
 
 -- run some queries from worker nodes
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO recursive_dml_queries_mx, public;
 
 -- the subquery foo is recursively planned
@@ -99,7 +99,7 @@ WHERE
 	AND second_distributed_table.dept IN (3);
 
 -- use the second worker
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SET search_path TO recursive_dml_queries_mx, public;
 
 CREATE TABLE recursive_dml_queries_mx.local_table (id text, name text);
@@ -150,7 +150,7 @@ RETURNING
 
 DROP TABLE local_table;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO recursive_dml_queries_mx, public;
 
 RESET client_min_messages;

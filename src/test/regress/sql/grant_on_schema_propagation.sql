@@ -28,49 +28,49 @@ SELECT create_distributed_table('dist_schema.dist_table', 'id');
 SELECT create_distributed_table('another_dist_schema.dist_table', 'id');
 
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema';
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema';
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- grant all permissions
 GRANT ALL ON SCHEMA dist_schema, another_dist_schema, non_dist_schema TO role_1, role_2, role_3 WITH GRANT OPTION;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- revoke all permissions
 REVOKE ALL ON SCHEMA dist_schema, another_dist_schema, non_dist_schema FROM role_1, role_2, role_3, PUBLIC CASCADE;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- grant with multiple permissions, roles and schemas
 GRANT USAGE, CREATE ON SCHEMA dist_schema, another_dist_schema, non_dist_schema TO role_1, role_2, role_3;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- revoke with multiple permissions, roles and schemas
 REVOKE USAGE, CREATE ON SCHEMA dist_schema, another_dist_schema, non_dist_schema FROM role_1, role_2;
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- grant with grant option
 GRANT USAGE ON SCHEMA dist_schema TO role_1, role_3 WITH GRANT OPTION;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- revoke grant option for
 REVOKE GRANT OPTION FOR USAGE ON SCHEMA dist_schema FROM role_3;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test current_user
 SET citus.enable_alter_role_propagation TO ON;
@@ -78,9 +78,9 @@ ALTER ROLE role_1 SUPERUSER;
 SET citus.enable_alter_role_propagation TO OFF;
 SET ROLE role_1;
 GRANT CREATE ON SCHEMA dist_schema TO CURRENT_USER;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 RESET ROLE;
 SET citus.enable_alter_role_propagation TO ON;
 ALTER ROLE role_1 NOSUPERUSER;
@@ -117,27 +117,27 @@ SELECT create_distributed_table('grantor_schema.grantor_table', 'id');
 
 -- check if the grantors are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- add the previously removed node
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 
 -- check if the grantors are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- revoke one of the permissions
 REVOKE USAGE ON SCHEMA grantor_schema FROM role_1 CASCADE;
 
 -- check if revoke worked correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- test if grantor propagates correctly on already distributed schemas
 GRANT USAGE ON SCHEMA grantor_schema TO role_1 WITH GRANT OPTION;
@@ -150,9 +150,9 @@ RESET ROLE;
 
 -- check the results
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP TABLE grantor_schema.grantor_table;
 SELECT run_command_on_coordinator_and_workers('DROP SCHEMA grantor_schema CASCADE');
@@ -168,9 +168,9 @@ CREATE TABLE dist_schema.dist_table (id int);
 SELECT create_distributed_table('dist_schema.dist_table', 'id');
 
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP TABLE dist_schema.dist_table;
 SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE');
@@ -192,27 +192,27 @@ RESET ROLE;
 
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- add the previously removed node
 SELECT 1 FROM master_add_node(:'worker_2_host', :worker_2_port);
 
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- revoke those new permissions
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM role_1 CASCADE;
 
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP TABLE public_schema_table;
 

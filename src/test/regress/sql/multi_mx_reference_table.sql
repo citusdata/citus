@@ -1,6 +1,6 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1250000;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 CREATE TABLE reference_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 SELECT create_reference_table('reference_table_test');
 
@@ -17,7 +17,7 @@ BEGIN;
 SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
 END;
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- SELECT .. FOR UPDATE should work on first worker (takes lock on self)
 SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
@@ -232,11 +232,11 @@ SELECT * FROM (
 ORDER BY value_1;
 
 -- to make the tests more interested for aggregation tests, ingest some more data
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 INSERT INTO reference_table_test VALUES (3, 3.0, '3', '2016-12-03');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- some aggregations
 SELECT
@@ -336,7 +336,7 @@ CREATE TEMP TABLE temp_reference_test as
 	FROM reference_table_test
 	WHERE value_1 = 1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 -- all kinds of joins are supported among reference tables
 -- first create two more tables
 CREATE TABLE reference_table_test_second (value_1 int, value_2 float, value_3 text, value_4 timestamp);
@@ -353,7 +353,7 @@ INSERT INTO reference_table_test_second VALUES (3, 3.0, '3', '2016-12-03');
 INSERT INTO reference_table_test_third VALUES (4, 4.0, '4', '2016-12-04');
 INSERT INTO reference_table_test_third VALUES (5, 5.0, '5', '2016-12-05');
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- SELECT .. FOR UPDATE should work on second worker (takes lock on first worker)
 SELECT value_1, value_2 FROM reference_table_test ORDER BY value_1, value_2 LIMIT 1 FOR UPDATE;
@@ -419,9 +419,9 @@ ORDER BY
 	1;
 
 -- ingest a common row to see more meaningful results with joins involving 3 tables
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 INSERT INTO reference_table_test_third VALUES (3, 3.0, '3', '2016-12-03');
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT
 	DISTINCT t1.value_1
@@ -468,7 +468,7 @@ FROM
 ORDER BY
 	1;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
@@ -489,7 +489,7 @@ INSERT INTO colocated_table_test VALUES (2, 2.0, '2', '2016-12-02');
 INSERT INTO colocated_table_test_2 VALUES (1, 1.0, '1', '2016-12-01');
 INSERT INTO colocated_table_test_2 VALUES (2, 2.0, '2', '2016-12-02');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET client_min_messages TO DEBUG1;
 SET citus.log_multi_join_order TO TRUE;
 
@@ -558,5 +558,5 @@ SET client_min_messages TO NOTICE;
 SET citus.log_multi_join_order TO FALSE;
 
 -- clean up tables
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third;;

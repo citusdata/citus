@@ -38,7 +38,7 @@ SELECT * FROM citus_shard_indexes_on_worker;
 
 -- now show that we see the shards, but not the
 -- indexes as there are no indexes
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -57,13 +57,13 @@ SELECT
 						 	1));
 
 -- now create an index
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 SET search_path TO 'mx_hide_shard_names';
 CREATE INDEX test_index ON mx_hide_shard_names.test_table(id);
 
 -- now show that we see the shards, and the
 -- indexes as well
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -77,7 +77,7 @@ SELECT pg_table_is_visible('test_table_1130000'::regclass);
 SET citus.override_table_visibility TO FALSE;
 SELECT pg_table_is_visible('test_table_1130000'::regclass);
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 -- make sure that we're resilient to the edge cases
 -- such that the table name includes the shard number
 SET search_path TO 'mx_hide_shard_names';
@@ -90,7 +90,7 @@ SET citus.replication_model TO 'streaming';
 CREATE TABLE test_table_102008(id int, time date);
 SELECT create_distributed_table('test_table_102008', 'id');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 
 -- existing shard ids appended to a local table name
@@ -103,7 +103,7 @@ SELECT * FROM citus_shards_on_worker ORDER BY 2;
 
 \d
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 -- make sure that don't mess up with schemas
 CREATE SCHEMA mx_hide_shard_names_2;
 SET search_path TO 'mx_hide_shard_names_2';
@@ -115,7 +115,7 @@ CREATE TABLE test_table(id int, time date);
 SELECT create_distributed_table('test_table', 'id');
 CREATE INDEX test_index ON mx_hide_shard_names_2.test_table(id);
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -127,7 +127,7 @@ SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
 -- now try very long table names
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -143,7 +143,7 @@ CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col2 integer not null);
 SELECT create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO 'mx_hide_shard_names_3';
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 \d
@@ -151,7 +151,7 @@ SELECT * FROM citus_shards_on_worker ORDER BY 2;
 
 
 -- now try weird schema names
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -167,7 +167,7 @@ CREATE INDEX "MyTenantIndex" ON  "CiTuS.TeeN"."TeeNTabLE.1!?!"("TeNANt_Id");
 -- create distributed table with weird names
 SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO "CiTuS.TeeN";
 SELECT * FROM citus_shards_on_worker ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
@@ -176,7 +176,7 @@ SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 \di
 
 -- clean-up
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- show that common psql functions do not show shards
 -- including the ones that are not in the current schema

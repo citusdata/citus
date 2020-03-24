@@ -243,13 +243,13 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 -- Test that shards which miss a modification are marked unhealthy
 
 -- First: Connect to the second worker node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 
 -- Third: Connect back to master node
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Fourth: Perform an INSERT on the remaining node
 -- the whole transaction should fail
@@ -257,20 +257,20 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 
 -- set the shard name back
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 
 -- Verify the insert failed and both placements are healthy
 -- or the insert succeeded and placement marked unhealthy
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 SELECT count(*) FROM limit_orders_750000 WHERE id = 276;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SELECT count(*) FROM limit_orders WHERE id = 276;
 
@@ -284,13 +284,13 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 -- Test that if all shards miss a modification, no state change occurs
 
 -- First: Connect to the first worker node
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 
 -- Third: Connect back to master node
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Fourth: Perform an INSERT on the remaining node
 \set VERBOSITY terse
@@ -310,13 +310,13 @@ AND    s.logicalrelid = 'limit_orders'::regclass;
 -- Undo our change...
 
 -- First: Connect to the first worker node
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Second: Move aside limit_orders shard on the second worker node
 ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 
 -- Third: Connect back to master node
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
@@ -363,15 +363,15 @@ UPDATE limit_orders SET array_of_values = 1 || array_of_values WHERE id = 246;
 CREATE FUNCTION immutable_append(old_values int[], new_value int)
 RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE FUNCTION immutable_append(old_values int[], new_value int)
 RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 CREATE FUNCTION immutable_append(old_values int[], new_value int)
 RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- immutable function calls with vars are also allowed
 UPDATE limit_orders

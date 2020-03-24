@@ -6,7 +6,7 @@
 
 
 -- connect to the coordinator
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 SELECT
 	l_orderkey,
@@ -32,7 +32,7 @@ ORDER BY
 	o_orderdate;
 
 -- connect one of the workers
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 SELECT
 	l_orderkey,
@@ -58,7 +58,7 @@ ORDER BY
 	o_orderdate;
 
 -- connect to the other node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 SELECT
 	l_orderkey,

@@ -1112,7 +1112,7 @@ SELECT master_create_worker_shards('failure_test', 2);
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port
@@ -1137,7 +1137,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 \c - postgres - :worker_1_port
 DROP OWNED BY router_user;
 DROP USER router_user;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 DROP OWNED BY router_user;
 DROP USER router_user;
 DROP TABLE failure_test;

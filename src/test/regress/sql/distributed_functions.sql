@@ -474,20 +474,20 @@ DROP SCHEMA function_tests2 CASCADE;
 SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 -- This is hacky, but we should clean-up the resources as below
 
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 SET search_path TO function_tests, function_tests2;
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 DROP USER functionuser;
 SELECT run_command_on_workers($$DROP USER functionuser$$);

@@ -133,7 +133,7 @@ SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 -- following approach adapted from PostgreSQL's stats.sql file
 
 -- save relevant stat counter values in refreshable view
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 CREATE MATERIALIZED VIEW prevcounts AS
 SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
 WHERE relname='dustbunnies_990002';
@@ -174,7 +174,7 @@ begin
 end
 $$ language plpgsql;
 
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 CREATE MATERIALIZED VIEW prevcounts AS
 SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
 WHERE relname='dustbunnies_990001';
@@ -215,12 +215,12 @@ end
 $$ language plpgsql;
 
 -- run VACUUM and ANALYZE against the table on the master
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
 
 -- verify that the VACUUM and ANALYZE ran
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT wait_for_stats();
 REFRESH MATERIALIZED VIEW prevcounts;
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
@@ -231,12 +231,12 @@ SELECT relfilenode AS oldnode FROM pg_class WHERE oid='dustbunnies_990002'::regc
 \gset
 
 -- send a VACUUM FULL and a VACUUM ANALYZE
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 VACUUM (FULL) dustbunnies;
 VACUUM ANALYZE dustbunnies;
 
 -- verify that relfilenode changed
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
@@ -251,12 +251,12 @@ SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::r
 \gset
 
 -- send a VACUUM FREEZE after adding a new row
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 INSERT INTO dustbunnies VALUES (5, 'peter');
 VACUUM (FREEZE) dustbunnies;
 
 -- verify that relfrozenxid increased
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
@@ -265,16 +265,16 @@ SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 -- add NULL values, then perform column-specific ANALYZE
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
 ANALYZE dustbunnies (name);
 
 -- verify that name's NULL ratio is updated but age's is not
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 -- verify warning for unqualified VACUUM
 VACUUM;
 

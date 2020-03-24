@@ -4,7 +4,7 @@
 
 
 -- connect to the coordinator
-\c - - :real_master_host :master_port
+\c - - :master_host :master_port
 
 -- Query #14 from the TPC-H decision support benchmark
 
@@ -23,7 +23,7 @@ WHERE
 	AND l_shipdate < date '1995-09-01' + interval '1' year;
 
 -- connect one of the workers
-\c - - :real_worker_1_host :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 
 -- Query #14 from the TPC-H decision support benchmark
 
@@ -42,7 +42,7 @@ WHERE
 	AND l_shipdate < date '1995-09-01' + interval '1' year;
 
 	-- connect to the other node
-\c - - :real_worker_2_host :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 
 -- Query #14 from the TPC-H decision support benchmark
 
