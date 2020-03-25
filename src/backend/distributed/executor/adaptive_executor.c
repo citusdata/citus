@@ -37,7 +37,7 @@
  * same connection since it may hold relevant locks or have uncommitted
  * writes. In that case we "assign" the task to a connection by adding
  * it to the task queue of specific connection (in
- * AssignTasksToConnectionsOrWorkerPool ). Otherwise we consider the task
+ * AssignTasksToConnectionsOrWorkerPool). Otherwise we consider the task
  * unassigned and add it to the task queue of a worker pool, which means
  * that it can be executed over any connection in the pool.
  *

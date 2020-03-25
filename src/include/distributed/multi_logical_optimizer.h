@@ -162,7 +162,7 @@ extern bool ExtractQueryWalker(Node *node, List **queryList);
 extern bool IsPartitionColumn(Expr *columnExpression, Query *query);
 extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList,
 									  Query *query, Oid *relationId, Var **column);
-
+extern char * WorkerColumnName(AttrNumber resno);
 extern bool IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses);
 
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */

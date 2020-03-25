@@ -1311,7 +1311,6 @@ DETAIL:  distribution column value: 1
  41 |         1 | aznavour |      11814
 (3 rows)
 
--- window functions are supported if query is router plannable
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5;
@@ -1388,19 +1387,44 @@ DETAIL:  distribution column value: 1
       11814 |    5
 (5 rows)
 
--- window functions are not supported for not router plannable queries
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
-	WHERE author_id = 1 or author_id = 2;
+	WHERE author_id = 1 or author_id = 2
+    ORDER BY 1;
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ id | min
+---------------------------------------------------------------------
+  1 |   1
+  2 |   1
+ 11 |  11
+ 12 |   1
+ 21 |  11
+ 22 |  11
+ 31 |  11
+ 32 |   1
+ 41 |   1
+ 42 |   1
+(10 rows)
+
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
-	WHERE author_id = 5 or author_id = 2;
+	WHERE author_id = 5 or author_id = 2
+    ORDER BY 2;
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+   prev   |   title    | word_count
+---------------------------------------------------------------------
+ aruru    | abducing   |      13642
+ antipope | adversa    |       3164
+          | afrasia    |        864
+ aminate  | amazon     |      11342
+ antehall | aminate    |       9089
+ adversa  | antehall   |       7707
+ afrasia  | antipope   |       2728
+ ausable  | archiblast |      18185
+ amazon   | aruru      |      11389
+ abducing | ausable    |      15885
+(10 rows)
+
 -- where false queries are router plannable
 SELECT *
 	FROM articles_hash

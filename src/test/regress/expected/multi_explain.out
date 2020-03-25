@@ -453,11 +453,8 @@ HashAggregate
         Tasks Shown: One of 2
         ->  Task
               Node: host=localhost port=xxxxx dbname=regression
-              ->  HashAggregate
+              ->  Seq Scan on public.lineitem_290000 lineitem
                     Output: l_quantity, l_quantity
-                    Group Key: lineitem.l_quantity
-                    ->  Seq Scan on public.lineitem_290000 lineitem
-                          Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Subquery pushdown tests with explain
 EXPLAIN (COSTS OFF)
 SELECT

@@ -79,27 +79,6 @@ FROM
     ORDER BY 1 DESC;
 SET citus.enable_router_execution TO true;
 
-
--- window functions are not allowed if they're not partitioned on the distribution column
-SELECT
-	*
-FROM
-(
-SELECT
-   user_id, time, rnk
-FROM
-(
-  SELECT
-    *, rank() OVER my_win as rnk
-  FROM
-    events_table
-    WINDOW my_win AS (PARTITION BY event_type ORDER BY time DESC)
-) as foo
-ORDER BY
-  3 DESC, 1 DESC, 2 DESC
-LIMIT
-  10) as foo;
-
 -- OUTER JOINs where the outer part is recursively planned and not the other way
 -- around is not supported
 SELECT

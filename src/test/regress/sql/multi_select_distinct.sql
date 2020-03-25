@@ -396,13 +396,13 @@ EXPLAIN (COSTS FALSE)
 SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 	FROM lineitem_hash_part
 	WHERE l_orderkey < 35
-	ORDER BY 1;
+	ORDER BY 1, 2, 3;
 
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
 		FROM lineitem_hash_part
 		WHERE l_orderkey < 35
-		ORDER BY 1;
+		ORDER BY 1, 2, 3;
 
 -- distinct on non-partition column
 -- note order by is required here

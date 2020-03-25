@@ -60,14 +60,15 @@ WHERE day >= '2018-06-23' AND day <= '2018-07-01'
 GROUP BY 1
 ORDER BY 1;
 
--- These are going to be supported after window function support
 SELECT day, hll_cardinality(hll_union_agg(unique_users) OVER seven_days)
 FROM daily_uniques
-WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING);
+WINDOW seven_days AS (ORDER BY day ASC ROWS 6 PRECEDING)
+ORDER BY 1;
 
 SELECT day, (hll_cardinality(hll_union_agg(unique_users) OVER two_days)) - hll_cardinality(unique_users) AS lost_uniques
 FROM daily_uniques
-WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING);
+WINDOW two_days AS (ORDER BY day ASC ROWS 1 PRECEDING)
+ORDER BY 1;
 
 -- Test disabling hash_agg on coordinator query
 SET citus.explain_all_tasks to true;
@@ -219,7 +220,6 @@ SELECT (topn(topn_add_agg(user_id::text), 10)).*
 FROM customer_reviews
 ORDER BY 2 DESC, 1;
 
--- The following is going to be supported after window function support
 SELECT day, (topn(agg, 10)).*
 FROM (
 	SELECT day, topn_union_agg(reviewers) OVER seven_days AS agg

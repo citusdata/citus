@@ -637,7 +637,7 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
 (1 row)
 
 TRUNCATE agg_results_window;
--- lets have some queries that Citus shouldn't push down
+-- test queries where the window function isn't pushed down
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -653,10 +653,6 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- user needs to supply partition by which should
--- include the distribution key
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -672,10 +668,6 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- user needs to supply partition by which should
--- include the distribution key
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
@@ -691,9 +683,6 @@ ORDER BY
   3 DESC, 1 DESC, 2 DESC
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- w2 should not be pushed down
 INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
@@ -709,9 +698,6 @@ SELECT * FROM
 ) as foo
 LIMIT
   10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- GROUP BY includes the partition key, but not the WINDOW function
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
@@ -727,9 +713,6 @@ FROM
 ) as foo
 WHERE
   my_rank > 125;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- GROUP BY includes the partition key, but not the WINDOW function
 INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
@@ -745,9 +728,6 @@ FROM
 ) as foo
 WHERE
   my_rank > 125;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- w2 should not be allowed
 INSERT INTO agg_results_window (user_id, value_2_agg, value_3_agg)
 SELECT * FROM
 (
@@ -761,9 +741,6 @@ SELECT * FROM
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (ORDER BY events_table.time)
 ) as foo;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- unsupported window function with an override
 INSERT INTO agg_results_window(user_id, agg_time, value_2_agg)
 SELECT * FROM (
   SELECT
@@ -779,9 +756,6 @@ SELECT * FROM (
     WINDOW
       w2 as (PARTITION BY user_id, time)
 ) a;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
-  -- Subquery in where with unsupported window function
 INSERT INTO agg_results_window(user_id)
 SELECT
   user_id
@@ -801,7 +775,6 @@ GROUP BY
   user_id;
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
--- Aggregate function on distribution column should error out
 INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT
@@ -811,10 +784,6 @@ SELECT * FROM (
   GROUP BY
     user_id
 ) a;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
--- UNION with only one subquery which has a partition on non-distribution column should
--- error out
 INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM (
@@ -849,6 +818,4 @@ FROM (
             user_id
         )
 ) AS ftop;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
 DROP VIEW view_with_window_func;

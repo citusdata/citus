@@ -1651,8 +1651,8 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
 		partitionKeyTargetAttrIndex++;
 
 		if (!targetEntry->resjunk &&
-			IsPartitionColumn(targetExpression, relationPlannerParseQuery) &&
-			IsA(targetExpression, Var))
+			IsA(targetExpression, Var) &&
+			IsPartitionColumn(targetExpression, relationPlannerParseQuery))
 		{
 			Var *targetColumn = (Var *) targetExpression;
 

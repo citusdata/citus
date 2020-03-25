@@ -248,8 +248,7 @@ LIMIT 10;
        3 |  18
 (10 rows)
 
--- similar query with no distribution column is on the partition by clause
--- is not supported
+-- similar query with no distribution column on the partition by clause
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk
 FROM
@@ -261,8 +260,20 @@ WINDOW
 ORDER BY
 	rnk DESC, 1 DESC
 LIMIT 10;
-ERROR:  could not run distributed query because the window function that is used cannot be pushed down
-HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions with a PARTITION BY clause containing the distribution column
+ user_id | rnk
+---------------------------------------------------------------------
+       3 |   7
+       2 |   7
+       3 |   6
+       2 |   6
+       4 |   5
+       3 |   5
+       2 |   5
+       1 |   5
+       6 |   4
+       5 |   4
+(10 rows)
+
 -- ORDER BY in the window function is an aggregate
 SELECT
 	user_id, rank() OVER my_win as rnk, avg(value_2) as avg_val_2
@@ -656,6 +667,237 @@ ORDER BY
        5 |       5 | {5,5,5}   | {5,5}
 (66 rows)
 
+-- repeat above 3 tests without grouping by distribution column
+SELECT
+	value_2,
+	rank() OVER (PARTITION BY value_2 ROWS BETWEEN
+				 UNBOUNDED PRECEDING AND CURRENT ROW),
+	dense_rank() OVER (PARTITION BY value_2 RANGE BETWEEN
+					   UNBOUNDED PRECEDING AND CURRENT ROW),
+	CUME_DIST() OVER (PARTITION BY value_2 RANGE BETWEEN
+					  UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING),
+	PERCENT_RANK() OVER (PARTITION BY value_2 ORDER BY avg(value_1) RANGE BETWEEN
+						 UNBOUNDED PRECEDING AND  UNBOUNDED FOLLOWING)
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	4 DESC,3 DESC,2 DESC ,1 DESC;
+ value_2 | rank | dense_rank | cume_dist | percent_rank
+---------------------------------------------------------------------
+       5 |    1 |          1 |         1 |            0
+       4 |    1 |          1 |         1 |            0
+       3 |    1 |          1 |         1 |            0
+       2 |    1 |          1 |         1 |            0
+       1 |    1 |          1 |         1 |            0
+       0 |    1 |          1 |         1 |            0
+(6 rows)
+
+-- test exclude supported
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW),
+	array_agg(value_1) OVER (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  UNBOUNDED PRECEDING AND CURRENT ROW EXCLUDE CURRENT ROW)
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+ORDER BY
+	value_2, value_1, 3, 4;
+ value_2 | value_1 |                 array_agg                 |                array_agg
+---------------------------------------------------------------------
+       3 |       0 | {0,0,0}                                   | {0,0}
+       3 |       0 | {0,0,0}                                   | {0,0}
+       3 |       0 | {0,0,0}                                   | {0,0}
+       3 |       1 | {0,0,0,1,1,1,1}                           | {0,0,0,1,1,1}
+       3 |       1 | {0,0,0,1,1,1,1}                           | {0,0,0,1,1,1}
+       3 |       1 | {0,0,0,1,1,1,1}                           | {0,0,0,1,1,1}
+       3 |       1 | {0,0,0,1,1,1,1}                           | {0,0,0,1,1,1}
+       3 |       2 | {0,0,0,1,1,1,1,2,2}                       | {0,0,0,1,1,1,1,2}
+       3 |       2 | {0,0,0,1,1,1,1,2,2}                       | {0,0,0,1,1,1,1,2}
+       3 |       3 | {0,0,0,1,1,1,1,2,2,3,3}                   | {0,0,0,1,1,1,1,2,2,3}
+       3 |       3 | {0,0,0,1,1,1,1,2,2,3,3}                   | {0,0,0,1,1,1,1,2,2,3}
+       3 |       4 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}         | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4}
+       3 |       4 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}         | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4}
+       3 |       4 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}         | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4}
+       3 |       4 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}         | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4}
+       3 |       4 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}         | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4}
+       3 |       5 | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4,5}       | {0,0,0,1,1,1,1,2,2,3,3,4,4,4,4,4}
+       4 |       0 | {0,0}                                     | {0}
+       4 |       0 | {0,0}                                     | {0}
+       4 |       1 | {0,0,1,1}                                 | {0,0,1}
+       4 |       1 | {0,0,1,1}                                 | {0,0,1}
+       4 |       2 | {0,0,1,1,2,2,2}                           | {0,0,1,1,2,2}
+       4 |       2 | {0,0,1,1,2,2,2}                           | {0,0,1,1,2,2}
+       4 |       2 | {0,0,1,1,2,2,2}                           | {0,0,1,1,2,2}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       3 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3}             | {0,0,1,1,2,2,2,3,3,3,3,3,3}
+       4 |       4 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4}     | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4}
+       4 |       4 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4}     | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4}
+       4 |       4 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4}     | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4}
+       4 |       4 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4}     | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4}
+       4 |       5 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4,5,5} | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4,5}
+       4 |       5 | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4,5,5} | {0,0,1,1,2,2,2,3,3,3,3,3,3,3,4,4,4,4,5}
+       5 |       0 | {0,0}                                     | {0}
+       5 |       0 | {0,0}                                     | {0}
+       5 |       1 | {0,0,1}                                   | {0,0}
+       5 |       2 | {0,0,1,2,2}                               | {0,0,1,2}
+       5 |       2 | {0,0,1,2,2}                               | {0,0,1,2}
+       5 |       3 | {0,0,1,2,2,3,3,3,3}                       | {0,0,1,2,2,3,3,3}
+       5 |       3 | {0,0,1,2,2,3,3,3,3}                       | {0,0,1,2,2,3,3,3}
+       5 |       3 | {0,0,1,2,2,3,3,3,3}                       | {0,0,1,2,2,3,3,3}
+       5 |       3 | {0,0,1,2,2,3,3,3,3}                       | {0,0,1,2,2,3,3,3}
+       5 |       4 | {0,0,1,2,2,3,3,3,3,4,4}                   | {0,0,1,2,2,3,3,3,3,4}
+       5 |       4 | {0,0,1,2,2,3,3,3,3,4,4}                   | {0,0,1,2,2,3,3,3,3,4}
+       5 |       5 | {0,0,1,2,2,3,3,3,3,4,4,5,5}               | {0,0,1,2,2,3,3,3,3,4,4,5}
+       5 |       5 | {0,0,1,2,2,3,3,3,3,4,4,5,5}               | {0,0,1,2,2,3,3,3,3,4,4,5}
+(50 rows)
+
+-- test <offset> preceding and <offset> following on RANGE window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER range_window,
+	array_agg(value_1) OVER range_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 AND value_2 < 6
+WINDOW
+	range_window as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	range_window_exclude as (PARTITION BY value_2 ORDER BY value_1 RANGE BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+ value_2 | value_1 |           array_agg           |          array_agg
+---------------------------------------------------------------------
+       3 |       0 | {0,0,0,1,1,1,1}               | {0,0,1,1,1,1}
+       3 |       0 | {0,0,0,1,1,1,1}               | {0,0,1,1,1,1}
+       3 |       0 | {0,0,0,1,1,1,1}               | {0,0,1,1,1,1}
+       3 |       1 | {0,0,0,1,1,1,1,2,2}           | {0,0,0,1,1,1,2,2}
+       3 |       1 | {0,0,0,1,1,1,1,2,2}           | {0,0,0,1,1,1,2,2}
+       3 |       1 | {0,0,0,1,1,1,1,2,2}           | {0,0,0,1,1,1,2,2}
+       3 |       1 | {0,0,0,1,1,1,1,2,2}           | {0,0,0,1,1,1,2,2}
+       3 |       2 | {1,1,1,1,2,2,3,3}             | {1,1,1,1,2,3,3}
+       3 |       2 | {1,1,1,1,2,2,3,3}             | {1,1,1,1,2,3,3}
+       3 |       3 | {2,2,3,3,4,4,4,4,4}           | {2,2,3,4,4,4,4,4}
+       3 |       3 | {2,2,3,3,4,4,4,4,4}           | {2,2,3,4,4,4,4,4}
+       3 |       4 | {3,3,4,4,4,4,4,5}             | {3,3,4,4,4,4,5}
+       3 |       4 | {3,3,4,4,4,4,4,5}             | {3,3,4,4,4,4,5}
+       3 |       4 | {3,3,4,4,4,4,4,5}             | {3,3,4,4,4,4,5}
+       3 |       4 | {3,3,4,4,4,4,4,5}             | {3,3,4,4,4,4,5}
+       3 |       4 | {3,3,4,4,4,4,4,5}             | {3,3,4,4,4,4,5}
+       3 |       5 | {4,4,4,4,4,5}                 | {4,4,4,4,4}
+       4 |       0 | {0,0,1,1}                     | {0,1,1}
+       4 |       0 | {0,0,1,1}                     | {0,1,1}
+       4 |       1 | {0,0,1,1,2,2,2}               | {0,0,1,2,2,2}
+       4 |       1 | {0,0,1,1,2,2,2}               | {0,0,1,2,2,2}
+       4 |       2 | {1,1,2,2,2,3,3,3,3,3,3,3}     | {1,1,2,2,3,3,3,3,3,3,3}
+       4 |       2 | {1,1,2,2,2,3,3,3,3,3,3,3}     | {1,1,2,2,3,3,3,3,3,3,3}
+       4 |       2 | {1,1,2,2,2,3,3,3,3,3,3,3}     | {1,1,2,2,3,3,3,3,3,3,3}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       3 | {2,2,2,3,3,3,3,3,3,3,4,4,4,4} | {2,2,2,3,3,3,3,3,3,4,4,4,4}
+       4 |       4 | {3,3,3,3,3,3,3,4,4,4,4,5,5}   | {3,3,3,3,3,3,3,4,4,4,5,5}
+       4 |       4 | {3,3,3,3,3,3,3,4,4,4,4,5,5}   | {3,3,3,3,3,3,3,4,4,4,5,5}
+       4 |       4 | {3,3,3,3,3,3,3,4,4,4,4,5,5}   | {3,3,3,3,3,3,3,4,4,4,5,5}
+       4 |       4 | {3,3,3,3,3,3,3,4,4,4,4,5,5}   | {3,3,3,3,3,3,3,4,4,4,5,5}
+       4 |       5 | {4,4,4,4,5,5}                 | {4,4,4,4,5}
+       4 |       5 | {4,4,4,4,5,5}                 | {4,4,4,4,5}
+       5 |       0 | {0,0,1}                       | {0,1}
+       5 |       0 | {0,0,1}                       | {0,1}
+       5 |       1 | {0,0,1,2,2}                   | {0,0,2,2}
+       5 |       2 | {1,2,2,3,3,3,3}               | {1,2,3,3,3,3}
+       5 |       2 | {1,2,2,3,3,3,3}               | {1,2,3,3,3,3}
+       5 |       3 | {2,2,3,3,3,3,4,4}             | {2,2,3,3,3,4,4}
+       5 |       3 | {2,2,3,3,3,3,4,4}             | {2,2,3,3,3,4,4}
+       5 |       3 | {2,2,3,3,3,3,4,4}             | {2,2,3,3,3,4,4}
+       5 |       3 | {2,2,3,3,3,3,4,4}             | {2,2,3,3,3,4,4}
+       5 |       4 | {3,3,3,3,4,4,5,5}             | {3,3,3,3,4,5,5}
+       5 |       4 | {3,3,3,3,4,4,5,5}             | {3,3,3,3,4,5,5}
+       5 |       5 | {4,4,5,5}                     | {4,4,5}
+       5 |       5 | {4,4,5,5}                     | {4,4,5}
+(50 rows)
+
+-- test <offset> preceding and <offset> following on ROW window
+SELECT
+	value_2,
+	value_1,
+	array_agg(value_1) OVER row_window,
+	array_agg(value_1) OVER row_window_exclude
+FROM
+	users_table
+WHERE
+	value_2 > 2 and value_2 < 6
+WINDOW
+	row_window as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING),
+	row_window_exclude as (PARTITION BY value_2 ORDER BY value_1 ROWS BETWEEN  1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW)
+ORDER BY
+	value_2, value_1, 3, 4;
+ value_2 | value_1 | array_agg | array_agg
+---------------------------------------------------------------------
+       3 |       0 | {0,0}     | {0}
+       3 |       0 | {0,0,0}   | {0,0}
+       3 |       0 | {0,0,1}   | {0,1}
+       3 |       1 | {0,1,1}   | {0,1}
+       3 |       1 | {1,1,1}   | {1,1}
+       3 |       1 | {1,1,1}   | {1,1}
+       3 |       1 | {1,1,2}   | {1,2}
+       3 |       2 | {1,2,2}   | {1,2}
+       3 |       2 | {2,2,3}   | {2,3}
+       3 |       3 | {2,3,3}   | {2,3}
+       3 |       3 | {3,3,4}   | {3,4}
+       3 |       4 | {3,4,4}   | {3,4}
+       3 |       4 | {4,4,4}   | {4,4}
+       3 |       4 | {4,4,4}   | {4,4}
+       3 |       4 | {4,4,4}   | {4,4}
+       3 |       4 | {4,4,5}   | {4,5}
+       3 |       5 | {4,5}     | {4}
+       4 |       0 | {0,0}     | {0}
+       4 |       0 | {0,0,1}   | {0,1}
+       4 |       1 | {0,1,1}   | {0,1}
+       4 |       1 | {1,1,2}   | {1,2}
+       4 |       2 | {1,2,2}   | {1,2}
+       4 |       2 | {2,2,2}   | {2,2}
+       4 |       2 | {2,2,3}   | {2,3}
+       4 |       3 | {2,3,3}   | {2,3}
+       4 |       3 | {3,3,3}   | {3,3}
+       4 |       3 | {3,3,3}   | {3,3}
+       4 |       3 | {3,3,3}   | {3,3}
+       4 |       3 | {3,3,3}   | {3,3}
+       4 |       3 | {3,3,3}   | {3,3}
+       4 |       3 | {3,3,4}   | {3,4}
+       4 |       4 | {3,4,4}   | {3,4}
+       4 |       4 | {4,4,4}   | {4,4}
+       4 |       4 | {4,4,4}   | {4,4}
+       4 |       4 | {4,4,5}   | {4,5}
+       4 |       5 | {4,5,5}   | {4,5}
+       4 |       5 | {5,5}     | {5}
+       5 |       0 | {0,0}     | {0}
+       5 |       0 | {0,0,1}   | {0,1}
+       5 |       1 | {0,1,2}   | {0,2}
+       5 |       2 | {1,2,2}   | {1,2}
+       5 |       2 | {2,2,3}   | {2,3}
+       5 |       3 | {2,3,3}   | {2,3}
+       5 |       3 | {3,3,3}   | {3,3}
+       5 |       3 | {3,3,3}   | {3,3}
+       5 |       3 | {3,3,4}   | {3,4}
+       5 |       4 | {3,4,4}   | {3,4}
+       5 |       4 | {4,4,5}   | {4,5}
+       5 |       5 | {4,5,5}   | {4,5}
+       5 |       5 | {5,5}     | {5}
+(50 rows)
+
 -- some tests with GROUP BY, HAVING and LIMIT
 SELECT
 	user_id, sum(event_type) OVER my_win , event_type
@@ -677,6 +919,27 @@ LIMIT
        1 |   4 |          4
        5 |   3 |          3
 (5 rows)
+
+-- test PARTITION BY avg(...) ORDER BY avg(...)
+SELECT
+	value_1,
+	avg(value_3),
+	dense_rank() OVER (PARTITION BY avg(value_3) ORDER BY avg(value_2))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	1;
+ value_1 |       avg        | dense_rank
+---------------------------------------------------------------------
+       0 | 3.08333333333333 |          1
+       1 | 2.93333333333333 |          1
+       2 | 2.22222222222222 |          1
+       3 | 2.73076923076923 |          1
+       4 |  2.9047619047619 |          1
+       5 | 2.22222222222222 |          2
+(6 rows)
 
 -- Group by has more columns than partition by
 SELECT
@@ -768,10 +1031,89 @@ $Q$);
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.avg_1 DESC, remote_scan.avg DESC, remote_scan.user_id DESC
-   ->  HashAggregate
-         Group Key: remote_scan.user_id
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(4 rows)
+
+SELECT
+	value_2,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY value_2, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+ value_2 |        avg         |          avg
+---------------------------------------------------------------------
+       5 | 2.6923076923076923 |     5.0000000000000000
+       4 | 2.7500000000000000 |     4.0000000000000000
+       3 | 2.2941176470588235 |     3.0000000000000000
+       2 | 2.7619047619047619 |     2.0000000000000000
+       1 | 2.4285714285714286 | 1.00000000000000000000
+       0 | 2.2222222222222222 | 0.00000000000000000000
+(6 rows)
+
+SELECT
+	value_2, user_id,
+	AVG(avg(value_1)) OVER (PARTITION BY value_2, max(value_2), MIN(value_2)),
+	AVG(avg(value_2)) OVER (PARTITION BY user_id, min(value_2), AVG(value_1))
+FROM
+	users_table
+GROUP BY
+	1, 2
+ORDER BY
+	3 DESC, 2 DESC, 1 DESC;
+ value_2 | user_id |          avg           |          avg
+---------------------------------------------------------------------
+       5 |       5 |     2.6666666666666667 |     5.0000000000000000
+       5 |       4 |     2.6666666666666667 |     5.0000000000000000
+       5 |       3 |     2.6666666666666667 |     5.0000000000000000
+       5 |       2 |     2.6666666666666667 |     5.0000000000000000
+       2 |       6 | 2.54583333333333333333 |     2.0000000000000000
+       2 |       5 | 2.54583333333333333333 |     2.0000000000000000
+       2 |       4 | 2.54583333333333333333 |     2.0000000000000000
+       2 |       3 | 2.54583333333333333333 |     2.0000000000000000
+       2 |       2 | 2.54583333333333333333 |     2.0000000000000000
+       2 |       1 | 2.54583333333333333333 |     2.0000000000000000
+       0 |       6 | 2.50000000000000000000 | 0.00000000000000000000
+       0 |       5 | 2.50000000000000000000 | 0.00000000000000000000
+       0 |       4 | 2.50000000000000000000 | 0.00000000000000000000
+       0 |       2 | 2.50000000000000000000 | 0.00000000000000000000
+       0 |       1 | 2.50000000000000000000 | 0.00000000000000000000
+       4 |       6 | 2.45555555555555555000 |     4.0000000000000000
+       4 |       5 | 2.45555555555555555000 |     4.0000000000000000
+       4 |       4 | 2.45555555555555555000 |     4.0000000000000000
+       4 |       3 | 2.45555555555555555000 |     4.0000000000000000
+       4 |       2 | 2.45555555555555555000 |     4.0000000000000000
+       4 |       1 | 2.45555555555555555000 |     4.0000000000000000
+       3 |       6 |     2.3500000000000000 |     3.0000000000000000
+       3 |       5 |     2.3500000000000000 |     3.0000000000000000
+       3 |       4 |     2.3500000000000000 |     3.0000000000000000
+       3 |       3 |     2.3500000000000000 |     3.0000000000000000
+       3 |       2 |     2.3500000000000000 |     3.0000000000000000
+       3 |       1 |     2.3500000000000000 |     3.0000000000000000
+       1 |       6 | 1.90666666666666666000 | 1.00000000000000000000
+       1 |       5 | 1.90666666666666666000 | 1.00000000000000000000
+       1 |       4 | 1.90666666666666666000 | 1.00000000000000000000
+       1 |       3 | 1.90666666666666666000 | 1.00000000000000000000
+       1 |       2 | 1.90666666666666666000 | 1.00000000000000000000
+(32 rows)
+
+SELECT user_id, sum(avg(user_id)) OVER ()
+FROM users_table
+GROUP BY user_id
+ORDER BY 1
+LIMIT 10;
+ user_id |           sum
+---------------------------------------------------------------------
+       1 | 21.00000000000000000000
+       2 | 21.00000000000000000000
+       3 | 21.00000000000000000000
+       4 | 21.00000000000000000000
+       5 | 21.00000000000000000000
+       6 | 21.00000000000000000000
 (6 rows)
 
 SELECT
@@ -939,24 +1281,22 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC;
-                                                         QUERY PLAN
+                                                      QUERY PLAN
 ---------------------------------------------------------------------
  Sort
-   Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.worker_column_5
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(15 rows)
+   Sort Key: remote_scan.user_id, remote_scan.avg DESC
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  WindowAgg
+                     ->  Sort
+                           Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                           ->  HashAggregate
+                                 Group Key: users_table.user_id, users_table.value_2
+                                 ->  Seq Scan on users_table_1400256 users_table
+(13 rows)
 
 -- order by in the window function is same as avg(value_1) DESC
 SELECT
@@ -1014,25 +1354,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                            QUERY PLAN
+                                                         QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1044,25 +1382,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                            QUERY PLAN
+                                                         QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1074,25 +1410,23 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                     QUERY PLAN
+                                              QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1104,23 +1438,117 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                     QUERY PLAN
+                                        QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: remote_scan.user_id, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))) DESC
-         ->  HashAggregate
-               Group Key: remote_scan.user_id, remote_scan.worker_column_5
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: users_table.user_id, (sum(users_table.value_2))
+                                 ->  HashAggregate
+                                       Group Key: users_table.user_id, users_table.value_2
+                                       ->  Seq Scan on users_table_1400256 users_table
+(14 rows)
+
+-- Grouping can be pushed down with aggregates even when window function can't
+EXPLAIN (COSTS FALSE)
+SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
+FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  WindowAgg
+         ->  Sort
+               Sort Key: remote_scan.worker_column_5
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  WindowAgg
-                                 ->  Sort
-                                       Sort Key: users_table.user_id, (sum(users_table.value_2))
-                                       ->  HashAggregate
-                                             Group Key: users_table.user_id, users_table.value_2
-                                             ->  Seq Scan on users_table_1400256 users_table
-(16 rows)
+                           ->  HashAggregate
+                                 Group Key: user_id
+                                 Filter: (avg(value_1) > '2'::numeric)
+                                 ->  Seq Scan on users_table_1400256 users_table
+(13 rows)
+
+-- Window function with inlined CTE
+WITH cte as (
+    SELECT uref.id user_id, events_table.value_2, count(*) c
+    FROM events_table
+    JOIN users_ref_test_table uref ON uref.id = events_table.user_id
+    GROUP BY 1, 2
+)
+SELECT DISTINCT cte.value_2, cte.c, sum(cte.value_2) OVER (PARTITION BY cte.c)
+FROM cte JOIN events_table et ON et.value_2 = cte.value_2 and et.value_2 = cte.c
+ORDER BY 1;
+ value_2 | c | sum
+---------------------------------------------------------------------
+       3 | 3 | 108
+       4 | 4 |  56
+(2 rows)
+
+-- There was a strange bug where this wouldn't have window functions being pushed down
+-- Bug dependent on column ordering
+CREATE TABLE daily_uniques (value_2 float, user_id bigint);
+SELECT create_distributed_table('daily_uniques', 'user_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+EXPLAIN (COSTS FALSE) SELECT
+  user_id,
+  sum(value_2) AS commits,
+  RANK () OVER (
+    PARTITION BY user_id
+    ORDER BY
+      sum(value_2) DESC
+  )
+FROM daily_uniques
+GROUP BY user_id
+HAVING
+  sum(value_2) > 0
+ORDER BY commits DESC
+LIMIT 10;
+                                             QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.commits DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  WindowAgg
+                           ->  Sort
+                                 Sort Key: daily_uniques.user_id, (sum(daily_uniques.value_2)) DESC
+                                 ->  HashAggregate
+                                       Group Key: daily_uniques.user_id
+                                       Filter: (sum(daily_uniques.value_2) > '0'::double precision)
+                                       ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(15 rows)
+
+DROP TABLE daily_uniques;
+-- Partition by reference table column joined to distribution column
+SELECT DISTINCT value_2, array_agg(rnk ORDER BY rnk) FROM (
+SELECT events_table.value_2, sum(uref.k_no) OVER (PARTITION BY uref.id) AS rnk
+FROM events_table
+JOIN users_ref_test_table uref ON uref.id = events_table.user_id) sq
+GROUP BY 1 ORDER BY 1;
+ value_2 |                                                              array_agg
+---------------------------------------------------------------------
+       0 | {686,686,816,816,987,987,1104}
+       1 | {500,500,675,675,675,686,686,816,816,816,987,987,987,987,987,1104,1104,1104,1104,1104,1104,1104}
+       2 | {500,500,500,500,675,675,675,675,675,686,686,686,686,816,816,816,816,816,987,987,987,987,987,987,987,1104,1104,1104,1104,1104,1104}
+       3 | {500,500,500,500,675,686,686,686,816,816,987,987,987,1104,1104,1104,1104,1104}
+       4 | {675,675,675,675,686,686,686,816,816,816,987,987,1104,1104}
+       5 | {675,675,816,816,987,987,1104,1104,1104}
+(6 rows)
 

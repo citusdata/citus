@@ -107,8 +107,6 @@ bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 						  PlannerRestrictionContext *plannerRestrictionContext)
 {
-	StringInfo errorMessage = NULL;
-
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
 	 * given that if postgres already flattened the subqueries, MultiNodeTree()
@@ -190,7 +188,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 
 	/* check if the query has a window function and it is safe to pushdown */
 	if (originalQuery->hasWindowFuncs &&
-		SafeToPushdownWindowFunction(originalQuery, &errorMessage))
+		SafeToPushdownWindowFunction(originalQuery, NULL))
 	{
 		return true;
 	}
@@ -393,7 +391,7 @@ IsOuterJoinExpr(Node *node)
 
 /*
  * SafeToPushdownWindowFunction checks if the query with window function is supported.
- * It returns the result accordingly and modifies the error detail.
+ * Returns the result accordingly and modifies errorDetail if non null.
  */
 bool
 SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
@@ -411,20 +409,26 @@ SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
 
 		if (!windowClause->partitionClause)
 		{
-			*errorDetail = makeStringInfo();
-			appendStringInfoString(*errorDetail,
-								   "Window functions without PARTITION BY on distribution "
-								   "column is currently unsupported");
+			if (errorDetail)
+			{
+				*errorDetail = makeStringInfo();
+				appendStringInfoString(*errorDetail,
+									   "Window functions without PARTITION BY on distribution "
+									   "column is currently unsupported");
+			}
 			return false;
 		}
 	}
 
 	if (!WindowPartitionOnDistributionColumn(query))
 	{
-		*errorDetail = makeStringInfo();
-		appendStringInfoString(*errorDetail,
-							   "Window functions with PARTITION BY list missing distribution "
-							   "column is currently unsupported");
+		if (errorDetail)
+		{
+			*errorDetail = makeStringInfo();
+			appendStringInfoString(*errorDetail,
+								   "Window functions with PARTITION BY list missing distribution "
+								   "column is currently unsupported");
+		}
 		return false;
 	}
 
@@ -1515,8 +1519,9 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
  * down to workers without invoking join order planner.
  */
 static MultiNode *
-SubqueryPushdownMultiNodeTree(Query *queryTree)
+SubqueryPushdownMultiNodeTree(Query *originalQuery)
 {
+	Query *queryTree = copyObject(originalQuery);
 	List *targetEntryList = queryTree->targetList;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 
@@ -1616,7 +1621,7 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, originalQuery);
 
 	/*
 	 * Postgres standard planner converts having qual node to a list of and
@@ -1763,11 +1768,9 @@ CreateSubqueryTargetEntryList(List *exprList)
 	{
 		Node *expr = (Node *) lfirst(exprCell);
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);
-		StringInfo exprNameString = makeStringInfo();
 
 		newTargetEntry->expr = (Expr *) copyObject(expr);
-		appendStringInfo(exprNameString, WORKER_COLUMN_FORMAT, resNo);
-		newTargetEntry->resname = exprNameString->data;
+		newTargetEntry->resname = WorkerColumnName(resNo);
 		newTargetEntry->resjunk = false;
 		newTargetEntry->resno = resNo;
 

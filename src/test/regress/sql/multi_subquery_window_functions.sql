@@ -476,7 +476,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5;
 
--- lets have some queries that Citus shouldn't push down
+-- test with window functions which aren't pushed down
 SELECT
    user_id, time, rnk
 FROM
@@ -492,8 +492,6 @@ ORDER BY
 LIMIT
   10;
 
--- user needs to supply partition by which should
--- include the distribution key
 SELECT
    user_id, time, rnk
 FROM
@@ -509,8 +507,6 @@ ORDER BY
 LIMIT
   10;
 
--- user needs to supply partition by which should
--- include the distribution key
 SELECT
    user_id, time, rnk
 FROM
@@ -526,7 +522,6 @@ ORDER BY
 LIMIT
   10;
 
--- w2 should not be pushed down
 SELECT * FROM
 (
   SELECT
@@ -542,7 +537,6 @@ SELECT * FROM
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
 
--- w2 should not be pushed down
 SELECT * FROM
 (
   SELECT
@@ -560,7 +554,6 @@ ORDER BY
 LIMIT
   10;
 
--- GROUP BY includes the partition key, but not the WINDOW function
 SELECT
    user_id, time, my_rank
 FROM
@@ -580,7 +573,6 @@ ORDER BY
 LIMIT
   10;
 
--- GROUP BY includes the partition key, but not the WINDOW function
 SELECT
    user_id, time, my_rank
 FROM
@@ -600,7 +592,6 @@ ORDER BY
 LIMIT
   10;
 
--- Overriding window function but not supported
 SELECT * FROM (
   SELECT
     user_id, date_trunc('day', time) as time, sum(rank) OVER w2
@@ -619,7 +610,6 @@ ORDER BY
 1,2,3;
 
 
--- Aggregate function on distribution column should error out
 SELECT * FROM (
   SELECT
     user_id, COUNT(*) OVER (PARTITION BY sum(user_id), MIN(value_2))
@@ -645,8 +635,6 @@ ORDER BY
 LIMIT
   20;
 
--- UNION ALL with only one of them is not partitioned over distribution column which
--- should not be allowed.
 SELECT
   max(avg)
 FROM
@@ -667,8 +655,6 @@ GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
 
--- UNION with only one subquery which has a partition on non-distribution column should
--- error out
 SELECT *
 FROM (
         ( SELECT user_id,

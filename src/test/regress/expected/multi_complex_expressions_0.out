@@ -396,6 +396,56 @@ LIMIT 10 OFFSET 20;
       1453 |                 5
 (10 rows)
 
+SELECT
+	customer_keys.o_custkey,
+	SUM(order_count) AS total_order_count
+FROM
+	(SELECT o_custkey, o_orderstatus, COUNT(*) over (partition by o_orderstatus) AS order_count
+	 FROM orders GROUP BY o_custkey, o_orderstatus ) customer_keys
+GROUP BY
+	customer_keys.o_custkey
+ORDER BY
+	customer_keys.o_custkey DESC
+LIMIT 10 OFFSET 20;
+ o_custkey | total_order_count
+---------------------------------------------------------------------
+      1466 |               759
+      1465 |               759
+      1463 |              1499
+      1462 |              1499
+      1460 |               759
+      1459 |              1499
+      1457 |               740
+      1456 |               830
+      1454 |              1499
+      1453 |              1499
+(10 rows)
+
+SELECT
+	customer_keys.o_custkey,
+	SUM(order_count1 + order_count) AS total_order_count
+FROM
+	(SELECT o_custkey, o_orderstatus, count(*) order_count1, COUNT(*) over (partition by o_orderstatus) AS order_count
+	 FROM orders GROUP BY o_custkey, o_orderstatus ) customer_keys
+GROUP BY
+	customer_keys.o_custkey
+ORDER BY
+	customer_keys.o_custkey DESC
+LIMIT 10 OFFSET 20;
+ o_custkey | total_order_count
+---------------------------------------------------------------------
+      1466 |               760
+      1465 |               761
+      1463 |              1503
+      1462 |              1509
+      1460 |               760
+      1459 |              1505
+      1457 |               741
+      1456 |               833
+      1454 |              1501
+      1453 |              1504
+(10 rows)
+
 RESET citus.task_executor_type;
 SET client_min_messages TO DEBUG1;
 -- Ensure that we push down LIMIT and OFFSET properly
