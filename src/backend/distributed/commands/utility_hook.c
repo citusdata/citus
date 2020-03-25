@@ -927,7 +927,6 @@ List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
 	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
-	char *concatenatedCommands = StringJoin(commands, ';');
 
 	if (list_length(workerNodes) <= 0)
 	{
@@ -940,7 +939,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	Task *task = CitusMakeNode(Task);
 	task->taskType = DDL_TASK;
-	SetTaskQueryString(task, concatenatedCommands);
+	SetTaskQueryStringList(task, commands);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodes)
