@@ -26,7 +26,6 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
-#include "distributed/metadata/namespace.h"
 
 #define AlterEnumIsRename(stmt) (stmt->oldVal != NULL)
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)

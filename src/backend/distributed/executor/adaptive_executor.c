@@ -2015,7 +2015,7 @@ ShouldRunTasksSequentially(List *taskList)
 
 /*
  * SequentialRunDistributedExecution gets a distributed execution and
- * executes each individual task in the exection sequentially, one
+ * executes each individual task in the execution sequentially, one
  * task at a time. See related function ShouldRunTasksSequentially()
  * for more detail on the definition of SequentialRun.
  */

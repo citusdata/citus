@@ -352,14 +352,8 @@ LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
 	else
 	{
 		/*
-		 * It is a regular utility command or SELECT query with non-udf,
-		 * targets, then we should execute it locally via process utility.
-		 *
-		 * If it is a regular utility command, CitusProcessUtility is the
-		 * appropriate function to process that command. However, if it's
-		 * a SELECT query with non-udf targets, CitusProcessUtility would
-		 * error out as we are not expecting such SELECT queries triggered
-		 * by utility commands.
+		 * It is a regular utility command we should execute it locally via
+		 * process utility.
 		 */
 		CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
 							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
