@@ -211,8 +211,8 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 			++counter;
 			if (counter == 10)
 			{
-				ereport(ERROR, (errmsg("citus.max_shared_pool_size connections are "
-									   "already established to the node %s:%d,"
+				ereport(ERROR, (errmsg("citus.max_shared_pool_size number of connections "
+									   "are already established to the node %s:%d,"
 									   "so cannot establish any more connections",
 									   hostname, port),
 								errhint("consider increasing "
