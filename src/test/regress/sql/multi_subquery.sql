@@ -620,9 +620,49 @@ SELECT * FROM
 		a_inner)
 AS foo;
 
-DROP TABLE subquery_pruning_varchar_test_table;
-
 RESET citus.enable_router_execution;
+
+-- Test https://github.com/citusdata/citus/issues/3424
+insert into subquery_pruning_varchar_test_table values ('1', '1'), (2, '1'), (3, '2'), (3, '1'), (4, '4'), (5, '6');
+
+WITH cte_1 AS (SELECT b max FROM subquery_pruning_varchar_test_table)
+SELECT a
+FROM subquery_pruning_varchar_test_table
+JOIN cte_1 ON a = max::text
+GROUP BY a HAVING a = (SELECT a)
+ORDER BY 1;
+
+-- Test https://github.com/citusdata/citus/issues/3432
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type > avg((SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+ORDER BY 1;
+
+SELECT t1.event_type FROM events_table t1
+GROUP BY t1.event_type HAVING t1.event_type > avg(2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
+ORDER BY 1;
+
+-- Test https://github.com/citusdata/citus/issues/3433
+CREATE TABLE keyval1 (key int, value int);
+SELECT create_distributed_table('keyval1', 'key');
+
+CREATE TABLE keyval2 (key int, value int);
+SELECT create_distributed_table('keyval2', 'key');
+
+CREATE TABLE keyvalref (key int, value int);
+SELECT create_reference_table('keyvalref');
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key);
+
+-- For some reason 'ORDER BY 1 DESC LIMIT 1' triggers recursive planning
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key ORDER BY 1 DESC LIMIT 1);
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM keyval1 k1 WHERE k1.key = 2 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 k2 WHERE k2.key = 2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
 
 -- Simple join subquery pushdown
 SELECT
@@ -843,7 +883,7 @@ LIMIT
 -- also set the min messages to WARNING to skip
 -- CASCADE NOTICE messagez
 SET client_min_messages TO WARNING;
-DROP TABLE users, events;
+DROP TABLE users, events, subquery_pruning_varchar_test_table, keyval1, keyval2, keyvalref;
 
 DROP TYPE user_composite_type CASCADE;
 

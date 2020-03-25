@@ -59,6 +59,7 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
@@ -147,7 +148,7 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 colocatedJoinChecker,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
-static List * SublinkList(Query *originalQuery);
+static List * SublinkListFromWhere(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static bool ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
@@ -173,6 +174,7 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
+static bool NodeContainsSubqueryReferencingOuterQuery(Node *node);
 static void WrapFunctionsInSubqueries(Query *query);
 static void TransformFunctionRTE(RangeTblEntry *rangeTblEntry);
 static bool ShouldTransformRTE(RangeTblEntry *rangeTableEntry);
@@ -312,6 +314,18 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	{
 		/* replace all subqueries in the WHERE clause */
 		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+	}
+
+	if (query->havingQual != NULL)
+	{
+		if (NodeContainsSubqueryReferencingOuterQuery(query->havingQual))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Subqueries in HAVING cannot refer to outer query",
+								 NULL, NULL);
+		}
+
+		RecursivelyPlanAllSubqueries(query->havingQual, context);
 	}
 
 	/*
@@ -528,7 +542,7 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 											 RecursivePlanningContext *
 											 recursivePlanningContext)
 {
-	List *sublinkList = SublinkList(query);
+	List *sublinkList = SublinkListFromWhere(query);
 	ListCell *sublinkCell = NULL;
 
 	foreach(sublinkCell, sublinkList)
@@ -551,12 +565,12 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 
 
 /*
- * SublinkList finds the subquery nodes in the where clause of the given query. Note
+ * SublinkListFromWhere finds the subquery nodes in the where clause of the given query. Note
  * that the function should be called on the original query given that postgres
  * standard_planner() may convert the subqueries in WHERE clause to joins.
  */
 static List *
-SublinkList(Query *originalQuery)
+SublinkListFromWhere(Query *originalQuery)
 {
 	FromExpr *joinTree = originalQuery->jointree;
 	List *sublinkList = NIL;
@@ -648,8 +662,7 @@ RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningConte
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-
-		if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+		if (FindNodeCheckInRangeTableList(query->rtable, IsCitusTableRTE))
 		{
 			RecursivelyPlanSubquery(query, planningContext);
 		}
@@ -1025,7 +1038,7 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
 		Query *subquery = rangeTableEntry->subquery;
 
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY &&
-			QueryContainsDistributedTableRTE(subquery))
+			FindNodeCheck((Node *) subquery, IsDistributedTableRTE))
 		{
 			RecursivelyPlanSubquery(subquery, context);
 		}
@@ -1223,7 +1236,7 @@ CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context)
 
 /*
  * ContainsReferencesToOuterQuery determines whether the given query contains
- * any Vars that point outside of the query itself. Such queries cannot be
+ * anything that points outside of the query itself. Such queries cannot be
  * planned recursively.
  */
 static bool
@@ -1299,6 +1312,29 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
 
 	return expression_tree_walker(node, ContainsReferencesToOuterQueryWalker,
 								  context);
+}
+
+
+/*
+ * NodeContainsSubqueryReferencingOuterQuery determines whether the given node
+ * contains anything that points outside of the query itself.
+ */
+static bool
+NodeContainsSubqueryReferencingOuterQuery(Node *node)
+{
+	List *sublinks = NIL;
+	ExtractSublinkWalker(node, &sublinks);
+
+	SubLink *sublink;
+	foreach_ptr(sublink, sublinks)
+	{
+		if (ContainsReferencesToOuterQuery(castNode(Query, sublink->subselect)))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
