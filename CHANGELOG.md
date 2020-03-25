@@ -1,3 +1,23 @@
+### citus v9.2.3 (March 25, 2020) ###
+
+* Do not use C functions that have been banned by Microsoft
+
+* Fixes a bug that causes wrong results with complex outer joins
+
+* Fixes issues found using static analysis
+
+* Fixes left join shard pruning in pushdown planner
+
+* Fixes possibility for segmentation fault in internal aggregate functions
+
+* Fixes possible segfault when non pushdownable aggregates are used in `HAVING`
+
+* Improves correctness of planning subqueries in `HAVING`
+
+* Prevents using old connections for security if `citus.node_conninfo` changed
+
+* Uses Microsoft approved cipher string for default TLS setup
+
 ### citus v9.0.2 (March 6, 2020) ###
 
 * Fixes build errors on EL/OL 6 based distros
