@@ -1017,7 +1017,7 @@ AddAnyValueAggregates(Node *node, void *context)
 			}
 		}
 	}
-	if (IsA(node, Aggref))
+	if (IsA(node, Aggref) || IsA(node, GroupingFunc))
 	{
 		return node;
 	}

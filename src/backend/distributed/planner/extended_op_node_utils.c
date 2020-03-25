@@ -225,13 +225,12 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		ListCell *varCell = NULL;
 		bool isPartitionColumn = false;
 
-		if (IsA(targetNode, Var))
+		if (!IsA(targetNode, Aggref))
 		{
 			continue;
 		}
 
-		Assert(IsA(targetNode, Aggref));
-		Aggref *targetAgg = (Aggref *) targetNode;
+		Aggref *targetAgg = castNode(Aggref, targetNode);
 		if (targetAgg->aggdistinct == NIL)
 		{
 			continue;

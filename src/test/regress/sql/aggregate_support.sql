@@ -204,6 +204,19 @@ RESET citus.task_executor_type;
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 
+-- GROUPING parses to GroupingFunc, distinct from Aggref
+-- These three queries represent edge cases implementation would have to consider
+-- For now we error out of all three
+select grouping(id)
+from aggdata group by id order by 1 limit 3;
+
+select key, grouping(val)
+from aggdata group by key, val order by 1, 2;
+
+select key, grouping(val), sum(distinct valf)
+from aggdata group by key, val order by 1, 2;
+
+
 -- Test https://github.com/citusdata/citus/issues/3328
 create table nulltable(id int);
 insert into nulltable values (0);
