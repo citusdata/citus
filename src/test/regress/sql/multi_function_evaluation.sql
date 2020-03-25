@@ -145,4 +145,24 @@ FROM table_1
 WHERE key >= (SELECT min(KEY) FROM table_1)
 AND value > now() - interval '1 hour';
 
+CREATE OR REPLACE FUNCTION stable_squared(int)
+RETURNS int STABLE
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RAISE NOTICE 'stable_fn called';
+	RETURN $1 * $1;
+END;
+$function$;
+SELECT create_distributed_function('stable_squared(int)');
+
+UPDATE example SET value = timestamp '10-10-2000 00:00'
+FROM (SELECT key, stable_squared(count(*)::int) y FROM example GROUP BY key) a WHERE example.key = a.key;
+
+UPDATE example SET value = timestamp '10-10-2000 00:00'
+FROM (SELECT key, stable_squared((count(*) OVER ())::int) y FROM example GROUP BY key) a WHERE example.key = a.key;
+
+UPDATE example SET value = timestamp '10-10-2000 00:00'
+FROM (SELECT key, stable_squared(grouping(key)) y FROM example GROUP BY key) a WHERE example.key = a.key;
+
 DROP SCHEMA multi_function_evaluation CASCADE;

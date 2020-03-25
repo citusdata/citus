@@ -27,7 +27,7 @@
 
 
 /* private function declarations */
-static bool IsVarOrParamSublink(Node *node);
+static bool IsVariableExpression(Node *node);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 								  Oid result_collation,
 								  MasterEvaluationContext *masterEvaluationContext);
@@ -120,9 +120,19 @@ PartiallyEvaluateExpression(Node *expression,
 	else if (ShouldEvaluateExpression((Expr *) expression) &&
 			 ShouldEvaluateFunctionWithMasterContext(masterEvaluationContext))
 	{
-		/* don't call citus_evaluate_expr on nodes it cannot handle */
-		if (FindNodeCheck(expression, IsVarOrParamSublink))
+		if (FindNodeCheck(expression, IsVariableExpression))
 		{
+			/*
+			 * The expression contains a variable expression (e.g. a stable function,
+			 * which has a column reference as its input). That means that we cannot
+			 * evaluate the expression on the coordinator, since the result depends
+			 * on the input.
+			 *
+			 * Skipping function evaluation for these expressions is safe in most
+			 * cases, since the function will always be re-evaluated for every input
+			 * value. An exception is function calls that call another stable function
+			 * that should not be re-evaluated, such as now().
+			 */
 			return (Node *) expression_tree_mutator(expression,
 													PartiallyEvaluateExpression,
 													masterEvaluationContext);
@@ -211,11 +221,23 @@ ShouldEvaluateExpression(Expr *expression)
 
 
 /*
- * IsVarOrParamSublink returns whether node is a Var or PARAM_SUBLINK param.
+ * IsVariableExpression returns whether the given node is a variable expression,
+ * meaning its result depends on the input data and is not constant for the whole
+ * query.
  */
 static bool
-IsVarOrParamSublink(Node *node)
+IsVariableExpression(Node *node)
 {
+	if (IsA(node, Aggref))
+	{
+		return true;
+	}
+
+	if (IsA(node, WindowFunc))
+	{
+		return true;
+	}
+
 	if (IsA(node, Param))
 	{
 		/* ExecInitExpr cannot handle PARAM_SUBLINK */
