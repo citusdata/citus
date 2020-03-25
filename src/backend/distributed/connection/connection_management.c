@@ -34,6 +34,7 @@
 #include "distributed/version_compat.h"
 #include "mb/pg_wchar.h"
 #include "portability/instr_time.h"
+#include "storage/ipc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -319,11 +320,27 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	}
 
 	/*
+	 * We can afford to skip establishing an optional connection. For
+	 * non-optional connections, we first retry for some time. If we still
+	 * cannot reserve the right to establish a connection, we prefer to
+	 * error out.
+	 */
+	if (flags & OPTIONAL_CONNECTION)
+	{
+		if (!TryToIncrementSharedConnectionCounter(hostname, port))
+		{
+			return NULL;
+		}
+	}
+	else
+	{
+		WaitOrErrorForSharedConnection(hostname, port);
+	}
+
+	/*
 	 * Either no caching desired, or no pre-established, non-claimed,
 	 * connection present. Initiate connection establishment.
 	 */
-	TryToIncrementSharedConnectionCounter(hostname, port);
-
 	connection = StartConnectionEstablishment(&key);
 
 	dlist_push_tail(entry->connections, &connection->connectionNode);

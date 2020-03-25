@@ -21,6 +21,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_authid.h"
 #include "commands/dbcommands.h"
+#include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shared_connection_stats.h"
@@ -168,8 +169,64 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 
 
 /*
- * Tries to increment the shared connection counter for the given nodeId and
- * the current database in SharedConnStatsHash.
+ * WaitOrErrorForSharedConnection tries to increment the shared connection
+ * counter for the given hostname/port and the current database in
+ * SharedConnStatsHash.
+ *
+ * The function implements a retry mechanism. If the function cannot increment
+ * the counter withing the specificed amount of the time, it throws an error.
+ */
+void
+WaitOrErrorForSharedConnection(const char *hostname, int port)
+{
+	int counter = 0;
+
+	while (!TryToIncrementSharedConnectionCounter(hostname, port))
+	{
+		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
+		double timeoutMsec = 100.0;
+
+		CHECK_FOR_INTERRUPTS();
+
+		int rc = WaitLatch(MyLatch, latchFlags, (long) timeoutMsec, PG_WAIT_EXTENSION);
+
+		/* emergency bailout if postmaster has died */
+		if (rc & WL_POSTMASTER_DEATH)
+		{
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+		}
+		else if (rc & WL_LATCH_SET)
+		{
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+
+			if (IsHoldOffCancellationReceived())
+			{
+				/* in case the interrupts are hold, we still want to cancel */
+				ereport(ERROR, (errmsg("canceling statement due to user request")));
+			}
+		}
+		else if (rc & WL_TIMEOUT)
+		{
+			++counter;
+			if (counter == 10)
+			{
+				ereport(ERROR, (errmsg("citus.max_shared_pool_size connections are "
+									   "already established to the node %s:%d,"
+									   "so cannot establish any more connections",
+									   hostname, port),
+								errhint("consider increasing "
+										"citus.max_shared_pool_size")));
+			}
+		}
+	}
+}
+
+
+/*
+ * TryToIncrementSharedConnectionCounter tries to increment the shared
+ * connection counter for the given nodeId and the current database in
+ * SharedConnStatsHash.
  *
  * The function first checks whether the number of connections is less than
  * citus.max_shared_pool_size. If so, the function increments the counter

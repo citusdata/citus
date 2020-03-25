@@ -2386,11 +2386,27 @@ ManageWorkerPool(WorkerPool *workerPool)
 			connectionFlags |= OUTSIDE_TRANSACTION;
 		}
 
+		if (list_length(workerPool->sessionList) > 0 && !UseConnectionPerPlacement())
+		{
+			/*
+			 * The executor can finish the execution with a single connection,
+			 * remaining are optional. If the executor can get more connections,
+			 * it can increase the parallelism.
+			 */
+			connectionFlags |= OPTIONAL_CONNECTION;
+		}
+
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  workerPool->nodeName,
 																	  workerPool->nodePort,
 																	  NULL, NULL);
+		if (!connection)
+		{
+			/* connection can only be NULL for optional connections */
+			Assert((connectionFlags & connectionFlags));
+			continue;
+		}
 
 		/*
 		 * Assign the initial state in the connection state machine. The connection

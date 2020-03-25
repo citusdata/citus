@@ -52,7 +52,15 @@ enum MultiConnectionMode
 	/* open a connection per (co-located set of) placement(s) */
 	CONNECTION_PER_PLACEMENT = 1 << 3,
 
-	OUTSIDE_TRANSACTION = 1 << 4
+	OUTSIDE_TRANSACTION = 1 << 4,
+
+	/*
+	 * Some connections are optionally required such as when adaptive executor is
+	 * executing a multi-shard command and requires the second (or further) connections
+	 * per node. In that case, the connection manager may decide not to allow the
+	 * connection.
+	 */
+	OPTIONAL_CONNECTION = 1 << 5
 };
 
 
