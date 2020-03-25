@@ -432,6 +432,21 @@ select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 ERROR:  type "aggregate_support.aggdata" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+-- GROUPING parses to GroupingFunc, distinct from Aggref
+-- These three queries represent edge cases implementation would have to consider
+-- For now we error out of all three
+select grouping(id)
+from aggdata group by id order by 1 limit 3;
+ERROR:  could not run distributed query with GROUPING
+HINT:  Consider using an equality filter on the distributed table's partition column.
+select key, grouping(val)
+from aggdata group by key, val order by 1, 2;
+ERROR:  could not run distributed query with GROUPING
+HINT:  Consider using an equality filter on the distributed table's partition column.
+select key, grouping(val), sum(distinct valf)
+from aggdata group by key, val order by 1, 2;
+ERROR:  could not run distributed query with GROUPING
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- Test https://github.com/citusdata/citus/issues/3328
 create table nulltable(id int);
 insert into nulltable values (0);

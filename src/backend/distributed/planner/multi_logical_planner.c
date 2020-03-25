@@ -82,6 +82,7 @@ static bool IsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultArrayFunction(Node *node);
 static bool IsCitusExtraDataContainerFunc(Node *node);
 static bool IsFunctionWithOid(Node *node, Oid funcOid);
+static bool IsGroupingFunc(Node *node);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
@@ -885,6 +886,16 @@ IsFunctionWithOid(Node *node, Oid funcOid)
 
 
 /*
+ * IsGroupingFunc returns whether node is a GroupingFunc.
+ */
+static bool
+IsGroupingFunc(Node *node)
+{
+	return IsA(node, GroupingFunc);
+}
+
+
+/*
  * FindIntermediateResultIdIfExists extracts the id of the intermediate result
  * if the given RTE contains a read_intermediate_results function, NULL otherwise
  */
@@ -975,6 +986,13 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with GROUPING SETS, CUBE, "
 					   "or ROLLUP";
+		errorHint = filterHint;
+	}
+
+	if (FindNodeCheck((Node *) queryTree, IsGroupingFunc))
+	{
+		preconditionsSatisfied = false;
+		errorMessage = "could not run distributed query with GROUPING";
 		errorHint = filterHint;
 	}
 
