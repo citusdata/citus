@@ -228,9 +228,7 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 							 binaryFormatString);
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
-
-		SetTaskQueryString(selectTask, NULL);
-		selectTask->perPlacementQueryStrings = perPlacementQueries;
+		SetTaskPerPlacementQueryStrings(selectTask, perPlacementQueries);
 	}
 }
 
