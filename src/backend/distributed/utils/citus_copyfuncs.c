@@ -260,6 +260,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskId);
 	COPY_NODE_FIELD(queryForLocalExecution);
 	COPY_STRING_FIELD(queryStringLazy);
+	COPY_NODE_FIELD(queryStringList);
 	COPY_SCALAR_FIELD(anchorDistributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);

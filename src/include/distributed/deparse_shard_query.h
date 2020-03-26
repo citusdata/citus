@@ -25,6 +25,7 @@ extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern void SetTaskQuery(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
+extern void SetTaskQueryStringList(Task *task, List *queryStringList);
 extern char * TaskQueryString(Task *task);
 extern bool UpdateRelationsToLocalShardTables(Node *node, List *relationShardList);
 

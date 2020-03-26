@@ -513,7 +513,8 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		task->jobId = INVALID_JOB_ID;
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
-		SetTaskQueryString(task, StringJoin(commandList, ';'));
+		SetTaskQueryStringList(task, commandList);
+
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependentTaskList = NIL;
 		task->anchorShardId = shardId;

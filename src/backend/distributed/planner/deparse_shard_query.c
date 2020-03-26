@@ -446,6 +446,17 @@ SetTaskQueryString(Task *task, char *queryString)
 
 
 /*
+ * SetTaskQueryStringList sets the queryStringList of the given task.
+ */
+void
+SetTaskQueryStringList(Task *task, List *queryStringList)
+{
+	task->queryStringList = queryStringList;
+	SetTaskQueryString(task, StringJoin(queryStringList, ';'));
+}
+
+
+/*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
 static char *
