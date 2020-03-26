@@ -367,7 +367,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	task = CitusMakeNode(Task);
 	task->taskType = SELECT_TASK;
 	task->taskPlacementList = placementList;
-	SetTaskQuery(task, planContext->query);
+	SetTaskQueryIfShouldLazyDeparse(task, planContext->query);
 	task->anchorShardId = shardInterval->shardId;
 	task->replicationModel = distTable->replicationModel;
 

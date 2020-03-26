@@ -399,7 +399,8 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringAllPlacements(task),
+													  es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
