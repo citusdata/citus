@@ -11,8 +11,6 @@
 #ifndef SHARED_CONNECTION_STATS_H
 #define SHARED_CONNECTION_STATS_H
 
-extern int MaxTrackedWorkerNodes;
-
 extern void InitializeSharedConnectionStats(void);
 extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);
 extern void WaitOrErrorForSharedConnection(const char *hostname, int port);

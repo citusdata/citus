@@ -936,9 +936,14 @@ RegisterCitusConfigVariables(void)
 					 "health status are tracked in a shared hash table on "
 					 "the master node. This configuration value limits the "
 					 "size of the hash table, and consequently the maximum "
-					 "number of worker nodes that can be tracked."),
+					 "number of worker nodes that can be tracked."
+					 "Citus keeps some information about the worker nodes "
+					 "in the shared memory for certain optimizations. The "
+					 "optimizations are enforced up to this number of worker "
+					 "nodes. Any additional worker nodes may not benefit from"
+					 "the optimizations."),
 		&MaxWorkerNodesTracked,
-		2048, 8, INT_MAX,
+		2048, 1024, INT_MAX,
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -1011,23 +1016,6 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_tracked_worker_nodes",
-		gettext_noop("Sets the maximum number of worker tracked."),
-		gettext_noop("Citus doesn't have any limitations in terms of the "
-					 "number of worker nodes allowed in the cluster. But, "
-					 "Citus keeps some information about the worker nodes "
-					 "in the shared memory for certain optimizations. The "
-					 "optimizations are enforced up to this number of worker "
-					 "nodes. Any additional worker nodes may not benefit from"
-					 "the optimizations."),
-		&MaxTrackedWorkerNodes,
-		1024, 256, INT_MAX,
-		PGC_POSTMASTER,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 
 	DefineCustomIntVariable(
 		"citus.max_running_tasks_per_node",

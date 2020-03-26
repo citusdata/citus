@@ -84,16 +84,6 @@ typedef struct SharedConnStatsHashEntry
 } SharedConnStatsHashEntry;
 
 
-/*
- * Controlled via a GUC.
- *
- * By default, Citus tracks 1024 worker nodes, which is already
- * very unlikely number of worker nodes. Given that the shared
- * memory required per worker is pretty small (~120 Bytes), we think it
- * is a good default that wouldn't hurt any users in any dimension.
- */
-int MaxTrackedWorkerNodes = 1024;
-
 static int MaxSharedPoolSize = 100;
 
 /* the following two structs used for accessing shared memory */
@@ -398,9 +388,9 @@ SharedConnectionStatsShmemSize(void)
 	Size size = 0;
 
 	size = add_size(size, sizeof(ConnectionStatsSharedData));
-	size = add_size(size, mul_size(sizeof(LWLock), MaxTrackedWorkerNodes));
+	size = add_size(size, mul_size(sizeof(LWLock), MaxWorkerNodesTracked));
 
-	Size hashSize = hash_estimate_size(MaxTrackedWorkerNodes,
+	Size hashSize = hash_estimate_size(MaxWorkerNodesTracked,
 									   sizeof(SharedConnStatsHashEntry));
 
 	size = add_size(size, hashSize);
@@ -453,8 +443,8 @@ SharedConnectionStatsShmemInit(void)
 
 	/*  allocate hash table */
 	SharedConnStatsHash =
-		ShmemInitHash("Shared Conn. Stats Hash", MaxTrackedWorkerNodes,
-					  MaxTrackedWorkerNodes, &info, hashFlags);
+		ShmemInitHash("Shared Conn. Stats Hash", MaxWorkerNodesTracked,
+					  MaxWorkerNodesTracked, &info, hashFlags);
 
 	LWLockRelease(AddinShmemInitLock);
 
