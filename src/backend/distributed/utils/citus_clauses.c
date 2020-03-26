@@ -33,7 +33,7 @@ static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typm
 								  MasterEvaluationContext *masterEvaluationContext);
 static bool CitusIsVolatileFunctionIdChecker(Oid func_id, void *context);
 static bool CitusIsMutableFunctionIdChecker(Oid func_id, void *context);
-static bool ShouldEvaluateExpressionType(NodeTag nodeTag);
+static bool ShouldEvaluateExpression(Expr *expression);
 static bool ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *
 													evaluationContext);
 
@@ -117,7 +117,7 @@ PartiallyEvaluateExpression(Node *expression,
 											exprCollation(expression),
 											masterEvaluationContext);
 	}
-	else if (ShouldEvaluateExpressionType(nodeTag) &&
+	else if (ShouldEvaluateExpression((Expr *) expression) &&
 			 ShouldEvaluateFunctionWithMasterContext(masterEvaluationContext))
 	{
 		/* don't call citus_evaluate_expr on nodes it cannot handle */
@@ -171,15 +171,25 @@ ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *evaluationConte
 
 
 /*
- * ShouldEvaluateExpressionType returns true if Citus should evaluate the
+ * ShouldEvaluateExpression returns true if Citus should evaluate the
  * input node on the coordinator.
  */
 static bool
-ShouldEvaluateExpressionType(NodeTag nodeTag)
+ShouldEvaluateExpression(Expr *expression)
 {
+	NodeTag nodeTag = nodeTag(expression);
+
 	switch (nodeTag)
 	{
 		case T_FuncExpr:
+		{
+			FuncExpr *funcExpr = (FuncExpr *) expression;
+
+			/* we cannot evaluate set returning functions */
+			bool isSetReturningFunction = funcExpr->funcretset;
+			return !isSetReturningFunction;
+		}
+
 		case T_OpExpr:
 		case T_DistinctExpr:
 		case T_NullIfExpr:
@@ -253,7 +263,7 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 		else if (masterEvaluationContext->evaluationMode != EVALUATE_FUNCTIONS_PARAMS)
 		{
 			/* should only get here for node types we should evaluate */
-			Assert(ShouldEvaluateExpressionType(nodeTag(expr)));
+			Assert(ShouldEvaluateExpression(expr));
 
 			/* bail out, the caller doesn't want functions/expressions to be evaluated */
 			return expr;
