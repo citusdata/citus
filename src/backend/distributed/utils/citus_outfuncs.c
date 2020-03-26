@@ -481,6 +481,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(taskId);
 	WRITE_NODE_FIELD(queryForLocalExecution);
 	WRITE_STRING_FIELD(queryStringLazy);
+	WRITE_NODE_FIELD(perPlacementQueryStrings);
 	WRITE_NODE_FIELD(queryStringList);
 	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
