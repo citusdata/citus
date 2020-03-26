@@ -98,6 +98,7 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
+static const char * MaxSharedPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 
@@ -930,6 +931,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_shared_pool_size",
+		gettext_noop("Sets the maximum number of connections allowed per worker node "
+					 "across all the backends from this node. Setting to -1 disables "
+					 "connections throttling. Setting to 0 makes it auto-adjust, meaning"
+					 "2 * max_connections."),
+		gettext_noop("For single coordinator setups, the value should be adjusted "
+					 "to match the max_connections on the remote nodes. For Citus MX, "
+					 "the value should be tuned such that it is roughly "
+					 "(max_connections / #workerNodes) so that each worker doesn't "
+					 "become overwhelmed by too many incoming connections"),
+		&MaxSharedPoolSize,
+		0, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, MaxSharedPoolSizeGucShowHook);
+
+	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
 		gettext_noop("Worker nodes' network locations, their membership and "
@@ -1513,6 +1531,28 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 	 * be unencrypted when the user doesn't want that.
 	 */
 	CloseAllConnectionsAfterTransaction();
+}
+
+
+/*
+ * MaxSharedPoolSizeGucShowHook overrides the value that is shown to the
+ * user when the default value has not been set.
+ */
+static const char *
+MaxSharedPoolSizeGucShowHook(void)
+{
+	StringInfo newvalue = makeStringInfo();
+
+	if (MaxSharedPoolSize == 0)
+	{
+		appendStringInfo(newvalue, "%d", GetMaxSharedPoolSize());
+	}
+	else
+	{
+		appendStringInfo(newvalue, "%d", MaxSharedPoolSize);
+	}
+
+	return (const char *) newvalue->data;
 }
 
 

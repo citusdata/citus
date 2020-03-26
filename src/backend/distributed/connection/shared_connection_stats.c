@@ -84,7 +84,14 @@ typedef struct SharedConnStatsHashEntry
 } SharedConnStatsHashEntry;
 
 
-static int MaxSharedPoolSize = 100;
+/*
+ * Controlled via a GUC, never access directly, use GetMaxSharedPoolSize().
+ *  "0" means adjust MaxSharedPoolSize automatically by using 2 * MaxConnections.
+ * "-1" means do not apply connection throttling
+ * Anything else means use that number
+ */
+int MaxSharedPoolSize = 0;
+
 
 /* the following two structs used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
@@ -170,6 +177,25 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 	}
 
 	UnLockConnectionSharedMemory();
+}
+
+
+/*
+ * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
+ * via a GUC.
+ *  "0" means adjust MaxSharedPoolSize automatically by using 2 * MaxConnections
+ * "-1" means do not apply connection throttling
+ * Anything else means use that number
+ */
+int
+GetMaxSharedPoolSize(void)
+{
+	if (MaxSharedPoolSize == 0)
+	{
+		return 2 * MaxConnections;
+	}
+
+	return MaxSharedPoolSize;
 }
 
 
@@ -286,7 +312,7 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 
 		counterIncremented = true;
 	}
-	else if (connectionEntry->connectionCount + 1 >= MaxSharedPoolSize)
+	else if (connectionEntry->connectionCount + 1 >= GetMaxSharedPoolSize())
 	{
 		/* there is no space left for this connection */
 		counterIncremented = false;
