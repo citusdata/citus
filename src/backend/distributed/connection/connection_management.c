@@ -55,6 +55,8 @@ static bool ShouldShutdownConnection(MultiConnection *connection, const int
 									 cachedConnectionCount);
 static void ResetConnection(MultiConnection *connection);
 static void DefaultCitusNoticeProcessor(void *arg, const char *message);
+static void RegisterConnectionCleanup(void);
+static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
@@ -347,7 +349,39 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	ResetShardPlacementAssociation(connection);
 
+	RegisterConnectionCleanup();
+
 	return connection;
+}
+
+
+/*
+ * RegisterConnectionCleanup cleans up any resources left at the end of the
+ * session. We prefer to cleanup before shared memory exit to make sure that
+ * this session properly releases anything hold in the shared memory.
+ */
+static void
+RegisterConnectionCleanup(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * CitusCleanupConnectionsAtExit is called before_shmem_exit() of the
+ * backend for the purposes of any clean-up needed.
+ */
+static void
+CitusCleanupConnectionsAtExit(int code, Datum arg)
+{
+	/* properly close all the cached connections */
+	ShutdownAllConnections();
 }
 
 

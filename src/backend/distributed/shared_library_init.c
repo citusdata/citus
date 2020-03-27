@@ -72,6 +72,7 @@
 #include "distributed/adaptive_executor.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
+#include "storage/ipc.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
@@ -88,7 +89,6 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
-static void CitusBackendAtExit(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void CreateRequiredDirectories(void);
@@ -275,26 +275,12 @@ _PG_init(void)
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 
-	atexit(CitusBackendAtExit);
-
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
-}
-
-
-/*
- * CitusBackendAtExit is called atexit of the backend for the purposes of
- * any clean-up needed.
- */
-static void
-CitusBackendAtExit(void)
-{
-	/* properly close all the cached connections */
-	ShutdownAllConnections();
 }
 
 
@@ -956,7 +942,7 @@ RegisterCitusConfigVariables(void)
 					 "become overwhelmed by too many incoming connections"),
 		&MaxSharedPoolSize,
 		0, -1, INT_MAX,
-		PGC_SIGHUP,
+		PGC_SIGHUP, /* TODO: is PGC_POSTMASTER more convinient? */
 		GUC_STANDARD,
 		NULL, NULL, MaxSharedPoolSizeGucShowHook);
 

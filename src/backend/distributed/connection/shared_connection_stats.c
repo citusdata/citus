@@ -47,16 +47,18 @@ typedef struct ConnectionStatsSharedData
 	int sharedConnectionHashTrancheId;
 	char *sharedConnectionHashTrancheName;
 
-	/*
-	 * We prefer mutex over LwLocks for two reasons:
-	 *   - The operations we perform while holding the lock is very tiny, and
-	 *     performance wise, mutex is encouraged by Postgres for such cases
-	 *   - We have to acquire the lock "atexit" callback, and LwLocks requires
-	 *     MyProc to be avaliable to acquire the lock. However, "atexit", it is
-	 *     not guranteed to have MyProc avaliable. On the other hand, "mutex" is
-	 *     independent from MyProc.
-	 */
-	slock_t mutex;
+	LWLock sharedConnectionHashLock;
+
+/*	/ * */
+/*	 * We prefer mutex over LwLocks for two reasons: */
+/*	 *   - The operations we perform while holding the lock is very tiny, and */
+/*	 *     performance wise, mutex is encouraged by Postgres for such cases */
+/*	 *   - We have to acquire the lock "atexit" callback, and LwLocks requires */
+/*	 *     MyProc to be avaliable to acquire the lock. However, "atexit", it is */
+/*	 *     not guranteed to have MyProc avaliable. On the other hand, "mutex" is */
+/*	 *     independent from MyProc. */
+/*	 * / */
+/*	slock_t mutex; */
 } ConnectionStatsSharedData;
 
 typedef struct SharedConnStatsHashKey
@@ -105,7 +107,7 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /* local function declarations */
 static void StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor);
-static void LockConnectionSharedMemory(void);
+static void LockConnectionSharedMemory(LWLockMode lockMode);
 static void UnLockConnectionSharedMemory(void);
 static void SharedConnectionStatsShmemInit(void);
 static size_t SharedConnectionStatsShmemSize(void);
@@ -156,7 +158,7 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 	 */
 
 	/* we're reading all distributed transactions, prevent new backends */
-	LockConnectionSharedMemory();
+	LockConnectionSharedMemory(LW_SHARED);
 
 	HASH_SEQ_STATUS status;
 	SharedConnStatsHashEntry *connectionEntry = NULL;
@@ -298,7 +300,7 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	connKey.port = port;
 	connKey.databaseOid = MyDatabaseId;
 
-	LockConnectionSharedMemory();
+	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	/*
 	 * Note that while holding a spinlock, it would not allowed to use HASH_ENTER_NULL
@@ -356,6 +358,12 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 {
 	SharedConnStatsHashKey connKey;
 
+	if (GetMaxSharedPoolSize() == -1)
+	{
+		/* connection throttling disabled */
+		return;
+	}
+
 	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
 	if (strlen(hostname) > MAX_NODE_LENGTH)
 	{
@@ -367,7 +375,7 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	connKey.port = port;
 	connKey.databaseOid = MyDatabaseId;
 
-	LockConnectionSharedMemory();
+	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	bool entryFound = false;
 	SharedConnStatsHashEntry *connectionEntry =
@@ -387,9 +395,11 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
  * accessing to the SharedConnStatsHash, which is in the shared memory.
  */
 static void
-LockConnectionSharedMemory()
+LockConnectionSharedMemory(LWLockMode lockMode)
 {
-	SpinLockAcquire(&ConnectionStatsSharedState->mutex);
+	LWLockAcquire(&ConnectionStatsSharedState->sharedConnectionHashLock, lockMode);
+
+	/* SpinLockAcquire(&ConnectionStatsSharedState->mutex); */
 }
 
 
@@ -400,7 +410,9 @@ LockConnectionSharedMemory()
 static void
 UnLockConnectionSharedMemory(void)
 {
-	SpinLockRelease(&ConnectionStatsSharedState->mutex);
+	LWLockRelease(&ConnectionStatsSharedState->sharedConnectionHashLock);
+
+	/* SpinLockRelease(&ConnectionStatsSharedState->mutex); */
 }
 
 
@@ -432,7 +444,8 @@ SharedConnectionStatsShmemSize(void)
 	Size size = 0;
 
 	size = add_size(size, sizeof(ConnectionStatsSharedData));
-	size = add_size(size, mul_size(sizeof(LWLock), MaxWorkerNodesTracked));
+
+	/* size = add_size(size, mul_size(sizeof(LWLock), MaxWorkerNodesTracked)); */
 
 	Size hashSize = hash_estimate_size(MaxWorkerNodesTracked,
 									   sizeof(SharedConnStatsHashEntry));
@@ -482,7 +495,10 @@ SharedConnectionStatsShmemInit(void)
 		LWLockRegisterTranche(ConnectionStatsSharedState->sharedConnectionHashTrancheId,
 							  ConnectionStatsSharedState->sharedConnectionHashTrancheName);
 
-		SpinLockInit(&ConnectionStatsSharedState->mutex);
+		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
+						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);
+
+		/* SpinLockInit(&ConnectionStatsSharedState->mutex); */
 	}
 
 	/*  allocate hash table */
