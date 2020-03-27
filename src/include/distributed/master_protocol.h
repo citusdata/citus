@@ -165,7 +165,9 @@ extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInt
 														 List **
 														 referenceTableForeignConstraintList);
 extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
-												   const char *nodeName, uint32 nodePort,
-												   bool missingOk);
+												   const char *nodeName, uint32 nodePort);
+extern ShardPlacement * ForceSearchShardPlacementInList(List *shardPlacementList,
+														const char *nodeName,
+														uint32 nodePort);
 
 #endif   /* MASTER_PROTOCOL_H */
