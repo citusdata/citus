@@ -1570,7 +1570,7 @@ TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task)
 	 */
 
 	StringInfo sqlTaskQueryString = makeStringInfo();
-	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryStringAllPlacements(task));
+	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryStringForAllPlacements(task));
 
 	if (BinaryMasterCopyFormat)
 	{
@@ -1606,7 +1606,7 @@ TrackerQueueTask(TaskTracker *taskTracker, Task *task)
 
 	/* wrap a task assignment query outside the original query */
 	StringInfo taskAssignmentQuery = TaskAssignmentQuery(task,
-														 TaskQueryStringAllPlacements(
+														 TaskQueryStringForAllPlacements(
 															 task));
 
 	TrackerTaskState *taskState = TaskStateHashEnter(taskStateHash, task->jobId,
@@ -2744,7 +2744,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 			{
 				/* assign through task tracker to manage resource utilization */
 				StringInfo jobCleanupQuery = TaskAssignmentQuery(
-					jobCleanupTask, TaskQueryStringAllPlacements(jobCleanupTask));
+					jobCleanupTask, TaskQueryStringForAllPlacements(jobCleanupTask));
 
 				jobCleanupQuerySent = MultiClientSendQuery(taskTracker->connectionId,
 														   jobCleanupQuery->data);
@@ -2823,7 +2823,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 											 nodeName, nodePort, (int) queryStatus),
 									  errhint("Manually clean job resources on node "
 											  "\"%s:%u\" by running \"%s\" ", nodeName,
-											  nodePort, TaskQueryStringAllPlacements(
+											  nodePort, TaskQueryStringForAllPlacements(
 												  jobCleanupTask))));
 				}
 				else
@@ -2842,7 +2842,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 										 nodePort, (int) resultStatus),
 								  errhint("Manually clean job resources on node "
 										  "\"%s:%u\" by running \"%s\" ", nodeName,
-										  nodePort, TaskQueryStringAllPlacements(
+										  nodePort, TaskQueryStringForAllPlacements(
 											  jobCleanupTask))));
 			}
 			else

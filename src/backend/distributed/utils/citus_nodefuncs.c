@@ -44,7 +44,8 @@ static const char *CitusNodeTagNamesD[] = {
 	"RelationShard",
 	"RelationRowLock",
 	"DeferredErrorMessage",
-	"GroupShardPlacement"
+	"GroupShardPlacement",
+	"TaskQuery",
 };
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
@@ -401,6 +402,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(TaskExecution),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
 	DEFINE_NODE_METHODS(GroupShardPlacement),
+	DEFINE_NODE_METHODS(TaskQuery),
 
 	/* nodes with only output support */
 	DEFINE_NODE_METHODS_NO_READ(MultiNode),

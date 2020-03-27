@@ -469,6 +469,12 @@ OutRelationRowLock(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(rowLockStrength, LockClauseStrength);
 }
 
+void OutTaskQuery(OUTFUNC_ARGS) {
+	WRITE_LOCALS(TaskQuery);
+	WRITE_NODE_TYPE("TASKQUERY");
+
+	WRITE_ENUM_FIELD(queryType, TaskQueryType);
+}
 
 void
 OutTask(OUTFUNC_ARGS)
@@ -479,9 +485,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	WRITE_NODE_FIELD(queryForLocalExecution);
-	WRITE_STRING_FIELD(queryStringLazy);
-	WRITE_NODE_FIELD(perPlacementQueryStrings);
+	// WRITE_SCALAR_FIELD(taskQuery);
 	WRITE_NODE_FIELD(queryStringList);
 	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);

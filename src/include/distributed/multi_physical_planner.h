@@ -203,6 +203,56 @@ typedef struct MapMergeJob
  */
 typedef struct TaskExecution TaskExecution;
 
+typedef enum TaskQueryType
+{
+	TASK_QUERY_TEXT,
+	TASK_QUERY_OBJECT,
+	TASK_QUERY_TEXT_PER_PLACEMENT
+} TaskQueryType;
+
+typedef struct TaskQuery
+{
+	CitusNode type;
+	TaskQueryType queryType;
+
+	union
+	{
+		/*
+		 * For most queries jobQueryReferenceForLazyDeparsing and/or queryStringLazy is not
+		 * NULL. This means we have a single query for all placements.
+		 *
+		 * If this is not the case, the length of perPlacementQueryStrings is
+		 * non-zero and equal to length of taskPlacementList. Like this it can
+		 * assign a different query for each placement. We need this flexibility
+		 * when a query should return node specific values. For example, on which
+		 * node did we succeed storing some result files?
+		 *
+		 * jobQueryReferenceForLazyDeparsing is only not null when the planner thinks the
+		 * query could possibly be locally executed. In that case deparsing+parsing
+		 * the query might not be necessary, so we do that lazily.
+		 *
+		 * jobQueryReferenceForLazyDeparsing should only be set by using SetTaskQueryIfShouldLazyDeparse()
+		 */
+		Query *jobQueryReferenceForLazyDeparsing;
+
+		/*
+		 * In almost all cases queryStringLazy should be read only indirectly by
+		 * using TaskQueryStringForAllPlacements(). This will populate the field if only the
+		 * jobQueryReferenceForLazyDeparsing field is not NULL.
+		 *
+		 * This field should only be set by using SetTaskQueryString() (or as a
+		 * side effect from TaskQueryStringForAllPlacements()). Otherwise it might not be in sync
+		 * with jobQueryReferenceForLazyDeparsing.
+		 */
+		char *queryStringLazy;
+
+		/*
+		 * perPlacementQueryStrings is used when we have different query strings for each placement.
+		 */
+		List *perPlacementQueryStrings;
+	}data;
+}TaskQuery;
+
 typedef struct Task
 {
 	CitusNode type;
@@ -210,35 +260,7 @@ typedef struct Task
 	uint64 jobId;
 	uint32 taskId;
 
-	/*
-	 * For most queries queryForLocalExecution and/or queryStringLazy is not
-	 * NULL. This means we have a single query for all placements.
-	 *
-	 * If this is not the case, the length of perPlacementQueryStrings is
-	 * non-zero and equal to length of taskPlacementList. Like this it can
-	 * assign a different query for each placement. We need this flexibility
-	 * when a query should return node specific values. For example, on which
-	 * node did we succeed storing some result files?
-	 *
-	 * queryForLocalExecution is only not null when the planner thinks the
-	 * query could possibly be locally executed. In that case deparsing+parsing
-	 * the query might not be necessary, so we do that lazily.
-	 *
-	 * queryForLocalExecution should only be set by using SetTaskQueryIfShouldLazyDeparse()
-	 */
-	Query *queryForLocalExecution;
-
-	/*
-	 * In almost all cases queryStringLazy should be read only indirectly by
-	 * using TaskQueryStringAllPlacements(). This will populate the field if only the
-	 * queryForLocalExecution field is not NULL.
-	 *
-	 * This field should only be set by using SetTaskQueryString() (or as a
-	 * side effect from TaskQueryStringAllPlacements()). Otherwise it might not be in sync
-	 * with queryForLocalExecution.
-	 */
-	char *queryStringLazy;
-	List *perPlacementQueryStrings;
+	TaskQuery *taskQuery;
 
 	/*
 	 * queryStringList contains query strings. They should be

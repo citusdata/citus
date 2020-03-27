@@ -251,6 +251,40 @@ CopyNodeRelationRowLock(COPYFUNC_ARGS)
 
 
 void
+CopyNodeTaskQuery(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(TaskQuery);
+	COPY_SCALAR_FIELD(queryType);
+
+	switch (from->queryType)
+	{
+		case TASK_QUERY_TEXT:
+		{
+			COPY_STRING_FIELD(data.queryStringLazy);
+			break;
+		}
+
+		case TASK_QUERY_OBJECT:
+		{
+			COPY_NODE_FIELD(data.jobQueryReferenceForLazyDeparsing);
+			break;
+		}
+
+		case TASK_QUERY_TEXT_PER_PLACEMENT:
+		{
+			COPY_NODE_FIELD(data.perPlacementQueryStrings);
+			break;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+}
+
+
+void
 CopyNodeTask(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(Task);
@@ -258,9 +292,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskType);
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
-	COPY_NODE_FIELD(queryForLocalExecution);
-	COPY_STRING_FIELD(queryStringLazy);
-	COPY_NODE_FIELD(perPlacementQueryStrings);
+	COPY_NODE_FIELD(taskQuery);
 	COPY_NODE_FIELD(queryStringList);
 	COPY_SCALAR_FIELD(anchorDistributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
