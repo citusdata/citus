@@ -378,8 +378,11 @@ AppendColumnDefList(StringInfo str, List *columnDefs)
 static void
 AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 {
-	Oid typeOid = LookupTypeNameOid(NULL, columnDef->typeName, false);
+	int32 typmod;
+	Oid typeOid;
 	Oid collationOid = GetColumnDefCollation(NULL, columnDef, typeOid);
+	bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
+	typenameTypeIdAndMod(NULL, columnDef->typeName, &typeOid, &typmod);
 
 	Assert(!columnDef->is_not_null); /* not null is not supported on composite types */
 
@@ -388,7 +391,7 @@ AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 		appendStringInfo(str, "%s ", quote_identifier(columnDef->colname));
 	}
 
-	appendStringInfo(str, "%s", format_type_be_qualified(typeOid));
+	appendStringInfo(str, "%s", format_type_extended(typeOid, typmod, formatFlags));
 
 	if (OidIsValid(collationOid))
 	{

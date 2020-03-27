@@ -21,6 +21,7 @@ test: multi_mx_function_table_reference
 test: multi_test_catalog_views
 
 # the following test has to be run sequentially
+test: multi_mx_create_type
 test: multi_mx_create_table
 test: multi_mx_hide_shard_names
 test: multi_mx_add_coordinator
