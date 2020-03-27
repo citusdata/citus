@@ -101,6 +101,7 @@ static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
+static bool ConnectionRetryCheck(int *newval, void **extra, GucSource source);
 
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
@@ -461,6 +462,18 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+
+	DefineCustomIntVariable(
+		"citus.connection_retry_timeout",
+		gettext_noop("Sets the time to retry if connection establishement "
+					 "fails because of reaching to citus.max_shared_pool_size."),
+		NULL,
+		&ConnectionRetryTimout,
+		120 * MS_PER_SECOND, 0, MS_PER_HOUR,
+		PGC_USERSET,
+		GUC_UNIT_MS,
+		ConnectionRetryCheck, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.expire_cached_shards",
@@ -934,8 +947,8 @@ RegisterCitusConfigVariables(void)
 		"citus.max_shared_pool_size",
 		gettext_noop("Sets the maximum number of connections allowed per worker node "
 					 "across all the backends from this node. Setting to -1 disables "
-					 "connections throttling. Setting to 0 makes it auto-adjust, meaning"
-					 "2 * max_connections."),
+					 "connections throttling. Setting to 0 makes it auto-adjust, meaning "
+					 "equal to max_connections."),
 		gettext_noop("For single coordinator setups, the value should be adjusted "
 					 "to match the max_connections on the remote nodes. For Citus MX, "
 					 "the value should be tuned such that it is roughly "
@@ -1575,4 +1588,20 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 		return true;
 	}
 #endif
+}
+
+
+static bool
+ConnectionRetryCheck(int *newval, void **extra, GucSource source)
+{
+	/* 0 disables connection_retry_timeout, so should be allowed */
+	if (*newval <= NodeConnectionTimeout && *newval != 0)
+	{
+		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
+		GUC_check_errdetail("citus.connection_retry_timeout cannot be smaller than "
+							"citus.node_connection_timeout.");
+		return false;
+	}
+
+	return true;
 }

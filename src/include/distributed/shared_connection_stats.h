@@ -12,6 +12,7 @@
 #define SHARED_CONNECTION_STATS_H
 
 extern int MaxSharedPoolSize;
+extern int ConnectionRetryTimout;
 
 
 extern void InitializeSharedConnectionStats(void);

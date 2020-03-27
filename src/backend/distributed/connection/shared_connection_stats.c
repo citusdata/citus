@@ -25,6 +25,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
 #include "utils/builtins.h"
 #include "utils/hashutils.h"
@@ -86,12 +87,13 @@ typedef struct SharedConnStatsHashEntry
 
 /*
  * Controlled via a GUC, never access directly, use GetMaxSharedPoolSize().
- *  "0" means adjust MaxSharedPoolSize automatically by using 2 * MaxConnections.
+ *  "0" means adjust MaxSharedPoolSize automatically by using MaxConnections.
  * "-1" means do not apply connection throttling
  * Anything else means use that number
  */
 int MaxSharedPoolSize = 0;
 
+int ConnectionRetryTimout = 120 * MS_PER_SECOND;
 
 /* the following two structs used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
@@ -183,7 +185,7 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 /*
  * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
  * via a GUC.
- *  "0" means adjust MaxSharedPoolSize automatically by using 2 * MaxConnections
+ *  "0" means adjust MaxSharedPoolSize automatically by using MaxConnections
  * "-1" means do not apply connection throttling
  * Anything else means use that number
  */
@@ -192,7 +194,7 @@ GetMaxSharedPoolSize(void)
 {
 	if (MaxSharedPoolSize == 0)
 	{
-		return 2 * MaxConnections;
+		return MaxConnections;
 	}
 
 	return MaxSharedPoolSize;
@@ -210,16 +212,25 @@ GetMaxSharedPoolSize(void)
 void
 WaitOrErrorForSharedConnection(const char *hostname, int port)
 {
-	int counter = 0;
+	int retryCount = 0;
+
+	/*
+	 * Sleep this amount before retrying, there is not much value retrying too often
+	 * as the remote node is too busy. That's the reason we're retrying.
+	 */
+	double sleepTimeoutMsec = 1000;
+
+	/* In practice, 0 disables the retry logic */
+	int allowedRetryCount = ConnectionRetryTimout / sleepTimeoutMsec;
 
 	while (!TryToIncrementSharedConnectionCounter(hostname, port))
 	{
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
-		double timeoutMsec = 100.0;
 
 		CHECK_FOR_INTERRUPTS();
 
-		int rc = WaitLatch(MyLatch, latchFlags, (long) timeoutMsec, PG_WAIT_EXTENSION);
+		int rc = WaitLatch(MyLatch, latchFlags, (long) sleepTimeoutMsec,
+						   PG_WAIT_EXTENSION);
 
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -239,15 +250,16 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 		}
 		else if (rc & WL_TIMEOUT)
 		{
-			++counter;
-			if (counter == 10)
+			++retryCount;
+			if (allowedRetryCount <= retryCount)
 			{
 				ereport(ERROR, (errmsg("citus.max_shared_pool_size number of connections "
 									   "are already established to the node %s:%d,"
 									   "so cannot establish any more connections",
 									   hostname, port),
 								errhint("consider increasing "
-										"citus.max_shared_pool_size")));
+										"citus.max_shared_pool_size or "
+										"citus.connection_retry_timeout")));
 			}
 		}
 	}
@@ -266,6 +278,12 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 bool
 TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 {
+	if (GetMaxSharedPoolSize() == -1)
+	{
+		/* connection throttling disabled */
+		return true;
+	}
+
 	bool counterIncremented = false;
 	SharedConnStatsHashKey connKey;
 
