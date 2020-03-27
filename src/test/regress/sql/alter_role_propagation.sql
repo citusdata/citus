@@ -78,11 +78,65 @@ SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlog
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
 
 
--- table belongs to a role
+-- give login permissions so that we can connect and check if the previous queries were propagated
+ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
 
 
--- we don't support propagation of configuration_parameters and notice the users
-ALTER ROLE alter_role_1 SET enable_hashagg TO FALSE;
+-- alter configuration_parameter defaults for a user
+ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
+SELECT run_command_on_workers('SHOW enable_hashagg');
+
+-- reset to default values
+ALTER ROLE CURRENT_USER RESET enable_hashagg;
+SELECT run_command_on_workers('SHOW enable_hashagg');
+
+-- provide role and database names
+ALTER ROLE alter_role_1 IN DATABASE regression SET enable_hashjoin TO 0;
+
+SET ROLE alter_role_1;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+
+-- make sure that only alter_role_1 was affected
+RESET ROLE;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+
+-- RESET ALL with IN DATABASE clause
+ALTER ROLE alter_role_1 IN DATABASE regression RESET ALL;
+ALTER ROLE alter_role_1 RESET ALL;
+ALTER ROLE ALL RESET ALL;
+
+-- FROM CURRENT clauses
+SET statement_timeout TO '1min';
+ALTER ROLE alter_role_1 SET statement_timeout FROM CURRENT;
+
+SET ROLE alter_role_1;
+SELECT run_command_on_workers('SHOW statement_timeout');
+
+RESET statement_timeout;
+RESET ROLE;
+
+-- the session defaults should be updated on master_add_node
+SELECT master_remove_node('localhost', :worker_1_port);
+ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
+ALTER ROLE CURRENT_USER SET statement_timeout TO '2min';
+ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
+ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
+ALTER ROLE CURRENT_USER SET myvar.foobar TO "007";
+
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT run_command_on_workers('SHOW enable_mergejoin');
+SELECT run_command_on_workers('SHOW statement_timeout');
+SELECT run_command_on_workers('SHOW log_min_duration_statement');
+SELECT run_command_on_workers('SHOW "app.dev"""');
+SELECT run_command_on_workers('SHOW myvar.foobar');
+
+-- revert back to defaults
+ALTER ROLE SESSION_USER RESET ALL;
+SELECT run_command_on_workers('SHOW enable_mergejoin');
+SELECT run_command_on_workers('SHOW statement_timeout');
+SELECT run_command_on_workers('SHOW log_min_duration_statement');
+SELECT run_command_on_workers('SHOW "app.dev"""');
+SELECT run_command_on_workers('SHOW myvar.foobar');
 
 -- we don't support propagation of ALTER ROLE ... RENAME TO commands.
 ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;

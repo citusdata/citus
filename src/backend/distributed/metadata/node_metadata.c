@@ -401,7 +401,12 @@ PropagateRolesToNewNode(WorkerNode *newWorkerNode)
 		return;
 	}
 
-	List *ddlCommands = GenerateAlterRoleIfExistsCommandAllRoles();
+	List *ddlCommands = NIL;
+	List *alterRoleCommands = GenerateAlterRoleIfExistsCommandAllRoles();
+	List *alterRoleSetCommands = GenerateAlterRoleSetIfExistsCommands();
+
+	ddlCommands = list_concat(ddlCommands, alterRoleCommands);
+	ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 
 	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
 											   newWorkerNode->workerPort,
