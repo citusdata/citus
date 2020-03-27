@@ -82,6 +82,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
+#include "distributed/local_plan_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
