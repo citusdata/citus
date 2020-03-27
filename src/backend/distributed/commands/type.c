@@ -712,15 +712,13 @@ RecreateCompositeTypeStmt(Oid typeOid)
 /*
  * attributeFormToColumnDef returns a ColumnDef * describing the field and its property
  * for a pg_attribute entry.
- *
- * Note: Current implementation is only covering the features supported by composite types
  */
 static ColumnDef *
 attributeFormToColumnDef(Form_pg_attribute attributeForm)
 {
 	return makeColumnDef(NameStr(attributeForm->attname),
 						 attributeForm->atttypid,
-						 -1,
+						 attributeForm->atttypmod,
 						 attributeForm->attcollation);
 }
 

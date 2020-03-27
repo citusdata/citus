@@ -22,7 +22,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_2_port);
 
 -- reproduction case as described in #3378
-CREATE TABLE zoop_table (x int, y int);
+CREATE TABLE zoop_table (x int, y decimal(4, 4));
 SELECT create_distributed_table('zoop_table','x');
 
 -- Create a function that refers to the distributed table
@@ -46,6 +46,9 @@ SELECT create_distributed_function('zoop(int)', '$1');
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(30000);
 
+-- verify typmod of zoop_table.b was propagated
+-- see numerictypmodin in postgres for how typmod is derived
+SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 2 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'zoop_table');$$);
 
 -- clean up after testing
 DROP SCHEMA function_table_reference CASCADE;
