@@ -171,6 +171,11 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 		memset(isNulls, false, sizeof(isNulls));
 
 		char *databaseName = get_database_name(connectionEntry->key.databaseOid);
+		if (databaseName == NULL)
+		{
+			/* database might have been dropped */
+			continue;
+		}
 
 		values[0] = PointerGetDatum(cstring_to_text(connectionEntry->key.hostname));
 		values[1] = Int32GetDatum(connectionEntry->key.port);
