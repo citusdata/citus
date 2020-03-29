@@ -340,6 +340,12 @@ test: distributed_procedure
 # ---------
 test: multi_deparse_function multi_deparse_procedure
 
+# --------
+# cannot be run in parallel with any other tests as it checks
+# statistics across sessions
+# --------
+test: shared_connection_stats
+
 # ---------
 # test that no tests leaked intermediate results. This should always be last
 # ---------

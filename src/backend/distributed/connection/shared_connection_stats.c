@@ -337,7 +337,7 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 
 		counterIncremented = true;
 	}
-	else if (connectionEntry->connectionCount + 1 >= GetMaxSharedPoolSize())
+	else if (connectionEntry->connectionCount + 1 > GetMaxSharedPoolSize())
 	{
 		/* there is no space left for this connection */
 		counterIncremented = false;
