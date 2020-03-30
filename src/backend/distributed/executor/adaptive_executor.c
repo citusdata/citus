@@ -589,6 +589,7 @@ static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
+static bool CanUseOptionalConnection(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
 static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
@@ -2386,7 +2387,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 			connectionFlags |= OUTSIDE_TRANSACTION;
 		}
 
-		if (list_length(workerPool->sessionList) > 0 && !UseConnectionPerPlacement())
+		if (CanUseOptionalConnection(workerPool))
 		{
 			/*
 			 * The executor can finish the execution with a single connection,
@@ -2430,6 +2431,45 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
 	execution->connectionSetChanged = true;
+}
+
+
+/*
+ * ConnectionThrottlingRequired contains the logic to decide whether a new connection
+ * can be considered as optional or not. When the function return true, the connection
+ * can be established with optinal flag, else it should not be an optional connection.
+ */
+static bool
+CanUseOptionalConnection(WorkerPool *workerPool)
+{
+	if (list_length(workerPool->sessionList) == 0)
+	{
+		/*
+		 * We definitely need at least 1 connection to finish the execution.
+		 * All single shard queries hit here with the default settings.
+		 */
+		return false;
+	}
+	else if (list_length(workerPool->sessionList) < MaxCachedConnectionsPerWorker)
+	{
+		/*
+		 * Until this session caches MaxCachedConnectionsPerWorker connections,
+		 * this might lead some optional connections to be considered as non-optional
+		 * when MaxCachedConnectionsPerWorker > 1.
+		 *
+		 * However, once the session caches MaxCachedConnectionsPerWorker (which is
+		 * the second transaction executed in the session), Citus would utilize the
+		 * cached connections as much as possible.
+		 */
+		return false;
+	}
+	else if (UseConnectionPerPlacement())
+	{
+		/* user wants one connection per placement, so no throttling is desired */
+		return false;
+	}
+
+	return true;
 }
 
 

@@ -172,6 +172,34 @@ BEGIN;
 		hostname, port;
 COMMIT;
 
+-- now show that when max_cached_conns_per_worker > 1
+-- Citus forces the first execution to open at least 2
+-- connections that are cached. Later, that 2 cached
+-- connections are user
+BEGIN;
+	SET LOCAL citus.max_cached_conns_per_worker TO 2;
+	SELECT count(*) FROM test;
+	SELECT
+		connection_count_to_node >= 2
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+	SELECT count(*) FROM test;
+	SELECT
+		connection_count_to_node >= 2
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+COMMIT;
+
 -- connection_retry_timeout cannot be smaller than node_connection_timeout
 SET citus.connection_retry_timeout TO 1000;
 
