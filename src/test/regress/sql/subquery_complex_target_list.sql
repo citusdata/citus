@@ -1,5 +1,5 @@
 -- ===================================================================
--- test recursive planning functionality with complex target entries
+-- test subquery functionality with complex target entries
 -- and some utilities
 -- ===================================================================
 CREATE SCHEMA subquery_complex;
@@ -346,4 +346,45 @@ SELECT key, a.value, sum(b)
 FROM items a JOIN generate_series(1,10) b ON (a.key = 'key-'||b)
 GROUP BY key ORDER BY 3, 2, 1;
 
+-- whole rows in the output should work
+SELECT a.key, a, count(b)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key ORDER BY 3, 2, 1;
+
+SELECT a FROM items a ORDER BY key;
+SELECT a FROM items a WHERE key = 'key-1';
+SELECT a FROM (SELECT a, random() FROM items a) b ORDER BY a;
+
+-- whole rows when table name needs escaping
+create table "another table" (key text primary key, value text not null, t timestamp);
+SELECT create_distributed_table('"another table"','key');
+INSERT INTO "another table" TABLE items;
+SELECT a.key, a, count(b)
+FROM "another table" a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key ORDER BY 3, 2, 1;
+
+-- subquery output is not recognised yet
+SELECT b FROM (SELECT a FROM items a GROUP BY key) b ORDER BY b;
+
+-- table output in recursive planning
+WITH a AS (SELECT a FROM items a OFFSET 0)
+SELECT count(a) FROM a;
+
+WITH a AS (SELECT a AS b FROM items a OFFSET 0)
+SELECT b FROM a ORDER BY b;
+
+BEGIN;
+WITH a AS (DELETE FROM items RETURNING items)
+SELECT count(a) FROM a;
+ROLLBACK;
+
+-- mix custom types with table type
+CREATE TYPE full_item AS (key text, value text);
+ALTER TABLE items ADD COLUMN fi subquery_complex.full_item;
+UPDATE items SET fi = (items.key, items.value);
+
+SELECT a, a.fi, (a.fi).* FROM items a ORDER BY 1,2,3;
+SELECT a, b.fi, (b.fi).*, (a).fi, ((a).fi).* FROM (SELECT a, fi FROM items a GROUP BY key) b ORDER BY 1,2,3;
+
+SET client_min_messages TO 'WARNING';
 DROP SCHEMA subquery_complex CASCADE;
