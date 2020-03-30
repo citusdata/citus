@@ -10,7 +10,6 @@ select create_distributed_table('test', 'a');
 
 -- Make sure a connection is opened and cached
 select count(*) from test where a = 0;
-
 show citus.node_conninfo;
 
 -- Set sslmode to something that does not work when connecting
@@ -30,8 +29,8 @@ show citus.node_conninfo;
 
 -- Should work again
 select count(*) from test where a = 0;
-
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
+
 BEGIN;
 -- Should still work (no SIGHUP yet);
 select count(*) from test where a = 0;
@@ -43,19 +42,15 @@ show citus.node_conninfo;
 -- query
 select count(*) from test where a = 0;
 COMMIT;
-
 -- Should fail now with connection error, when transaction is finished
 select count(*) from test where a = 0;
-
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
 select pg_sleep(0.1); -- wait for config reload to apply
 show citus.node_conninfo;
-
 -- Should work again
 select count(*) from test where a = 0;
-
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
 BEGIN;
 -- Should still work (no SIGHUP yet);
@@ -68,10 +63,8 @@ show citus.node_conninfo;
 -- query
 select count(*) from test where a = 0;
 COMMIT;
-
 -- Should fail now, when transaction is finished
 select count(*) from test where a = 0;
-
 -- Reset it again
 ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();

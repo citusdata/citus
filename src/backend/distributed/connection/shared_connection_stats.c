@@ -152,12 +152,7 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 	Datum values[REMOTE_CONNECTION_STATS_COLUMNS];
 	bool isNulls[REMOTE_CONNECTION_STATS_COLUMNS];
 
-	/*
-	 * TODO: We should not do all the iterations/operations while
-	 * holding the spinlock.
-	 */
-
-	/* we're reading all distributed transactions, prevent new backends */
+	/* we're reading all shared connections, prevent any changes */
 	LockConnectionSharedMemory(LW_SHARED);
 
 	HASH_SEQ_STATUS status;
@@ -184,6 +179,29 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
+
+	UnLockConnectionSharedMemory();
+}
+
+
+/*
+ * RemoveAllSharedConnectionEntriesForNode gets a nodename and nodeport, and removes
+ * the corresponding entry in the shared memory for the current database.
+ */
+void
+RemoveAllSharedConnectionEntriesForNode(char *hostname, int port)
+{
+	SharedConnStatsHashKey connKey;
+
+	connKey.databaseOid = MyDatabaseId;
+	connKey.port = port;
+	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
+
+	/* we're reading all shared connections, prevent any changes */
+	LockConnectionSharedMemory(LW_EXCLUSIVE);
+
+	bool entryFound = false;
+	hash_search(SharedConnStatsHash, &connKey, HASH_REMOVE, &entryFound);
 
 	UnLockConnectionSharedMemory();
 }
@@ -386,8 +404,23 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	SharedConnStatsHashEntry *connectionEntry =
 		hash_search(SharedConnStatsHash, &connKey, HASH_FIND, &entryFound);
 
-	/* we should never decrement for non-existing connections */
-	Assert((connectionEntry && entryFound && connectionEntry->connectionCount > 0));
+	/* this worker node is removed or updated */
+	if (!entryFound)
+	{
+		UnLockConnectionSharedMemory();
+
+		return;
+	}
+
+	/*
+	 * We might have some connection lingering for worker nodes
+	 * that are removed/updated.
+	 */
+	if (connectionEntry->connectionCount <= 0)
+	{
+		UnLockConnectionSharedMemory();
+		return;
+	}
 
 	connectionEntry->connectionCount -= 1;
 

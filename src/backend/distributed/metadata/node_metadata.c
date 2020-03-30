@@ -39,6 +39,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -651,6 +652,7 @@ master_update_node(PG_FUNCTION_ARGS)
 						errmsg("node %u not found", nodeId)));
 	}
 
+
 	/*
 	 * If the node is a primary node we block reads and writes.
 	 *
@@ -692,10 +694,22 @@ master_update_node(PG_FUNCTION_ARGS)
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
 
+	char *oldWorkerName = pstrdup(workerNode->workerName);
+	int oldWorkerPort = workerNode->workerPort;
+
+	/* make sure we don't have any lingering session lifespan connections */
+	CloseNodeConnectionsAfterTransaction(oldWorkerName, oldWorkerPort);
+
+	/*
+	 * We're not sure that there is no concurrent queries going on, so remove all
+	 * entries in shared connection stats for the current database.
+	 */
+	RemoveAllSharedConnectionEntriesForNode(oldWorkerName, oldWorkerPort);
+
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
-	strlcpy(workerNode->workerName, newNodeNameString, WORKER_LENGTH);
-	workerNode->workerPort = newNodePort;
+	workerNode = FindWorkerNode(newNodeNameString, newNodePort);
+	Assert(workerNode->nodeId == nodeId);
 
 	/*
 	 * Propagate the updated pg_dist_node entry to all metadata workers.

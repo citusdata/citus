@@ -16,6 +16,7 @@ extern int ConnectionRetryTimout;
 
 
 extern void InitializeSharedConnectionStats(void);
+extern void RemoveAllSharedConnectionEntriesForNode(char *hostname, int port);
 extern int GetMaxSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);
 extern void WaitOrErrorForSharedConnection(const char *hostname, int port);
