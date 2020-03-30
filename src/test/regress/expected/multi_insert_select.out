@@ -2283,7 +2283,6 @@ FROM
   table_with_defaults
 GROUP BY
   store_id;
-ERROR:  INSERT ... SELECT cannot generate sequence values when selecting from a distributed table
 -- do some more error/error message checks
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -2701,7 +2700,7 @@ SELECT create_distributed_table('dist_table_with_sequence', 'user_id');
 -- from local query
 INSERT INTO dist_table_with_sequence (value_1)
 SELECT s FROM generate_series(1,5) s;
-SELECT * FROM dist_table_with_sequence ORDER BY user_id;
+SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
  user_id | value_1
 ---------------------------------------------------------------------
        1 |       1
@@ -2713,9 +2712,26 @@ SELECT * FROM dist_table_with_sequence ORDER BY user_id;
 
 -- from a distributed query
 INSERT INTO dist_table_with_sequence (value_1)
-SELECT value_1 FROM dist_table_with_sequence;
-ERROR:  INSERT ... SELECT cannot generate sequence values when selecting from a distributed table
-SELECT * FROM dist_table_with_sequence ORDER BY user_id;
+SELECT value_1 FROM dist_table_with_sequence ORDER BY value_1;
+SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+       6 |       1
+       7 |       2
+       8 |       3
+       9 |       4
+      10 |       5
+(10 rows)
+
+TRUNCATE dist_table_with_sequence;
+INSERT INTO dist_table_with_sequence (user_id)
+SELECT user_id FROM raw_events_second ORDER BY user_id;
+SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
  user_id | value_1
 ---------------------------------------------------------------------
        1 |       1
@@ -2725,8 +2741,38 @@ SELECT * FROM dist_table_with_sequence ORDER BY user_id;
        5 |       5
 (5 rows)
 
+WITH top10 AS (
+  SELECT user_id FROM raw_events_second WHERE value_1 IS NOT NULL ORDER BY value_1 LIMIT 10
+)
+INSERT INTO dist_table_with_sequence (value_1)
+SELECT * FROM top10;
+ERROR:  cannot handle complex subqueries when the router executor is disabled
+SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- router queries become logical planner queries when there is a nextval call
+INSERT INTO dist_table_with_sequence (user_id)
+SELECT user_id FROM dist_table_with_sequence WHERE user_id = 1;
+SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       1 |       6
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(6 rows)
+
 -- Select from distributed table into reference table
-CREATE TABLE ref_table (user_id int, value_1 int);
+CREATE TABLE ref_table (user_id serial, value_1 int);
 SELECT create_reference_table('ref_table');
  create_reference_table
 ---------------------------------------------------------------------
@@ -2744,6 +2790,49 @@ SELECT * FROM ref_table ORDER BY user_id, value_1;
        4 |
        5 |
 (5 rows)
+
+INSERT INTO ref_table (value_1)
+SELECT value_1 FROM raw_events_second ORDER BY value_1;
+SELECT * FROM ref_table ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |
+       1 |
+       2 |
+       2 |
+       3 |
+       3 |
+       4 |
+       4 |
+       5 |
+       5 |
+(10 rows)
+
+INSERT INTO ref_table SELECT * FROM ref_table;
+SELECT * FROM ref_table ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |
+       1 |
+       1 |
+       1 |
+       2 |
+       2 |
+       2 |
+       2 |
+       3 |
+       3 |
+       3 |
+       3 |
+       4 |
+       4 |
+       4 |
+       4 |
+       5 |
+       5 |
+       5 |
+       5 |
+(20 rows)
 
 DROP TABLE ref_table;
 -- Select from reference table into reference table

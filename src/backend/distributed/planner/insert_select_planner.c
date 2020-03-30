@@ -1164,18 +1164,6 @@ CoordinatorInsertSelectSupported(Query *insertSelectQuery)
 							 "not supported", NULL, NULL);
 	}
 
-	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	Query *subquery = (Query *) subqueryRte->subquery;
-
-	if (NeedsDistributedPlanning(subquery) &&
-		contain_nextval_expression_walker((Node *) insertSelectQuery->targetList, NULL))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "INSERT ... SELECT cannot generate sequence values when "
-							 "selecting from a distributed table",
-							 NULL, NULL);
-	}
-
 	return NULL;
 }
 
