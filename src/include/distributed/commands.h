@@ -187,7 +187,10 @@ extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString);
 extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
 extern List * GenerateAlterRoleSetIfExistsCommands(void);
-
+extern ObjectAddress AlterRoleStmtObjectAddress(Node *node,
+												bool missing_ok);
+extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
+												   bool missing_ok);
 
 /* schema.c - forward declarations */
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,

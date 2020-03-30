@@ -21,6 +21,7 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_type.h"
+#include "catalog/objectaddress.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
@@ -59,9 +60,53 @@ static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
+static ObjectAddress RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
 
 /* controlled via GUC */
 bool EnableAlterRolePropagation = false;
+
+
+/*
+ * AlterRoleStmtObjectAddress returns the ObjectAddress of the role in the
+ * AlterRoleStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the role that was the target of the statement.
+ */
+ObjectAddress
+AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
+	return RoleSpecToObjectAddress(stmt->role, missing_ok);
+}
+
+
+/*
+ * AlterRoleSetStmtObjectAddress returns the ObjectAddress of the role in the
+ * AlterRoleSetStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the role that was the target of the statement.
+ */
+ObjectAddress
+AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	return RoleSpecToObjectAddress(stmt->role, missing_ok);
+}
+
+
+/*
+ * RoleSpecToObjectAddress returns the ObjectAddress of a Role associated with a
+ * RoleSpec. If missing_ok is set to false an error will be raised by postgres
+ * explaining the Role could not be found.
+ */
+static ObjectAddress
+RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
+{
+	Oid roleOid = get_rolespec_oid(role, missing_ok);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, AuthIdRelationId, roleOid);
+
+	return address;
+}
 
 
 /*
