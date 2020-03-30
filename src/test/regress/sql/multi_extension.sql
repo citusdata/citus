@@ -113,6 +113,12 @@ ALTER EXTENSION citus UPDATE TO '9.0-2';
 ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
+/*
+ * As we mistakenly bumped schema version to 9.3-1 (in previous
+ * release), we support updating citus schema from 9.3-1 to 9.2-4,
+ * but we do not support explicitly updating it to to 9.3-1.
+ * Hence below update (to 9.3-1) command should fail.
+ */
 ALTER EXTENSION citus UPDATE TO '9.3-1';
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 
@@ -337,4 +343,3 @@ DROP DATABASE another;
 
 \c - - - :worker_1_port
 DROP DATABASE another;
-
