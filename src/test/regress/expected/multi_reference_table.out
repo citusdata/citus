@@ -1248,7 +1248,8 @@ SELECT
 FROM
 	reference_table_test_sixth, reference_table_test_seventh
 WHERE
-	reference_table_test_sixth.value_4 = reference_table_test_seventh.value_4;
+	reference_table_test_sixth.value_4 = reference_table_test_seventh.value_4
+ORDER BY 1;
  value_1
 ---------------------------------------------------------------------
        1
@@ -1262,7 +1263,8 @@ SELECT
 FROM
 	colocated_table_test_2, reference_schema.reference_table_test_sixth as reftable
 WHERE
-	colocated_table_test_2.value_4 = reftable.value_4;
+	colocated_table_test_2.value_4 = reftable.value_4
+ORDER BY 1, 2;
  value_2 | value_1
 ---------------------------------------------------------------------
        1 |       1
