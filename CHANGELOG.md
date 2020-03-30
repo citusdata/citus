@@ -1,3 +1,7 @@
+### citus v9.2.4 (March 30, 2020) ###
+
+* Fixes a release problem in 9.2.3
+
 ### citus v9.2.3 (March 25, 2020) ###
 
 * Do not use C functions that have been banned by Microsoft
