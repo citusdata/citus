@@ -111,11 +111,15 @@ ALTER EXTENSION citus UPDATE TO '9.0-1';
 ALTER EXTENSION citus UPDATE TO '9.0-2';
 ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
+ALTER EXTENSION citus UPDATE TO '9.2-2';
+ALTER EXTENSION citus UPDATE TO '9.3-1';
+ERROR:  extension "citus" has no update path from version "9.2-2" to version "9.3-1"
+ALTER EXTENSION citus UPDATE TO '9.2-4';
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 9.2.3
+ 9.2.4
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
