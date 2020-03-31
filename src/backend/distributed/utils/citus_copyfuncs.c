@@ -73,6 +73,7 @@ CitusSetTag(Node *node, int tag)
 	} \
 	while (0)
 
+static void CopyTaskQuery(Task *newnode, Task *from);
 
 static void
 copyJobInfo(Job *newnode, Job *from)
@@ -250,35 +251,33 @@ CopyNodeRelationRowLock(COPYFUNC_ARGS)
 }
 
 
-void
-CopyNodeTaskQuery(COPYFUNC_ARGS)
+static void
+CopyTaskQuery(Task *newnode, Task *from)
 {
-	DECLARE_FROM_AND_NEW_NODE(TaskQuery);
-	COPY_SCALAR_FIELD(queryType);
-
-	switch (from->queryType)
+	COPY_SCALAR_FIELD(taskQuery.queryType);
+	switch (from->taskQuery.queryType)
 	{
 		case TASK_QUERY_TEXT:
 		{
-			COPY_STRING_FIELD(data.queryStringLazy);
+			COPY_STRING_FIELD(taskQuery.data.queryStringLazy);
 			break;
 		}
 
 		case TASK_QUERY_OBJECT:
 		{
-			COPY_NODE_FIELD(data.jobQueryReferenceForLazyDeparsing);
+			COPY_NODE_FIELD(taskQuery.data.jobQueryReferenceForLazyDeparsing);
 			break;
 		}
 
 		case TASK_QUERY_TEXT_PER_PLACEMENT:
 		{
-			COPY_NODE_FIELD(data.perPlacementQueryStrings);
+			COPY_NODE_FIELD(taskQuery.data.perPlacementQueryStrings);
 			break;
 		}
 
 		case TASK_QUERY_TEXT_LIST:
 		{
-			COPY_NODE_FIELD(data.queryStringList);
+			COPY_NODE_FIELD(taskQuery.data.queryStringList);
 			break;
 		}
 
@@ -298,7 +297,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskType);
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
-	COPY_NODE_FIELD(taskQuery);
+	CopyTaskQuery(newnode, from);
 	COPY_SCALAR_FIELD(anchorDistributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);

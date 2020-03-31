@@ -213,7 +213,6 @@ typedef enum TaskQueryType
 
 typedef struct TaskQuery
 {
-	CitusNode type;
 	TaskQueryType queryType;
 
 	union
@@ -269,7 +268,11 @@ typedef struct Task
 	uint64 jobId;
 	uint32 taskId;
 
-	TaskQuery *taskQuery;
+	/*
+	 * taskQuery contains query string information. The way we get queryString can be different
+	 * so this is abstracted with taskQuery.
+	 */
+	TaskQuery taskQuery;
 
 	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */

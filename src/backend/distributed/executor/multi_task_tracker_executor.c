@@ -1606,9 +1606,8 @@ TrackerQueueTask(TaskTracker *taskTracker, Task *task)
 	HTAB *taskStateHash = taskTracker->taskStateHash;
 
 	/* wrap a task assignment query outside the original query */
-	StringInfo taskAssignmentQuery = TaskAssignmentQuery(task,
-														 TaskQueryStringForAllPlacements(
-															 task));
+	StringInfo taskAssignmentQuery =
+		TaskAssignmentQuery(task, TaskQueryStringForAllPlacements(task));
 
 	TrackerTaskState *taskState = TaskStateHashEnter(taskStateHash, task->jobId,
 													 task->taskId);

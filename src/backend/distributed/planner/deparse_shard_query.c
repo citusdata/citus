@@ -42,7 +42,6 @@ static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
 static char * DeparseTaskQuery(Task *task, Query *query);
 static bool IsEachPlacementQueryStringDifferent(Task *task);
-static void InitializeTaskQueryIfNecessary(Task *task);
 
 
 /*
@@ -427,9 +426,8 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 {
 	if (ShouldLazyDeparseQuery(task))
 	{
-		InitializeTaskQueryIfNecessary(task);
-		task->taskQuery->queryType = TASK_QUERY_OBJECT;
-		task->taskQuery->data.jobQueryReferenceForLazyDeparsing = query;
+		task->taskQuery.queryType = TASK_QUERY_OBJECT;
+		task->taskQuery.data.jobQueryReferenceForLazyDeparsing = query;
 		return;
 	}
 
@@ -445,26 +443,8 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 void
 SetTaskQueryString(Task *task, char *queryString)
 {
-	InitializeTaskQueryIfNecessary(task);
-	task->taskQuery->queryType = TASK_QUERY_TEXT;
-	task->taskQuery->data.queryStringLazy = queryString;
-}
-
-
-/*
- * InitializeTaskQueryIfNecessary initializes task query if it
- * is not yet allocated.
- */
-static void
-InitializeTaskQueryIfNecessary(Task *task)
-{
-	if (task->taskQuery == NULL)
-	{
-		MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
-																  task));
-		task->taskQuery = CitusMakeNode(TaskQuery);
-		MemoryContextSwitchTo(previousContext);
-	}
+	task->taskQuery.queryType = TASK_QUERY_TEXT;
+	task->taskQuery.data.queryStringLazy = queryString;
 }
 
 
@@ -474,10 +454,9 @@ InitializeTaskQueryIfNecessary(Task *task)
 void
 SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
 {
-	InitializeTaskQueryIfNecessary(task);
 	Assert(perPlacementQueryStringList != NIL);
-	task->taskQuery->queryType = TASK_QUERY_TEXT_PER_PLACEMENT;
-	task->taskQuery->data.perPlacementQueryStrings = perPlacementQueryStringList;
+	task->taskQuery.queryType = TASK_QUERY_TEXT_PER_PLACEMENT;
+	task->taskQuery.data.perPlacementQueryStrings = perPlacementQueryStringList;
 }
 
 
@@ -487,9 +466,8 @@ SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
 void
 SetTaskQueryStringList(Task *task, List *queryStringList)
 {
-	InitializeTaskQueryIfNecessary(task);
-	task->taskQuery->queryType = TASK_QUERY_TEXT_LIST;
-	task->taskQuery->data.queryStringList = queryStringList;
+	task->taskQuery.queryType = TASK_QUERY_TEXT_LIST;
+	task->taskQuery.data.queryStringList = queryStringList;
 }
 
 
@@ -528,7 +506,7 @@ DeparseTaskQuery(Task *task, Query *query)
 int
 GetTaskQueryType(Task *task)
 {
-	return task->taskQuery->queryType;
+	return task->taskQuery.queryType;
 }
 
 
@@ -544,15 +522,15 @@ TaskQueryStringForAllPlacements(Task *task)
 {
 	if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
 	{
-		return StringJoin(task->taskQuery->data.queryStringList, ';');
+		return StringJoin(task->taskQuery.data.queryStringList, ';');
 	}
 	if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
 	{
-		return task->taskQuery->data.queryStringLazy;
+		return task->taskQuery.data.queryStringLazy;
 	}
 	Query *jobQueryReferenceForLazyDeparsing =
-		task->taskQuery->data.jobQueryReferenceForLazyDeparsing;
-	Assert(task->taskQuery->queryType == TASK_QUERY_OBJECT &&
+		task->taskQuery.data.jobQueryReferenceForLazyDeparsing;
+	Assert(task->taskQuery.queryType == TASK_QUERY_OBJECT &&
 		   jobQueryReferenceForLazyDeparsing != NULL);
 
 
@@ -569,7 +547,7 @@ TaskQueryStringForAllPlacements(Task *task)
 	char *queryString = DeparseTaskQuery(task, jobQueryReferenceForLazyDeparsing);
 	MemoryContextSwitchTo(previousContext);
 	SetTaskQueryString(task, queryString);
-	return task->taskQuery->data.queryStringLazy;
+	return task->taskQuery.data.queryStringLazy;
 }
 
 
@@ -583,7 +561,7 @@ TaskQueryStringForPlacement(Task *task, int placementIndex)
 	if (IsEachPlacementQueryStringDifferent(task))
 	{
 		List *perPlacementQueryStringList =
-			task->taskQuery->data.perPlacementQueryStrings;
+			task->taskQuery.data.perPlacementQueryStrings;
 		Assert(list_length(perPlacementQueryStringList) > placementIndex);
 		return list_nth(perPlacementQueryStringList, placementIndex);
 	}

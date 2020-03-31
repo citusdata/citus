@@ -135,7 +135,7 @@
 
 
 #define booltostr(x)  ((x) ? "true" : "false")
-
+static void WriteTaskQuery(OUTFUNC_ARGS);
 
 /*****************************************************************************
  *	Output routines for Citus node types
@@ -469,35 +469,34 @@ OutRelationRowLock(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(rowLockStrength, LockClauseStrength);
 }
 
-void OutTaskQuery(OUTFUNC_ARGS) {
-	WRITE_LOCALS(TaskQuery);
-	WRITE_NODE_TYPE("TASKQUERY");
+static void WriteTaskQuery(OUTFUNC_ARGS) {
+	WRITE_LOCALS(Task);
 
-	WRITE_ENUM_FIELD(queryType, TaskQueryType);
+	WRITE_ENUM_FIELD(taskQuery.queryType, TaskQueryType);
 
-		switch (node->queryType)
+	switch (node->taskQuery.queryType)
 	{
 		case TASK_QUERY_TEXT:
 		{
-			WRITE_STRING_FIELD(data.queryStringLazy);
+			WRITE_STRING_FIELD(taskQuery.data.queryStringLazy);
 			break;
 		}
 
 		case TASK_QUERY_OBJECT:
 		{
-			WRITE_NODE_FIELD(data.jobQueryReferenceForLazyDeparsing);
+			WRITE_NODE_FIELD(taskQuery.data.jobQueryReferenceForLazyDeparsing);
 			break;
 		}
 
 		case TASK_QUERY_TEXT_PER_PLACEMENT:
 		{
-			WRITE_NODE_FIELD(data.perPlacementQueryStrings);
+			WRITE_NODE_FIELD(taskQuery.data.perPlacementQueryStrings);
 			break;
 		}
 
 		case TASK_QUERY_TEXT_LIST:
 		{
-			WRITE_NODE_FIELD(data.queryStringList);
+			WRITE_NODE_FIELD(taskQuery.data.queryStringList);
 			break;
 		}
 
@@ -517,7 +516,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	WRITE_NODE_FIELD(taskQuery);
+	WriteTaskQuery(str, raw_node);
 	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);

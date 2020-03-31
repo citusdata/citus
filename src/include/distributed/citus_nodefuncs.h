@@ -47,7 +47,6 @@ extern void OutMapMergeJob(OUTFUNC_ARGS);
 extern void OutShardPlacement(OUTFUNC_ARGS);
 extern void OutRelationShard(OUTFUNC_ARGS);
 extern void OutRelationRowLock(OUTFUNC_ARGS);
-extern void OutTaskQuery(OUTFUNC_ARGS);
 extern void OutTask(OUTFUNC_ARGS);
 extern void OutLocalPlannedStatement(OUTFUNC_ARGS);
 extern void OutTaskExecution(OUTFUNC_ARGS);

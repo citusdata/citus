@@ -227,6 +227,7 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		}
 		else
 		{
+			/* avoid the overhead of deparsing when using local execution */
 			shardQueryString = "<optimized out by local execution>";
 		}
 
