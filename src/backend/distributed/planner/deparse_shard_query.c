@@ -130,7 +130,8 @@ RebuildQueryStrings(Job *workerJob)
 		task->parametersInQueryStringResolved = workerJob->parametersInJobQueryResolved;
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
-								ApplyLogRedaction(TaskQueryStringForAllPlacements(task)))));
+								ApplyLogRedaction(TaskQueryStringForAllPlacements(
+													  task)))));
 	}
 }
 
@@ -459,7 +460,10 @@ InitializeTaskQueryIfNecessary(Task *task)
 {
 	if (task->taskQuery == NULL)
 	{
+		MemoryContext previousContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+																  task));
 		task->taskQuery = CitusMakeNode(TaskQuery);
+		MemoryContextSwitchTo(previousContext);
 	}
 }
 
@@ -483,8 +487,9 @@ SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
 void
 SetTaskQueryStringList(Task *task, List *queryStringList)
 {
-	task->queryStringList = queryStringList;
-	SetTaskQueryString(task, StringJoin(queryStringList, ';'));
+	InitializeTaskQueryIfNecessary(task);
+	task->taskQuery->queryType = TASK_QUERY_TEXT_LIST;
+	task->taskQuery->data.queryStringList = queryStringList;
 }
 
 
@@ -537,13 +542,18 @@ GetTaskQueryType(Task *task)
 char *
 TaskQueryStringForAllPlacements(Task *task)
 {
+	if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
+	{
+		return StringJoin(task->taskQuery->data.queryStringList, ';');
+	}
 	if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery->data.queryStringLazy;
 	}
-	Query *jobQueryReferenceForLazyDeparsing = task->taskQuery->data.jobQueryReferenceForLazyDeparsing;
-	Assert(task->taskQuery->queryType == TASK_QUERY_OBJECT && jobQueryReferenceForLazyDeparsing !=
-		   NULL);
+	Query *jobQueryReferenceForLazyDeparsing =
+		task->taskQuery->data.jobQueryReferenceForLazyDeparsing;
+	Assert(task->taskQuery->queryType == TASK_QUERY_OBJECT &&
+		   jobQueryReferenceForLazyDeparsing != NULL);
 
 
 	/*
@@ -563,6 +573,10 @@ TaskQueryStringForAllPlacements(Task *task)
 }
 
 
+/*
+ * TaskQueryStringForPlacement returns the query string that should be executed
+ * on the placement with the given placementIndex.
+ */
 char *
 TaskQueryStringForPlacement(Task *task, int placementIndex)
 {

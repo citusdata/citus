@@ -276,6 +276,12 @@ CopyNodeTaskQuery(COPYFUNC_ARGS)
 			break;
 		}
 
+		case TASK_QUERY_TEXT_LIST:
+		{
+			COPY_NODE_FIELD(data.queryStringList);
+			break;
+		}
+
 		default:
 		{
 			break;
@@ -293,7 +299,6 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(jobId);
 	COPY_SCALAR_FIELD(taskId);
 	COPY_NODE_FIELD(taskQuery);
-	COPY_NODE_FIELD(queryStringList);
 	COPY_SCALAR_FIELD(anchorDistributedTableId);
 	COPY_SCALAR_FIELD(anchorShardId);
 	COPY_NODE_FIELD(taskPlacementList);

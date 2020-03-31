@@ -207,7 +207,8 @@ typedef enum TaskQueryType
 {
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
-	TASK_QUERY_TEXT_PER_PLACEMENT
+	TASK_QUERY_TEXT_PER_PLACEMENT,
+	TASK_QUERY_TEXT_LIST
 } TaskQueryType;
 
 typedef struct TaskQuery
@@ -250,6 +251,14 @@ typedef struct TaskQuery
 		 * perPlacementQueryStrings is used when we have different query strings for each placement.
 		 */
 		List *perPlacementQueryStrings;
+
+		/*
+		 * queryStringList contains query strings. They should be
+		 * run sequentially. The concatenated version of this list
+		 * will already be set for queryStringLazy, this can be useful
+		 * when we want to access each query string.
+		 */
+		List *queryStringList;
 	}data;
 }TaskQuery;
 
@@ -261,14 +270,6 @@ typedef struct Task
 	uint32 taskId;
 
 	TaskQuery *taskQuery;
-
-	/*
-	 * queryStringList contains query strings. They should be
-	 * run sequentially. The concatenated version of this list
-	 * will already be set for queryStringLazy, this can be useful
-	 * when we want to access each query string.
-	 */
-	List *queryStringList;
 
 	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */

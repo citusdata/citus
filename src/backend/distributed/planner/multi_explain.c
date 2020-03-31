@@ -399,7 +399,8 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringForAllPlacements(task),
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringForAllPlacements(
+														  task),
 													  es);
 
 	/*

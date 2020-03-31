@@ -1570,7 +1570,8 @@ TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task)
 	 */
 
 	StringInfo sqlTaskQueryString = makeStringInfo();
-	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryStringForAllPlacements(task));
+	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryStringForAllPlacements(
+														  task));
 
 	if (BinaryMasterCopyFormat)
 	{

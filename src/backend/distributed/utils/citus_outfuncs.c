@@ -474,6 +474,38 @@ void OutTaskQuery(OUTFUNC_ARGS) {
 	WRITE_NODE_TYPE("TASKQUERY");
 
 	WRITE_ENUM_FIELD(queryType, TaskQueryType);
+
+		switch (node->queryType)
+	{
+		case TASK_QUERY_TEXT:
+		{
+			WRITE_STRING_FIELD(data.queryStringLazy);
+			break;
+		}
+
+		case TASK_QUERY_OBJECT:
+		{
+			WRITE_NODE_FIELD(data.jobQueryReferenceForLazyDeparsing);
+			break;
+		}
+
+		case TASK_QUERY_TEXT_PER_PLACEMENT:
+		{
+			WRITE_NODE_FIELD(data.perPlacementQueryStrings);
+			break;
+		}
+
+		case TASK_QUERY_TEXT_LIST:
+		{
+			WRITE_NODE_FIELD(data.queryStringList);
+			break;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
 }
 
 void
@@ -485,8 +517,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	// WRITE_SCALAR_FIELD(taskQuery);
-	WRITE_NODE_FIELD(queryStringList);
+	WRITE_NODE_FIELD(taskQuery);
 	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);
