@@ -100,7 +100,6 @@
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
 
-
 /* controlled via a GUC */
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
@@ -108,12 +107,12 @@ bool LogLocalCommands = false;
 bool TransactionAccessedLocalPlacement = false;
 bool TransactionConnectedToLocalGroup = false;
 
-
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
-static uint64 ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan,
-								   char *queryString);
+static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
+								   Tuplestorestate *tupleStoreState, ParamListInfo
+								   paramListInfo);
 static void LogLocalCommand(Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
@@ -121,21 +120,40 @@ static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 static void LocallyExecuteUtilityTask(const char *utilityCommand);
 static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 
-
 /*
- * ExecuteLocalTasks gets a CitusScanState node and list of local tasks.
+ * ExecuteLocalTasks executes the given tasks locally.
  *
  * The function goes over the task list and executes them locally.
- * The returning tuples (if any) is stored in the CitusScanState.
+ * The returning tuples (if any) is stored in the tupleStoreState.
  *
  * The function returns totalRowsProcessed.
  */
 uint64
-ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
+ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 {
-	EState *executorState = ScanStateGetExecutorState(scanState);
-	DistributedPlan *distributedPlan = scanState->distributedPlan;
-	ParamListInfo paramListInfo = copyParamList(executorState->es_param_list_info);
+	DistributedPlan *distributedPlan = NULL;
+	ParamListInfo paramListInfo = NULL;
+	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,
+										tupleStoreState);
+}
+
+
+/*
+ * ExecuteLocalTaskListExtended executes the given tasks locally.
+ *
+ * The function goes over the task list and executes them locally.
+ * The returning tuples (if any) is stored in the tupleStoreState.
+ *
+ * It uses a cached plan if distributedPlan is found in cache.
+ *
+ * The function returns totalRowsProcessed.
+ */
+uint64
+ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
+							 DistributedPlan *distributedPlan,
+							 Tuplestorestate *tupleStoreState)
+{
+	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
 	uint64 totalRowsProcessed = 0;
@@ -232,7 +250,8 @@ ExecuteLocalTaskList(CitusScanState *scanState, List *taskList)
 		}
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(scanState, localPlan, shardQueryString);
+			ExecuteLocalTaskPlan(localPlan, shardQueryString, tupleStoreState,
+								 paramListInfo);
 	}
 
 	return totalRowsProcessed;
@@ -260,7 +279,13 @@ ExtractAndExecuteLocalAndRemoteTasks(CitusScanState *scanState,
 		/* set local (if any) & remote tasks */
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
 								   &remoteTaskList);
-		processedRows += ExecuteLocalTaskList(scanState, localTaskList);
+		EState *estate = ScanStateGetExecutorState(scanState);
+		processedRows += ExecuteLocalTaskListExtended(
+			localTaskList,
+			estate->es_param_list_info,
+			scanState->distributedPlan,
+			scanState->tuplestorestate
+			);
 	}
 	else
 	{
@@ -514,10 +539,9 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
  * tupleStore if necessary. The function returns the
  */
 static uint64
-ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *queryString)
+ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
+					 Tuplestorestate *tupleStoreState, ParamListInfo paramListInfo)
 {
-	EState *executorState = ScanStateGetExecutorState(scanState);
-	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	DestReceiver *tupleStoreDestReceiver = CreateDestReceiver(DestTuplestore);
 	ScanDirection scanDirection = ForwardScanDirection;
 	QueryEnvironment *queryEnv = create_queryEnv();
@@ -529,7 +553,7 @@ ExecuteLocalTaskPlan(CitusScanState *scanState, PlannedStmt *taskPlan, char *que
 	 * the other task executions and the adaptive executor.
 	 */
 	SetTuplestoreDestReceiverParams(tupleStoreDestReceiver,
-									scanState->tuplestorestate,
+									tupleStoreState,
 									CurrentMemoryContext, false);
 
 	/* Create a QueryDesc for the query */
