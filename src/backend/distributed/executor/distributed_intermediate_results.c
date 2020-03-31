@@ -373,6 +373,7 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
 	text *resultId = DatumGetTextP(slot_getattr(tupleSlot, 3, &isNull));
 	int64 rowCount = DatumGetInt64(slot_getattr(tupleSlot, 4, &isNull));
 
+	Assert(targetShardIndex < targetRelation->shardIntervalArrayLength);
 	ShardInterval *shardInterval =
 		targetRelation->sortedShardIntervalArray[targetShardIndex];
 
@@ -443,6 +444,7 @@ ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRe
 	{
 		int shardIndex = sourceFragment->targetShardIndex;
 
+		Assert(shardIndex < shardCount);
 		shardResultIdList[shardIndex] = lappend(shardResultIdList[shardIndex],
 												sourceFragment->resultId);
 	}
