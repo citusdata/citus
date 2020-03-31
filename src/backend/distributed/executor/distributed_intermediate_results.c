@@ -221,16 +221,15 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 							 shardPlacement->nodeId,
 							 quote_literal_cstr(taskPrefix),
 							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(TaskQueryString(selectTask)),
+							 quote_literal_cstr(TaskQueryStringForAllPlacements(
+													selectTask)),
 							 partitionColumnIndex,
 							 quote_literal_cstr(partitionMethodString),
 							 minValuesString->data, maxValuesString->data,
 							 binaryFormatString);
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
-
-		SetTaskQueryString(selectTask, NULL);
-		selectTask->perPlacementQueryStrings = perPlacementQueries;
+		SetTaskPerPlacementQueryStrings(selectTask, perPlacementQueries);
 	}
 }
 

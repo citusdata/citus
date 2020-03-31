@@ -1820,7 +1820,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	 * that the query cannot be executed locally.
 	 */
 	task->taskPlacementList = placementList;
-	SetTaskQuery(task, query);
+	SetTaskQueryIfShouldLazyDeparse(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
@@ -1901,7 +1901,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	}
 
 	task->taskPlacementList = placementList;
-	SetTaskQuery(task, query);
+	SetTaskQueryIfShouldLazyDeparse(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;

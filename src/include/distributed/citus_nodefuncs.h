@@ -76,6 +76,7 @@ extern void CopyNodeRelationShard(COPYFUNC_ARGS);
 extern void CopyNodeRelationRowLock(COPYFUNC_ARGS);
 extern void CopyNodeTask(COPYFUNC_ARGS);
 extern void CopyNodeLocalPlannedStatement(COPYFUNC_ARGS);
+extern void CopyNodeTaskQuery(COPYFUNC_ARGS);
 extern void CopyNodeTaskExecution(COPYFUNC_ARGS);
 extern void CopyNodeDeferredErrorMessage(COPYFUNC_ARGS);
 
