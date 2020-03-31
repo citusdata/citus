@@ -48,17 +48,6 @@ typedef struct ConnectionStatsSharedData
 	char *sharedConnectionHashTrancheName;
 
 	LWLock sharedConnectionHashLock;
-
-/*	/ * */
-/*	 * We prefer mutex over LwLocks for two reasons: */
-/*	 *   - The operations we perform while holding the lock is very tiny, and */
-/*	 *     performance wise, mutex is encouraged by Postgres for such cases */
-/*	 *   - We have to acquire the lock "atexit" callback, and LwLocks requires */
-/*	 *     MyProc to be avaliable to acquire the lock. However, "atexit", it is */
-/*	 *     not guranteed to have MyProc avaliable. On the other hand, "mutex" is */
-/*	 *     independent from MyProc. */
-/*	 * / */
-/*	slock_t mutex; */
 } ConnectionStatsSharedData;
 
 typedef struct SharedConnStatsHashKey
@@ -436,8 +425,6 @@ static void
 LockConnectionSharedMemory(LWLockMode lockMode)
 {
 	LWLockAcquire(&ConnectionStatsSharedState->sharedConnectionHashLock, lockMode);
-
-	/* SpinLockAcquire(&ConnectionStatsSharedState->mutex); */
 }
 
 
@@ -449,8 +436,6 @@ static void
 UnLockConnectionSharedMemory(void)
 {
 	LWLockRelease(&ConnectionStatsSharedState->sharedConnectionHashLock);
-
-	/* SpinLockRelease(&ConnectionStatsSharedState->mutex); */
 }
 
 
@@ -535,8 +520,6 @@ SharedConnectionStatsShmemInit(void)
 
 		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
 						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);
-
-		/* SpinLockInit(&ConnectionStatsSharedState->mutex); */
 	}
 
 	/*  allocate hash table */

@@ -91,6 +91,8 @@ void _PG_init(void);
 
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
+static void RegisterConnectionCleanup(void);
+static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
@@ -369,6 +371,37 @@ StartupCitusBackend(void)
 {
 	InitializeMaintenanceDaemonBackend();
 	InitializeBackendData();
+	RegisterConnectionCleanup();
+}
+
+
+/*
+ * RegisterConnectionCleanup cleans up any resources left at the end of the
+ * session. We prefer to cleanup before shared memory exit to make sure that
+ * this session properly releases anything hold in the shared memory.
+ */
+static void
+RegisterConnectionCleanup(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * CitusCleanupConnectionsAtExit is called before_shmem_exit() of the
+ * backend for the purposes of any clean-up needed.
+ */
+static void
+CitusCleanupConnectionsAtExit(int code, Datum arg)
+{
+	/* properly close all the cached connections */
+	ShutdownAllConnections();
 }
 
 
