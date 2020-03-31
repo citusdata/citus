@@ -23,10 +23,14 @@
 
 extern void RebuildQueryStrings(Job *workerJob);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
-extern void SetTaskQuery(Task *task, Query *query);
+extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);
-extern char * TaskQueryString(Task *task);
+extern void SetTaskPerPlacementQueryStrings(Task *task,
+											List *perPlacementQueryStringList);
+extern char * TaskQueryStringForAllPlacements(Task *task);
+extern char * TaskQueryStringForPlacement(Task *task, int placementIndex);
 extern bool UpdateRelationsToLocalShardTables(Node *node, List *relationShardList);
+extern int GetTaskQueryType(Task *task);
 
 #endif /* DEPARSE_SHARD_QUERY_H */

@@ -1062,7 +1062,7 @@ IsRedistributablePlan(Plan *selectPlan)
 
 
 /*
- * WrapTaskListForProjection wraps task->queryString to only select given
+ * WrapTaskListForProjection wraps task query string to only select given
  * projected columns. It modifies the taskList.
  */
 static void
@@ -1091,7 +1091,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
 						 projectedColumnsString->data,
-						 TaskQueryString(task));
+						 TaskQueryStringForAllPlacements(task));
 		SetTaskQueryString(task, wrappedQuery->data);
 	}
 }

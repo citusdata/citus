@@ -61,6 +61,7 @@ jobs:
       - run:
           name: 'Install and Test (check-multi)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_11,multi'
 
@@ -74,6 +75,7 @@ jobs:
       - run:
           name: 'Install and Test (check-tt-van-mx)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_11,tracker,vanilla,mx'
   test-11_check-iso-work-fol:
@@ -86,6 +88,7 @@ jobs:
       - run:
           name: 'Install and Test (check-iso-work-fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_11,isolation,worker'
   test-11_check-fol:
@@ -101,6 +104,7 @@ jobs:
       - run:
           name: 'Install and Test (fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-follower-cluster'
+          no_output_timeout: 2m
       - run:
           command: |
             mkdir -p /tmp/core_dumps
@@ -120,6 +124,7 @@ jobs:
       - run:
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
+          no_output_timeout: 2m
 
   test-11-12_check-pg-upgrade:
     docker:
@@ -131,6 +136,7 @@ jobs:
       - run:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
+          no_output_timeout: 2m
 
   test-12_check-multi:
     docker:
@@ -142,6 +148,7 @@ jobs:
       - run:
           name: 'Install and Test (check-multi)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,multi'
   test-12_check-tt-van-mx:
@@ -154,6 +161,7 @@ jobs:
       - run:
           name: 'Install and Test (check-tt-van-mx)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,tracker,vanilla,mx'
   test-12_check-iso-work-fol:
@@ -166,6 +174,7 @@ jobs:
       - run:
           name: 'Install and Test (check-iso-work-fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,isolation,worker'
   test-12_check-fol:
@@ -181,6 +190,7 @@ jobs:
       - run:
           name: 'Install and Test (fol)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-follower-cluster'
+          no_output_timeout: 2m
       - run:
           command: |
             mkdir -p /tmp/core_dumps
@@ -201,6 +211,7 @@ jobs:
       - run:
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
+          no_output_timeout: 2m
 
   test-11_check-citus-upgrade:
     docker:
@@ -221,6 +232,7 @@ jobs:
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.1.0.tar
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
+          no_output_timeout: 2m
 
 
 

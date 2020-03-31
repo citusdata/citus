@@ -785,7 +785,11 @@ HasDependentJobs(Job *mainJob)
 static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
-	uint64 rowsProcessed = ExecuteLocalTaskList(scanState, execution->localTaskList);
+	EState *estate = ScanStateGetExecutorState(scanState);
+	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
+														estate->es_param_list_info,
+														scanState->distributedPlan,
+														scanState->tuplestorestate);
 
 	/*
 	 * We're deliberately not setting execution->rowsProcessed here. The main reason
@@ -3196,18 +3200,9 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 	int querySent = 0;
 
-	char *queryString = NULL;
-	if (list_length(task->perPlacementQueryStrings) == 0)
-	{
-		queryString = TaskQueryString(task);
-	}
-	else
-	{
-		Assert(list_length(task->taskPlacementList) == list_length(
-				   task->perPlacementQueryStrings));
-		queryString = list_nth(task->perPlacementQueryStrings,
-							   placementExecution->placementExecutionIndex);
-	}
+	char *queryString = TaskQueryStringForPlacement(task,
+													placementExecution->
+													placementExecutionIndex);
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
