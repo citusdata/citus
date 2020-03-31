@@ -223,4 +223,21 @@ SELECT
 	LIMIT 5;
 
 SET client_min_messages TO NOTICE;
+
+-- non constants should not push down
+CREATE OR REPLACE FUNCTION my_limit()
+RETURNS INT AS $$
+BEGIN
+  RETURN 5;
+END; $$ language plpgsql VOLATILE;
+
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT my_limit();
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET my_limit();
+
+DROP FUNCTION my_limit();
+
+-- subqueries should error out
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
+
 DROP TABLE lineitem_hash;

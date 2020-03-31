@@ -4320,19 +4320,30 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
 	Node *workerLimitNode = NULL;
 	LimitPushdownable canPushDownLimit = LIMIT_CANNOT_PUSHDOWN;
 
-	/* no limit node to push down */
 	if (limitCount == NULL)
 	{
+		/* no limit node to push down */
 		return NULL;
 	}
 
-	/*
-	 * During subquery pushdown planning original query is used. In that case,
-	 * certain expressions such as parameters are not evaluated and converted
-	 * into Consts on the op node.
-	 */
-	Assert(IsA(limitCount, Const));
-	Assert(limitOffset == NULL || IsA(limitOffset, Const));
+	if (!IsA(limitCount, Const))
+	{
+		/*
+		 * We only push down constant LIMIT clauses to make sure we get back
+		 * the minimum number of rows.
+		 */
+		return NULL;
+	}
+
+	if (limitOffset != NULL && !IsA(limitOffset, Const))
+	{
+		/*
+		 * If OFFSET is not a constant then we cannot calculate the LIMIT to
+		 * push down.
+		 */
+		return NULL;
+	}
+
 
 	/*
 	 * If window functions are computed on coordinator, we cannot push down LIMIT.
