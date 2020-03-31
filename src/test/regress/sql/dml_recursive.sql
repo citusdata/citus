@@ -142,7 +142,7 @@ WHERE
 RETURNING
 	distributed_table.*;
 
--- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
+-- there is a lateral join (e.g., correlated subquery) thus the subqueries cannot be
 -- recursively planned, however it can be planned using the repartition planner
 SET citus.enable_repartition_joins to on;
 SELECT DISTINCT foo_inner_1.tenant_id FROM
@@ -173,7 +173,7 @@ ORDER BY foo_inner_1.tenant_id;
 RESET citus.enable_repartition_joins;
 
 
--- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
+-- there is a lateral join (e.g., correlated subquery) thus the subqueries cannot be
 -- recursively planned, this one can not be planned by the repartion planner
 -- because of the IN query on a non unique column
 UPDATE
@@ -209,7 +209,7 @@ FROM
 RETURNING *;
 
 
--- again a corrolated subquery
+-- again a correlated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
 UPDATE

@@ -184,7 +184,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml
  50        |   50 | {"f1": 50, "f2": 2500}
 (1 row)
 
--- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
+-- there is a lateral join (e.g., correlated subquery) thus the subqueries cannot be
 -- recursively planned, however it can be planned using the repartition planner
 SET citus.enable_repartition_joins to on;
 SELECT DISTINCT foo_inner_1.tenant_id FROM
@@ -227,7 +227,7 @@ ORDER BY foo_inner_1.tenant_id;
 (10 rows)
 
 RESET citus.enable_repartition_joins;
--- there is a lateral join (e.g., corrolated subquery) thus the subqueries cannot be
+-- there is a lateral join (e.g., correlated subquery) thus the subqueries cannot be
 -- recursively planned, this one can not be planned by the repartion planner
 -- because of the IN query on a non unique column
 UPDATE
@@ -263,7 +263,7 @@ FROM
 RETURNING *;
 DEBUG:  generating subplan XXX_1 for subquery SELECT dept FROM recursive_dml_queries.second_distributed_table
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
--- again a corrolated subquery
+-- again a correlated subquery
 -- this time distribution key eq. exists
 -- however recursive planning is prevented due to correlated subqueries
 UPDATE
