@@ -2133,9 +2133,6 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	 */
 	SerializeNonCommutativeWrites(shardIntervalList, RowExclusiveLock);
 
-	/* keep the table metadata to avoid looking it up for every tuple */
-	copyDest->tableMetadata = cacheEntry;
-
 	UseCoordinatedTransaction();
 
 	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
@@ -2480,8 +2477,9 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * For reference table, this function blindly returns the tables single
 	 * shard.
 	 */
-	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue,
-													 copyDest->tableMetadata);
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntry(copyDest->distributedRelationId);
+	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
 	if (shardInterval == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
