@@ -222,14 +222,16 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
 
-	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
+	bool hashDistributed = (tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
-		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
+		(tableRef->cacheEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
 	bool mxTable = (streamingReplicated && hashDistributed);
-	bool referenceTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+	bool referenceTable = (tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+
+	ReleaseTableCacheEntry(tableRef);
 
 	if (mxTable || referenceTable)
 	{
@@ -371,19 +373,19 @@ MetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	/* create the list of tables whose metadata will be created */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
+	CitusTableCacheEntryRef *cacheEntryRef = NULL;
+	foreach_ptr(cacheEntryRef, distributedTableList)
 	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		if (ShouldSyncTableMetadata(cacheEntryRef->cacheEntry->relationId))
 		{
-			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+			propagatedTableList = lappend(propagatedTableList, cacheEntryRef);
 		}
 	}
 
 	/* create the tables, but not the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
+	foreach_ptr(cacheEntryRef, propagatedTableList)
 	{
-		Oid relationId = cacheEntry->relationId;
+		Oid relationId = cacheEntryRef->cacheEntry->relationId;
 		ObjectAddress tableAddress = { 0 };
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
@@ -407,22 +409,23 @@ MetadataCreateCommands(void)
 	}
 
 	/* construct the foreign key constraints after all tables are created */
-	foreach_ptr(cacheEntry, propagatedTableList)
+	foreach_ptr(cacheEntryRef, propagatedTableList)
 	{
 		List *foreignConstraintCommands =
-			GetTableForeignConstraintCommands(cacheEntry->relationId);
+			GetTableForeignConstraintCommands(cacheEntryRef->cacheEntry->relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  foreignConstraintCommands);
 	}
 
 	/* construct partitioning hierarchy after all tables are created */
-	foreach_ptr(cacheEntry, propagatedTableList)
+	foreach_ptr(cacheEntryRef, propagatedTableList)
 	{
-		if (PartitionTable(cacheEntry->relationId))
+		if (PartitionTable(cacheEntryRef->cacheEntry->relationId))
 		{
 			char *alterTableAttachPartitionCommands =
-				GenerateAlterTableAttachPartitionCommand(cacheEntry->relationId);
+				GenerateAlterTableAttachPartitionCommand(
+					cacheEntryRef->cacheEntry->relationId);
 
 			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 												  alterTableAttachPartitionCommands);
@@ -430,18 +433,18 @@ MetadataCreateCommands(void)
 	}
 
 	/* after all tables are created, create the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
+	foreach_ptr(cacheEntryRef, propagatedTableList)
 	{
-		Oid clusteredTableId = cacheEntry->relationId;
+		Oid clusteredTableId = cacheEntryRef->cacheEntry->relationId;
 
 		/* add the table metadata command first*/
-		char *metadataCommand = DistributionCreateCommand(cacheEntry);
+		char *metadataCommand = DistributionCreateCommand(cacheEntryRef->cacheEntry);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
 		/* add the truncate trigger command after the table became distributed */
 		char *truncateTriggerCreateCommand =
-			TruncateTriggerCreateCommand(cacheEntry->relationId);
+			TruncateTriggerCreateCommand(clusteredTableId);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  truncateTriggerCreateCommand);
 
@@ -451,6 +454,11 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  shardCreateCommandList);
+	}
+
+	foreach_ptr(cacheEntryRef, distributedTableList)
+	{
+		ReleaseTableCacheEntry(cacheEntryRef);
 	}
 
 	return metadataSnapshotCommandList;
@@ -466,8 +474,6 @@ MetadataCreateCommands(void)
 List *
 GetDistributedTableDDLEvents(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
 
@@ -484,8 +490,10 @@ GetDistributedTableDDLEvents(Oid relationId)
 	commandList = lappend(commandList, tableOwnerResetCommand);
 
 	/* command to insert pg_dist_partition entry */
-	char *metadataCommand = DistributionCreateCommand(cacheEntry);
+	CitusTableCacheEntryRef *cacheEntryRef = GetCitusTableCacheEntry(relationId);
+	char *metadataCommand = DistributionCreateCommand(cacheEntryRef->cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
+	ReleaseTableCacheEntry(cacheEntryRef);
 
 	/* commands to create the truncate trigger of the table */
 	char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
@@ -1308,15 +1316,15 @@ DetachPartitionCommandList(void)
 	List *distributedTableList = CitusTableList();
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
+	CitusTableCacheEntryRef *cacheEntryRef = NULL;
+	foreach_ptr(cacheEntryRef, distributedTableList)
 	{
-		if (!PartitionedTable(cacheEntry->relationId))
+		if (!PartitionedTable(cacheEntryRef->cacheEntry->relationId))
 		{
 			continue;
 		}
 
-		List *partitionList = PartitionList(cacheEntry->relationId);
+		List *partitionList = PartitionList(cacheEntryRef->cacheEntry->relationId);
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
@@ -1326,6 +1334,11 @@ DetachPartitionCommandList(void)
 			detachPartitionCommandList = lappend(detachPartitionCommandList,
 												 detachPartitionCommand);
 		}
+	}
+
+	foreach_ptr(cacheEntryRef, distributedTableList)
+	{
+		ReleaseTableCacheEntry(cacheEntryRef);
 	}
 
 	if (list_length(detachPartitionCommandList) == 0)

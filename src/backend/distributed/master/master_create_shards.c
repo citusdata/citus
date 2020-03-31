@@ -108,7 +108,6 @@ void
 CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 								 int32 replicationFactor, bool useExclusiveConnections)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	bool colocatedShard = false;
 	List *insertedShardPlacements = NIL;
 
@@ -151,10 +150,13 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	}
 
 	/* make sure that RF=1 if the table is streaming replicated */
-	if (cacheEntry->replicationModel == REPLICATION_MODEL_STREAMING &&
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
+	char replicationModel = cacheRef->cacheEntry->replicationModel;
+	ReleaseTableCacheEntry(cacheRef);
+	if (replicationModel == REPLICATION_MODEL_STREAMING &&
 		replicationFactor > 1)
 	{
-		char *relationName = get_rel_name(cacheEntry->relationId);
+		char *relationName = get_rel_name(distributedTableId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("using replication factor %d with the streaming "
 							   "replication model is not supported",

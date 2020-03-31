@@ -2071,12 +2071,13 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	else if (partitionType == SINGLE_HASH_PARTITION_TYPE || partitionType ==
 			 RANGE_PARTITION_TYPE)
 	{
-		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
-		int shardCount = cache->shardIntervalArrayLength;
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(baseRelationId);
+		int shardCount = cacheRef->cacheEntry->shardIntervalArrayLength;
 		ShardInterval **cachedSortedShardIntervalArray =
-			cache->sortedShardIntervalArray;
+			cacheRef->cacheEntry->sortedShardIntervalArray;
+
 		bool hasUninitializedShardInterval =
-			cache->hasUninitializedShardInterval;
+			cacheRef->cacheEntry->hasUninitializedShardInterval;
 
 		ShardInterval **sortedShardIntervalArray =
 			palloc0(sizeof(ShardInterval) * shardCount);
@@ -2086,6 +2087,8 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 			sortedShardIntervalArray[shardIndex] =
 				CopyShardInterval(cachedSortedShardIntervalArray[shardIndex]);
 		}
+
+		ReleaseTableCacheEntry(cacheRef);
 
 		if (hasUninitializedShardInterval)
 		{
@@ -2326,14 +2329,16 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
 
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+		if (cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
+			ReleaseTableCacheEntry(cacheRef);
 			continue;
 		}
 
 		/* we expect distributed tables to have the same shard count */
-		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
+		if (shardCount > 0 && shardCount !=
+			cacheRef->cacheEntry->shardIntervalArrayLength)
 		{
 			ereport(ERROR, (errmsg("shard counts of co-located tables do not "
 								   "match")));
@@ -2341,13 +2346,15 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 		if (taskRequiredForShardIndex == NULL)
 		{
-			shardCount = cacheEntry->shardIntervalArrayLength;
+			shardCount = cacheRef->cacheEntry->shardIntervalArrayLength;
 			taskRequiredForShardIndex = (bool *) palloc0(shardCount);
 
 			/* there is a distributed table, find the shard range */
 			minShardOffset = shardCount;
 			maxShardOffset = -1;
 		}
+
+		ReleaseTableCacheEntry(cacheRef);
 
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
@@ -2505,8 +2512,8 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			CitusTableCacheEntry *distTableEntry = GetCitusTableCacheEntry(relationId);
-			if (distTableEntry->hasOverlappingShardInterval)
+			CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+			if (cacheRef->cacheEntry->hasOverlappingShardInterval)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("cannot push down this subquery"),
@@ -2514,6 +2521,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 										  "with overlapping shard intervals are "
 										  "not supported")));
 			}
+			ReleaseTableCacheEntry(cacheRef);
 
 			appendDistributedRelationCount++;
 		}
@@ -2611,11 +2619,11 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		Oid relationId = relationRestriction->relationId;
 		ShardInterval *shardInterval = NULL;
 
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+		if (cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			/* reference table only has one shard */
-			shardInterval = cacheEntry->sortedShardIntervalArray[0];
+			shardInterval = cacheRef->cacheEntry->sortedShardIntervalArray[0];
 
 			/* only use reference table as anchor shard if none exists yet */
 			if (anchorShardId == INVALID_SHARD_ID)
@@ -2625,7 +2633,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		}
 		else if (UpdateOrDeleteQuery(originalQuery))
 		{
-			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
+			shardInterval = cacheRef->cacheEntry->sortedShardIntervalArray[shardIndex];
 			if (!modifyWithSubselect || relationId == resultRelationOid)
 			{
 				/* for UPDATE/DELETE the shard in the result relation becomes the anchor shard */
@@ -2635,11 +2643,13 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		else
 		{
 			/* for SELECT we pick an arbitrary shard as the anchor shard */
-			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
+			shardInterval = cacheRef->cacheEntry->sortedShardIntervalArray[shardIndex];
 			anchorShardId = shardInterval->shardId;
 		}
 
 		ShardInterval *copiedShardInterval = CopyShardInterval(shardInterval);
+
+		ReleaseTableCacheEntry(cacheRef);
 
 		taskShardList = lappend(taskShardList, list_make1(copiedShardInterval));
 
@@ -2712,37 +2722,45 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		return true;
 	}
 
-	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
-	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
-
-	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
+	bool result = false;
+	CitusTableCacheEntryRef *firstTableRef = GetCitusTableCacheEntry(firstRelationId);
+	CitusTableCacheEntryRef *secondTableRef = GetCitusTableCacheEntry(secondRelationId);
+	ShardInterval **sortedFirstIntervalArray =
+		firstTableRef->cacheEntry->sortedShardIntervalArray;
 	ShardInterval **sortedSecondIntervalArray =
-		secondTableCache->sortedShardIntervalArray;
-	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
-	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
-	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
+		secondTableRef->cacheEntry->sortedShardIntervalArray;
+	uint32 firstListShardCount = firstTableRef->cacheEntry->shardIntervalArrayLength;
+	uint32 secondListShardCount = secondTableRef->cacheEntry->shardIntervalArrayLength;
+	char firstPartitionMethod = firstTableRef->cacheEntry->partitionMethod;
+	char secondPartitionMethod = secondTableRef->cacheEntry->partitionMethod;
+	FmgrInfo *comparisonFunction =
+		firstTableRef->cacheEntry->shardIntervalCompareFunction;
 
 	/* reference tables are always & only copartitioned with reference tables */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE &&
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (firstPartitionMethod == DISTRIBUTE_BY_NONE &&
+		secondPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		return true;
+		result = true;
+		goto returnresult;
 	}
-	else if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE ||
-			 secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	else if (firstPartitionMethod == DISTRIBUTE_BY_NONE ||
+			 secondPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		return false;
+		result = false;
+		goto returnresult;
 	}
 
 	if (firstListShardCount != secondListShardCount)
 	{
-		return false;
+		result = false;
+		goto returnresult;
 	}
 
 	/* if there are not any shards just return true */
 	if (firstListShardCount == 0)
 	{
-		return true;
+		result = true;
+		goto returnresult;
 	}
 
 	Assert(comparisonFunction != NULL);
@@ -2751,10 +2769,12 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * Check if the tables have the same colocation ID - if so, we know
 	 * they're colocated.
 	 */
-	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
-		firstTableCache->colocationId == secondTableCache->colocationId)
+	if (firstTableRef->cacheEntry->colocationId != INVALID_COLOCATION_ID &&
+		firstTableRef->cacheEntry->colocationId ==
+		secondTableRef->cacheEntry->colocationId)
 	{
-		return true;
+		result = true;
+		goto returnresult;
 	}
 
 	/*
@@ -2764,22 +2784,24 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * different values for the same value. int vs bigint can be given as an
 	 * example.
 	 */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH ||
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	if (firstPartitionMethod == DISTRIBUTE_BY_HASH ||
+		secondPartitionMethod == DISTRIBUTE_BY_HASH)
 	{
-		return false;
+		result = false;
+		goto returnresult;
 	}
 
 
 	/*
 	 * Don't compare unequal types
 	 */
-	Oid collation = firstTableCache->partitionColumn->varcollid;
-	if (firstTableCache->partitionColumn->vartype !=
-		secondTableCache->partitionColumn->vartype ||
-		collation != secondTableCache->partitionColumn->varcollid)
+	Oid collation = firstTableRef->cacheEntry->partitionColumn->varcollid;
+	if (firstTableRef->cacheEntry->partitionColumn->vartype !=
+		secondTableRef->cacheEntry->partitionColumn->vartype ||
+		collation != secondTableRef->cacheEntry->partitionColumn->varcollid)
 	{
-		return false;
+		result = false;
+		goto returnresult;
 	}
 
 
@@ -2802,11 +2824,16 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		if (!shardIntervalsEqual || !CoPlacedShardIntervals(firstInterval,
 															secondInterval))
 		{
-			return false;
+			result = false;
+			goto returnresult;
 		}
 	}
 
-	return true;
+	result = true;
+returnresult:
+	ReleaseTableCacheEntry(firstTableRef);
+	ReleaseTableCacheEntry(secondTableRef);
+	return result;
 }
 
 
@@ -4110,14 +4137,14 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	CitusTableCacheEntry *intervalRelation =
+	CitusTableCacheEntryRef *intervalRelationRef =
 		GetCitusTableCacheEntry(firstInterval->relationId);
 
-	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
+	Assert(intervalRelationRef->cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE);
 
-	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
-	Oid collation = intervalRelation->partitionColumn->varcollid;
-
+	FmgrInfo *comparisonFunction =
+		intervalRelationRef->cacheEntry->shardIntervalCompareFunction;
+	Oid collation = intervalRelationRef->cacheEntry->partitionColumn->varcollid;
 
 	Datum firstMin = firstInterval->minValue;
 	Datum firstMax = firstInterval->maxValue;
@@ -4142,10 +4169,12 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 
 		if (firstComparison < 0 || secondComparison < 0)
 		{
+			ReleaseTableCacheEntry(intervalRelationRef);
 			return false;
 		}
 	}
 
+	ReleaseTableCacheEntry(intervalRelationRef);
 	return true;
 }
 

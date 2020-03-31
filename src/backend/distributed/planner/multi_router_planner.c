@@ -741,11 +741,12 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 			{
 				StringInfo errorHint = makeStringInfo();
-				CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
+				CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(
 					distributedTableId);
-				char *partitionKeyString = cacheEntry->partitionKeyString;
+				char *partitionKeyString = cacheRef->cacheEntry->partitionKeyString;
 				char *partitionColumnName = ColumnToColumnName(distributedTableId,
 															   partitionKeyString);
+				ReleaseTableCacheEntry(cacheRef);
 
 				appendStringInfo(errorHint, "Consider using an equality filter on "
 											"partition column \"%s\" to target a single shard.",
@@ -1482,15 +1483,16 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 	List *insertTaskList = NIL;
 
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
 
-	ErrorIfNoShardsExist(cacheEntry);
+	ErrorIfNoShardsExist(cacheRef->cacheEntry);
 
 	Assert(query->commandType == CMD_INSERT);
 
 	List *modifyRouteList = BuildRoutesForInsert(query, planningError);
 	if (*planningError != NULL)
 	{
+		ReleaseTableCacheEntry(cacheRef);
 		return NIL;
 	}
 
@@ -1499,7 +1501,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 	{
 		Task *modifyTask = CreateTask(MODIFY_TASK);
 		modifyTask->anchorShardId = modifyRoute->shardId;
-		modifyTask->replicationModel = cacheEntry->replicationModel;
+		modifyTask->replicationModel = cacheRef->cacheEntry->replicationModel;
 		modifyTask->rowValuesLists = modifyRoute->rowValuesLists;
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
@@ -1513,6 +1515,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
 
+	ReleaseTableCacheEntry(cacheRef);
 	return insertTaskList;
 }
 
@@ -1888,9 +1891,10 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
 	Assert(updateOrDeleteRTE != NULL);
 
-	CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
+	CitusTableCacheEntryRef *modificationTableRef = GetCitusTableCacheEntry(
 		updateOrDeleteRTE->relid);
-	char modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
+	char modificationPartitionMethod =
+		modificationTableRef->cacheEntry->partitionMethod;
 
 	if (modificationPartitionMethod == DISTRIBUTE_BY_NONE &&
 		SelectsFromDistributedTable(rangeTableList, query))
@@ -1905,9 +1909,10 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
-	task->replicationModel = modificationTableCacheEntry->replicationModel;
+	task->replicationModel = modificationTableRef->cacheEntry->replicationModel;
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
+	ReleaseTableCacheEntry(modificationTableRef);
 	return list_make1(task);
 }
 
@@ -1953,9 +1958,12 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 			continue;
 		}
 
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
+		char partitionMethod = cacheRef->cacheEntry->partitionMethod;
+		ReleaseTableCacheEntry(cacheRef);
+
+		if (partitionMethod != DISTRIBUTE_BY_NONE &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
 		{
@@ -2316,21 +2324,25 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 
 	if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
 	{
-		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(relationId);
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
 		ShardInterval *cachedShardInterval =
-			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
+			FindShardInterval(inputDistributionKeyValue->constvalue,
+							  cacheRef->cacheEntry);
 		if (cachedShardInterval == NULL)
 		{
 			ereport(ERROR, (errmsg(
 								"could not find shardinterval to which to send the query")));
 		}
 
+		ShardInterval *shardInterval = CopyShardInterval(cachedShardInterval);
+
+		ReleaseTableCacheEntry(cacheRef);
+
 		if (outputPartitionValueConst != NULL)
 		{
 			/* set the outgoing partition column value if requested */
 			*outputPartitionValueConst = inputDistributionKeyValue;
 		}
-		ShardInterval *shardInterval = CopyShardInterval(cachedShardInterval);
 		List *shardIntervalList = list_make1(shardInterval);
 
 		return list_make1(shardIntervalList);
@@ -2403,14 +2415,15 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
 		Index tableId = relationRestriction->index;
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		int shardCount = cacheEntry->shardIntervalArrayLength;
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+		int shardCount = cacheRef->cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardIntervalList = NIL;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 
+		ReleaseTableCacheEntry(cacheRef);
 		relationRestriction->prunedShardIntervalList = NIL;
 
 		/*
@@ -2568,8 +2581,8 @@ static List *
 BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 {
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
+	char partitionMethod = cacheRef->cacheEntry->partitionMethod;
 	uint32 rangeTableId = 1;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
@@ -2605,6 +2618,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		modifyRouteList = lappend(modifyRouteList, modifyRoute);
 
+		ReleaseTableCacheEntry(cacheRef);
 		return modifyRouteList;
 	}
 
@@ -2640,8 +2654,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
-			cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
+			ShardInterval *shardInterval = FindShardInterval(partitionValue,
+															 cacheRef->cacheEntry);
 			if (shardInterval != NULL)
 			{
 				prunedShardIntervalList = list_make1(shardInterval);
@@ -2671,7 +2685,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		int prunedShardIntervalCount = list_length(prunedShardIntervalList);
 		if (prunedShardIntervalCount != 1)
 		{
-			char *partitionKeyString = cacheEntry->partitionKeyString;
+			char *partitionKeyString = cacheRef->cacheEntry->partitionKeyString;
 			char *partitionColumnName = ColumnToColumnName(distributedTableId,
 														   partitionKeyString);
 			StringInfo errorMessage = makeStringInfo();
@@ -2706,6 +2720,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 											 errorMessage->data, NULL,
 											 errorHint->data);
 
+			ReleaseTableCacheEntry(cacheRef);
 			return NIL;
 		}
 
@@ -2713,8 +2728,9 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		insertValues->shardId = targetShard->shardId;
 	}
 
-	modifyRouteList = GroupInsertValuesByShardId(insertValuesList);
+	ReleaseTableCacheEntry(cacheRef);
 
+	modifyRouteList = GroupInsertValuesByShardId(insertValuesList);
 	return modifyRouteList;
 }
 

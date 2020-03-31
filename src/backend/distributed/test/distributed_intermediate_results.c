@@ -64,18 +64,22 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *targetRelation = GetCitusTableCacheEntry(relationId);
 
 	/*
 	 * Here SELECT query's target list should match column list of target relation,
 	 * so their partition column indexes are equal.
 	 */
-	int partitionColumnIndex = targetRelation->partitionMethod != DISTRIBUTE_BY_NONE ?
-							   targetRelation->partitionColumn->varattno - 1 : 0;
+	int partitionColumnIndex =
+		targetRelation->cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE ?
+		targetRelation->cacheEntry->partitionColumn->varattno - 1 : 0;
 
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, taskList,
 												  partitionColumnIndex,
-												  targetRelation, binaryFormat);
+												  targetRelation->cacheEntry,
+												  binaryFormat);
+
+	ReleaseTableCacheEntry(targetRelation);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
@@ -132,27 +136,29 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	Job *job = distributedPlan->workerJob;
 	List *taskList = job->taskList;
 
-	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *targetRelation = GetCitusTableCacheEntry(relationId);
 
 	/*
 	 * Here SELECT query's target list should match column list of target relation,
 	 * so their partition column indexes are equal.
 	 */
-	int partitionColumnIndex = targetRelation->partitionMethod != DISTRIBUTE_BY_NONE ?
-							   targetRelation->partitionColumn->varattno - 1 : 0;
+	int partitionColumnIndex =
+		targetRelation->cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE ?
+		targetRelation->cacheEntry->partitionColumn->varattno - 1 : 0;
 
 	List **shardResultIds = RedistributeTaskListResults(resultIdPrefix, taskList,
 														partitionColumnIndex,
-														targetRelation, binaryFormat);
+														targetRelation->cacheEntry,
+														binaryFormat);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	int shardCount = targetRelation->shardIntervalArrayLength;
+	int shardCount = targetRelation->cacheEntry->shardIntervalArrayLength;
 
 	for (int shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
 		ShardInterval *shardInterval =
-			targetRelation->sortedShardIntervalArray[shardIndex];
+			targetRelation->cacheEntry->sortedShardIntervalArray[shardIndex];
 		uint64 shardId = shardInterval->shardId;
 
 		int fragmentCount = list_length(shardResultIds[shardIndex]);
@@ -179,6 +185,8 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	}
 
 	tuplestore_donestoring(tupleStore);
+
+	ReleaseTableCacheEntry(targetRelation);
 
 	PG_RETURN_DATUM(0);
 }

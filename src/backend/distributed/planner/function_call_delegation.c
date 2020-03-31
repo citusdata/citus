@@ -110,8 +110,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	Datum partitionValueDatum = 0;
 	ShardInterval *shardInterval = NULL;
 	List *placementList = NIL;
-	CitusTableCacheEntry *distTable = NULL;
-	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
 	WorkerNode *workerNode = NULL;
 	Task *task = NULL;
@@ -269,13 +267,16 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	distTable = GetCitusTableCacheEntry(colocatedRelationId);
-	partitionColumn = distTable->partitionColumn;
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(colocatedRelationId);
+	Var *partitionColumn = cacheRef->cacheEntry->partitionColumn;
+	char replicationModel = cacheRef->cacheEntry->replicationModel;
+
 	if (partitionColumn == NULL)
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(
 							 "cannnot push down function call for reference tables")));
+		ReleaseTableCacheEntry(cacheRef);
 		return NULL;
 	}
 
@@ -289,6 +290,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		{
 			/* Don't log a message, we should end up here again without a parameter */
 			DissuadePlannerFromUsingPlan(planContext->plan);
+			ReleaseTableCacheEntry(cacheRef);
 			return NULL;
 		}
 	}
@@ -296,6 +298,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	if (!IsA(partitionValue, Const))
 	{
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
+		ReleaseTableCacheEntry(cacheRef);
 		return NULL;
 	}
 
@@ -307,6 +310,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	{
 		ereport(DEBUG1, (errmsg(
 							 "not pushing down function calls in CTEs or Subqueries")));
+		ReleaseTableCacheEntry(cacheRef);
 		return NULL;
 	}
 
@@ -322,14 +326,17 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
 	}
 
-	shardInterval = FindShardInterval(partitionValueDatum, distTable);
+	shardInterval = FindShardInterval(partitionValueDatum, cacheRef->cacheEntry);
 	if (shardInterval == NULL)
 	{
 		ereport(DEBUG1, (errmsg("cannot push down call, failed to find shard interval")));
+		ReleaseTableCacheEntry(cacheRef);
 		return NULL;
 	}
 
 	placementList = ActiveShardPlacementList(shardInterval->shardId);
+	uint64 shardId = shardInterval->shardId;
+	ReleaseTableCacheEntry(cacheRef);
 	if (list_length(placementList) != 1)
 	{
 		/* punt on this for now */
@@ -370,8 +377,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	task->taskType = SELECT_TASK;
 	task->taskPlacementList = placementList;
 	SetTaskQueryIfShouldLazyDeparse(task, planContext->query);
-	task->anchorShardId = shardInterval->shardId;
-	task->replicationModel = distTable->replicationModel;
+	task->anchorShardId = shardId;
+	task->replicationModel = replicationModel;
 
 	job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();

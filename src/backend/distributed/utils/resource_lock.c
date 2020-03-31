@@ -391,11 +391,11 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid citusTableId = shardInterval->relationId;
-	CitusTableCacheEntry *citusTable = GetCitusTableCacheEntry(citusTableId);
-	uint32 colocationId = citusTable->colocationId;
+	CitusTableCacheEntryRef *citusTableRef = GetCitusTableCacheEntry(citusTableId);
+	uint32 colocationId = citusTableRef->cacheEntry->colocationId;
 
 	if (colocationId == INVALID_COLOCATION_ID ||
-		citusTable->partitionMethod != DISTRIBUTE_BY_HASH)
+		citusTableRef->cacheEntry->partitionMethod != DISTRIBUTE_BY_HASH)
 	{
 		SET_LOCKTAG_SHARD_METADATA_RESOURCE(*tag, MyDatabaseId, shardId);
 	}
@@ -404,6 +404,8 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(*tag, MyDatabaseId, colocationId,
 													   shardInterval->shardIndex);
 	}
+
+	ReleaseTableCacheEntry(citusTableRef);
 }
 
 
@@ -420,8 +422,8 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 {
 	Oid relationId = RelationIdForShard(shardId);
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+	List *referencedRelationList = cacheRef->cacheEntry->referencedRelationsViaForeignKey;
 	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
 
 	if (list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
@@ -434,6 +436,8 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 	{
 		LockShardDistributionMetadata(shardInterval->shardId, lockMode);
 	}
+
+	ReleaseTableCacheEntry(cacheRef);
 }
 
 
@@ -450,13 +454,13 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 {
 	Oid relationId = RelationIdForShard(shardId);
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
 
 	/*
 	 * Note that referencedRelationsViaForeignKey contains transitively referenced
 	 * relations too.
 	 */
-	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
+	List *referencedRelationList = cacheRef->cacheEntry->referencedRelationsViaForeignKey;
 	List *referencedShardIntervalList =
 		GetSortedReferenceShardIntervals(referencedRelationList);
 
@@ -478,6 +482,8 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 	{
 		LockShardResource(referencedShardInterval->shardId, lockMode);
 	}
+
+	ReleaseTableCacheEntry(cacheRef);
 }
 
 

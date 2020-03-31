@@ -46,11 +46,9 @@ typedef struct
 	/* lookup key - must be first. A pg_class.oid oid. */
 	Oid relationId;
 
-	/*
-	 * Has an invalidation been received for this entry, requiring a rebuild
-	 * of the cache entry?
-	 */
-	bool isValid;
+	/* cache entries are reference counted */
+	MemoryContext memoryContext;
+	long refCount;
 
 	bool isCitusTable;
 	bool hasUninitializedShardInterval;
@@ -97,6 +95,12 @@ typedef struct
 	int *arrayOfPlacementArrayLengths;
 } CitusTableCacheEntry;
 
+typedef struct CitusTableCacheEntryRef
+{
+	MemoryContextCallback refcallback;
+	CitusTableCacheEntry *cacheEntry;
+} CitusTableCacheEntryRef;
+
 typedef struct DistObjectCacheEntryKey
 {
 	Oid classid;
@@ -125,7 +129,7 @@ extern bool ReferenceTableShardId(uint64 shardId);
 extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
-extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId);
+extern CitusTableCacheEntryRef * GetCitusTableCacheEntry(Oid distributedRelationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
@@ -156,6 +160,7 @@ extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
+extern void ReleaseTableCacheEntry(CitusTableCacheEntryRef *cacheEntry);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);

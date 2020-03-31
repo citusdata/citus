@@ -64,14 +64,17 @@ PG_FUNCTION_INFO_V1(replicate_reference_tables);
 bool
 IsReferenceTable(Oid relationId)
 {
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
+	bool isCitusTable = tableRef->cacheEntry->isCitusTable;
+	char partitionMethod = tableRef->cacheEntry->partitionMethod;
+	ReleaseTableCacheEntry(tableRef);
 
-	if (!tableEntry->isCitusTable)
+	if (!isCitusTable)
 	{
 		return false;
 	}
 
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	if (partitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		return false;
 	}
@@ -349,9 +352,9 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
 
-	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -360,7 +363,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								  relationName)));
 	}
 
-	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
+	if (tableRef->cacheEntry->replicationModel == REPLICATION_MODEL_STREAMING)
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -370,6 +373,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								  relationName)));
 	}
 
+	ReleaseTableCacheEntry(tableRef);
 	LockRelationOid(relationId, AccessExclusiveLock);
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);

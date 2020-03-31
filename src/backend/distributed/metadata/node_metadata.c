@@ -846,7 +846,7 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 Datum
 get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 {
-	ShardInterval *shardInterval = NULL;
+	uint64 shardId = 0;
 
 	CheckCitusVersion(ERROR);
 
@@ -878,13 +878,13 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 			PG_RETURN_INT64(0);
 		}
 
-		shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		ShardInterval *shardInterval =
+			(ShardInterval *) linitial(shardIntervalList);
+		shardId = shardInterval->shardId;
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
 	{
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-
 		/* if given table is not reference table, distributionValue cannot be NULL */
 		if (PG_ARGISNULL(1))
 		{
@@ -903,7 +903,16 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		Datum distributionValueDatum = StringToDatum(distributionValueString,
 													 distributionDataType);
 
-		shardInterval = FindShardInterval(distributionValueDatum, cacheEntry);
+		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+
+		ShardInterval *shardInterval =
+			FindShardInterval(distributionValueDatum, cacheRef->cacheEntry);
+		if (shardInterval != NULL)
+		{
+			shardId = shardInterval->shardId;
+		}
+
+		ReleaseTableCacheEntry(cacheRef);
 	}
 	else
 	{
@@ -913,12 +922,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 							   "tables and reference tables.")));
 	}
 
-	if (shardInterval != NULL)
-	{
-		PG_RETURN_INT64(shardInterval->shardId);
-	}
-
-	PG_RETURN_INT64(0);
+	PG_RETURN_INT64(shardId);
 }
 
 

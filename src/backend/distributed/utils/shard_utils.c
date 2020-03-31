@@ -46,12 +46,13 @@ GetTableLocalShardOid(Oid citusTableOid, uint64 shardId)
 Oid
 GetReferenceTableLocalShardOid(Oid referenceTableOid)
 {
-	const CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(referenceTableOid);
+	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(referenceTableOid);
 
 	/* given OID should belong to a valid reference table */
-	Assert(cacheEntry != NULL && cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+	Assert(tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
 
-	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	const ShardInterval *shardInterval =
+		tableRef->cacheEntry->sortedShardIntervalArray[0];
 	uint64 referenceTableShardId = shardInterval->shardId;
 
 	return GetTableLocalShardOid(referenceTableOid, referenceTableShardId);

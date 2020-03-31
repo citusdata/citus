@@ -106,7 +106,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/* find partition tuple for partitioned relation */
-	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *partitionRef = GetCitusTableCacheEntry(relationId);
 
 	/* create tuple descriptor for return value */
 	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
@@ -120,7 +120,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	char *partitionKeyString = partitionEntry->partitionKeyString;
+	char *partitionKeyString = partitionRef->cacheEntry->partitionKeyString;
 
 	/* reference tables do not have partition key */
 	if (partitionKeyString == NULL)
@@ -132,7 +132,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	{
 		/* get decompiled expression tree for partition key */
 		partitionKeyExpr =
-			PointerGetDatum(cstring_to_text(partitionEntry->partitionKeyString));
+			PointerGetDatum(cstring_to_text(partitionKeyString));
 		partitionKey = DirectFunctionCall2(pg_get_expr, partitionKeyExpr,
 										   ObjectIdGetDatum(relationId));
 	}
@@ -144,7 +144,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 
 	values[0] = ObjectIdGetDatum(relationId);
 	values[1] = shardStorageType;
-	values[2] = partitionEntry->partitionMethod;
+	values[2] = partitionRef->cacheEntry->partitionMethod;
 	values[3] = partitionKey;
 	values[4] = Int32GetDatum(ShardReplicationFactor);
 	values[5] = Int64GetDatum(shardMaxSizeInBytes);
@@ -153,6 +153,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	HeapTuple metadataTuple = heap_form_tuple(metadataDescriptor, values, isNulls);
 	Datum metadataDatum = HeapTupleGetDatum(metadataTuple);
 
+	ReleaseTableCacheEntry(partitionRef);
 	PG_RETURN_DATUM(metadataDatum);
 }
 

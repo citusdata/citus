@@ -247,17 +247,17 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 List *
 GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 {
-	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *citusTableRef = GetCitusTableCacheEntry(relationId);
 	List *resultList = NIL;
 
-	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
+	int shardIntervalArrayLength = citusTableRef->cacheEntry->shardIntervalArrayLength;
 
 	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
 		GroupShardPlacement *placementArray =
-			distTableCacheEntry->arrayOfPlacementArrays[shardIndex];
+			citusTableRef->cacheEntry->arrayOfPlacementArrays[shardIndex];
 		int numberOfPlacements =
-			distTableCacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+			citusTableRef->cacheEntry->arrayOfPlacementArrayLengths[shardIndex];
 
 		for (int placementIndex = 0; placementIndex < numberOfPlacements;
 			 placementIndex++)
@@ -271,6 +271,7 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 		}
 	}
 
+	ReleaseTableCacheEntry(citusTableRef);
 	return resultList;
 }
 
@@ -282,16 +283,16 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 static List *
 ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 {
-	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *citusTableRef = GetCitusTableCacheEntry(relationId);
 	List *shardIntervalList = NIL;
-	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
+	int shardIntervalArrayLength = citusTableRef->cacheEntry->shardIntervalArrayLength;
 
 	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
 		GroupShardPlacement *placementArray =
-			distTableCacheEntry->arrayOfPlacementArrays[shardIndex];
+			citusTableRef->cacheEntry->arrayOfPlacementArrays[shardIndex];
 		int numberOfPlacements =
-			distTableCacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+			citusTableRef->cacheEntry->arrayOfPlacementArrayLengths[shardIndex];
 
 		for (int placementIndex = 0; placementIndex < numberOfPlacements;
 			 placementIndex++)
@@ -301,13 +302,14 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 			if (placement->groupId == workerNode->groupId)
 			{
 				ShardInterval *cachedShardInterval =
-					distTableCacheEntry->sortedShardIntervalArray[shardIndex];
+					citusTableRef->cacheEntry->sortedShardIntervalArray[shardIndex];
 				ShardInterval *shardInterval = CopyShardInterval(cachedShardInterval);
 				shardIntervalList = lappend(shardIntervalList, shardInterval);
 			}
 		}
 	}
 
+	ReleaseTableCacheEntry(citusTableRef);
 	return shardIntervalList;
 }
 
@@ -473,16 +475,18 @@ TableShardReplicationFactor(Oid relationId)
 List *
 LoadShardIntervalList(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
-	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
+	for (int i = 0; i < cacheRef->cacheEntry->shardIntervalArrayLength; i++)
 	{
 		ShardInterval *newShardInterval =
-			CopyShardInterval(cacheEntry->sortedShardIntervalArray[i]);
+			CopyShardInterval(cacheRef->cacheEntry->sortedShardIntervalArray[i]);
+
 		shardList = lappend(shardList, newShardInterval);
 	}
 
+	ReleaseTableCacheEntry(cacheRef);
 	return shardList;
 }
 
@@ -495,14 +499,15 @@ LoadShardIntervalList(Oid relationId)
 int
 ShardIntervalCount(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
 	int shardIntervalCount = 0;
 
-	if (cacheEntry->isCitusTable)
+	if (cacheRef->cacheEntry->isCitusTable)
 	{
-		shardIntervalCount = cacheEntry->shardIntervalArrayLength;
+		shardIntervalCount = cacheRef->cacheEntry->shardIntervalArrayLength;
 	}
 
+	ReleaseTableCacheEntry(cacheRef);
 	return shardIntervalCount;
 }
 
@@ -517,17 +522,19 @@ ShardIntervalCount(Oid relationId)
 List *
 LoadShardList(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
 
-	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
+	for (int i = 0; i < cacheRef->cacheEntry->shardIntervalArrayLength; i++)
 	{
-		ShardInterval *currentShardInterval = cacheEntry->sortedShardIntervalArray[i];
+		ShardInterval *currentShardInterval =
+			cacheRef->cacheEntry->sortedShardIntervalArray[i];
 		uint64 *shardIdPointer = AllocateUint64(currentShardInterval->shardId);
 
 		shardList = lappend(shardList, shardIdPointer);
 	}
 
+	ReleaseTableCacheEntry(cacheRef);
 	return shardList;
 }
 
@@ -1393,14 +1400,15 @@ EnsureHashDistributedTable(Oid relationId)
 
 
 /*
- * IsDistributedTable returns true if the given relation is
- * a distributed table.
+ * IsHashDistributedTable returns true if the given relation is
+ * a hash distributed table.
  */
 bool
 IsHashDistributedTable(Oid relationId)
 {
-	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
-	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
+	CitusTableCacheEntryRef *sourceTableRef = GetCitusTableCacheEntry(relationId);
+	char sourceDistributionMethod = sourceTableRef->cacheEntry->partitionMethod;
+	ReleaseTableCacheEntry(sourceTableRef);
 	return sourceDistributionMethod == DISTRIBUTE_BY_HASH;
 }
 

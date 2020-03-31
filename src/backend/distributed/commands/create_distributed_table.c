@@ -811,11 +811,9 @@ static void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
-	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
-	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
+	CitusTableCacheEntryRef *sourceTableRef = GetCitusTableCacheEntry(sourceRelationId);
 
+	char sourceDistributionMethod = sourceTableRef->cacheEntry->partitionMethod;
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -823,6 +821,12 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 						errdetail("Currently, colocate_with option is only supported "
 								  "for hash distributed tables.")));
 	}
+
+	char sourceReplicationModel = sourceTableRef->cacheEntry->replicationModel;
+	Oid sourceDistributionColumnType =
+		sourceTableRef->cacheEntry->partitionColumn->vartype;
+
+	ReleaseTableCacheEntry(sourceTableRef);
 
 	if (sourceReplicationModel != replicationModel)
 	{
@@ -835,7 +839,6 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  sourceRelationName, relationName)));
 	}
 
-	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -930,12 +933,11 @@ EnsureLocalTableEmpty(Oid relationId)
 static void
 EnsureTableNotDistributed(Oid relationId)
 {
-	char *relationName = get_rel_name(relationId);
-
 	bool isCitusTable = IsCitusTable(relationId);
 
 	if (isCitusTable)
 	{
+		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("table \"%s\" is already distributed",
 							   relationName)));
