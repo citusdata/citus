@@ -215,7 +215,6 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
-static Node * AddAnyValueAggregates(Node *node, void *context);
 
 
 /*
@@ -974,7 +973,7 @@ TargetEntryList(List *expressionList)
  * function. This is needed for repartition joins because primary keys are not
  * present on intermediate tables.
  */
-static Node *
+Node *
 AddAnyValueAggregates(Node *node, void *context)
 {
 	List *groupClauseList = context;
@@ -994,6 +993,7 @@ AddAnyValueAggregates(Node *node, void *context)
 		agg->aggtranstype = InvalidOid;
 		agg->aggargtypes = list_make1_oid(var->vartype);
 		agg->aggsplit = AGGSPLIT_SIMPLE;
+		agg->aggcollid = exprCollation((Node *) var);
 		return (Node *) agg;
 	}
 	if (IsA(node, TargetEntry))
