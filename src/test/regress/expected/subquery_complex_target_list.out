@@ -1,5 +1,5 @@
 -- ===================================================================
--- test recursive planning functionality with complex target entries
+-- test subquery functionality with complex target entries
 -- and some utilities
 -- ===================================================================
 CREATE SCHEMA subquery_complex;
@@ -499,7 +499,99 @@ GROUP BY key ORDER BY 3, 2, 1;
  key-2 | value-1 |   2
 (2 rows)
 
+-- whole rows in the output should work
+SELECT a.key, a, count(b)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key ORDER BY 3, 2, 1;
+  key  |                     a                      | count
+---------------------------------------------------------------------
+ key-2 | (key-2,value-1,"Sun Feb 02 00:00:00 2020") |     0
+ key-1 | (key-1,value-2,"Wed Jan 01 00:00:00 2020") |     1
+(2 rows)
+
+SELECT a FROM items a ORDER BY key;
+                     a
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020")
+ (key-2,value-1,"Sun Feb 02 00:00:00 2020")
+(2 rows)
+
+SELECT a FROM items a WHERE key = 'key-1';
+                     a
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020")
+(1 row)
+
+SELECT a FROM (SELECT a, random() FROM items a) b ORDER BY a;
+                     a
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020")
+ (key-2,value-1,"Sun Feb 02 00:00:00 2020")
+(2 rows)
+
+-- whole rows when table name needs escaping
+create table "another table" (key text primary key, value text not null, t timestamp);
+SELECT create_distributed_table('"another table"','key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO "another table" TABLE items;
+SELECT a.key, a, count(b)
+FROM "another table" a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key ORDER BY 3, 2, 1;
+  key  |                     a                      | count
+---------------------------------------------------------------------
+ key-2 | (key-2,value-1,"Sun Feb 02 00:00:00 2020") |     0
+ key-1 | (key-1,value-2,"Wed Jan 01 00:00:00 2020") |     1
+(2 rows)
+
+-- subquery output is not recognised yet
+SELECT b FROM (SELECT a FROM items a GROUP BY key) b ORDER BY b;
+ERROR:  input of anonymous composite types is not implemented
+-- table output in recursive planning
+WITH a AS (SELECT a FROM items a OFFSET 0)
+SELECT count(a) FROM a;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+WITH a AS (SELECT a AS b FROM items a OFFSET 0)
+SELECT b FROM a ORDER BY b;
+                     b
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020")
+ (key-2,value-1,"Sun Feb 02 00:00:00 2020")
+(2 rows)
+
+BEGIN;
+WITH a AS (DELETE FROM items RETURNING items)
+SELECT count(a) FROM a;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+ROLLBACK;
+-- mix custom types with table type
+CREATE TYPE full_item AS (key text, value text);
+ALTER TABLE items ADD COLUMN fi subquery_complex.full_item;
+UPDATE items SET fi = (items.key, items.value);
+SELECT a, a.fi, (a.fi).* FROM items a ORDER BY 1,2,3;
+                              a                               |       fi        |  key  |  value
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020","(key-1,value-2)") | (key-1,value-2) | key-1 | value-2
+ (key-2,value-1,"Sun Feb 02 00:00:00 2020","(key-2,value-1)") | (key-2,value-1) | key-2 | value-1
+(2 rows)
+
+SELECT a, b.fi, (b.fi).*, (a).fi, ((a).fi).* FROM (SELECT a, fi FROM items a GROUP BY key) b ORDER BY 1,2,3;
+                              a                               |       fi        |  key  |  value  |       fi        |  key  |  value
+---------------------------------------------------------------------
+ (key-1,value-2,"Wed Jan 01 00:00:00 2020","(key-1,value-2)") | (key-1,value-2) | key-1 | value-2 | (key-1,value-2) | key-1 | value-2
+ (key-2,value-1,"Sun Feb 02 00:00:00 2020","(key-2,value-1)") | (key-2,value-1) | key-2 | value-1 | (key-2,value-1) | key-2 | value-1
+(2 rows)
+
+SET client_min_messages TO 'WARNING';
 DROP SCHEMA subquery_complex CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table items
-drop cascades to table other_items

@@ -430,8 +430,17 @@ RESET citus.task_executor_type;
 -- This fails due to table types not being managed properly
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
-ERROR:  type "aggregate_support.aggdata" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ key | count
+---------------------------------------------------------------------
+   1 |     2
+   2 |     3
+   3 |     1
+   5 |     1
+   6 |     2
+   7 |     1
+   9 |     1
+(7 rows)
+
 -- GROUPING parses to GroupingFunc, distinct from Aggref
 -- These three queries represent edge cases implementation would have to consider
 -- For now we error out of all three
