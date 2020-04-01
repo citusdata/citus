@@ -2396,9 +2396,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 		else if (UseConnectionPerPlacement())
 		{
 			/*
-			 * The executor can finish the execution with a single connection,
-			 * remaining are optional. If the executor can get more connections,
-			 * it can increase the parallelism.
+			 * Via connection throttling, the connection establishments may be suspended
+			 * until a connection slot is empty to the remote host. When forced to use
+			 * one connection per placement, do not enforce this restriction.
 			 */
 			connectionFlags |= NEVER_WAIT_FOR_CONNECTION;
 		}
