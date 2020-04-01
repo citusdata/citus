@@ -232,7 +232,7 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 	 * Sleep this amount before retrying, there is not much value retrying too often
 	 * as the remote node is too busy. That's the reason we're retrying.
 	 */
-	double sleepTimeoutMsec = 1000;
+	double sleepTimeoutMsec = 100;
 
 	/* In practice, 0 disables the retry logic */
 	int allowedRetryCount = ConnectionRetryTimout / sleepTimeoutMsec;
@@ -275,6 +275,9 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 										"citus.max_shared_pool_size or "
 										"citus.connection_retry_timeout")));
 			}
+
+			ereport(DEBUG4, (errmsg("connection to  node %s:%d is retried for %d times",
+									hostname, port, retryCount)));
 		}
 	}
 }
