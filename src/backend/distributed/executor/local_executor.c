@@ -147,8 +147,30 @@ ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 	}
 	DistributedPlan *distributedPlan = NULL;
 	ParamListInfo paramListInfo = NULL;
+	bool isUtilityCommand = false;
 	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,
-										tupleStoreState);
+										tupleStoreState, isUtilityCommand);
+}
+
+
+/*
+ * ExecuteLocalUtilityTaskList executes the given tasks locally.
+ *
+ * The function returns totalRowsProcessed.
+ */
+uint64
+ExecuteLocalUtilityTaskList(List *utilityTaskList)
+{
+	if (list_length(utilityTaskList) == 0)
+	{
+		return 0;
+	}
+	DistributedPlan *distributedPlan = NULL;
+	ParamListInfo paramListInfo = NULL;
+	Tuplestorestate *tupleStoreState = NULL;
+	bool isUtilityCommand = true;
+	return ExecuteLocalTaskListExtended(utilityTaskList, paramListInfo, distributedPlan,
+										tupleStoreState, isUtilityCommand);
 }
 
 
@@ -163,9 +185,11 @@ ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
  * The function returns totalRowsProcessed.
  */
 uint64
-ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
+ExecuteLocalTaskListExtended(List *taskList,
+							 ParamListInfo orig_paramListInfo,
 							 DistributedPlan *distributedPlan,
-							 Tuplestorestate *tupleStoreState)
+							 Tuplestorestate *tupleStoreState,
+							 bool isUtilityCommand)
 {
 	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 	int numParams = 0;
@@ -202,6 +226,11 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 		}
 		LogLocalCommand(task);
 
+		if (isUtilityCommand)
+		{
+			LocallyExecuteUtilityTask(TaskQueryStringForAllPlacements(task));
+			continue;
+		}
 
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
@@ -271,7 +300,6 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 		}
 
-
 		char *shardQueryString = NULL;
 		if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
 		{
@@ -329,39 +357,6 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
 								   parameterValues, true);
-}
-
-
-/*
- * ExecuteLocalUtilityTaskList executes a list of tasks locally. This function
- * also logs local execution notice for each task and sets
- * TransactionAccessedLocalPlacement to true for next set of possible queries
- * & commands within the current transaction block. See the comment in function.
- */
-void
-ExecuteLocalUtilityTaskList(List *localTaskList)
-{
-	Task *localTask = NULL;
-
-	foreach_ptr(localTask, localTaskList)
-	{
-		const char *localTaskQueryCommand = TaskQueryStringForAllPlacements(localTask);
-
-		/* we do not expect tasks with INVALID_SHARD_ID for utility commands */
-		Assert(localTask->anchorShardId != INVALID_SHARD_ID);
-
-		Assert(TaskAccessesLocalNode(localTask));
-
-		/*
-		 * We should register the access to local placement to force the local
-		 * execution of the following commands withing the current transaction.
-		 */
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
-
-		LogLocalCommand(localTask);
-
-		LocallyExecuteUtilityTask(localTaskQueryCommand);
-	}
 }
 
 

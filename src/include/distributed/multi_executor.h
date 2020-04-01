@@ -108,6 +108,10 @@ typedef struct ExecutionParams
 	/* localExecutionSupported is true if we can use local execution, if it is false
 	 * local execution will not be used. */
 	bool localExecutionSupported;
+
+	/* isUtilityCommand is true if the current execution is for a utility
+	 * command such as a DDL command.*/
+	bool isUtilityCommand;
 } ExecutionParams;
 
 ExecutionParams * CreateBasicExecutionParams(RowModifyLevel modLevel,
@@ -120,8 +124,6 @@ extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskL
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
 											bool hasReturning);
-extern void ExecuteUtilityTaskListWithoutResults(List *taskList, bool
-												 localExecutionSupported);
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);

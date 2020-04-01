@@ -17,6 +17,7 @@
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/foreign_key_relationship.h"
@@ -85,8 +86,7 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		 * then execute TRUNCATE command locally.
 		 */
 		bool localExecutionSupported = true;
-
-		ExecuteUtilityTaskListWithoutResults(taskList, localExecutionSupported);
+		ExecuteUtilityTaskList(taskList, localExecutionSupported);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
