@@ -235,7 +235,7 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 				totalRowsProcessed += LocallyPlanAndExecuteMultipleQueries(
 					queryStringList,
 					tupleStoreState);
-				return totalRowsProcessed;
+				continue;
 			}
 
 			Query *shardQuery = ParseQueryString(TaskQueryStringForAllPlacements(task),
