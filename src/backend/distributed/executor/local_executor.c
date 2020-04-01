@@ -81,6 +81,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/query_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -116,6 +117,8 @@ static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   Tuplestorestate *tupleStoreState, ParamListInfo
 								   paramListInfo);
 static void LogLocalCommand(Task *task);
+static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
+												   Tuplestorestate *tupleStoreState);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -221,9 +224,24 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 				taskParameterTypes = NULL;
 			}
 
+			/*
+			 * for concatenated strings, we set queryStringList so that we can access
+			 * each query string.
+			 */
+			if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
+			{
+				List *queryStringList = task->taskQuery.data.queryStringList;
+				LogLocalCommand(task);
+				totalRowsProcessed += LocallyPlanAndExecuteMultipleQueries(
+					queryStringList,
+					tupleStoreState);
+				continue;
+			}
+
 			Query *shardQuery = ParseQueryString(TaskQueryStringForAllPlacements(task),
 												 taskParameterTypes,
 												 taskNumParams);
+
 
 			int cursorOptions = 0;
 
@@ -261,50 +279,31 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 
 
 /*
- * ExtractAndExecuteLocalAndRemoteTasks extracts local and remote tasks
- * if local execution can be used and executes them.
+ * LocallyPlanAndExecuteMultipleQueries plans and executes the given query strings
+ * one by one.
  */
-uint64
-ExtractAndExecuteLocalAndRemoteTasks(CitusScanState *scanState,
-									 List *taskList, RowModifyLevel rowModifyLevel, bool
-									 hasReturning)
+static uint64
+LocallyPlanAndExecuteMultipleQueries(List *queryStrings, Tuplestorestate *tupleStoreState)
 {
-	uint64 processedRows = 0;
-	List *localTaskList = NIL;
-	List *remoteTaskList = NIL;
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-
-	if (ShouldExecuteTasksLocally(taskList))
+	char *queryString = NULL;
+	uint64 totalProcessedRows = 0;
+	if (tupleStoreState == NULL)
 	{
-		bool readOnlyPlan = false;
-
-		/* set local (if any) & remote tasks */
-		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
-								   &remoteTaskList);
-		EState *estate = ScanStateGetExecutorState(scanState);
-		processedRows += ExecuteLocalTaskListExtended(
-			localTaskList,
-			estate->es_param_list_info,
-			scanState->distributedPlan,
-			scanState->tuplestorestate
-			);
+		tupleStoreState = tuplestore_begin_heap(true, false, work_mem);
 	}
-	else
+	foreach_ptr(queryString, queryStrings)
 	{
-		/* all tasks should be executed via remote connections */
-		remoteTaskList = taskList;
+		Query *shardQuery = ParseQueryString(queryString,
+											 NULL,
+											 0);
+		int cursorOptions = 0;
+		ParamListInfo paramListInfo = NULL;
+		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
+		totalProcessedRows += ExecuteLocalTaskPlan(localPlan, queryString,
+												   tupleStoreState,
+												   paramListInfo);
 	}
-
-	/* execute remote tasks if any */
-	if (list_length(remoteTaskList) > 0)
-	{
-		processedRows += ExecuteTaskListIntoTupleStore(rowModifyLevel, remoteTaskList,
-													   tupleDescriptor,
-													   scanState->tuplestorestate,
-													   hasReturning);
-	}
-
-	return processedRows;
+	return totalProcessedRows;
 }
 
 

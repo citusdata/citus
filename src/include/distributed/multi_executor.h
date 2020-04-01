@@ -79,15 +79,14 @@ extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 									  Tuplestorestate *tupleStore,
 									  bool hasReturning, int targetPoolSize,
 									  TransactionProperties *xactProperties,
-									  List *jobIdList);
+									  List *jobIdList,
+									  bool localExecutionSupported);
 extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
 											bool hasReturning);
 extern void ExecuteUtilityTaskListWithoutResults(List *taskList, bool
 												 localExecutionSupported);
-extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int
-							  targetPoolSize);
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);

@@ -270,11 +270,11 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-			uint64 rowsInserted = ExtractAndExecuteLocalAndRemoteTasks(scanState,
-																	   taskList,
-																	   ROW_MODIFY_COMMUTATIVE,
-																	   hasReturning);
+			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+			uint64 rowsInserted = ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE,
+																taskList, tupleDescriptor,
+																scanState->tuplestorestate,
+																hasReturning);
 
 			executorState->es_processed = rowsInserted;
 		}
@@ -331,9 +331,11 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 				Assert(scanState->tuplestorestate == NULL);
 				scanState->tuplestorestate =
 					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-				ExtractAndExecuteLocalAndRemoteTasks(scanState, prunedTaskList,
-													 ROW_MODIFY_COMMUTATIVE,
-													 hasReturning);
+
+				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+				ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+											  tupleDescriptor, scanState->tuplestorestate,
+											  hasReturning);
 
 				if (SortReturning && hasReturning)
 				{
