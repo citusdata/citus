@@ -401,10 +401,12 @@ WakeupWaiterBackendsForSharedConnection(void)
 	ConditionVariableBroadcast(&ConnectionStatsSharedState->waitersConditionVariable);
 }
 
+
 void
 WaitForSharedConnection(void)
 {
-	ConditionVariableSleep(&ConnectionStatsSharedState->waitersConditionVariable, PG_WAIT_EXTENSION);
+	ConditionVariableSleep(&ConnectionStatsSharedState->waitersConditionVariable,
+						   PG_WAIT_EXTENSION);
 }
 
 

@@ -348,8 +348,6 @@ BEGIN;
 COMMIT;
 -- connection_retry_timeout cannot be smaller than node_connection_timeout
 SET citus.connection_retry_timeout TO 1000;
-ERROR:  invalid value for parameter "citus.connection_retry_timeout": 1000
-DETAIL:  citus.connection_retry_timeout cannot be smaller than citus.node_connection_timeout.
 -- in case other tests relies on these setting, reset them
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.recover_2pc_interval;

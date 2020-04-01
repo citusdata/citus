@@ -1595,4 +1595,3 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 	}
 #endif
 }
-
