@@ -117,6 +117,12 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
+	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
 	if (!EnableAlterRolePropagation || !IsCoordinator())
@@ -165,6 +171,12 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 List *
 PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 {
+	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
 	if (!EnableAlterRolePropagation)
 	{
 		return NIL;

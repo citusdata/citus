@@ -97,14 +97,14 @@ static DistributeObjectOps Any_AlterRole = {
 	.qualify = NULL,
 	.preprocess = NULL,
 	.postprocess = PostprocessAlterRoleStmt,
-	.address = NULL,
+	.address = AlterRoleStmtObjectAddress,
 };
 static DistributeObjectOps Any_AlterRoleSet = {
 	.deparse = DeparseAlterRoleSetStmt,
 	.qualify = QualifyAlterRoleSetStmt,
 	.preprocess = PreprocessAlterRoleSetStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = AlterRoleSetStmtObjectAddress,
 };
 static DistributeObjectOps Any_AlterTableMoveAll = {
 	.deparse = NULL,

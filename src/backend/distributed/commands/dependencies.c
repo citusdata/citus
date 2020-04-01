@@ -196,6 +196,12 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateFunctionDDLCommandsIdempotent(dependency);
 		}
 
+		case OCLASS_ROLE:
+		{
+			/* TODO add alter commands for distributed roles */
+			return NIL;
+		}
+
 		case OCLASS_SCHEMA:
 		{
 			char *schemaDDLCommand = CreateSchemaDDLCommand(dependency->objectId);
