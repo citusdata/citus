@@ -3,7 +3,7 @@ BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 -- test distributed type
 INSERT INTO tt VALUES (1, (2,3)::type1);
-SELECT * FROM tt;
+SELECT * FROM tt ORDER BY 1,2;
  a |   b
 ---------------------------------------------------------------------
  1 | (2,3)
