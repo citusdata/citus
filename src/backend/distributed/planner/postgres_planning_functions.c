@@ -13,9 +13,11 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "distributed/multi_master_planner.h"
 #include "nodes/plannodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
 #else
@@ -29,7 +31,7 @@
  * src/backend/optimizer/plan/createplan.c.
  */
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 /*
  * distinctList is a list of SortGroupClauses, identifying the targetlist items

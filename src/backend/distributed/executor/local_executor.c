@@ -76,6 +76,8 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
@@ -92,7 +94,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/planner.h"

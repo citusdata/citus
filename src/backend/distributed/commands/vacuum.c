@@ -10,7 +10,9 @@
 
 #include "postgres.h"
 
-#if PG_VERSION_NUM >= 120000
+#include "distributed/pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "commands/defrem.h"
 #endif
 #include "commands/vacuum.h"
@@ -33,7 +35,7 @@
 typedef struct CitusVacuumParams
 {
 	int options;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	VacOptTernaryValue truncate;
 	VacOptTernaryValue index_cleanup;
 #endif
@@ -279,7 +281,7 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 
 	/* if no flags remain, exit early */
 	if (vacuumFlags == 0
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		&& vacuumParams.truncate == VACOPT_TERNARY_DEFAULT &&
 		vacuumParams.index_cleanup == VACOPT_TERNARY_DEFAULT
 #endif
@@ -316,7 +318,7 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "VERBOSE,");
 	}
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	if (vacuumFlags & VACOPT_SKIP_LOCKED)
 	{
 		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
@@ -415,7 +417,7 @@ ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
 /*
  * VacuumStmtParams returns a CitusVacuumParams based on the supplied VacuumStmt.
  */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 /*
  * This is mostly ExecVacuum from Postgres's commands/vacuum.c

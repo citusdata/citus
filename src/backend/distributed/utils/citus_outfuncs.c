@@ -18,6 +18,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <ctype.h>
 
 #include "distributed/citus_nodefuncs.h"
@@ -31,7 +33,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"

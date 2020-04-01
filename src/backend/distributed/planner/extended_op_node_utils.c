@@ -9,13 +9,14 @@
  */
 
 #include "postgres.h"
+#include "distributed/pg_version_constants.h"
 
 #include "distributed/extended_op_node_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"

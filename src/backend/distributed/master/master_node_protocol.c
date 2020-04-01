@@ -12,6 +12,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "c.h"
 #include "fmgr.h"
 #include "funcapi.h"
@@ -463,7 +466,7 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		 * This tuple descriptor must match the output parameters declared for
 		 * the function in pg_proc.
 		 */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS, false);
 #else
 		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);

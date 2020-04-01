@@ -14,10 +14,13 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "funcapi.h"
 #include "miscadmin.h"
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
 #include "access/table.h"
 #endif
@@ -307,7 +310,7 @@ Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
 	Relation pgNamespace = NULL;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	TableScanDesc scanDescriptor = NULL;
 #else
 	HeapScanDesc scanDescriptor = NULL;
@@ -319,7 +322,7 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
 #else
 	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);

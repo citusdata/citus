@@ -14,10 +14,11 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "distributed/pg_version_constants.h"
 
 #include "distributed/cte_inline.h"
 #include "nodes/nodeFuncs.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/cost.h"
@@ -25,7 +26,7 @@
 #endif
 #include "rewrite/rewriteManip.h"
 
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 
 /* copy & paste from PG 12 */
 #define PG_12_QTW_EXAMINE_RTES_BEFORE 0x10
@@ -232,7 +233,7 @@ PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType)
 	 * will be inlined even if multiply referenced.
 	 */
 	if (
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		(cte->ctematerialized == CTEMaterializeNever ||
 		 (cte->ctematerialized == CTEMaterializeDefault &&
 		  cte->cterefcount == 1)) &&
@@ -298,7 +299,7 @@ inline_cte_walker(Node *node, inline_cte_walker_context *context)
 		 * query_tree_walker would descend into the newly inlined CTE query,
 		 * which we don't want.
 		 */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 		(void) pg_12_query_tree_walker(query, inline_cte_walker, context,
 									   PG_12_QTW_EXAMINE_RTES_AFTER);
 #else
@@ -411,7 +412,7 @@ contain_dml_walker(Node *node, void *context)
 }
 
 
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 /*
  * pg_12_query_tree_walker is copied from Postgres 12's source
  * code. The only difference between query_tree_walker the new

@@ -12,6 +12,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include <math.h>
 
 #include "access/genam.h"
@@ -43,7 +46,7 @@
 #include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"
@@ -3311,7 +3314,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 			if (procForm->proargtypes.values[0] == inputType ||
 				procForm->proargtypes.values[0] == ANYELEMENTOID)
 			{
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 				functionOid = HeapTupleGetOid(heapTuple);
 #else
 				functionOid = procForm->oid;

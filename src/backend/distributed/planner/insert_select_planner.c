@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "catalog/pg_class.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
@@ -35,7 +37,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"

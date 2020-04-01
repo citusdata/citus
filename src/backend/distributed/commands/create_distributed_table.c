@@ -11,6 +11,8 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/genam.h"
 #include "access/hash.h"
 #include "access/heapam.h"
@@ -644,7 +646,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 							"cannot distribute relations using non-heap access methods")));
 	}
 
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 
 	/* verify target relation does not use WITH (OIDS) PostgreSQL feature */
 	if (relationDesc->tdhasoid)
@@ -691,7 +693,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 									  "defined to use hash partitioning.")));
 		}
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		if (distributionColumn->varcollid != InvalidOid &&
 			!get_collation_isdeterministic(distributionColumn->varcollid))
 		{
@@ -1206,7 +1208,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	bool stopOnFailure = true;
 
 	EState *estate = NULL;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	TableScanDesc scan = NULL;
 #else
 	HeapScanDesc scan = NULL;
@@ -1269,7 +1271,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
 
 	/* begin reading from local table */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	scan = table_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
 #else
 	scan = heap_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
@@ -1280,7 +1282,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		/* materialize tuple and send it to a shard */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		ExecStoreHeapTuple(tuple, slot, false);
 #else
 		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
@@ -1314,7 +1316,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	MemoryContextSwitchTo(oldContext);
 
 	/* finish reading from the local table */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	table_endscan(scan);
 #else
 	heap_endscan(scan);
@@ -1348,7 +1350,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -1392,7 +1394,7 @@ static bool
 DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 											Var *distributionColumn)
 {
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
 													distributionColumn->varattno - 1);
 
@@ -1412,7 +1414,7 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 static bool
 RelationUsesHeapAccessMethodOrNone(Relation relation)
 {
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 	return relation->rd_rel->relkind != RELKIND_RELATION ||
 		   relation->rd_amhandler == HEAP_TABLE_AM_HANDLER_OID;

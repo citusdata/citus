@@ -43,6 +43,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -345,7 +347,7 @@ PreprocessAlterEnumStmt(Node *node, const char *queryString)
 	 * creating a DDLTaksList we won't return anything here. During the processing phase
 	 * we directly connect to workers and execute the commands remotely.
 	 */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 	if (AlterEnumIsAddValue(castNode(AlterEnumStmt, node)))
 	{
 		/*
@@ -391,7 +393,7 @@ PostprocessAlterEnumStmt(Node *node, const char *queryString)
 	 * From pg12 and up we use the normal infrastructure and create the ddl jobs during
 	 * planning.
 	 */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))

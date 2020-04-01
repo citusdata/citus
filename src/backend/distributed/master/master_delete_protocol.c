@@ -14,6 +14,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "c.h"
 #include "fmgr.h"
 #include "libpq-fe.h"
@@ -45,7 +48,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/nodeFuncs.h"
 #endif
 #include "nodes/nodes.h"
@@ -53,7 +56,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #else

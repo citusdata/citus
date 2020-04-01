@@ -13,6 +13,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/listutils.h"
@@ -303,7 +305,7 @@ FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 	}
 	else if (IsA(node, Query))
 	{
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		const int flags = QTW_EXAMINE_RTES_BEFORE;
 #else
 		const int flags = QTW_EXAMINE_RTES;

@@ -55,6 +55,8 @@
 #include <netinet/in.h> /* for htons */
 #include <string.h>
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/htup_details.h"
 #include "access/htup.h"
 #include "access/sdir.h"
@@ -413,7 +415,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -873,7 +875,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 		Oid typeId = InvalidOid;
 
 		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -1322,7 +1324,7 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
 		if (attr->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| attr->attgenerated == ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -1494,7 +1496,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 		}
 
 		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -1617,7 +1619,7 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
 		if (!currentColumn->attisdropped
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			&& currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
 #endif
 			)
@@ -2726,7 +2728,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 		{
 			if (copyStatement->is_from)
 			{
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 				if (copyStatement->whereClause)
 				{
 					ereport(ERROR, (errmsg(

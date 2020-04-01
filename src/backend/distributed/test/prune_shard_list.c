@@ -11,6 +11,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "c.h"
 #include "fmgr.h"
 
@@ -25,7 +28,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #endif
