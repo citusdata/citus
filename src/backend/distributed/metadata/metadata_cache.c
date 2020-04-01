@@ -996,7 +996,7 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 	}
 
 	systable_endscan(pgDistObjectScan);
-	relation_close(pgDistObjectRel, AccessShareLock);
+	relation_close(pgDistObjectRel, NoLock);
 
 	return cacheEntry;
 }
@@ -1183,7 +1183,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 			arrayIndex++;
 		}
 
-		heap_close(distShardRelation, AccessShareLock);
+		heap_close(distShardRelation, NoLock);
 
 		ShardInterval *firstShardInterval = shardIntervalArray[0];
 		bool foundInCache = false;
@@ -3555,7 +3555,7 @@ DistTableOidList(void)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	heap_close(pgDistPartition, NoLock);
 
 	return distTableOidList;
 }
@@ -3656,7 +3656,7 @@ LookupDistShardTuples(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, AccessShareLock);
+	heap_close(pgDistShard, NoLock);
 
 	return distShardTupleList;
 }
