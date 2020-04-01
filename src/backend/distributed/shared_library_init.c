@@ -482,6 +482,18 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+
+	DefineCustomIntVariable(
+		"citus.connection_retry_timeout",
+		gettext_noop("Sets the time to retry if connection establishement "
+					 "fails because of reaching to citus.max_shared_pool_size."),
+		NULL,
+		&ConnectionRetryTimout,
+		120 * MS_PER_SECOND, 0, MS_PER_HOUR,
+		PGC_USERSET,
+		GUC_UNIT_MS,
+		ConnectionRetryCheck, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.expire_cached_shards",
 		gettext_noop("This GUC variable has been deprecated."),
