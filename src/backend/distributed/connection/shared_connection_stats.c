@@ -316,6 +316,52 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 
 
 /*
+ * IncrementSharedConnectionCounter increments the shared counter
+ * for the given hostname and port.
+ */
+void
+IncrementSharedConnectionCounter(const char *hostname, int port)
+{
+	SharedConnStatsHashKey connKey;
+
+	if (GetMaxSharedPoolSize() == -1)
+	{
+		/* connection throttling disabled */
+		return;
+	}
+
+	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
+	if (strlen(hostname) > MAX_NODE_LENGTH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("hostname exceeds the maximum length of %d",
+							   MAX_NODE_LENGTH)));
+	}
+
+	connKey.port = port;
+	connKey.databaseOid = MyDatabaseId;
+
+	LockConnectionSharedMemory(LW_EXCLUSIVE);
+
+	bool entryFound = false;
+	SharedConnStatsHashEntry *connectionEntry =
+		hash_search(SharedConnStatsHash, &connKey, HASH_FIND, &entryFound);
+
+	/* this worker node is removed or updated */
+	if (!entryFound)
+	{
+		UnLockConnectionSharedMemory();
+
+		return;
+	}
+
+	connectionEntry->connectionCount += 1;
+
+	UnLockConnectionSharedMemory();
+}
+
+
+/*
  * DecrementSharedConnectionCounter decrements the shared counter
  * for the given hostname and port.
  */

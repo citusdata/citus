@@ -319,14 +319,28 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		}
 	}
 
-	/*
-	 * We can afford to skip establishing an optional connection. For
-	 * non-optional connections, we first retry for some time. If we still
-	 * cannot reserve the right to establish a connection, we prefer to
-	 * error out.
-	 */
-	if (flags & OPTIONAL_CONNECTION)
+
+	if (flags & NEVER_WAIT_FOR_CONNECTION)
 	{
+		/*
+		 * The caller doesn't want the connection manager to wait
+		 * until a connection slot is avaliable on the remote node.
+		 * In the end, we might fail to establish connection to the
+		 * remote node as it might not have any space in
+		 * max_connections for this connection establishment.
+		 *
+		 * Still, we keep track of the connnection counter.
+		 */
+		IncrementSharedConnectionCounter(hostname, port);
+	}
+	else if (flags & OPTIONAL_CONNECTION)
+	{
+		/*
+		 * We can afford to skip establishing an optional connection. For
+		 * non-optional connections, we first retry for some time. If we still
+		 * cannot reserve the right to establish a connection, we prefer to
+		 * error out.
+		 */
 		if (!TryToIncrementSharedConnectionCounter(hostname, port))
 		{
 			return NULL;

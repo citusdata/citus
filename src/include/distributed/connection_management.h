@@ -60,7 +60,14 @@ enum MultiConnectionMode
 	 * per node. In that case, the connection manager may decide not to allow the
 	 * connection.
 	 */
-	OPTIONAL_CONNECTION = 1 << 5
+	OPTIONAL_CONNECTION = 1 << 5,
+
+	/*
+	 * Via connection throttling, the connection establishments may be suspended
+	 * until a connection slot is empty to the remote host. When this flag is passed,
+	 * the connection manager skips waiting.
+	 */
+	NEVER_WAIT_FOR_CONNECTION = 1 << 6
 };
 
 

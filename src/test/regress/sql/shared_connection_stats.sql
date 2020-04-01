@@ -117,8 +117,8 @@ WHERE
 ORDER BY
 	hostname, port;
 
--- now, decrease the shared pool size, and prevent
--- establishing all the required connections
+-- now, decrease the shared pool size, and still force
+-- one connection per placement
 ALTER SYSTEM SET citus.max_shared_pool_size TO 5;
 SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
@@ -127,8 +127,7 @@ BEGIN;
 	SET LOCAL citus.node_connection_timeout TO 1000;
 	SET LOCAL citus.connection_retry_timeout TO 2000;
 	SET LOCAL citus.force_max_query_parallelization TO ON;
---	TODO: This query got stuck
---	SELECT count(*) FROM test;
+	SELECT count(*) FROM test;
 COMMIT;
 
 -- pg_sleep forces almost 1 connection per placement

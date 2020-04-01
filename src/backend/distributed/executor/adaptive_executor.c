@@ -2393,6 +2393,15 @@ ManageWorkerPool(WorkerPool *workerPool)
 			 */
 			connectionFlags |= OPTIONAL_CONNECTION;
 		}
+		else if (UseConnectionPerPlacement())
+		{
+			/*
+			 * The executor can finish the execution with a single connection,
+			 * remaining are optional. If the executor can get more connections,
+			 * it can increase the parallelism.
+			 */
+			connectionFlags |= NEVER_WAIT_FOR_CONNECTION;
+		}
 
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
