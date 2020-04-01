@@ -378,8 +378,8 @@ AppendColumnDefList(StringInfo str, List *columnDefs)
 static void
 AppendColumnDef(StringInfo str, ColumnDef *columnDef)
 {
-	int32 typmod;
-	Oid typeOid;
+	int32 typmod = 0;
+	Oid typeOid = InvalidOid;
 	bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
 
 	typenameTypeIdAndMod(NULL, columnDef->typeName, &typeOid, &typmod);
