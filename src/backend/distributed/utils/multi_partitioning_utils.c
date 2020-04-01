@@ -6,6 +6,8 @@
  */
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
@@ -22,7 +24,7 @@
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "partitioning/partdesc.h"
 #endif
 #include "utils/builtins.h"

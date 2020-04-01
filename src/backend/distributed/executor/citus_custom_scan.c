@@ -9,6 +9,8 @@
  */
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "commands/copy.h"
@@ -32,7 +34,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/planner.h"
@@ -164,7 +166,7 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 	CitusScanState *scanState = (CitusScanState *) node;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 	/*
 	 * Since we are using a tuplestore we cannot use the virtual tuples postgres had

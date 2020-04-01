@@ -9,6 +9,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "access/genam.h"
@@ -102,7 +105,7 @@ ObjectExists(const ObjectAddress *address)
 		HeapTuple objtup;
 		Relation catalog = heap_open(address->classId, AccessShareLock);
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		objtup = get_catalog_object_by_oid(catalog, get_object_attnum_oid(
 											   address->classId), address->objectId);
 #else

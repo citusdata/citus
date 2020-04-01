@@ -10,7 +10,8 @@
 
 #include "postgres.h"
 
-#if PG_VERSION_NUM >= 120000
+#include "distributed/pg_version_constants.h"
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
 #endif
 #include "access/htup_details.h"
@@ -70,7 +71,7 @@ struct DropRelationCallbackState
  */
 struct ReindexIndexCallbackState
 {
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	bool concurrent;
 #endif
 	Oid locked_table_oid;
@@ -213,7 +214,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
 		bool isCitusRelation = false;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
 							AccessExclusiveLock;
 #else
@@ -228,7 +229,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 		{
 			Oid indOid;
 			struct ReindexIndexCallbackState state;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			state.concurrent = reindexStatement->concurrent;
 #endif
 			state.locked_table_oid = InvalidOid;
@@ -281,7 +282,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 		{
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
 #else
 			ddlJob->concurrentIndexCmd = false;
@@ -702,7 +703,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 	 * non-concurrent case and table locks used by index_concurrently_*() for
 	 * concurrent case.
 	 */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	table_lockmode = state->concurrent ? ShareUpdateExclusiveLock : ShareLock;
 #else
 	table_lockmode = ShareLock;

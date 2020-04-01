@@ -10,9 +10,11 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/table.h"
 #endif
 #include "catalog/catalog.h"
@@ -404,7 +406,7 @@ GenerateAlterRoleIfExistsCommandAllRoles()
 	List *commands = NIL;
 	const char *alterRoleQuery = NULL;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	TableScanDesc scan = table_beginscan_catalog(pgAuthId, 0, NULL);
 #else
 	HeapScanDesc scan = heap_beginscan_catalog(pgAuthId, 0, NULL);
@@ -447,7 +449,7 @@ GenerateAlterRoleSetIfExistsCommands()
 	List *alterRoleSetQueries = NIL;
 
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	TableScanDesc scan = table_beginscan_catalog(DbRoleSetting, 0, NULL);
 #else
 	HeapScanDesc scan = heap_beginscan_catalog(DbRoleSetting, 0, NULL);

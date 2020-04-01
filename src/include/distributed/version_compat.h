@@ -13,16 +13,18 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "commands/explain.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_safe_lib.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"
-#if (PG_VERSION_NUM >= 120000)
+#if (PG_VERSION_NUM >= PG_VERSION_12)
 #include "optimizer/optimizer.h"
 #endif
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 #define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
 #define AllocSetContextCreateExtended AllocSetContextCreateInternal

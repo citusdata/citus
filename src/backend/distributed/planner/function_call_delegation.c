@@ -12,6 +12,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
@@ -41,7 +43,7 @@
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
 #include "parser/parse_coerce.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "parser/parsetree.h"
 #endif
 #include "miscadmin.h"
@@ -157,7 +159,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	if (joinTree->fromlist != NIL)
 	{
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 		/*
 		 * In pg12's planning phase empty FROMs are represented with an RTE_RESULT.

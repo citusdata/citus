@@ -7,6 +7,9 @@
  *
  *-------------------------------------------------------------------------
  */
+
+#include "distributed/pg_version_constants.h"
+
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -323,7 +326,7 @@ ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 	Tuplestorestate *resultStore = NULL;
 	int resultColumnCount = 4;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 #else
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);
@@ -610,7 +613,7 @@ ExecuteFetchTaskList(List *taskList)
 	Tuplestorestate *resultStore = NULL;
 	int resultColumnCount = 1;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 #else
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);

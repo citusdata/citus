@@ -10,6 +10,8 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <stddef.h>
 
 #include "access/attnum.h"
@@ -129,7 +131,7 @@ get_extension_schema(Oid ext_oid)
 	rel = heap_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 				Anum_pg_extension_oid,
 #else
 				ObjectIdAttributeNumber,
@@ -356,7 +358,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 					defaultString = deparse_expression(defaultNode, defaultContext,
 													   false, false);
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 					if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
 					{
 						appendStringInfo(&buffer, " GENERATED ALWAYS AS (%s) STORED",
@@ -705,7 +707,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 {
 	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = NULL;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
 #else
 	const char *concurrentlyString = "";

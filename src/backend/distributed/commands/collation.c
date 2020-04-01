@@ -24,6 +24,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_create_or_replace.h"
+#include "distributed/pg_version_constants.h"
 #include "distributed/worker_manager.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
@@ -59,7 +60,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	const char *collctype;
 	const char *collname;
 	Oid collnamespace;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	bool collisdeterministic;
 #endif
 
@@ -75,7 +76,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	collctype = NameStr(collationForm->collctype);
 	collnamespace = collationForm->collnamespace;
 	collname = NameStr(collationForm->collname);
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	collisdeterministic = collationForm->collisdeterministic;
 #endif
 
@@ -116,7 +117,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 						 quote_literal_cstr(collctype));
 	}
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	if (!collisdeterministic)
 	{
 		appendStringInfoString(&collationNameDef, ", deterministic = false");

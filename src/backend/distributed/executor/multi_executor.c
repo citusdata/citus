@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "access/xact.h"
@@ -184,7 +186,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			EState *estate = queryDesc->estate;
 
 			estate->es_processed = 0;
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 			estate->es_lastoid = InvalidOid;
 #endif
 

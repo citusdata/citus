@@ -18,7 +18,7 @@
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"

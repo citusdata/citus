@@ -808,7 +808,7 @@ RegisterCitusConfigVariables(void)
 
 	/*
 	 * We shouldn't need this variable after we drop support to PostgreSQL 11 and
-	 * below. So, noting it here with PG_VERSION_NUM < 120000
+	 * below. So, noting it here with PG_VERSION_NUM < PG_VERSION_12
 	 */
 	DefineCustomBoolVariable(
 		"citus.enable_cte_inlining",

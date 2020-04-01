@@ -17,7 +17,9 @@
 
 #include "postgres.h"
 
-#if (PG_VERSION_NUM >= 110000) && (PG_VERSION_NUM < 120000)
+#include "distributed/pg_version_constants.h"
+
+#if (PG_VERSION_NUM >= PG_VERSION_11) && (PG_VERSION_NUM < PG_VERSION_12)
 
 #include <ctype.h>
 #include <unistd.h>
@@ -7994,4 +7996,4 @@ get_range_partbound_string(List *bound_datums)
 	return buf->data;
 }
 
-#endif /* (PG_VERSION_NUM >= 110000) && (PG_VERSION_NUM < 120000) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_11) && (PG_VERSION_NUM < PG_VERSION_12) */

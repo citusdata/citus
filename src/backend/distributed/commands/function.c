@@ -19,7 +19,9 @@
 #include "miscadmin.h"
 #include "funcapi.h"
 
-#if PG_VERSION_NUM >= 120000
+#include "distributed/pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
 #endif
 #include "access/htup_details.h"
@@ -670,7 +672,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	const char *name = NameStr(proc->proname);
 	const char *nsp = get_namespace_name(proc->pronamespace);
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	if (useCreateOrReplace)
 	{
 		appendStringInfo(&buf, "CREATE OR REPLACE AGGREGATE %s(",
@@ -974,7 +976,7 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	ReleaseSysCache(aggtup);
 	ReleaseSysCache(proctup);
 
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 	if (useCreateOrReplace)
 	{
 		return WrapCreateOrReplace(buf.data);

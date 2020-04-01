@@ -11,10 +11,12 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "utils/hsearch.h"
 
 /* pg12 includes this exact implementation of hash_combine */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 
 /*
  * Combine two hash values, resulting in another hash value, with decent bit

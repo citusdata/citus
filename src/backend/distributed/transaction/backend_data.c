@@ -11,6 +11,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "funcapi.h"
@@ -28,7 +31,7 @@
 #include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "replication/walsender.h"
 #endif
 #include "storage/ipc.h"
@@ -581,7 +584,7 @@ TotalProcCount(void)
 	 */
 	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	totalProcs += max_wal_senders;
 #endif
 
