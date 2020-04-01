@@ -48,6 +48,7 @@ typedef struct ConnectionStatsSharedData
 	char *sharedConnectionHashTrancheName;
 
 	LWLock sharedConnectionHashLock;
+	ConditionVariable waitersConditionVariable;
 } ConnectionStatsSharedData;
 
 typedef struct SharedConnStatsHashKey
@@ -83,8 +84,6 @@ typedef struct SharedConnStatsHashEntry
  * Anything else means use that number
  */
 int MaxSharedPoolSize = 0;
-
-int ConnectionRetryTimout = 120 * MS_PER_SECOND;
 
 /* the following two structs used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
@@ -226,60 +225,12 @@ GetMaxSharedPoolSize(void)
 void
 WaitOrErrorForSharedConnection(const char *hostname, int port)
 {
-	int retryCount = 0;
-
-	/*
-	 * Sleep this amount before retrying, there is not much value retrying too often
-	 * as the remote node is too busy. That's the reason we're retrying.
-	 */
-	double sleepTimeoutMsec = 100;
-
-	/* In practice, 0 disables the retry logic */
-	int allowedRetryCount = ConnectionRetryTimout / sleepTimeoutMsec;
-
 	while (!TryToIncrementSharedConnectionCounter(hostname, port))
 	{
-		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
-
-		CHECK_FOR_INTERRUPTS();
-
-		int rc = WaitLatch(MyLatch, latchFlags, (long) sleepTimeoutMsec,
-						   PG_WAIT_EXTENSION);
-
-		/* emergency bailout if postmaster has died */
-		if (rc & WL_POSTMASTER_DEATH)
-		{
-			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
-		}
-		else if (rc & WL_LATCH_SET)
-		{
-			ResetLatch(MyLatch);
-			CHECK_FOR_INTERRUPTS();
-
-			if (IsHoldOffCancellationReceived())
-			{
-				/* in case the interrupts are hold, we still want to cancel */
-				ereport(ERROR, (errmsg("canceling statement due to user request")));
-			}
-		}
-		else if (rc & WL_TIMEOUT)
-		{
-			++retryCount;
-			if (allowedRetryCount <= retryCount)
-			{
-				ereport(ERROR, (errmsg("citus.max_shared_pool_size number of connections "
-									   "are already established to the node %s:%d,"
-									   "so cannot establish any more connections",
-									   hostname, port),
-								errhint("consider increasing "
-										"citus.max_shared_pool_size or "
-										"citus.connection_retry_timeout")));
-			}
-
-			ereport(DEBUG4, (errmsg("connection to  node %s:%d is retried for %d times",
-									hostname, port, retryCount)));
-		}
+		WaitForSharedConnection();
 	}
+
+	ConditionVariableCancelSleep();
 }
 
 
@@ -417,6 +368,8 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	connectionEntry->connectionCount -= 1;
 
 	UnLockConnectionSharedMemory();
+
+	WakeupWaiterBackendsForSharedConnection();
 }
 
 
@@ -439,6 +392,19 @@ static void
 UnLockConnectionSharedMemory(void)
 {
 	LWLockRelease(&ConnectionStatsSharedState->sharedConnectionHashLock);
+}
+
+
+void
+WakeupWaiterBackendsForSharedConnection(void)
+{
+	ConditionVariableBroadcast(&ConnectionStatsSharedState->waitersConditionVariable);
+}
+
+void
+WaitForSharedConnection(void)
+{
+	ConditionVariableSleep(&ConnectionStatsSharedState->waitersConditionVariable, PG_WAIT_EXTENSION);
 }
 
 
@@ -523,6 +489,8 @@ SharedConnectionStatsShmemInit(void)
 
 		LWLockInitialize(&ConnectionStatsSharedState->sharedConnectionHashLock,
 						 ConnectionStatsSharedState->sharedConnectionHashTrancheId);
+
+		ConditionVariableInit(&ConnectionStatsSharedState->waitersConditionVariable);
 	}
 
 	/*  allocate hash table */

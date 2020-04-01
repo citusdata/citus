@@ -103,7 +103,6 @@ static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
-static bool ConnectionRetryCheck(int *newval, void **extra, GucSource source);
 
 /* static variable to hold value of deprecated GUC variable */
 static bool ExpireCachedShards = false;
@@ -481,18 +480,6 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
-
-	DefineCustomIntVariable(
-		"citus.connection_retry_timeout",
-		gettext_noop("Sets the time to retry if connection establishement "
-					 "fails because of reaching to citus.max_shared_pool_size."),
-		NULL,
-		&ConnectionRetryTimout,
-		120 * MS_PER_SECOND, 0, MS_PER_HOUR,
-		PGC_USERSET,
-		GUC_UNIT_MS,
-		ConnectionRetryCheck, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.expire_cached_shards",
@@ -1609,18 +1596,3 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 #endif
 }
 
-
-static bool
-ConnectionRetryCheck(int *newval, void **extra, GucSource source)
-{
-	/* 0 disables connection_retry_timeout, so should be allowed */
-	if (*newval <= NodeConnectionTimeout && *newval != 0)
-	{
-		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
-		GUC_check_errdetail("citus.connection_retry_timeout cannot be smaller than "
-							"citus.node_connection_timeout.");
-		return false;
-	}
-
-	return true;
-}
