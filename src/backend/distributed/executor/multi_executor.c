@@ -72,7 +72,6 @@ int ExecutorLevel = 0;
 /* local function forward declarations */
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
-static bool IsLocalReferenceTableJoinPlan(PlannedStmt *plan);
 static List * FindCitusCustomScanStates(PlanState *planState);
 static bool CitusCustomScanStateWalker(PlanState *planState,
 									   List **citusCustomScanStates);
@@ -147,24 +146,6 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		if (totalTime)
 		{
 			InstrStartNode(totalTime);
-		}
-
-		if (CitusHasBeenLoaded())
-		{
-			if (IsLocalReferenceTableJoinPlan(queryDesc->plannedstmt) &&
-				IsMultiStatementTransaction())
-			{
-				/*
-				 * Currently we don't support this to avoid problems with tuple
-				 * visibility, locking, etc. For example, change to the reference
-				 * table can go through a MultiConnection, which won't be visible
-				 * to the locally planned queries.
-				 */
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot join local tables and reference tables in "
-									   "a transaction block, udf block, or distributed "
-									   "CTE subquery")));
-			}
 		}
 
 		/*
@@ -740,111 +721,4 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	}
 
 	return true;
-}
-
-
-/*
- * IsLocalReferenceTableJoinPlan returns true if the given plan joins local tables
- * with reference table shards.
- *
- * This should be consistent with IsLocalReferenceTableJoin() in distributed_planner.c.
- */
-static bool
-IsLocalReferenceTableJoinPlan(PlannedStmt *plan)
-{
-	bool hasReferenceTable = false;
-	bool hasLocalTable = false;
-	bool hasReferenceTableReplica = false;
-
-	/*
-	 * We only allow join between reference tables and local tables in the
-	 * coordinator.
-	 */
-	if (!IsCoordinator())
-	{
-		return false;
-	}
-
-	/*
-	 * All groups that have pg_dist_node entries, also have reference
-	 * table replicas.
-	 */
-	PrimaryNodeForGroup(GetLocalGroupId(), &hasReferenceTableReplica);
-
-	/*
-	 * If reference table doesn't have replicas on the coordinator, we don't
-	 * allow joins with local tables.
-	 */
-	if (!hasReferenceTableReplica)
-	{
-		return false;
-	}
-
-	/*
-	 * No need to check FOR UPDATE/SHARE or modifying subqueries, those have
-	 * already errored out in distributed_planner.c if they contain mix of
-	 * local and distributed tables.
-	 */
-	if (plan->commandType != CMD_SELECT)
-	{
-		return false;
-	}
-
-	/*
-	 * plan->rtable contains the flattened RTE lists of the plan tree, which
-	 * includes rtes in subqueries, CTEs, ...
-	 *
-	 * It doesn't contain optimized away table accesses (due to join optimization),
-	 * which is fine for our purpose.
-	 */
-	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, plan->rtable)
-	{
-		bool onlySearchPath = false;
-
-		/*
-		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning functions
-		 * in FROM clause locally. Early exit. We cannot use Assert() here since
-		 * all non-Citus plans might pass through these checks.
-		 */
-		if (rangeTableEntry->rtekind == RTE_FUNCTION)
-		{
-			return false;
-		}
-
-		if (rangeTableEntry->rtekind != RTE_RELATION)
-		{
-			continue;
-		}
-
-		/*
-		 * Planner's IsLocalReferenceTableJoin() doesn't allow planning reference
-		 * table and view join locally. Early exit. We cannot use Assert() here
-		 * since all non-Citus plans might pass through these checks.
-		 */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
-		{
-			return false;
-		}
-
-		if (RelationIsAKnownShard(rangeTableEntry->relid, onlySearchPath))
-		{
-			/*
-			 * We don't allow joining non-reference distributed tables, so we
-			 * can skip checking that this is a reference table shard or not.
-			 */
-			hasReferenceTable = true;
-		}
-		else
-		{
-			hasLocalTable = true;
-		}
-
-		if (hasReferenceTable && hasLocalTable)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }

@@ -36,6 +36,11 @@ SELECT create_reference_table('numbers');
 
 INSERT INTO numbers VALUES (20), (21);
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (20), (21)
+CREATE OR REPLACE FUNCTION my_random()
+RETURNS INT AS $$
+BEGIN
+  RETURN 1;
+END; $$ language plpgsql VOLATILE;
 -- INSERT ... SELECT between reference tables
 BEGIN;
 EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
@@ -125,20 +130,21 @@ ORDER BY 1,2,3;
  7 | 10 | 100
 (3 rows)
 
--- error if in transaction block
+-- should work if in transaction block
 BEGIN;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+ a  | a
+---------------------------------------------------------------------
+ 20 | 20
+(1 row)
+
 ROLLBACK;
--- error if in a DO block
+-- should work if in a DO block
 DO $$
 BEGIN
 	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 END;
 $$;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
-CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers"
-PL/pgSQL function inline_code_block line 3 at PERFORM
 -- test plpgsql function
 CREATE FUNCTION test_reference_local_join_plpgsql_func()
 RETURNS void AS $$
@@ -154,9 +160,8 @@ SELECT test_reference_local_join_plpgsql_func();
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
 CONTEXT:  SQL statement "INSERT INTO numbers VALUES (4)"
 PL/pgSQL function test_reference_local_join_plpgsql_func() line 4 at SQL statement
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
-CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1"
-PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
+ERROR:
+CONTEXT:  PL/pgSQL function test_reference_local_join_plpgsql_func() line 6 at RAISE
 SELECT sum(a) FROM local_table;
  sum
 ---------------------------------------------------------------------
@@ -175,9 +180,6 @@ CREATE PROCEDURE test_reference_local_join_proc() AS $$
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 $$ LANGUAGE sql;
 CALL test_reference_local_join_proc();
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
-CONTEXT:  SQL function "test_reference_local_join_proc" statement 1
--- error if in a transaction block even if reference table is not in search path
 CREATE SCHEMA s1;
 CREATE TABLE s1.ref(a int);
 SELECT create_reference_table('s1.ref');
@@ -188,35 +190,54 @@ SELECT create_reference_table('s1.ref');
 
 BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+ a | a
+---------------------------------------------------------------------
+(0 rows)
+
 ROLLBACK;
 BEGIN;
 WITH t1 AS (
-	SELECT random() r, a FROM local_table
+	SELECT my_random() r, a FROM local_table
 ) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 END;
 BEGIN;
 WITH t1 AS (
-	SELECT random() r, a FROM numbers
+	SELECT my_random() r, a FROM numbers
 ) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 END;
 BEGIN;
 SELECT count(*) FROM local_table
-WHERE EXISTS(SELECT random() FROM numbers WHERE local_table.a = numbers.a);
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+WHERE EXISTS(SELECT my_random() FROM numbers WHERE local_table.a = numbers.a);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 END;
 BEGIN;
 SELECT count(*) FROM numbers
-WHERE EXISTS(SELECT random() FROM local_table WHERE local_table.a = numbers.a);
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+WHERE EXISTS(SELECT my_random() FROM local_table WHERE local_table.a = numbers.a);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 END;
 DROP SCHEMA s1 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table s1.ref
 drop cascades to table s1.ref_8000002
--- error if inside a SQL UDF call
+-- not error if inside a SQL UDF call
 CREATE or replace FUNCTION test_reference_local_join_func()
 RETURNS SETOF RECORD AS $$
 SET LOCAL citus.enable_local_execution to false;
@@ -224,18 +245,21 @@ INSERT INTO numbers VALUES (2);
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 $$ LANGUAGE sql;
 SELECT test_reference_local_join_func();
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
-CONTEXT:  SQL function "test_reference_local_join_func" statement 3
+ test_reference_local_join_func
+---------------------------------------------------------------------
+ (20,20)
+(1 row)
+
 -- shouldn't plan locally if modifications happen in CTEs, ...
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;
 ERROR:  relation local_table is not distributed
-WITH t AS (SELECT *, random() x FROM numbers FOR UPDATE)
+WITH t AS (SELECT *, my_random() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 ERROR:  relation local_table is not distributed
 -- but this should be fine
-WITH t AS (SELECT *, random() x FROM numbers)
+WITH t AS (SELECT *, my_random() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
  a | a
@@ -251,15 +275,19 @@ SELECT create_distributed_table('dist', 'a');
 (1 row)
 
 INSERT INTO dist VALUES (20),(30);
-WITH t AS (SELECT *, random() x FROM dist)
+WITH t AS (SELECT *, my_random() x FROM dist)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 ERROR:  relation local_table is not distributed
 -- test CTE being reference/local join for distributed query
-WITH t as (SELECT n.a, random() x FROM numbers n NATURAL JOIN local_table l)
+WITH t as (SELECT n.a, my_random() x FROM numbers n NATURAL JOIN local_table l)
 SELECT a FROM t NATURAL JOIN dist;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
- -- error if FOR UPDATE/FOR SHARE
+ a
+---------------------------------------------------------------------
+ 20
+(1 row)
+
+ -- shouldn't error if FOR UPDATE/FOR SHARE
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
 ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 HINT:  Consider using an equality filter on the distributed table's partition column.
@@ -313,7 +341,11 @@ $Q$);
 
 BEGIN;
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-ERROR:  cannot join local tables and reference tables in a transaction block, udf block, or distributed CTE subquery
+ a | b | a
+---------------------------------------------------------------------
+ 2 | 4 | 2
+(1 row)
+
 END;
 --
 -- Joins between reference tables, local tables, and function calls shouldn't
@@ -342,6 +374,55 @@ $Q$);
  f
 (1 row)
 
+TRUNCATE local_table;
+TRUNCATE numbers;
+NOTICE:  executing the command locally: TRUNCATE TABLE replicate_ref_to_coordinator.numbers_xxxxx CASCADE
+BEGIN;
+INSERT INTO local_table VALUES (1), (2), (3), (4);
+INSERT INTO numbers VALUES (1), (2), (3), (4);
+NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (1), (2), (3), (4)
+ALTER TABLE numbers ADD COLUMN d int;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (8000001, 'replicate_ref_to_coordinator', 'ALTER TABLE numbers ADD COLUMN d int;')
+SELECT * FROM local_table JOIN numbers USING(a) ORDER BY a;
+ a | d
+---------------------------------------------------------------------
+ 1 |
+ 2 |
+ 3 |
+ 4 |
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+INSERT INTO local_table VALUES (1), (2), (3);
+WITH t as (SELECT n.a, my_random() x FROM numbers n NATURAL JOIN local_table l ORDER BY n.a, x)
+SELECT a FROM t NATURAL JOIN dist ORDER BY a;
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+ROLLBACK;
+BEGIN;
+INSERT INTO local_table VALUES (1), (2), (3);
+INSERT INTO numbers SELECT * FROM generate_series(1, 100);
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO numbers SELECT * FROM numbers;
+NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers
+SELECT COUNT(*) FROM local_table JOIN numbers using (a);
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+UPDATE numbers SET a = a + 1;
+NOTICE:  executing the command locally: UPDATE replicate_ref_to_coordinator.numbers_8000001 numbers SET a = (a OPERATOR(pg_catalog.+) 1)
+SELECT COUNT(*) FROM local_table JOIN numbers using (a);
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+ROLLBACK;
 -- verify that we can drop columns from reference tables replicated to the coordinator
 -- see https://github.com/citusdata/citus/issues/3279
 ALTER TABLE squares DROP COLUMN b;
