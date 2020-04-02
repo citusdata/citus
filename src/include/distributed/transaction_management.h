@@ -103,6 +103,9 @@ extern int DoBlockLevel;
 /* SET LOCAL statements active in the current (sub-)transaction. */
 extern StringInfo activeSetStmts;
 
+/* did current transaction modify pg_dist_node? */
+extern bool TransactionModifiedNodeMetadata;
+
 /*
  * Coordinated transaction management.
  */

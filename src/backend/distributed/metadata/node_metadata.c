@@ -60,6 +60,9 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
+/* did current transaction modify pg_dist_node? */
+bool TransactionModifiedNodeMetadata = false;
+
 typedef struct NodeMetadata
 {
 	int32 groupId;
@@ -158,6 +161,7 @@ master_add_node(PG_FUNCTION_ARGS)
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
 								 &nodeAlreadyExists);
+	TransactionModifiedNodeMetadata = true;
 
 	/*
 	 * After adding new node, if the node did not already exist, we will activate
@@ -196,6 +200,7 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
 								 &nodeAlreadyExists);
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
 }
@@ -229,6 +234,7 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
 								 &nodeAlreadyExists);
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
 }
@@ -252,6 +258,7 @@ master_remove_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	RemoveNodeFromCluster(text_to_cstring(nodeNameText), nodePort);
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
 }
@@ -305,6 +312,7 @@ master_disable_node(PG_FUNCTION_ARGS)
 		}
 
 		SetNodeState(nodeName, nodePort, isActive);
+		TransactionModifiedNodeMetadata = true;
 	}
 	PG_CATCH();
 	{
@@ -351,6 +359,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
 							)));
 	}
 
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
 }
@@ -449,6 +458,8 @@ master_activate_node(PG_FUNCTION_ARGS)
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
 	ActivateNode(workerNode->workerName, workerNode->workerPort);
+
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(workerNode->nodeId);
 }
@@ -720,6 +731,8 @@ master_update_node(PG_FUNCTION_ARGS)
 		 */
 		TerminateBackgroundWorker(handle);
 	}
+
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
 }
