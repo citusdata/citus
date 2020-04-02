@@ -367,6 +367,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * connection attempt.
 		 */
 		DecrementSharedConnectionCounter(hostname, port);
+
+		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
