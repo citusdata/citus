@@ -1059,6 +1059,17 @@ IsRedistributablePlan(Plan *selectPlan)
 		return false;
 	}
 
+	if (distSelectPlan->masterQuery != NULL)
+	{
+		Query *masterQuery = (Query *) distSelectPlan->masterQuery;
+
+		if (contain_nextval_expression_walker((Node *) masterQuery->targetList, NULL))
+		{
+			/* nextval needs to be evaluated on the coordinator */
+			return false;
+		}
+	}
+
 	return true;
 }
 
