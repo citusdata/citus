@@ -202,6 +202,19 @@ SELECT create_distributed_table('dist_table1', 'a');
 ROLLBACK;
 
 RESET citus.enable_cte_inlining;
+CREATE table ref_table(x int, y int);
+-- this will be replicated to the coordinator because of add_coordinator test
+SELECT create_reference_table('ref_table');
+
+TRUNCATE TABLE test;
+
+BEGIN;
+INSERT INTO test SELECT *, * FROM generate_series(1, 100);
+INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
+SELECT COUNT(*) FROM test JOIN ref_table USING(x);
+ROLLBACK;
+
+DROP TABLE ref_table;
 
 DELETE FROM test;
 DROP TABLE test;
