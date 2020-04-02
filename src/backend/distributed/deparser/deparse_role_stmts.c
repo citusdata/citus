@@ -21,6 +21,7 @@
 
 static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
 static void AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt);
+static void AppendRoleOption(StringInfo buf, ListCell *optionCell);
 
 
 /*
@@ -75,84 +76,102 @@ AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt)
 
 	foreach(optionCell, stmt->options)
 	{
-		DefElem *option = (DefElem *) lfirst(optionCell);
+		AppendRoleOption(buf, optionCell);
+	}
+}
 
-		if (strcmp(option->defname, "superuser") == 0 && intVal(option->arg))
+
+/*
+ * AppendRoleOption generates the string representation for the role options
+ * and appends it to the buffer.
+ *
+ * This function only generates strings for common role options of ALTER ROLE
+ * and CREATE ROLE statements. The extra options for CREATE ROLE are handled
+ * seperately.
+ */
+static void
+AppendRoleOption(StringInfo buf, ListCell *optionCell)
+{
+	DefElem *option = (DefElem *) lfirst(optionCell);
+
+	if (strcmp(option->defname, "superuser") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " SUPERUSER");
+	}
+	else if (strcmp(option->defname, "superuser") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOSUPERUSER");
+	}
+	else if (strcmp(option->defname, "createdb") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " CREATEDB");
+	}
+	else if (strcmp(option->defname, "createdb") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOCREATEDB");
+	}
+	else if (strcmp(option->defname, "createrole") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " CREATEROLE");
+	}
+	else if (strcmp(option->defname, "createrole") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOCREATEROLE");
+	}
+	else if (strcmp(option->defname, "inherit") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " INHERIT");
+	}
+	else if (strcmp(option->defname, "inherit") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOINHERIT");
+	}
+	else if (strcmp(option->defname, "canlogin") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " LOGIN");
+	}
+	else if (strcmp(option->defname, "canlogin") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOLOGIN");
+	}
+	else if (strcmp(option->defname, "isreplication") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " REPLICATION");
+	}
+	else if (strcmp(option->defname, "isreplication") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOREPLICATION");
+	}
+	else if (strcmp(option->defname, "bypassrls") == 0 && intVal(option->arg))
+	{
+		appendStringInfo(buf, " BYPASSRLS");
+	}
+	else if (strcmp(option->defname, "bypassrls") == 0 && !intVal(option->arg))
+	{
+		appendStringInfo(buf, " NOBYPASSRLS");
+	}
+	else if (strcmp(option->defname, "connectionlimit") == 0)
+	{
+		appendStringInfo(buf, " CONNECTION LIMIT %d", intVal(option->arg));
+	}
+	else if (strcmp(option->defname, "password") == 0)
+	{
+		if (option->arg != NULL)
 		{
-			appendStringInfo(buf, " SUPERUSER");
+			appendStringInfo(buf, " PASSWORD %s", quote_literal_cstr(strVal(
+																		 option->arg)));
 		}
-		else if (strcmp(option->defname, "superuser") == 0 && !intVal(option->arg))
+		else
 		{
-			appendStringInfo(buf, " NOSUPERUSER");
+			appendStringInfo(buf, " PASSWORD NULL");
 		}
-		else if (strcmp(option->defname, "createdb") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " CREATEDB");
-		}
-		else if (strcmp(option->defname, "createdb") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOCREATEDB");
-		}
-		else if (strcmp(option->defname, "createrole") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " CREATEROLE");
-		}
-		else if (strcmp(option->defname, "createrole") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOCREATEROLE");
-		}
-		else if (strcmp(option->defname, "inherit") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " INHERIT");
-		}
-		else if (strcmp(option->defname, "inherit") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOINHERIT");
-		}
-		else if (strcmp(option->defname, "canlogin") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " LOGIN");
-		}
-		else if (strcmp(option->defname, "canlogin") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOLOGIN");
-		}
-		else if (strcmp(option->defname, "isreplication") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " REPLICATION");
-		}
-		else if (strcmp(option->defname, "isreplication") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOREPLICATION");
-		}
-		else if (strcmp(option->defname, "bypassrls") == 0 && intVal(option->arg))
-		{
-			appendStringInfo(buf, " BYPASSRLS");
-		}
-		else if (strcmp(option->defname, "bypassrls") == 0 && !intVal(option->arg))
-		{
-			appendStringInfo(buf, " NOBYPASSRLS");
-		}
-		else if (strcmp(option->defname, "connectionlimit") == 0)
-		{
-			appendStringInfo(buf, " CONNECTION LIMIT %d", intVal(option->arg));
-		}
-		else if (strcmp(option->defname, "password") == 0)
-		{
-			if (option->arg != NULL)
-			{
-				appendStringInfo(buf, " PASSWORD %s", quote_literal_cstr(strVal(
-																			 option->arg)));
-			}
-			else
-			{
-				appendStringInfo(buf, " PASSWORD NULL");
-			}
-		}
-		else if (strcmp(option->defname, "validUntil") == 0)
-		{
-			appendStringInfo(buf, " VALID UNTIL %s", quote_literal_cstr(strVal(
-																			option->arg)));
+	}
+	else if (strcmp(option->defname, "validUntil") == 0)
+	{
+		appendStringInfo(buf, " VALID UNTIL %s", quote_literal_cstr(strVal(option->arg)));
+	}
+}
+
 		}
 	}
 }

@@ -6,3 +6,4 @@
 #include "udfs/update_distributed_table_colocation/9.3-2.sql"
 #include "udfs/replicate_reference_tables/9.3-2.sql"
 #include "udfs/citus_remote_connection_stats/9.3-2.sql"
+#include "udfs/create_or_alter_role/9.3-1.sql"

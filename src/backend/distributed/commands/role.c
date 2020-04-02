@@ -18,6 +18,7 @@
 #include "access/table.h"
 #endif
 #include "catalog/catalog.h"
+#include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_type.h"
@@ -48,7 +49,13 @@ static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
 static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
 											   TupleDesc DbRoleSettingDescription);
+static const char * CreateQueryArray(List *stmts);
+static char * CreateCreateOrAlterRoleCommand(const char *roleName,
+											 CreateRoleStmt *createRoleStmt,
+											 AlterRoleStmt *alterRoleStmt,
+											 List *grantRoleStmts);
 static DefElem * makeDefElemInt(char *name, int value);
+static List * GenerateRoleOptionsList(Form_pg_authid role, HeapTuple tuple);
 
 static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
 										   TupleDesc DbRoleSettingDescription);
@@ -123,12 +130,12 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
-
 	if (!EnableAlterRolePropagation || !IsCoordinator())
 	{
 		return NIL;
 	}
+
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -255,6 +262,74 @@ WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role)
 }
 
 
+static const char *
+CreateQueryArray(List *stmts)
+{
+	StringInfoData queryArrayBuffer = { 0 };
+	initStringInfo(&queryArrayBuffer);
+	appendStringInfo(&queryArrayBuffer, "ARRAY [");
+
+	ListCell *cell = NULL;
+
+	foreach(cell, stmts)
+	{
+		Node *stmt = (Node *) lfirst(cell);
+		char *query = DeparseTreeNode(stmt);
+		appendStringInfoString(&queryArrayBuffer, quote_literal_cstr(query));
+		if (cell != list_tail(stmts))
+		{
+			appendStringInfo(&queryArrayBuffer, ", ");
+		}
+	}
+
+	appendStringInfo(&queryArrayBuffer, "]");
+	return queryArrayBuffer.data;
+}
+
+
+/*
+ * CreateCreateOrAlterRoleCommand creates ALTER ROLE command, from the alter role node
+ *  using the alter_role_if_exists() UDF.
+ */
+static char *
+CreateCreateOrAlterRoleCommand(const char *roleName,
+							   CreateRoleStmt *createRoleStmt,
+							   AlterRoleStmt *alterRoleStmt,
+							   List *grantRoleStmts)
+{
+	StringInfoData createOrAlterRoleQueryBuffer = { 0 };
+	const char *createRoleQuery = "null";
+	const char *alterRoleQuery = "null";
+	const char *grantRoleQueries = "null";
+
+	if (createRoleStmt != NULL)
+	{
+		createRoleQuery = quote_literal_cstr(DeparseTreeNode((Node *) createRoleStmt));
+	}
+
+	if (alterRoleStmt != NULL)
+	{
+		alterRoleQuery = quote_literal_cstr(DeparseTreeNode((Node *) alterRoleStmt));
+	}
+
+	if (grantRoleStmts != NULL)
+	{
+		grantRoleQueries = CreateQueryArray(grantRoleStmts);
+	}
+
+
+	initStringInfo(&createOrAlterRoleQueryBuffer);
+	appendStringInfo(&createOrAlterRoleQueryBuffer,
+					 "SELECT create_or_alter_role(%s, %s, %s, %s)",
+					 quote_literal_cstr(roleName),
+					 createRoleQuery,
+					 alterRoleQuery,
+					 grantRoleQueries);
+
+	return createOrAlterRoleQueryBuffer.data;
+}
+
+
 /*
  * ExtractEncryptedPassword extracts the encrypted password of a role. The function
  * gets the password from the pg_authid table.
@@ -366,73 +441,50 @@ MakeVariableSetStmt(const char *config)
 
 
 /*
- * GenerateAlterRoleIfExistsCommand generate ALTER ROLE command that copies a role from
- * the pg_authid table.
+ *
  */
-static const char *
-GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
+static List *
+GenerateRoleOptionsList(Form_pg_authid role, HeapTuple tuple)
 {
+	bool isNull = true;
+	List *options = NIL;
 	char *rolPassword = "";
 	char *rolValidUntil = "infinity";
-	bool isNull = true;
-	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
-	AlterRoleStmt *stmt = makeNode(AlterRoleStmt);
-	const char *rolename = NameStr(role->rolname);
+	options = lappend(options, makeDefElemInt("superuser", role->rolsuper));
 
-	stmt->role = makeNode(RoleSpec);
-	stmt->role->roletype = ROLESPEC_CSTRING;
-	stmt->role->location = -1;
-	stmt->role->rolename = pstrdup(rolename);
-	stmt->action = 1;
-	stmt->options = NIL;
+	options = lappend(options, makeDefElemInt("createdb", role->rolcreatedb));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("superuser", role->rolsuper));
+	options = lappend(options, makeDefElemInt("createrole", role->rolcreaterole));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("createdb", role->rolcreatedb));
+	options = lappend(options, makeDefElemInt("inherit", role->rolinherit));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("createrole", role->rolcreaterole));
+	options = lappend(options, makeDefElemInt("canlogin", role->rolcanlogin));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("inherit", role->rolinherit));
+	options = lappend(options, makeDefElemInt("isreplication", role->rolreplication));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("canlogin", role->rolcanlogin));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("isreplication", role->rolreplication));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("bypassrls", role->rolbypassrls));
+	options = lappend(options, makeDefElemInt("bypassrls", role->rolbypassrls));
 
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("connectionlimit", role->rolconnlimit));
+	options = lappend(options, makeDefElemInt("connectionlimit", role->rolconnlimit));
 
+
+	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
+	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
+	heap_close(pgAuthId, AccessShareLock);
 
 	Datum rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 										  pgAuthIdDescription, &isNull);
 	if (!isNull)
 	{
 		rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
-		stmt->options = lappend(stmt->options, makeDefElem("password",
-														   (Node *) makeString(
-															   rolPassword),
-														   -1));
+		options = lappend(options, makeDefElem("password",
+											   (Node *) makeString(
+												   rolPassword),
+											   -1));
 	}
 	else
 	{
-		stmt->options = lappend(stmt->options, makeDefElem("password", NULL, -1));
+		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
 	Datum rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
@@ -442,11 +494,45 @@ GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
 		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 	}
 
-	stmt->options = lappend(stmt->options, makeDefElem("validUntil",
-													   (Node *) makeString(rolValidUntil),
-													   -1));
+	options = lappend(options, makeDefElem("validUntil",
+										   (Node *) makeString(rolValidUntil),
+										   -1));
+	return options;
+}
 
-	return CreateAlterRoleIfExistsCommand(stmt);
+
+/*
+ * GenerateCreateOrAlterRoleCommand generates ALTER ROLE command that copies a role from
+ * the pg_authid table.
+ */
+List *
+GenerateCreateOrAlterRoleCommand(Oid roleOid)
+{
+	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
+	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));
+
+	CreateRoleStmt *createRoleStmt = NULL;
+	AlterRoleStmt *alterRoleStmt = NULL;
+	if (EnableAlterRolePropagation)
+	{
+		alterRoleStmt = makeNode(AlterRoleStmt);
+		alterRoleStmt->role = makeNode(RoleSpec);
+		alterRoleStmt->role->roletype = ROLESPEC_CSTRING;
+		alterRoleStmt->role->location = -1;
+		alterRoleStmt->role->rolename = pstrdup(NameStr(role->rolname));
+		alterRoleStmt->action = 1;
+		alterRoleStmt->options = GenerateRoleOptionsList(role, roleTuple);
+	}
+
+	ReleaseSysCache(roleTuple);
+
+	List *grantRoleStmts = NULL;
+	char * createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
+										pstrdup(NameStr(role->rolname)),
+										createRoleStmt,
+										alterRoleStmt,
+										grantRoleStmts);
+	return list_make1(createOrAlterRoleQuery);
 }
 
 

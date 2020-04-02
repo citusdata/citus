@@ -198,8 +198,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_ROLE:
 		{
-			/* TODO add alter commands for distributed roles */
-			return NIL;
+			return GenerateCreateOrAlterRoleCommand(dependency->objectId);
 		}
 
 		case OCLASS_SCHEMA:

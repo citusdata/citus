@@ -840,7 +840,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_alter_role_propagation",
-		gettext_noop("Enables propagating role passwords statements to workers"),
+		gettext_noop("Enables propagating ALTER ROLE statements to workers"),
 		NULL,
 		&EnableAlterRolePropagation,
 		false,
