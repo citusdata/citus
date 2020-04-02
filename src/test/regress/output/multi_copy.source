@@ -674,19 +674,14 @@ SELECT shardid, nodename, nodeport
 (4 rows)
 
 -- add the node back
+SET client_min_messages TO ERROR;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
-NOTICE:  Replicating reference table "orders_reference" to the node localhost:57637
-NOTICE:  Replicating reference table "customer" to the node localhost:57637
-NOTICE:  Replicating reference table "nation" to the node localhost:57637
-NOTICE:  Replicating reference table "part" to the node localhost:57637
-NOTICE:  Replicating reference table "supplier" to the node localhost:57637
-NOTICE:  Replicating reference table "multi_outer_join_right_reference" to the node localhost:57637
-NOTICE:  Replicating reference table "multi_outer_join_third_reference" to the node localhost:57637
  ?column? 
 ----------
         1
 (1 row)
 
+RESET client_min_messages;
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv');

@@ -221,7 +221,6 @@ SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  node at "localhost:xxxxx" does not exist
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -242,7 +241,6 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for the next test
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -262,10 +260,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -291,10 +288,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -318,10 +314,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -347,10 +342,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 -- remove node in a transaction and COMMIT
@@ -367,10 +361,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -396,10 +389,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -458,7 +450,6 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -478,10 +469,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -507,10 +497,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -583,7 +572,6 @@ SELECT * FROM remove_node_reference_table;
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -603,10 +591,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -632,10 +619,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -704,7 +690,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -724,10 +709,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -903,8 +887,6 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -926,11 +908,9 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY
     shardid;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
-(2 rows)
+(0 rows)
 
 SELECT *
 FROM pg_dist_colocation
@@ -957,11 +937,9 @@ FROM
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid ASC;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
-(2 rows)
+(0 rows)
 
 \c - - - :master_port
 SELECT master_disable_node('localhost', :worker_2_port);
@@ -1018,8 +996,6 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
