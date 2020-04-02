@@ -131,26 +131,18 @@ static bool UpdateReferenceTablesWithShard(Node *node, void *context);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
-										 List *rangeTableList, int rteIdCounter);
+										 int rteIdCounter);
 
 
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
-	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = false;
-	bool setPartitionedTablesInherited = false;
-	List *rangeTableList = ExtractRangeTableEntryList(parse);
-	int rteIdCounter = 1;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
-	DistributedPlanningContext planContext = {
-		.query = parse,
-		.cursorOptions = cursorOptions,
-		.boundParams = boundParams,
-	};
 
+	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -180,6 +172,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			}
 		}
 	}
+
+	int rteIdCounter = 1;
+
+	DistributedPlanningContext planContext = {
+		.query = parse,
+		.cursorOptions = cursorOptions,
+		.boundParams = boundParams,
+	};
 
 	if (fastPathRouterQuery)
 	{
@@ -217,7 +217,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 		planContext.originalQuery = copyObject(parse);
 
-		setPartitionedTablesInherited = false;
+		bool setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(rangeTableList,
 												 setPartitionedTablesInherited);
 	}
@@ -239,6 +239,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 */
 	PlannerLevel++;
 
+	PlannedStmt *result = NULL;
 
 	PG_TRY();
 	{
@@ -258,7 +259,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 												planContext.boundParams);
 			if (needsDistributedPlanning)
 			{
-				result = PlanDistributedStmt(&planContext, rangeTableList, rteIdCounter);
+				result = PlanDistributedStmt(&planContext, rteIdCounter);
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
 			{
@@ -309,11 +310,11 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 List *
 ExtractRangeTableEntryList(Query *query)
 {
-	List *rangeTblList = NIL;
+	List *rteList = NIL;
 
-	ExtractRangeTableEntryWalker((Node *) query, &rangeTblList);
+	ExtractRangeTableEntryWalker((Node *) query, &rteList);
 
-	return rangeTblList;
+	return rteList;
 }
 
 
@@ -328,13 +329,12 @@ ExtractRangeTableEntryList(Query *query)
 bool
 NeedsDistributedPlanning(Query *query)
 {
-	List *allRTEs = NIL;
-	CmdType commandType = query->commandType;
-
 	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
+
+	CmdType commandType = query->commandType;
 
 	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
 		commandType != CMD_UPDATE && commandType != CMD_DELETE)
@@ -342,7 +342,7 @@ NeedsDistributedPlanning(Query *query)
 		return false;
 	}
 
-	ExtractRangeTableEntryWalker((Node *) query, &allRTEs);
+	List *allRTEs = ExtractRangeTableEntryList(query);
 
 	return ListContainsDistributedTableRTE(allRTEs);
 }
@@ -594,11 +594,10 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
  */
 static PlannedStmt *
 PlanDistributedStmt(DistributedPlanningContext *planContext,
-					List *rangeTableList,
 					int rteIdCounter)
 {
 	/* may've inlined new relation rtes */
-	rangeTableList = ExtractRangeTableEntryList(planContext->query);
+	List *rangeTableList = ExtractRangeTableEntryList(planContext->query);
 	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 
 
