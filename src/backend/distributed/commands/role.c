@@ -537,48 +537,6 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 
 
 /*
- * GenerateAlterRoleIfExistsCommandAllRoles creates ALTER ROLE commands
- * that copies all roles from the pg_authid table.
- */
-List *
-GenerateAlterRoleIfExistsCommandAllRoles()
-{
-	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
-	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
-	HeapTuple tuple = NULL;
-	List *commands = NIL;
-	const char *alterRoleQuery = NULL;
-
-#if PG_VERSION_NUM >= PG_VERSION_12
-	TableScanDesc scan = table_beginscan_catalog(pgAuthId, 0, NULL);
-#else
-	HeapScanDesc scan = heap_beginscan_catalog(pgAuthId, 0, NULL);
-#endif
-
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
-	{
-		const char *rolename = NameStr(((Form_pg_authid) GETSTRUCT(tuple))->rolname);
-
-		/*
-		 * The default roles are skipped, because reserved roles
-		 * cannot be altered.
-		 */
-		if (IsReservedName(rolename))
-		{
-			continue;
-		}
-		alterRoleQuery = GenerateAlterRoleIfExistsCommand(tuple, pgAuthIdDescription);
-		commands = lappend(commands, (void *) alterRoleQuery);
-	}
-
-	heap_endscan(scan);
-	heap_close(pgAuthId, AccessShareLock);
-
-	return commands;
-}
-
-
-/*
  * GenerateAlterRoleSetIfExistsCommands creates ALTER ROLE .. SET commands
  * that copies all session defaults for roles from the pg_db_role_setting table.
  */

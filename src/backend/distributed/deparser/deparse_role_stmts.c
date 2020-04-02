@@ -172,10 +172,6 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 	}
 }
 
-		}
-	}
-}
-
 
 /*
  * AppendAlterRoleStmt generates the string representation of the
