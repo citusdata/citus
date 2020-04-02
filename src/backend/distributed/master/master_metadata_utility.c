@@ -916,6 +916,55 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 }
 
 
+void
+InsertShardRows(Oid relationId, uint64* shardIds, char storageType,
+				text *shardMinValues[], text *shardMaxValues[], int count)
+{
+	Datum values[Natts_pg_dist_shard];
+	bool isNulls[Natts_pg_dist_shard];
+
+	/* open shard relation and insert new tuple */
+	Relation pgDistShard = heap_open(DistShardRelationId(), RowExclusiveLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
+
+	for (int i = 0; i < count; i++)
+	{
+		/* form new shard tuple */
+		memset(values, 0, sizeof(values));
+		memset(isNulls, false, sizeof(isNulls));
+
+		values[Anum_pg_dist_shard_logicalrelid - 1] = ObjectIdGetDatum(relationId);
+		values[Anum_pg_dist_shard_shardstorage - 1] = CharGetDatum(storageType);
+		values[Anum_pg_dist_shard_shardid - 1] = Int64GetDatum(shardIds[i]);
+
+		/* dropped shardalias column must also be set; it is still part of the tuple */
+		isNulls[Anum_pg_dist_shard_shardalias_DROPPED - 1] = true;
+
+		/* check if shard min/max values are null */
+		if (shardMinValues != NULL && shardMaxValues != NULL)
+		{
+			values[Anum_pg_dist_shard_shardminvalue - 1] = PointerGetDatum(shardMinValues[i]);
+			values[Anum_pg_dist_shard_shardmaxvalue - 1] = PointerGetDatum(shardMaxValues[i]);
+		}
+		else
+		{
+			isNulls[Anum_pg_dist_shard_shardminvalue - 1] = true;
+			isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
+		}
+
+		HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+		CatalogTupleInsert(pgDistShard, heapTuple);
+	}
+
+	/* invalidate previous cache entry and close relation */
+	CitusInvalidateRelcacheByRelid(relationId);
+
+	CommandCounterIncrement();
+	heap_close(pgDistShard, NoLock);
+}
+
+
 /*
  * InsertShardPlacementRow opens the shard placement system catalog, and inserts
  * a new row with the given values into that system catalog. If placementId is
@@ -958,6 +1007,66 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	heap_close(pgDistPlacement, NoLock);
 
 	return placementId;
+}
+
+
+/*
+ * InsertShardPlacementRow opens the shard placement system catalog, and inserts
+ * a new row with the given values into that system catalog. If placementId is
+ * INVALID_PLACEMENT_ID, a new placement id will be assigned.Then, returns the
+ * placement id of the added shard placement.
+ */
+uint64 *
+InsertShardPlacementRowBatch(uint64 *shardIds, uint64 *placementIds,
+							 char shardState, uint64 shardLength,
+							 int32 *groupIds, int count)
+{
+	Datum values[Natts_pg_dist_placement];
+	bool isNulls[Natts_pg_dist_placement];
+
+	/* open shard placement relation and insert new tuple */
+	Relation pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
+
+	List *invalidateShardIds = NIL;
+
+	for (int i = 0; i < count; i++)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		/* form new shard placement tuple */
+		memset(values, 0, sizeof(values));
+		memset(isNulls, false, sizeof(isNulls));
+
+		if (placementIds[i] == INVALID_PLACEMENT_ID)
+		{
+			placementIds[i] = master_get_new_placementid(NULL);
+		}
+		values[Anum_pg_dist_placement_placementid - 1] = Int64GetDatum(placementIds[i]);
+		values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardIds[i]);
+		values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
+		values[Anum_pg_dist_placement_shardlength - 1] = Int64GetDatum(shardLength);
+		values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupIds[i]);
+
+		HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+		CatalogTupleInsert(pgDistPlacement, heapTuple);
+
+		invalidateShardIds = list_append_unique_int(invalidateShardIds, shardIds[i]);
+	}
+
+	int shardId = 0;
+	foreach_int(shardId, invalidateShardIds)
+	{
+		CHECK_FOR_INTERRUPTS();
+		CitusInvalidateRelcacheByShardId(shardId);
+	}
+	list_free(invalidateShardIds);
+
+	CommandCounterIncrement();
+	heap_close(pgDistPlacement, NoLock);
+
+	return placementIds;
 }
 
 

@@ -118,10 +118,15 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue);
+extern void InsertShardRows(Oid relationId, uint64 *shardIds, char storageType,
+							text *shardMinValues[], text *shardMaxValues[], int count);
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
 									  int32 groupId);
+extern uint64 *InsertShardPlacementRowBatch(uint64 *shardIds, uint64 *placementIds,
+											char shardState, uint64 shardLength,
+											int32 *groupIds, int count);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel);

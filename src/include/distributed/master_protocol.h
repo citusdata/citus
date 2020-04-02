@@ -111,6 +111,9 @@ extern void CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacemen
 extern List * InsertShardPlacementRows(Oid relationId, int64 shardId,
 									   List *workerNodeList, int workerStartIndex,
 									   int replicationFactor);
+extern List *InsertShardPlacementRowsBatch(Oid relationId, uint64 *shardIds,
+										   List *workerNodeList, int workerStartIndex,
+										   int replicationFactor, int count);
 extern uint64 UpdateShardStatistics(int64 shardId);
 extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 											 int32 replicationFactor,

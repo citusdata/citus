@@ -473,6 +473,63 @@ InsertShardPlacementRows(Oid relationId, int64 shardId, List *workerNodeList,
 
 
 /*
+ * InsertShardPlacementRows inserts shard placements to the metadata table on
+ * the coordinator node. Then, returns the list of added shard placements.
+ */
+List *
+InsertShardPlacementRowsBatch(Oid relationId, uint64 *shardIds, List *workerNodeList,
+							  int workerStartIndex, int replicationFactor, int count)
+{
+	int workerNodeCount = list_length(workerNodeList);
+	List *insertedShardPlacements = NIL;
+
+	int insertRowCount = count * replicationFactor;
+	uint64 *insertShardIds = palloc0(insertRowCount * sizeof(uint64));
+	uint64 *insertPlacementsIds = palloc0(insertRowCount * sizeof(uint64));
+	int32 *insertGroupIds = palloc0(insertRowCount * sizeof(int32));
+
+	for (int i = 0; i < count; i++)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		uint64 shardId = shardIds[i];
+
+		for (int attemptNumber = 0; attemptNumber < replicationFactor; attemptNumber++)
+		{
+			int insertIndex = i*replicationFactor + attemptNumber;
+
+			int workerNodeIndex = (workerStartIndex + i + attemptNumber) % workerNodeCount;
+			WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+			uint32 nodeGroupId = workerNode->groupId;
+
+			insertShardIds[insertIndex] = shardId;
+			insertPlacementsIds[insertIndex] = INVALID_PLACEMENT_ID;
+			insertGroupIds[insertIndex] = nodeGroupId;
+
+		}
+	}
+
+
+	uint64 *shardPlacementIds = InsertShardPlacementRowBatch(insertShardIds,
+															 insertPlacementsIds,
+															 SHARD_STATE_ACTIVE, 0,
+															 insertGroupIds,
+															 insertRowCount);
+	for (int i = 0; i < insertRowCount; i++)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		ShardPlacement *shardPlacement = LoadShardPlacement(insertShardIds[i],
+															shardPlacementIds[i]);
+		insertedShardPlacements = lappend(insertedShardPlacements, shardPlacement);
+	}
+
+
+	return insertedShardPlacements;
+}
+
+
+/*
  * CreateShardsOnWorkers creates shards on worker nodes given the shard placements
  * as a parameter The function creates the shards via the executor. This means
  * that it can adopt the number of connections required to create the shards.

@@ -108,7 +108,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	bool colocatedShard = false;
-	List *insertedShardPlacements = NIL;
 
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
@@ -193,9 +192,13 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	uint64 *shardIds = palloc0(shardCount * sizeof(uint64));
+	text **minHashTokenTexts = palloc0(shardCount * sizeof(text*));
+	text **maxHashTokenTexts = palloc0(shardCount * sizeof(text*));
+
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
-		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
+		CHECK_FOR_INTERRUPTS();
 
 		/* initialize the hash token space for this shard */
 		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
@@ -212,18 +215,21 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		InsertShardRow(distributedTableId, shardId, shardStorageType,
-					   minHashTokenText, maxHashTokenText);
+		shardIds[shardIndex] = shardId;
+		minHashTokenTexts[shardIndex] = minHashTokenText;
+		maxHashTokenTexts[shardIndex] = maxHashTokenText;
 
-		List *currentInsertedShardPlacements = InsertShardPlacementRows(
-			distributedTableId,
-			shardId,
-			workerNodeList,
-			roundRobinNodeIndex,
-			replicationFactor);
-		insertedShardPlacements = list_concat(insertedShardPlacements,
-											  currentInsertedShardPlacements);
 	}
+
+	InsertShardRows(distributedTableId, shardIds, shardStorageType, minHashTokenTexts, maxHashTokenTexts, shardCount);
+
+	List *insertedShardPlacements = InsertShardPlacementRowsBatch(
+		distributedTableId,
+		shardIds,
+		workerNodeList,
+		0,
+		replicationFactor,
+		shardCount);
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnections, colocatedShard);
