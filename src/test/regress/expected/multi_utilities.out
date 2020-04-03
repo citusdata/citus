@@ -197,169 +197,64 @@ SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 
 (1 row)
 
--- following approach adapted from PostgreSQL's stats.sql file
--- save relevant stat counter values in refreshable view
-\c - - - :worker_1_port
-CREATE MATERIALIZED VIEW prevcounts AS
-SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
-WHERE relname='dustbunnies_990002';
--- create function that sleeps until those counters increment
-create function wait_for_stats() returns void as $$
-declare
-  start_time timestamptz := clock_timestamp();
-  analyze_updated bool;
-  vacuum_updated bool;
-begin
-  -- we don't want to wait forever; loop will exit after 10 seconds
-  for i in 1 .. 100 loop
-
-    -- check to see if analyze has been updated
-    SELECT (st.analyze_count >= pc.analyze_count + 1) INTO analyze_updated
-      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
-
-     -- check to see if vacuum has been updated
-    SELECT (st.vacuum_count >= pc.vacuum_count + 1) INTO vacuum_updated
-      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
-
-    if analyze_updated or vacuum_updated then
-      REFRESH MATERIALIZED VIEW prevcounts;
-      exit;
-    end if;
-
-    -- wait a little
-    perform pg_sleep(0.1);
-
-    -- reset stats snapshot so we can test again
-    perform pg_stat_clear_snapshot();
-
-    -- fail if we reach the end of this loop
-    if i = 100 then
-        raise 'Waited too long for analyze/vacuum';
-    end if;
-
-  end loop;
-
-  -- report time waited in postmaster log (where it won't change test output)
-  raise log 'wait_for_stats delayed % seconds',
-    extract(epoch from clock_timestamp() - start_time);
-end
-$$ language plpgsql;
-\c - - - :worker_2_port
-CREATE MATERIALIZED VIEW prevcounts AS
-SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
-WHERE relname='dustbunnies_990002';
--- create function that sleeps until those counters increment
-create function wait_for_stats() returns void as $$
-declare
-  start_time timestamptz := clock_timestamp();
-  analyze_updated bool;
-  vacuum_updated bool;
-begin
-  -- we don't want to wait forever; loop will exit after 10 seconds
-  for i in 1 .. 100 loop
-
-    -- check to see if analyze has been updated
-    SELECT (st.analyze_count >= pc.analyze_count + 1) INTO analyze_updated
-      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
-
-     -- check to see if vacuum has been updated
-    SELECT (st.vacuum_count >= pc.vacuum_count + 1) INTO vacuum_updated
-      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
-     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
-
-    if analyze_updated or vacuum_updated then
-      REFRESH MATERIALIZED VIEW prevcounts;
-      exit;
-    end if;
-
-    -- wait a little
-    perform pg_sleep(0.1);
-
-    -- reset stats snapshot so we can test again
-    perform pg_stat_clear_snapshot();
-
-    -- fail if we reach the end of this loop
-    if i = 100 then
-        raise 'Waited too long for analyze/vacuum';
-    end if;
-
-  end loop;
-
-  -- report time waited in postmaster log (where it won't change test output)
-  raise log 'wait_for_stats delayed % seconds',
-    extract(epoch from clock_timestamp() - start_time);
-end
-$$ language plpgsql;
 -- run VACUUM and ANALYZE against the table on the master
 \c - - - :master_port
+SET citus.log_remote_commands TO ON;
 VACUUM dustbunnies;
+NOTICE:  issuing VACUUM public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ANALYZE dustbunnies;
--- verify that the VACUUM and ANALYZE ran
-\c - - - :worker_1_port
-SELECT wait_for_stats();
- wait_for_stats
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count
----------------------------------------------------------------------
-                        1
-(1 row)
-
-SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count
----------------------------------------------------------------------
-                         1
-(1 row)
-
--- get file node to verify VACUUM FULL
-SELECT relfilenode AS oldnode FROM pg_class WHERE oid='dustbunnies_990002'::regclass
-\gset
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- send a VACUUM FULL and a VACUUM ANALYZE
-\c - - - :master_port
 VACUUM (FULL) dustbunnies;
+NOTICE:  issuing VACUUM (FULL) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM ANALYZE dustbunnies;
--- verify that relfilenode changed
+NOTICE:  issuing VACUUM (ANALYZE) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (ANALYZE) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 \c - - - :worker_1_port
-SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
-WHERE oid='dustbunnies_990002'::regclass;
- table_rewritten
----------------------------------------------------------------------
- t
-(1 row)
-
--- verify the VACUUM ANALYZE incremented both vacuum and analyze counts
-SELECT wait_for_stats();
- wait_for_stats
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count
----------------------------------------------------------------------
-                        2
-(1 row)
-
-SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count
----------------------------------------------------------------------
-                         2
-(1 row)
-
 -- disable auto-VACUUM for next test
 ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
 \gset
 -- send a VACUUM FREEZE after adding a new row
 \c - - - :master_port
+SET citus.log_remote_commands TO ON;
 INSERT INTO dustbunnies VALUES (5, 'peter');
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO public.dustbunnies_990002 (id, name) VALUES (5, 'peter'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO public.dustbunnies_990002 (id, name) VALUES (5, 'peter'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FREEZE) dustbunnies;
+NOTICE:  issuing VACUUM (FREEZE) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FREEZE) public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- verify that relfrozenxid increased
 \c - - - :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
@@ -381,8 +276,33 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 -- add NULL values, then perform column-specific ANALYZE
 \c - - - :master_port
+SET citus.log_remote_commands TO ON;
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO public.dustbunnies_990002 (id, name, age) VALUES (6, NULL::text, NULL::integer)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO public.dustbunnies_990002 (id, name, age) VALUES (6, NULL::text, NULL::integer)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ANALYZE dustbunnies (name);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.dustbunnies_990002 (name)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.dustbunnies_990002 (name)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- verify that name's NULL ratio is updated but age's is not
 \c - - - :worker_1_port
 SELECT attname, null_frac FROM pg_stats
@@ -395,32 +315,21 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 (3 rows)
 
 \c - - - :master_port
+SET citus.log_remote_commands TO ON;
 -- verify warning for unqualified VACUUM
 VACUUM;
 WARNING:  not propagating VACUUM command to worker nodes
 HINT:  Provide a specific table in order to VACUUM distributed tables.
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
-\c - - - :worker_1_port
-SELECT wait_for_stats();
- wait_for_stats
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count
----------------------------------------------------------------------
-                        4
-(1 row)
-
-SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count
----------------------------------------------------------------------
-                         3
-(1 row)
-
-\c - - - :master_port
+NOTICE:  issuing VACUUM public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.dustbunnies_990002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.second_dustbunnies_990003
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.second_dustbunnies_990003
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- and warning when using targeted VACUUM without DDL propagation
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
@@ -430,21 +339,6 @@ ANALYZE dustbunnies;
 WARNING:  not propagating ANALYZE command to worker nodes
 HINT:  Set citus.enable_ddl_propagation to true in order to send targeted ANALYZE commands to worker nodes.
 SET citus.enable_ddl_propagation to DEFAULT;
-\c - - - :worker_1_port
--- should not propagate the vacuum and analyze
-SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
- pg_stat_get_vacuum_count
----------------------------------------------------------------------
-                        4
-(1 row)
-
-SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
- pg_stat_get_analyze_count
----------------------------------------------------------------------
-                         3
-(1 row)
-
-\c - - - :master_port
 -- test worker_hash
 SELECT worker_hash(123);
  worker_hash
@@ -472,6 +366,14 @@ SELECT citus_truncate_trigger();
 ERROR:  must be called as trigger
 -- confirm that citus_create_restore_point works
 SELECT 1 FROM citus_create_restore_point('regression-test');
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.pg_create_restore_point($1::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_catalog.pg_create_restore_point($1::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1
