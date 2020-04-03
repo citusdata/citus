@@ -169,6 +169,7 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 ERROR:  permission denied for function master_update_node
 -- try to manipulate node metadata via privileged user
 SET ROLE node_metadata_user;
+SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
  ?column?
@@ -177,6 +178,8 @@ SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -195,6 +198,8 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1

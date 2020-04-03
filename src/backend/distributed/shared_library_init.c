@@ -843,7 +843,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables propagating ALTER ROLE statements to workers"),
 		NULL,
 		&EnableAlterRolePropagation,
-		false,
+		true,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

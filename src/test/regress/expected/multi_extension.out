@@ -367,7 +367,10 @@ HINT:  You can manually create a database and its extensions on workers.
 \c - - - :master_port
 \c another
 CREATE EXTENSION citus;
+SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
 --
 (1 row)
 

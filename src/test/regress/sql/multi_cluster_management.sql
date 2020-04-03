@@ -83,6 +83,7 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 
 -- try to manipulate node metadata via privileged user
 SET ROLE node_metadata_user;
+SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);

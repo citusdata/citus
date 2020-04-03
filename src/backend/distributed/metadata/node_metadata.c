@@ -388,8 +388,21 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	if (NodeIsPrimary(newWorkerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
-		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
-									   newWorkerNode->workerPort);
+
+		if (EnableDependencyCreation)
+		{
+			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
+										   newWorkerNode->workerPort);
+		}
+		else
+		{
+			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
+									 "creating distributed objects on worker"),
+							  errdetail("distributed objects are only kept in sync when "
+										"citus.enable_object_propagation is set to on. "
+										"Newly activated nodes will not get these "
+										"objects created")));
+		}
 
 		if (ReplicateReferenceTablesOnActivate)
 		{

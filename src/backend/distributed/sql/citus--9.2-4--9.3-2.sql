@@ -7,3 +7,10 @@
 #include "udfs/replicate_reference_tables/9.3-2.sql"
 #include "udfs/citus_remote_connection_stats/9.3-2.sql"
 #include "udfs/create_or_alter_role/9.3-1.sql"
+
+-- add citus extension owner as a distributed object, if not already in there
+INSERT INTO citus.pg_dist_object SELECT
+  (SELECT oid FROM pg_class WHERE relname = 'pg_authid') AS oid,
+  (SELECT oid FROM pg_authid WHERE rolname = current_user) as objid,
+  0 as objsubid
+ON CONFLICT DO NOTHING;
