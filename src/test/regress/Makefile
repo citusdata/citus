@@ -66,12 +66,12 @@ create-symbolic-link:
 # so this is renamed to avoid that since we are running the isolation tests from build/specs now.
 $(generated_isolation_files): $(citus_abs_srcdir)/build/specs/%: $(citus_abs_srcdir)/spec/%
 	@mkdir -p $(citus_abs_srcdir)/$(ISOLATION_DEPDIR) $(citus_abs_srcdir)/$(ISOLATION_BUILDDIR)
-	# -MF is used to store dependency files(.Po) in another directory for separation
-	# -MT is used to change the target of the rule emitted by dependency generation.
-	# -P is used to inhibit generation of linemarkers in the output from the preprocessor.
-	# -undef is used to not predefine any system-specific or GCC-specific macros.
-	# `man cpp` for further information
-	# sed is used to strip the final // comments, because OSX cpp is weird
+	@# -MF is used to store dependency files(.Po) in another directory for separation
+	@# -MT is used to change the target of the rule emitted by dependency generation.
+	@# -P is used to inhibit generation of linemarkers in the output from the preprocessor.
+	@# -undef is used to not predefine any system-specific or GCC-specific macros.
+	@# `man cpp` for further information
+	@# sed is used to strip the final // comments, because OSX cpp is weird
 	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(ISOLATION_DEPDIR)/$(*F).Po -MT$@ $< | sed '/^\/\//d' > $@
 
 
