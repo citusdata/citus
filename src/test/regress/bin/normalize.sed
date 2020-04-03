@@ -68,6 +68,9 @@ s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g
 /^LINE [0-9]+:.*$/d
 /^ *\^$/d
 
+# connection id
+s/connectionId: [0-9]+/connectionId: xxxxxxx/g
+
 # Remove trailing whitespace
 s/ *$//g
 
