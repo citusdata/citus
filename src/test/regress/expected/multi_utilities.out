@@ -223,7 +223,10 @@ begin
       FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
      WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
 
-    exit when analyze_updated or vacuum_updated;
+    if analyze_updated or vacuum_updated then
+      REFRESH MATERIALIZED VIEW prevcounts;
+      exit;
+    end if;
 
     -- wait a little
     perform pg_sleep(0.1);
@@ -267,7 +270,10 @@ begin
       FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
      WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
 
-    exit when analyze_updated or vacuum_updated;
+    if analyze_updated or vacuum_updated then
+      REFRESH MATERIALIZED VIEW prevcounts;
+      exit;
+    end if;
 
     -- wait a little
     perform pg_sleep(0.1);
@@ -299,7 +305,6 @@ SELECT wait_for_stats();
 
 (1 row)
 
-REFRESH MATERIALIZED VIEW prevcounts;
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
  pg_stat_get_vacuum_count
 ---------------------------------------------------------------------
@@ -389,9 +394,6 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
  name    |  0.166667
 (3 rows)
 
-REFRESH MATERIALIZED VIEW prevcounts;
-\c - - - :worker_2_port
-REFRESH MATERIALIZED VIEW prevcounts;
 \c - - - :master_port
 -- verify warning for unqualified VACUUM
 VACUUM;
@@ -400,32 +402,25 @@ HINT:  Provide a specific table in order to VACUUM distributed tables.
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
 \c - - - :worker_1_port
-REFRESH MATERIALIZED VIEW prevcounts;
-\c - - - :worker_2_port
-REFRESH MATERIALIZED VIEW prevcounts;
+SELECT wait_for_stats();
+ wait_for_stats
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+ pg_stat_get_vacuum_count
+---------------------------------------------------------------------
+                        4
+(1 row)
+
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+ pg_stat_get_analyze_count
+---------------------------------------------------------------------
+                         3
+(1 row)
+
 \c - - - :master_port
--- check the current number of vacuum and analyze run on dustbunnies
-SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
-(2 rows)
-
-SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,4)
- (localhost,57638,t,4)
-(2 rows)
-
-SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,3)
- (localhost,57638,t,3)
-(2 rows)
-
 -- and warning when using targeted VACUUM without DDL propagation
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
@@ -435,28 +430,21 @@ ANALYZE dustbunnies;
 WARNING:  not propagating ANALYZE command to worker nodes
 HINT:  Set citus.enable_ddl_propagation to true in order to send targeted ANALYZE commands to worker nodes.
 SET citus.enable_ddl_propagation to DEFAULT;
+\c - - - :worker_1_port
 -- should not propagate the vacuum and analyze
-SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
- run_command_on_workers
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+ pg_stat_get_vacuum_count
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
-(2 rows)
+                        4
+(1 row)
 
-SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+ pg_stat_get_analyze_count
 ---------------------------------------------------------------------
- (localhost,57637,t,4)
- (localhost,57638,t,4)
-(2 rows)
+                         3
+(1 row)
 
-SELECT run_command_on_workers($$SELECT pg_stat_get_analyze_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,3)
- (localhost,57638,t,3)
-(2 rows)
-
+\c - - - :master_port
 -- test worker_hash
 SELECT worker_hash(123);
  worker_hash
