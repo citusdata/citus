@@ -130,6 +130,7 @@ extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid,
 														 objsubid);
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
+extern List * ReferenceTableOidList(void);
 extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);

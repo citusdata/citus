@@ -41,8 +41,8 @@
 
 /* local function forward declarations */
 static List * WorkersWithoutReferenceTablePlacement(uint64 shardId);
-static void CopyShardPlacementToNewWorkerNode(ShardPlacement *sourceShardPlacement,
-											  WorkerNode *newWorkerNode);
+static void CopyShardPlacementToWorkerNode(ShardPlacement *sourceShardPlacement,
+										   WorkerNode *workerNode, const char *userName);
 static void ReplicateSingleShardTableToAllNodes(Oid relationId);
 static void ReplicateShardToAllNodes(ShardInterval *shardInterval);
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
@@ -100,10 +100,25 @@ replicate_reference_tables(PG_FUNCTION_ARGS)
 void
 EnsureReferenceTablesExistOnAllNodes(void)
 {
+	/*
+	 * TODO: remove this. This is here so we don't have to update regression test
+	 * outputs because of reference table colocation id being changed. Specially
+	 * multi_colocation_utils which requires the test itself being updated.
+	 */
+	if (ReferenceTableOidList() == NIL)
+	{
+		return;
+	}
+
+	/* prevent this function from running concurrently with itself */
+	int colocationId = CreateReferenceTableColocationId();
+	LockColocationId(colocationId, ExclusiveLock);
+
 	List *referenceTableIdList = ReferenceTableOidList();
-	if (list_length(referenceTableIdList) == 0)
+	if (referenceTableIdList == NIL)
 	{
 		/* no reference tables exist */
+		UnlockColocationId(colocationId, ExclusiveLock);
 		return;
 	}
 
@@ -118,10 +133,6 @@ EnsureReferenceTablesExistOnAllNodes(void)
 
 	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 	uint64 shardId = shardInterval->shardId;
-
-	/* prevent this function from running concurrently with itself */
-	int colocationId = TableColocationId(referenceTableId);
-	LockColocationId(colocationId, ExclusiveLock);
 
 	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId);
 	if (list_length(newWorkersList) == 0)
@@ -168,7 +179,13 @@ EnsureReferenceTablesExistOnAllNodes(void)
 	WorkerNode *newWorkerNode = NULL;
 	foreach_ptr(newWorkerNode, newWorkersList)
 	{
-		CopyShardPlacementToNewWorkerNode(sourceShardPlacement, newWorkerNode);
+		/*
+		 * Call master_copy_shard_placement using citus extension owner. Current
+		 * user might not have permissions to do the copy.
+		 */
+		const char *userName = CitusExtensionOwnerName();
+		CopyShardPlacementToWorkerNode(sourceShardPlacement, newWorkerNode,
+									   userName);
 	}
 
 	/*
@@ -235,16 +252,16 @@ WorkersWithoutReferenceTablePlacement(uint64 shardId)
 
 
 /*
- * CopyShardPlacementToNewWorkerNode runs master_copy_shard_placement in a
- * subtransaction by connecting to localhost.
+ * CopyShardPlacementToWorkerNode runs master_copy_shard_placement
+ * using the given username by connecting to localhost.
  */
 static void
-CopyShardPlacementToNewWorkerNode(ShardPlacement *sourceShardPlacement,
-								  WorkerNode *newWorkerNode)
+CopyShardPlacementToWorkerNode(ShardPlacement *sourceShardPlacement,
+							   WorkerNode *workerNode,
+							   const char *userName)
 {
 	int connectionFlags = OUTSIDE_TRANSACTION;
 	StringInfo queryString = makeStringInfo();
-	const char *userName = CitusExtensionOwnerName();
 
 	MultiConnection *connection = GetNodeUserDatabaseConnection(
 		connectionFlags, "localhost", PostPortNumber,
@@ -256,8 +273,10 @@ CopyShardPlacementToNewWorkerNode(ShardPlacement *sourceShardPlacement,
 					 sourceShardPlacement->shardId,
 					 quote_literal_cstr(sourceShardPlacement->nodeName),
 					 sourceShardPlacement->nodePort,
-					 quote_literal_cstr(newWorkerNode->workerName),
-					 newWorkerNode->workerPort);
+					 quote_literal_cstr(workerNode->workerName),
+					 workerNode->workerPort);
+
+	elog(DEBUG3, "%s", queryString->data);
 
 	ExecuteCriticalRemoteCommand(connection, queryString->data);
 }
@@ -602,34 +621,6 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 						 placement->placementId);
 		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
 	}
-}
-
-
-/*
- * ReferenceTableOidList function scans pg_dist_partition to create a list of all
- * reference tables. To create the list, it performs sequential scan. Since it is not
- * expected that this function will be called frequently, it is OK not to use index scan.
- * If this function becomes performance bottleneck, it is possible to modify this function
- * to perform index scan.
- */
-List *
-ReferenceTableOidList()
-{
-	List *referenceTableList = NIL;
-
-	List *distTableOidList = DistTableOidList();
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, distTableOidList)
-	{
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			referenceTableList = lappend_oid(referenceTableList, relationId);
-		}
-	}
-
-	return referenceTableList;
 }
 
 
