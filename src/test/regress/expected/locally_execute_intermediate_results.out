@@ -52,6 +52,8 @@ HAVING max(value) > (SELECT max FROM cte_1);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -74,6 +76,8 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
@@ -100,6 +104,8 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
@@ -144,7 +150,11 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -192,6 +202,8 @@ DEBUG:  generating subplan XXX_2 for subquery SELECT max(max) AS max FROM (SELEC
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT max(max) AS max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1
  count
 ---------------------------------------------------------------------
@@ -258,6 +270,8 @@ DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT max(value) AS max FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a
  count | key
 ---------------------------------------------------------------------
@@ -352,7 +366,9 @@ HAVING max(value) >
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.=) 3) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -373,7 +389,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -395,7 +413,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 ON ((table_2.key OPERATOR(pg_catalog.=) (cte_2.max)::integer))) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 USING (max)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2_1 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -435,6 +455,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  key | key
@@ -454,7 +476,11 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM locally_execute_in
 DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2)) LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be written to local file
 DEBUG:  Subplan XXX_4 will be written to local file
 NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
@@ -484,6 +510,7 @@ HAVING max(value) > (SELECT max FROM cte_1);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -507,6 +534,7 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
@@ -532,6 +560,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
@@ -576,7 +605,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -624,6 +655,7 @@ DEBUG:  generating subplan XXX_2 for subquery SELECT max(max) AS max FROM (SELEC
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -686,6 +718,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count | key
 ---------------------------------------------------------------------
      1 |   4
@@ -792,7 +825,9 @@ HAVING max(value) >
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.=) 3) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -813,7 +848,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -834,7 +871,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 ON ((table_2.key OPERATOR(pg_catalog.=) (cte_2.max)::integer))) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 USING (max)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2_1 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -874,6 +913,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  key | key
@@ -893,7 +933,9 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM locally_execute_in
 DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2)) LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be written to local file
 DEBUG:  Subplan XXX_4 will be written to local file
  key | key
@@ -914,6 +956,7 @@ HAVING max(value) > (SELECT max FROM cte_1);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -937,6 +980,7 @@ DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_e
 DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
@@ -962,6 +1006,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
@@ -985,7 +1030,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(key) AS max FROM locally_execute_intermediate_results.table_2
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 WHERE (key OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_2)) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
-DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -1006,7 +1051,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -1029,7 +1076,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -1054,6 +1103,7 @@ DEBUG:  generating subplan XXX_2 for subquery SELECT max(max) AS max FROM (SELEC
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
@@ -1076,7 +1126,7 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT max(max) AS max FROM (SELEC
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.<) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max text)))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_3 will be written to local file
  count
 ---------------------------------------------------------------------
      1
@@ -1116,6 +1166,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count | key
 ---------------------------------------------------------------------
      1 |   4
@@ -1221,7 +1272,9 @@ HAVING max(value) >
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.table_2 WHERE (key OPERATOR(pg_catalog.=) 3) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -1242,7 +1295,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -1263,7 +1318,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -1285,7 +1342,9 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM lo
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT key, value FROM locally_execute_intermediate_results.table_2
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((locally_execute_intermediate_results.table_2 JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_3 USING (key)) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2 ON ((table_2.key OPERATOR(pg_catalog.=) (cte_2.max)::integer))) JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1 USING (max)) WHERE (table_2.key OPERATOR(pg_catalog.=) 3) GROUP BY table_2.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>) (SELECT cte_1_1.max FROM ((SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1_1 JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2_1 USING (max))))
+DEBUG:  Subplan XXX_1 will be written to local file
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  count
@@ -1315,6 +1374,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
  key | key
@@ -1334,7 +1394,9 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM locally_execute_in
 DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM locally_execute_intermediate_results.table_2 GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_2.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_2)) LIMIT 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.key, bar.key FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo, (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) bar WHERE (foo.key OPERATOR(pg_catalog.<>) bar.key)
 DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_4 will be sent to localhost:xxxxx
  key | key

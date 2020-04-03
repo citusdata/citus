@@ -911,8 +911,16 @@ RESET citus.coordinator_aggregation_strategy;
 SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type > corr(t1.value_3, t1.value_2 + (SELECT t2.value_2 FROM users_table t2 ORDER BY 1 DESC LIMIT 1))
 ORDER BY 1;
-ERROR:  result "68_1" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ event_type
+---------------------------------------------------------------------
+          0
+          1
+          2
+          3
+          4
+          5
+(6 rows)
+
 SELECT t1.event_type FROM events_table t1
 GROUP BY t1.event_type HAVING t1.event_type * 5 > sum(distinct t1.value_3)
 ORDER BY 1;

@@ -1148,56 +1148,39 @@ FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
  * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
  * updates the usedSubPlanNodeList of the distributed plan.
  *
- * The function simply pulls all the subPlans that are used in the queryTree
- * with one exception: subPlans in the HAVING clause. The reason is explained
- * in the function.
+ * The function simply pulls all the subPlans that are used in the queryTree.
+ * In addition to that, subPlans in the HAVING clause are marked as to be
+ * written locally as well. The reason is explained in the function.
  */
 static void
 RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 {
 	Node *havingQual = originalQuery->havingQual;
 
-	/* temporarily set to NULL, we're going to restore before the function returns */
-	originalQuery->havingQual = NULL;
-
 	/*
 	 * Mark the subplans as needed on remote side. Note that this decision is revisited
 	 * on execution, when the query only consists of intermediate results.
 	 */
-	List *subplansExceptHaving = FindSubPlansUsedInNode((Node *) originalQuery);
-	UpdateUsedPlanListLocation(subplansExceptHaving, SUBPLAN_ACCESS_REMOTE);
+	List *subplansUsedInQuery = FindSubPlansUsedInNode((Node *) originalQuery);
+	UpdateUsedPlanListLocation(subplansUsedInQuery, SUBPLAN_ACCESS_REMOTE);
 
-	/* do the same for HAVING part of the query */
 	List *subplansInHaving = NIL;
 	if (originalQuery->hasSubLinks &&
 		FindNodeCheck(havingQual, IsNodeSubquery))
 	{
 		subplansInHaving = FindSubPlansUsedInNode(havingQual);
-		if (plan->masterQuery)
-		{
-			/*
-			 * If we have the master query, we're sure that the result is needed locally.
-			 * Otherwise, such as router queries, the plan may not be required locally.
-			 * Note that if the query consists of only intermediate results, the executor
-			 * may still prefer to write locally.
-			 *
-			 * If any of the subplansInHaving is used in other parts of the query,
-			 * we'll later merge those subPlans and send to remote.
-			 */
-			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
-		}
-		else
-		{
-			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_REMOTE);
-		}
+
+		/*
+		 * If we have the master query, it is likely that the result is needed locally.
+		 *
+		 * Although this is not optimal, we always write all intermediate results
+		 * used in HAVING locally.
+		 */
+		UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
 	}
 
-	/* set back the havingQual and the calculated subplans */
-	originalQuery->havingQual = havingQual;
-
-	/* merge the used subplans */
-	plan->usedSubPlanNodeList =
-		MergeUsedSubPlanLists(subplansExceptHaving, subplansInHaving);
+	plan->usedSubPlanNodeList = MergeUsedSubPlanLists(subplansUsedInQuery,
+													  subplansInHaving);
 }
 
 
