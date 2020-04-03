@@ -795,11 +795,32 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 		int statOK = stat(resultFileName, &fileStat);
 		if (statOK != 0)
 		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("result \"%s\" does not exist", resultId)));
+			/*
+			 * When the file does not exist, it could mean two different things.
+			 * First -- and a lot more common -- case is that a failure happened
+			 * in a concurrent backend on the same distributed transaction. And,
+			 * one of the backends in that transaction has already been roll
+			 * backed, which has already removed the file. If we throw an error
+			 * here, the user might see this error instead of the actual error
+			 * message. Instead, we prefer to WARN the user and pretend that the
+			 * file has no data in it. In the end, the user would see the actual
+			 * error message for the failure.
+			 *
+			 * Second, in case of any bugs in intermediate result broadcasts,
+			 * we could try to read a non-existing file. That is most likely
+			 * to happen during development.
+			 */
+			ereport(WARNING, (errcode_for_file_access(),
+							  errmsg("Query could not find the intermediate result file "
+									 "\"%s\", it was mostly likely deleted due to an "
+									 "error in a parallel process within the same "
+									 "distributed transaction", resultId)));
 		}
-
-		ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor, tupleStore);
+		else
+		{
+			ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor,
+								   tupleStore);
+		}
 	}
 
 	tuplestore_donestoring(tupleStore);
