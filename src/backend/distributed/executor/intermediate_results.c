@@ -82,6 +82,7 @@ typedef struct RemoteFileDestReceiver
 
 static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 										  TupleDesc inputTupleDescriptor);
+static void PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest);
 static StringInfo ConstructCopyResultStatement(const char *resultId);
 static void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 static bool RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
@@ -233,13 +234,8 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) dest;
 
-	const char *resultId = resultDest->resultId;
-
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
-
-	List *initialNodeList = resultDest->initialNodeList;
-	List *connectionList = NIL;
 
 	resultDest->tupleDescriptor = inputTupleDescriptor;
 
@@ -255,6 +251,23 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	resultDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															  copyOutState->binary);
+
+	PrepareIntermediateResultBroadcast(resultDest);
+}
+
+
+/*
+ * PrepareIntermediateResultBroadcast gets a RemoteFileDestReceiver and does
+ * the necessary initilizations including initiating the remote connnections
+ * and creating the local file, which is necessary (it might be both).
+ */
+static void
+PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
+{
+	List *initialNodeList = resultDest->initialNodeList;
+	const char *resultId = resultDest->resultId;
+	List *connectionList = NIL;
+	CopyOutState copyOutState = resultDest->copyOutState;
 
 	if (resultDest->writeLocalFile)
 	{
