@@ -26,6 +26,8 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include <distributed/metadata_sync.h>
+#include "distributed/reference_table_utils.h"
+#include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
 #include "nodes/parsenodes.h"
@@ -88,6 +90,13 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 			{
 				heapTuple = systable_getnext(scanDescriptor);
 				continue;
+			}
+
+			if (IsReferenceTable(relationId))
+			{
+				/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
+				int colocationId = CreateReferenceTableColocationId();
+				LockColocationId(colocationId, ExclusiveLock);
 			}
 
 			/* invalidate foreign key cache if the table involved in any foreign key */

@@ -605,3 +605,42 @@ master_remove_node
 
 
 
+
+starting permutation: s1-add-second-worker s2-begin s1-begin s1-drop-reference-table s2-replicate-reference-tables s1-commit s2-commit
+create_distributed_table
+
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-begin:
+ BEGIN;
+
+step s1-begin:
+    BEGIN;
+
+step s1-drop-reference-table:
+ DROP TABLE test_reference_table;
+
+step s2-replicate-reference-tables:
+ SET client_min_messages TO DEBUG2;
+ SELECT replicate_reference_tables();
+ RESET client_min_messages;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-replicate-reference-tables: <... completed>
+replicate_reference_tables
+
+
+step s2-commit:
+ COMMIT;
+
+master_remove_node
+
+
+
