@@ -328,3 +328,16 @@ SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
 
 SET client_min_messages to 'NOTICE';
+
+-- we should be able to use nextval in the target list
+CREATE SEQUENCE query_seq;
+SELECT nextval('query_seq') FROM articles WHERE author_id = 1;
+SELECT nextval('query_seq') FROM articles LIMIT 3;
+SELECT nextval('query_seq')*2 FROM articles LIMIT 3;
+SELECT * FROM (SELECT nextval('query_seq') FROM articles LIMIT 3) vals;
+
+-- but not elsewhere
+SELECT sum(nextval('query_seq')) FROM articles;
+SELECT n FROM (SELECT nextval('query_seq') n, random() FROM articles) vals;
+
+DROP SEQUENCE query_seq;

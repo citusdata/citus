@@ -3589,17 +3589,22 @@ static bool
 CanPushDownExpression(Node *expression,
 					  const ExtendedOpNodeProperties *extendedOpNodeProperties)
 {
+	if (contain_nextval_expression_walker(expression, NULL))
+	{
+		/* nextval can only be evaluated on the coordinator */
+		return false;
+	}
+
 	bool hasAggregate = contain_aggs_of_level(expression, 0);
 	bool hasWindowFunction = contain_window_function(expression);
-	bool hasPushableWindowFunction =
-		hasWindowFunction && extendedOpNodeProperties->onlyPushableWindowFunctions;
-
 	if (!hasAggregate && !hasWindowFunction)
 	{
 		return true;
 	}
 
 	/* aggregates inside pushed down window functions can be pushed down */
+	bool hasPushableWindowFunction =
+		hasWindowFunction && extendedOpNodeProperties->onlyPushableWindowFunctions;
 	if (hasPushableWindowFunction)
 	{
 		return true;

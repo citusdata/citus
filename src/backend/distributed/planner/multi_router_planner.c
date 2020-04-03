@@ -3140,6 +3140,17 @@ MultiRouterPlannableQuery(Query *query)
 							 NULL, NULL);
 	}
 
+	if (contain_nextval_expression_walker((Node *) query->targetList, NULL))
+	{
+		/*
+		 * We let queries with nextval in the target list fall through to
+		 * the logical planner, which knows how to handle those queries.
+		 */
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Sequences cannot be used in router queries",
+							 NULL, NULL);
+	}
+
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
 	foreach(rangeTableRelationCell, rangeTableRelationList)
 	{
