@@ -760,11 +760,90 @@ ORDER BY 1,4,5;
  1370015 |          1 |           0 | localhost |    57637
 (1 row)
 
--- this should have no effect
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
+(1 row)
+
+-- verify we cannot replicate reference tables in a transaction modifying pg_dist_node
+BEGIN;
+SELECT 1 FROM master_add_inactive_node('invalid-node-name', 9999);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT replicate_reference_tables();
+ERROR:  cannot replicate reference tables in a transaction that modified node metadata
+ROLLBACK;
+-- verify we cannot replicate reference tables in a transaction which
+-- modified reference tables
+BEGIN;
+DELETE FROM ref_table;
+SELECT replicate_reference_tables();
+ERROR:  cannot replicate reference tables in a transaction that modified a reference table
+ROLLBACK;
+BEGIN;
+ALTER TABLE ref_table ADD COLUMN b int;
+SELECT replicate_reference_tables();
+ERROR:  cannot replicate reference tables in a transaction that modified a reference table
+ROLLBACK;
+BEGIN;
+CREATE INDEX ref_idx ON ref_table(a);
+SELECT replicate_reference_tables();
+ERROR:  cannot replicate reference tables in a transaction that modified a reference table
+ROLLBACK;
+--
+-- read from reference table, then replicate, then write. verify
+-- placements are consistent.
+--
+BEGIN;
+SELECT count(*) FROM ref_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT replicate_reference_tables();
+ replicate_reference_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table VALUES (11);
+SELECT count(*), sum(a) FROM ref_table;
+ count | sum
+---------------------------------------------------------------------
+    11 |  66
+(1 row)
+
+UPDATE ref_table SET a = a + 1;
+SELECT sum(a) FROM ref_table;
+ sum
+---------------------------------------------------------------------
+  77
+(1 row)
+
+COMMIT;
+SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
+ consistent
+---------------------------------------------------------------------
+ t
 (1 row)
 
 -- test adding an invalid node while we have reference tables to replicate
