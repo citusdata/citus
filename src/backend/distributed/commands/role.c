@@ -31,6 +31,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
@@ -107,10 +108,14 @@ AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
 static ObjectAddress
 RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 {
-	Oid roleOid = get_rolespec_oid(role, missing_ok);
-
 	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, AuthIdRelationId, roleOid);
+
+	if (role != NULL)
+	{
+		/* roles can be NULL for statements on ALL roles eg. ALTER ROLE ALL SET ... */
+		Oid roleOid = get_rolespec_oid(role, missing_ok);
+		ObjectAddressSet(address, AuthIdRelationId, roleOid);
+	}
 
 	return address;
 }
@@ -178,8 +183,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 List *
 PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 {
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&address))
+	if (!ShouldPropagate())
 	{
 		return NIL;
 	}
@@ -189,9 +193,18 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
-
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+
+	/*
+	 * stmt->role could be NULL when the statement is on 'ALL' roles, we do propagate for
+	 * ALL roles. If it is not NULL the role is for a specific role. If that role is not
+	 * distributed we will not propagate the statement
+	 */
+	if (stmt->role != NULL && !IsObjectDistributed(&address))
+	{
+		return NIL;
+	}
 
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -527,11 +540,11 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 	ReleaseSysCache(roleTuple);
 
 	List *grantRoleStmts = NULL;
-	char * createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
-										pstrdup(NameStr(role->rolname)),
-										createRoleStmt,
-										alterRoleStmt,
-										grantRoleStmts);
+	char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
+		pstrdup(NameStr(role->rolname)),
+		createRoleStmt,
+		alterRoleStmt,
+		grantRoleStmts);
 	return list_make1(createOrAlterRoleQuery);
 }
 
