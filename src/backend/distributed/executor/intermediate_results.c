@@ -251,8 +251,6 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	resultDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															  copyOutState->binary);
-
-	PrepareIntermediateResultBroadcast(resultDest);
 }
 
 
@@ -372,6 +370,15 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) dest;
 
+	if (resultDest->tuplesSent == 0)
+	{
+		/*
+		 *  We get the first tuple, lets initialize the remote connections
+		 *  and/or the local file.
+		 */
+		PrepareIntermediateResultBroadcast(resultDest);
+	}
+
 	TupleDesc tupleDescriptor = resultDest->tupleDescriptor;
 
 	List *connectionList = resultDest->connectionList;
@@ -440,6 +447,17 @@ static void
 RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
+
+	if (resultDest->tuplesSent == 0)
+	{
+		/*
+		 *  We have not received any tuples (when the intermediate result
+		 *  returns zero rows). Still, we want to create the necessary
+		 *  intermediate result files even if they are empty, as the query
+		 *  execution requires the files to be present.
+		 */
+		PrepareIntermediateResultBroadcast(resultDest);
+	}
 
 	List *connectionList = resultDest->connectionList;
 	CopyOutState copyOutState = resultDest->copyOutState;
