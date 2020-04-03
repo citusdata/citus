@@ -8,6 +8,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "funcapi.h"
 
 #include <float.h>
@@ -46,7 +49,7 @@
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
 #else
@@ -772,7 +775,7 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
-	#if PG_VERSION_NUM < 120000
+	#if PG_VERSION_NUM < PG_VERSION_12
 	Query *query = planContext->query;
 
 	/*
@@ -798,7 +801,7 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->
 														  plannerRestrictionContext);
 
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 
 	/*
 	 * Set back the original query, in case the planning failed and we need to go
@@ -1591,7 +1594,7 @@ BlessRecordExpression(Expr *expr)
 		ListCell *argCell = NULL;
 		int currentResno = 1;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args));
 #else
 		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args), false);
@@ -2033,7 +2036,7 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 	double rowSizeEstimate = 0;
 	double rowCountEstimate = 0.;
 	double ioCost = 0.;
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	QualCost funcCost = { 0., 0. };
 #else
 	double funcCost = 0.;
@@ -2096,13 +2099,13 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 
 
 		/* add the cost of parsing a column */
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		add_function_cost(NULL, inputFunctionId, NULL, &funcCost);
 #else
 		funcCost += get_func_cost(inputFunctionId);
 #endif
 	}
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	rowCost += funcCost.per_tuple;
 #else
 	rowCost += funcCost * cpu_operator_cost;
@@ -2121,7 +2124,7 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 	path->rows = rowCountEstimate;
 	path->total_cost = rowCountEstimate * rowCost + ioCost;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	path->startup_cost = funcCost.startup + relOptInfo->baserestrictcost.startup;
 #endif
 }

@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "catalog/pg_class.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
@@ -35,7 +37,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"
@@ -1160,18 +1162,6 @@ CoordinatorInsertSelectSupported(Query *insertSelectQuery)
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "INSERT ... SELECT into an append-distributed table is "
 							 "not supported", NULL, NULL);
-	}
-
-	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	Query *subquery = (Query *) subqueryRte->subquery;
-
-	if (NeedsDistributedPlanning(subquery) &&
-		contain_nextval_expression_walker((Node *) insertSelectQuery->targetList, NULL))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "INSERT ... SELECT cannot generate sequence values when "
-							 "selecting from a distributed table",
-							 NULL, NULL);
 	}
 
 	return NULL;

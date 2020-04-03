@@ -15,6 +15,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
@@ -45,7 +48,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/predtest.h"

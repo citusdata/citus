@@ -18,7 +18,8 @@ DECLARE
    activity record;
 BEGIN
     DO 'BEGIN END'; -- Force maintenance daemon to start
-    LOOP
+    -- we don't want to wait forever; loop will exit after 20 seconds
+    FOR i IN 1 .. 200 LOOP
         PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
         WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
@@ -28,6 +29,8 @@ BEGIN
             PERFORM pg_sleep(0.1);
         END IF ;
     END LOOP;
+    -- fail if we reach the end of this loop
+    raise 'Waited too long for maintenance daemon to start';
 END;
 $$;
 $definition$ create_function_test_maintenance_worker
@@ -117,7 +120,16 @@ ALTER EXTENSION citus UPDATE TO '9.0-1';
 ALTER EXTENSION citus UPDATE TO '9.0-2';
 ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
+ALTER EXTENSION citus UPDATE TO '9.2-2';
+ALTER EXTENSION citus UPDATE TO '9.2-4';
+/*
+ * As we mistakenly bumped schema version to 9.3-1 (in previous
+ * release), we support updating citus schema from 9.3-1 to 9.2-4,
+ * but we do not support explicitly updating it to to 9.3-1.
+ * Hence below update (to 9.3-1) command should fail.
+ */
 ALTER EXTENSION citus UPDATE TO '9.3-1';
+ALTER EXTENSION citus UPDATE TO '9.3-2';
 
 -- show running version
 SHOW citus.version;

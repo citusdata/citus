@@ -270,11 +270,11 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-			uint64 rowsInserted = ExtractAndExecuteLocalAndRemoteTasks(scanState,
-																	   taskList,
-																	   ROW_MODIFY_COMMUTATIVE,
-																	   hasReturning);
+			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+			uint64 rowsInserted = ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE,
+																taskList, tupleDescriptor,
+																scanState->tuplestorestate,
+																hasReturning);
 
 			executorState->es_processed = rowsInserted;
 		}
@@ -331,9 +331,11 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 				Assert(scanState->tuplestorestate == NULL);
 				scanState->tuplestorestate =
 					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-				ExtractAndExecuteLocalAndRemoteTasks(scanState, prunedTaskList,
-													 ROW_MODIFY_COMMUTATIVE,
-													 hasReturning);
+
+				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+				ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+											  tupleDescriptor, scanState->tuplestorestate,
+											  hasReturning);
 
 				if (SortReturning && hasReturning)
 				{
@@ -1057,12 +1059,23 @@ IsRedistributablePlan(Plan *selectPlan)
 		return false;
 	}
 
+	if (distSelectPlan->masterQuery != NULL)
+	{
+		Query *masterQuery = (Query *) distSelectPlan->masterQuery;
+
+		if (contain_nextval_expression_walker((Node *) masterQuery->targetList, NULL))
+		{
+			/* nextval needs to be evaluated on the coordinator */
+			return false;
+		}
+	}
+
 	return true;
 }
 
 
 /*
- * WrapTaskListForProjection wraps task->queryString to only select given
+ * WrapTaskListForProjection wraps task query string to only select given
  * projected columns. It modifies the taskList.
  */
 static void
@@ -1091,7 +1104,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
 						 projectedColumnsString->data,
-						 TaskQueryString(task));
+						 TaskQueryStringForAllPlacements(task));
 		SetTaskQueryString(task, wrappedQuery->data);
 	}
 }

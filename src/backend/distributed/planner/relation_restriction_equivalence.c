@@ -10,6 +10,8 @@
  */
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
@@ -22,7 +24,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"

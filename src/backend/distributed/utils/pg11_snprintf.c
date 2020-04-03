@@ -33,6 +33,9 @@
 
 #include "c.h"
 
+#include "distributed/pg_version_constants.h"
+
+
 #include <ctype.h>
 #ifdef _MSC_VER
 #include <float.h>				/* for _isnan */
@@ -45,7 +48,7 @@
 #include <sys/param.h>
 
 /* Include this file only for PG11 and only when USE_REPL_SNPRINTF is not set */
-#if PG_VERSION_NUM < 120000
+#if PG_VERSION_NUM < PG_VERSION_12
 #ifndef USE_REPL_SNPRINTF
 /*
  * We used to use the platform's NL_ARGMAX here, but that's a bad idea,
@@ -1178,4 +1181,4 @@ trailing_pad(int *padlen, PrintfTarget *target)
 	}
 }
 #endif /* USE_REPL_SNPRINTF */
-#endif /* PG_VERSION_NUM < 120000 */
+#endif /* PG_VERSION_NUM < PG_VERSION_12 */

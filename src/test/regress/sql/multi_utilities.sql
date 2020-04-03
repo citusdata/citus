@@ -295,6 +295,13 @@ VACUUM;
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
 
+\c - - - :worker_1_port
+REFRESH MATERIALIZED VIEW prevcounts;
+
+\c - - - :worker_2_port
+REFRESH MATERIALIZED VIEW prevcounts;
+
+\c - - - :master_port
 -- check the current number of vacuum and analyze run on dustbunnies
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
 SELECT run_command_on_workers($$SELECT pg_stat_get_vacuum_count(tablename::regclass) from pg_tables where tablename LIKE 'dustbunnies_%' limit 1$$);

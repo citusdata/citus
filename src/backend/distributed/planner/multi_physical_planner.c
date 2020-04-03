@@ -13,6 +13,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <math.h>
 #include <stdint.h>
 
@@ -57,7 +59,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #else
@@ -215,7 +217,6 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
-static Node * AddAnyValueAggregates(Node *node, void *context);
 
 
 /*
@@ -974,7 +975,7 @@ TargetEntryList(List *expressionList)
  * function. This is needed for repartition joins because primary keys are not
  * present on intermediate tables.
  */
-static Node *
+Node *
 AddAnyValueAggregates(Node *node, void *context)
 {
 	List *groupClauseList = context;
@@ -994,6 +995,7 @@ AddAnyValueAggregates(Node *node, void *context)
 		agg->aggtranstype = InvalidOid;
 		agg->aggargtypes = list_make1_oid(var->vartype);
 		agg->aggsplit = AGGSPLIT_SIMPLE;
+		agg->aggcollid = exprCollation((Node *) var);
 		return (Node *) agg;
 	}
 	if (IsA(node, TargetEntry))
@@ -4388,7 +4390,7 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 
 	/* wrap repartition query string around filter query string */
 	StringInfo mapQueryString = makeStringInfo();
-	char *filterQueryString = TaskQueryString(filterTask);
+	char *filterQueryString = TaskQueryStringForAllPlacements(filterTask);
 	char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
 	PartitionType partitionType = mapMergeJob->partitionType;
 

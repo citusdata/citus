@@ -200,7 +200,6 @@ select count(*) FROM (
 
 RESET citus.task_executor_type;
 
--- This fails due to table types not being managed properly
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
 

@@ -13,13 +13,16 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 #include "libpq-fe.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
 #endif
 #include "access/heapam.h"

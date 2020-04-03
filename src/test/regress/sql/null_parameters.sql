@@ -309,6 +309,10 @@ EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
+-- it seems that sometimes the pruning is deferred and sometimes not.
+-- what we care about is that this doesn't crash and the log for this
+-- one shouldn't matter. This is to prevent this test being from flaky.
+SET client_min_messages to ERROR;
 EXECUTE null_select_on_json_param(NULL);
 
 SET client_min_messages TO ERROR;

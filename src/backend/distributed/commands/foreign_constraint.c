@@ -12,10 +12,12 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
-#if (PG_VERSION_NUM >= 120000)
+#if (PG_VERSION_NUM >= PG_VERSION_12)
 #include "access/genam.h"
 #endif
 #include "catalog/pg_type.h"

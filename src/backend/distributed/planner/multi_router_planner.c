@@ -12,6 +12,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <stddef.h>
 
 #include "access/stratnum.h"
@@ -60,7 +62,7 @@
 #include "optimizer/joininfo.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"
@@ -711,7 +713,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			queryTableCount++;
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 				 || rangeTableEntry->rtekind == RTE_RESULT
 #endif
 				 )
@@ -1820,7 +1822,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 	 * that the query cannot be executed locally.
 	 */
 	task->taskPlacementList = placementList;
-	SetTaskQuery(task, query);
+	SetTaskQueryIfShouldLazyDeparse(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
@@ -1901,7 +1903,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	}
 
 	task->taskPlacementList = placementList;
-	SetTaskQuery(task, query);
+	SetTaskQueryIfShouldLazyDeparse(task, query);
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
@@ -3135,6 +3137,17 @@ MultiRouterPlannableQuery(Query *query)
 	{
 		return DeferredError(ERRCODE_SUCCESSFUL_COMPLETION,
 							 "Router planner not enabled.",
+							 NULL, NULL);
+	}
+
+	if (contain_nextval_expression_walker((Node *) query->targetList, NULL))
+	{
+		/*
+		 * We let queries with nextval in the target list fall through to
+		 * the logical planner, which knows how to handle those queries.
+		 */
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Sequences cannot be used in router queries",
 							 NULL, NULL);
 	}
 

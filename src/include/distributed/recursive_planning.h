@@ -10,13 +10,13 @@
 #ifndef RECURSIVE_PLANNING_H
 #define RECURSIVE_PLANNING_H
 
-
+#include "distributed/pg_version_constants.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"

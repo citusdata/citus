@@ -7,6 +7,9 @@
  *
  *-------------------------------------------------------------------------
  */
+
+#include "distributed/pg_version_constants.h"
+
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -221,16 +224,15 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 							 shardPlacement->nodeId,
 							 quote_literal_cstr(taskPrefix),
 							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(TaskQueryString(selectTask)),
+							 quote_literal_cstr(TaskQueryStringForAllPlacements(
+													selectTask)),
 							 partitionColumnIndex,
 							 quote_literal_cstr(partitionMethodString),
 							 minValuesString->data, maxValuesString->data,
 							 binaryFormatString);
 			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 		}
-
-		SetTaskQueryString(selectTask, NULL);
-		selectTask->perPlacementQueryStrings = perPlacementQueries;
+		SetTaskPerPlacementQueryStrings(selectTask, perPlacementQueries);
 	}
 }
 
@@ -324,7 +326,7 @@ ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 	Tuplestorestate *resultStore = NULL;
 	int resultColumnCount = 4;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 #else
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);
@@ -374,6 +376,7 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
 	text *resultId = DatumGetTextP(slot_getattr(tupleSlot, 3, &isNull));
 	int64 rowCount = DatumGetInt64(slot_getattr(tupleSlot, 4, &isNull));
 
+	Assert(targetShardIndex < targetRelation->shardIntervalArrayLength);
 	ShardInterval *shardInterval =
 		targetRelation->sortedShardIntervalArray[targetShardIndex];
 
@@ -411,9 +414,16 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 	Tuplestorestate *resultStore = tuplestore_begin_heap(randomAccess, interTransactions,
 														 work_mem);
 
+	/*
+	 * Local execution is not supported because here we use perPlacementQueryStrings.
+	 * Local execution does not know how to handle it. One solution is to extract and set
+	 * queryStringLazy from perPlacementQueryStrings. The extracted one should be the
+	 * query string for the local placement.
+	 */
+	bool localExecutionSupported = false;
 	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
 							resultStore, hasReturning, targetPoolSize, &xactProperties,
-							NIL);
+							NIL, localExecutionSupported);
 
 	return resultStore;
 }
@@ -444,6 +454,7 @@ ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRe
 	{
 		int shardIndex = sourceFragment->targetShardIndex;
 
+		Assert(shardIndex < shardCount);
 		shardResultIdList[shardIndex] = lappend(shardResultIdList[shardIndex],
 												sourceFragment->resultId);
 	}
@@ -609,7 +620,7 @@ ExecuteFetchTaskList(List *taskList)
 	Tuplestorestate *resultStore = NULL;
 	int resultColumnCount = 1;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 #else
 	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);

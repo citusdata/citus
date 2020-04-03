@@ -65,6 +65,9 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "fmgr.h"
 
 #include "distributed/shard_pruning.h"
@@ -183,7 +186,7 @@ typedef struct PendingPruningInstance
 	PruningTreeNode *continueAt;
 } PendingPruningInstance;
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 typedef union \
 { \
 	FunctionCallInfoBaseData fcinfo; \

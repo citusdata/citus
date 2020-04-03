@@ -50,6 +50,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include "funcapi.h"
 
 #include "catalog/pg_type.h"
@@ -81,7 +84,7 @@
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"

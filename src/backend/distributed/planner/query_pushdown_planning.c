@@ -21,6 +21,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
@@ -35,7 +37,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #else
@@ -226,7 +228,7 @@ HasEmptyJoinTree(Query *query)
 		return true;
 	}
 
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 	else if (list_length(query->rtable) == 1)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) linitial(query->rtable);
@@ -1087,7 +1089,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
 			rangeTableEntry->rtekind == RTE_SUBQUERY
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 			|| rangeTableEntry->rtekind == RTE_RESULT
 #endif
 			)
@@ -1474,7 +1476,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			 */
 			return true;
 		}
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 		else if (rangeTableEntry->rtekind == RTE_RESULT)
 		{
 			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
@@ -1634,6 +1636,27 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	{
 		extendedOpNode->havingQual =
 			(Node *) make_ands_implicit((Expr *) extendedOpNode->havingQual);
+	}
+
+	/*
+	 * Group by on primary key allows all columns to appear in the target
+	 * list, but once we wrap the join tree into a subquery the GROUP BY
+	 * will no longer directly refer to the primary key and referencing
+	 * columns that are not in the GROUP BY would result in an error. To
+	 * prevent that we wrap all the columns that do not appear in the
+	 * GROUP BY in an any_value aggregate.
+	 */
+	if (extendedOpNode->groupClauseList != NIL)
+	{
+		extendedOpNode->targetList =
+			(List *) expression_tree_mutator((Node *) extendedOpNode->targetList,
+											 AddAnyValueAggregates,
+											 extendedOpNode->groupClauseList);
+
+		extendedOpNode->havingQual =
+			expression_tree_mutator((Node *) extendedOpNode->havingQual,
+									AddAnyValueAggregates,
+									extendedOpNode->groupClauseList);
 	}
 
 	/*

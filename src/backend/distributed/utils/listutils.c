@@ -165,10 +165,15 @@ StringJoin(List *stringList, char delimiter)
 	StringInfo joinedString = makeStringInfo();
 
 	const char *command = NULL;
+	int curIndex = 0;
 	foreach_ptr(command, stringList)
 	{
+		if (curIndex > 0)
+		{
+			appendStringInfoChar(joinedString, delimiter);
+		}
 		appendStringInfoString(joinedString, command);
-		appendStringInfoChar(joinedString, delimiter);
+		curIndex++;
 	}
 
 	return joinedString->data;

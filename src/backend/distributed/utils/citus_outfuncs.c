@@ -18,6 +18,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <ctype.h>
 
 #include "distributed/citus_nodefuncs.h"
@@ -31,7 +33,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #else
 #include "nodes/relation.h"
@@ -135,7 +137,7 @@
 
 
 #define booltostr(x)  ((x) ? "true" : "false")
-
+static void WriteTaskQuery(OUTFUNC_ARGS);
 
 /*****************************************************************************
  *	Output routines for Citus node types
@@ -469,6 +471,43 @@ OutRelationRowLock(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(rowLockStrength, LockClauseStrength);
 }
 
+static void WriteTaskQuery(OUTFUNC_ARGS) {
+	WRITE_LOCALS(Task);
+
+	WRITE_ENUM_FIELD(taskQuery.queryType, TaskQueryType);
+
+	switch (node->taskQuery.queryType)
+	{
+		case TASK_QUERY_TEXT:
+		{
+			WRITE_STRING_FIELD(taskQuery.data.queryStringLazy);
+			break;
+		}
+
+		case TASK_QUERY_OBJECT:
+		{
+			WRITE_NODE_FIELD(taskQuery.data.jobQueryReferenceForLazyDeparsing);
+			break;
+		}
+
+		case TASK_QUERY_TEXT_PER_PLACEMENT:
+		{
+			WRITE_NODE_FIELD(taskQuery.data.perPlacementQueryStrings);
+			break;
+		}
+
+		case TASK_QUERY_TEXT_LIST:
+		{
+			WRITE_NODE_FIELD(taskQuery.data.queryStringList);
+			break;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+}
 
 void
 OutTask(OUTFUNC_ARGS)
@@ -479,10 +518,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(taskType, TaskType);
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_UINT_FIELD(taskId);
-	WRITE_NODE_FIELD(queryForLocalExecution);
-	WRITE_STRING_FIELD(queryStringLazy);
-	WRITE_NODE_FIELD(perPlacementQueryStrings);
-	WRITE_NODE_FIELD(queryStringList);
+	WriteTaskQuery(str, raw_node);
 	WRITE_OID_FIELD(anchorDistributedTableId);
 	WRITE_UINT64_FIELD(anchorShardId);
 	WRITE_NODE_FIELD(taskPlacementList);

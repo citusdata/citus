@@ -83,6 +83,9 @@ s/_id_other_column_ref_fkey/_id_fkey/g
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
+# assign_distributed_transaction id params
+s/(NOTICE.*)assign_distributed_transaction_id\([0-9]+, [0-9]+, '.*'\)/\1assign_distributed_transaction_id\(xx, xx, 'xxxxxxx'\)/g
+
 # toast tables
 s/pg_toast_[0-9]+/pg_toast_xxxxx/g
 

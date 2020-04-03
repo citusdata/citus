@@ -22,7 +22,9 @@
 /* *INDENT-OFF* */
 #include "postgres.h"
 
-#if PG_VERSION_NUM >= 120000
+#include "distributed/pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_12
 
 #include "access/tableam.h"
 #include "access/heapam.h"

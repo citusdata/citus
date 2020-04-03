@@ -121,9 +121,78 @@ SELECT y FROM test WHERE x = 1;
 (1 row)
 
 END;
+SET citus.shard_count TO 6;
+SET citus.log_remote_commands TO OFF;
+BEGIN;
+SET citus.log_local_commands TO ON;
+CREATE TABLE dist_table (a int);
+INSERT INTO dist_table SELECT * FROM generate_series(1, 100);
+-- trigger local execution
+SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
+ y
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+-- this should be run locally
+SELECT create_distributed_table('dist_table', 'a', colocate_with := 'none');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503004, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1503004, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503007, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1503007, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table OWNER TO postgres')
+NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  Copying data from local table...
+NOTICE:  executing the copy locally for shard xxxxx
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.dist_table_1503004 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.dist_table_1503007 dist_table WHERE true
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+ROLLBACK;
+CREATE TABLE dist_table (a int);
+INSERT INTO dist_table SELECT * FROM generate_series(1, 100);
+BEGIN;
+SET citus.log_local_commands TO ON;
+-- trigger local execution
+SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
+ y
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+-- this should be run locally
+SELECT create_distributed_table('dist_table', 'a', colocate_with := 'none');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503010, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1503010, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503013, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1503013, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table OWNER TO postgres')
+NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  Copying data from local table...
+NOTICE:  executing the copy locally for shard xxxxx
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.dist_table_1503010 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinator_shouldhaveshards.dist_table_1503013 dist_table WHERE true
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+ROLLBACK;
 DELETE FROM test;
 DROP TABLE test;
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
+NOTICE:  drop cascades to table dist_table
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
  ?column?
 ---------------------------------------------------------------------

@@ -12,6 +12,9 @@
  */
 
 #include "postgres.h"
+
+#include "distributed/pg_version_constants.h"
+
 #include <limits.h>
 
 #include "access/nbtree.h"
@@ -25,7 +28,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
-#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"

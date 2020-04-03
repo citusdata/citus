@@ -16,8 +16,9 @@
  */
 
 #include "postgres.h"
+#include "distributed/pg_version_constants.h"
 
-#if (PG_VERSION_NUM >= 120000) && (PG_VERSION_NUM < 130000)
+#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
 
 #include <ctype.h>
 #include <unistd.h>
@@ -430,6 +431,7 @@ static void printSubscripts(SubscriptingRef *aref, deparse_context *context);
 static char *get_relation_name(Oid relid);
 static char *generate_relation_or_shard_name(Oid relid, Oid distrelid,
 				int64 shardid, List *namespaces);
+static char *generate_rte_shard_name(RangeTblEntry *rangeTableEntry);
 static char *generate_fragment_name(char *schemaName, char *tableName);
 static char *generate_function_name(Oid funcid, int nargs,
 					   List *argnames, Oid *argtypes,
@@ -3763,10 +3765,22 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	else
 	{
 		appendStringInfoChar(buf, '*');
+
 		if (istoplevel)
-			appendStringInfo(buf, "::%s",
-							 format_type_with_typemod(var->vartype,
-													  var->vartypmod));
+		{
+			if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+			{
+				/* use rel.*::shard_name instead of rel.*::table_name */
+				appendStringInfo(buf, "::%s",
+								 generate_rte_shard_name(rte));
+			}
+			else
+			{
+				appendStringInfo(buf, "::%s",
+								 format_type_with_typemod(var->vartype,
+														  var->vartypmod));
+			}
+		}
 	}
 
 	return attname;
@@ -7737,6 +7751,26 @@ generate_relation_name(Oid relid, List *namespaces)
 	return result;
 }
 
+
+/*
+ * generate_rte_shard_name returns the qualified name of the shard given a
+ * CITUS_RTE_SHARD range table entry.
+ */
+static char *
+generate_rte_shard_name(RangeTblEntry *rangeTableEntry)
+{
+	char *shardSchemaName = NULL;
+	char *shardTableName = NULL;
+
+	Assert(GetRangeTblKind(rangeTableEntry) == CITUS_RTE_SHARD);
+
+	ExtractRangeTblExtraData(rangeTableEntry, NULL, &shardSchemaName, &shardTableName,
+							 NULL);
+
+	return generate_fragment_name(shardSchemaName, shardTableName);
+}
+
+
 /*
  * generate_fragment_name
  *		Compute the name to display for a shard or merged table
@@ -7962,4 +7996,4 @@ get_range_partbound_string(List *bound_datums)
 	return buf->data;
 }
 
-#endif /* (PG_VERSION_NUM >= 120000) && (PG_VERSION_NUM < 130000) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13) */

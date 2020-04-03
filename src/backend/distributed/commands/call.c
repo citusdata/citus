@@ -186,10 +186,11 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 			.requires2PC = false
 		};
 
+		bool localExecutionSupported = true;
 		ExecuteTaskListExtended(ROW_MODIFY_NONE, list_make1(task),
 								tupleDesc, tupleStore, hasReturning,
 								MaxAdaptiveExecutorPoolSize,
-								&xactProperties, NIL);
+								&xactProperties, NIL, localExecutionSupported);
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{
