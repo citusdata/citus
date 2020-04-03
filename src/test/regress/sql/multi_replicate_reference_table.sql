@@ -501,8 +501,51 @@ WHERE
     AND nodeport != :master_port
 ORDER BY 1,4,5;
 
--- this should have no effect
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
+
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+-- verify we cannot replicate reference tables in a transaction modifying pg_dist_node
+BEGIN;
+SELECT 1 FROM master_add_inactive_node('invalid-node-name', 9999);
+SELECT replicate_reference_tables();
+ROLLBACK;
+
+-- verify we cannot replicate reference tables in a transaction which
+-- modified reference tables
+BEGIN;
+DELETE FROM ref_table;
+SELECT replicate_reference_tables();
+ROLLBACK;
+
+BEGIN;
+ALTER TABLE ref_table ADD COLUMN b int;
+SELECT replicate_reference_tables();
+ROLLBACK;
+
+BEGIN;
+CREATE INDEX ref_idx ON ref_table(a);
+SELECT replicate_reference_tables();
+ROLLBACK;
+
+--
+-- read from reference table, then replicate, then write. verify
+-- placements are consistent.
+--
+BEGIN;
+SELECT count(*) FROM ref_table;
+SELECT replicate_reference_tables();
+INSERT INTO ref_table VALUES (11);
+SELECT count(*), sum(a) FROM ref_table;
+UPDATE ref_table SET a = a + 1;
+SELECT sum(a) FROM ref_table;
+COMMIT;
+
+SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
 
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
