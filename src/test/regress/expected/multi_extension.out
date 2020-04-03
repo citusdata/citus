@@ -15,7 +15,8 @@ DECLARE
    activity record;
 BEGIN
     DO 'BEGIN END'; -- Force maintenance daemon to start
-    LOOP
+    -- we don't want to wait forever; loop will exit after 20 seconds
+    FOR i IN 1 .. 200 LOOP
         PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
         WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
@@ -25,6 +26,8 @@ BEGIN
             PERFORM pg_sleep(0.1);
         END IF ;
     END LOOP;
+    -- fail if we reach the end of this loop
+    raise 'Waited too long for maintenance daemon to start';
 END;
 $$;
 $definition$ create_function_test_maintenance_worker
