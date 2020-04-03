@@ -274,16 +274,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, initialNodeList)
 	{
+		int flags = 0;
+
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-
-		/*
-		 * We prefer to use a connection that is not associcated with
-		 * any placements. The reason is that we claim this connection
-		 * exclusively and that would prevent the consecutive DML/DDL
-		 * use the same connection.
-		 */
-		int flags = REQUIRE_SIDECHANNEL;
 
 		MultiConnection *connection = StartNodeConnection(flags, nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
