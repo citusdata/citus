@@ -695,8 +695,13 @@ LEFT JOIN
         FROM distinct_undistribured d2
         WHERE d1.user_id = d2.user_id )) AS bar USING (user_id);
 
-RESET citus.enable_cte_inlining;
+-- some test  with failures
+WITH a AS (SELECT * FROM users_table LIMIT 10)
+	SELECT 1/(random() * 0) FROM users_table JOIN a USING (user_id);
+WITH a AS (SELECT * FROM users_table LIMIT 10)
+	SELECT 1/0 FROM users_table JOIN a USING (user_id);
 
+RESET citus.enable_cte_inlining;
 
 DROP VIEW basic_view;
 DROP VIEW cte_view;
