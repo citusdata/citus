@@ -2,10 +2,15 @@
 -- MULTI_REPLICATE_REFERENCE_TABLE
 --
 -- Tests that check that reference tables are replicated when adding new nodes.
+CREATE SCHEMA replicate_reference_table;
+SET search_path TO replicate_reference_table;
 SET citus.next_shard_id TO 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
+-- only query shards created in this test
+CREATE VIEW pg_dist_shard_placement_view AS
+SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1370000 AND 1380000;
 -- remove a node for testing purposes
 CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
@@ -40,7 +45,7 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport
@@ -86,7 +91,7 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport
@@ -106,7 +111,7 @@ SELECT create_reference_table('replicate_reference_table_valid');
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -115,15 +120,14 @@ ORDER BY shardid, nodeport;
  1370001 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -136,7 +140,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -145,15 +149,14 @@ ORDER BY shardid, nodeport;
  1370001 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 -- test add same node twice
@@ -161,7 +164,7 @@ WHERE colocationid IN
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -170,15 +173,14 @@ ORDER BY shardid, nodeport;
  1370001 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -191,7 +193,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -200,15 +202,14 @@ ORDER BY shardid, nodeport;
  1370001 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 DROP TABLE replicate_reference_table_valid;
@@ -230,7 +231,7 @@ SELECT create_reference_table('replicate_reference_table_rollback');
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -238,15 +239,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 BEGIN;
@@ -261,7 +261,7 @@ ROLLBACK;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -269,15 +269,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 DROP TABLE replicate_reference_table_rollback;
@@ -293,7 +292,7 @@ SELECT create_reference_table('replicate_reference_table_commit');
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -301,15 +300,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 BEGIN;
@@ -324,7 +322,7 @@ COMMIT;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -332,15 +330,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 DROP TABLE replicate_reference_table_commit;
@@ -375,22 +372,21 @@ CREATE TABLE replicate_reference_table_reference_two(column1 int);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT colocationid AS reference_table_colocationid FROM pg_dist_colocation WHERE distributioncolumntype = 0 \gset
@@ -431,7 +427,7 @@ RESET client_min_messages;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -442,15 +438,14 @@ ORDER BY shardid, nodeport;
  1370006 |          1 |           0 | localhost |    57638
 (3 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT
@@ -533,7 +528,7 @@ SELECT create_reference_table('replicate_reference_table_drop');
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -541,15 +536,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 BEGIN;
@@ -565,7 +559,7 @@ COMMIT;
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -597,7 +591,7 @@ SELECT create_reference_table('replicate_reference_table_schema.table1');
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -605,15 +599,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -626,7 +619,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -634,15 +627,14 @@ ORDER BY shardid, nodeport;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
-FROM pg_dist_colocation
+SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0 |                           0
 (1 row)
 
 DROP TABLE replicate_reference_table_schema.table1;
@@ -669,7 +661,7 @@ SELECT create_reference_table('ref_table_1'),
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -687,7 +679,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
@@ -728,7 +720,7 @@ SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     shardid IN (SELECT
                     shardid
@@ -753,7 +745,7 @@ SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
-    pg_dist_shard_placement
+    pg_dist_shard_placement_view
 WHERE
     shardid IN (SELECT
                     shardid
@@ -782,12 +774,9 @@ SET client_min_messages to ERROR;
 \set VERBOSITY terse
 SELECT master_add_node('invalid-node-name', 9999);
 ERROR:  connection error: invalid-node-name:9999
-SET client_min_messages to DEFAULT;
-\set VERBOSITY default
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;
 -- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
 DROP TABLE tmp_shard_placement;
-RESET citus.shard_replication_factor;
-RESET citus.replication_model;
+DROP SCHEMA replicate_reference_table CASCADE;
