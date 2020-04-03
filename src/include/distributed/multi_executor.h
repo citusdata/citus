@@ -91,8 +91,6 @@ extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
-extern void ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc
-								   tupleDescriptor, Tuplestorestate *tupstore);
 extern Query * ParseQueryString(const char *queryString, Oid *paramOids, int numParams);
 extern Query * RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString,
 								   Oid *paramOids, int numParams);

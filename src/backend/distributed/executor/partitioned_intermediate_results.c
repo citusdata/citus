@@ -460,8 +460,11 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *copyDes
 						 partitionIndex);
 		char *filePath = QueryResultFileName(resultId->data);
 
+		IntermediateResultFormat format =
+			partitionedDest->binaryCopy ? BINARY_COPY_FORMAT : TEXT_COPY_FORMAT;
+
 		partitionDest = CreateFileDestReceiver(filePath, partitionedDest->perTupleContext,
-											   partitionedDest->binaryCopy);
+											   format);
 		partitionedDest->partitionDestReceivers[partitionIndex] = partitionDest;
 		partitionDest->rStartup(partitionDest, 0, partitionedDest->tupleDescriptor);
 	}
