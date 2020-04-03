@@ -42,6 +42,7 @@
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
@@ -127,30 +128,22 @@ static void ResetPlannerRestrictionContext(
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
-static bool UpdateReferenceTablesWithShard(Node *node, void *context);
+static void UpdateReferenceTablesWithShard(List *rangeTableList);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
-										 List *rangeTableList, int rteIdCounter);
+										 int rteIdCounter);
 
 
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
-	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = false;
-	bool setPartitionedTablesInherited = false;
-	List *rangeTableList = ExtractRangeTableEntryList(parse);
-	int rteIdCounter = 1;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
-	DistributedPlanningContext planContext = {
-		.query = parse,
-		.cursorOptions = cursorOptions,
-		.boundParams = boundParams,
-	};
 
+	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -168,8 +161,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			 * reference table names with shard tables names in the query, so
 			 * we can use the standard_planner for planning it locally.
 			 */
+			UpdateReferenceTablesWithShard(rangeTableList);
+
 			needsDistributedPlanning = false;
-			UpdateReferenceTablesWithShard((Node *) parse, NULL);
 		}
 		else
 		{
@@ -180,6 +174,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			}
 		}
 	}
+
+	int rteIdCounter = 1;
+
+	DistributedPlanningContext planContext = {
+		.query = parse,
+		.cursorOptions = cursorOptions,
+		.boundParams = boundParams,
+	};
 
 	if (fastPathRouterQuery)
 	{
@@ -217,7 +219,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 		planContext.originalQuery = copyObject(parse);
 
-		setPartitionedTablesInherited = false;
+		bool setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(rangeTableList,
 												 setPartitionedTablesInherited);
 	}
@@ -239,6 +241,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 */
 	PlannerLevel++;
 
+	PlannedStmt *result = NULL;
 
 	PG_TRY();
 	{
@@ -258,7 +261,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 												planContext.boundParams);
 			if (needsDistributedPlanning)
 			{
-				result = PlanDistributedStmt(&planContext, rangeTableList, rteIdCounter);
+				result = PlanDistributedStmt(&planContext, rteIdCounter);
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
 			{
@@ -309,11 +312,42 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 List *
 ExtractRangeTableEntryList(Query *query)
 {
-	List *rangeTblList = NIL;
+	List *rteList = NIL;
 
-	ExtractRangeTableEntryWalker((Node *) query, &rangeTblList);
+	ExtractRangeTableEntryWalker((Node *) query, &rteList);
 
-	return rangeTblList;
+	return rteList;
+}
+
+
+/*
+ * ExtractClassifiedRangeTableEntryList extracts reference table rte's from
+ * the given rte list.
+ * Callers of this function are responsible for passing referenceTableRTEList
+ * to be non-null and initially pointing to an empty list.
+ */
+List *
+ExtractReferenceTableRTEList(List *rteList)
+{
+	List *referenceTableRTEList = NIL;
+
+	RangeTblEntry *rte = NULL;
+	foreach_ptr(rte, rteList)
+	{
+		if (rte->rtekind != RTE_RELATION || rte->relkind != RELKIND_RELATION)
+		{
+			continue;
+		}
+
+		Oid relationOid = rte->relid;
+		if (IsCitusTable(relationOid) && PartitionMethod(relationOid) ==
+			DISTRIBUTE_BY_NONE)
+		{
+			referenceTableRTEList = lappend(referenceTableRTEList, rte);
+		}
+	}
+
+	return referenceTableRTEList;
 }
 
 
@@ -328,13 +362,12 @@ ExtractRangeTableEntryList(Query *query)
 bool
 NeedsDistributedPlanning(Query *query)
 {
-	List *allRTEs = NIL;
-	CmdType commandType = query->commandType;
-
 	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
+
+	CmdType commandType = query->commandType;
 
 	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
 		commandType != CMD_UPDATE && commandType != CMD_DELETE)
@@ -342,7 +375,7 @@ NeedsDistributedPlanning(Query *query)
 		return false;
 	}
 
-	ExtractRangeTableEntryWalker((Node *) query, &allRTEs);
+	List *allRTEs = ExtractRangeTableEntryList(query);
 
 	return ListContainsDistributedTableRTE(allRTEs);
 }
@@ -594,11 +627,10 @@ PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
  */
 static PlannedStmt *
 PlanDistributedStmt(DistributedPlanningContext *planContext,
-					List *rangeTableList,
 					int rteIdCounter)
 {
 	/* may've inlined new relation rtes */
-	rangeTableList = ExtractRangeTableEntryList(planContext->query);
+	List *rangeTableList = ExtractRangeTableEntryList(planContext->query);
 	rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
 
 
@@ -2464,62 +2496,25 @@ QueryIsNotSimpleSelect(Node *node)
 
 /*
  * UpdateReferenceTablesWithShard recursively replaces the reference table names
- * in the given query with the shard table names.
+ * in the given range table list with the local shard table names.
  */
-static bool
-UpdateReferenceTablesWithShard(Node *node, void *context)
+static void
+UpdateReferenceTablesWithShard(List *rangeTableList)
 {
-	if (node == NULL)
+	List *referenceTableRTEList = ExtractReferenceTableRTEList(rangeTableList);
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, referenceTableRTEList)
 	{
-		return false;
+		Oid referenceTableLocalShardOid = GetReferenceTableLocalShardOid(
+			rangeTableEntry->relid);
+
+		rangeTableEntry->relid = referenceTableLocalShardOid;
+
+		/*
+		 * Parser locks relations in addRangeTableEntry(). So we should lock the
+		 * modified ones too.
+		 */
+		LockRelationOid(referenceTableLocalShardOid, AccessShareLock);
 	}
-
-	/* want to look at all RTEs, even in subqueries, CTEs and such */
-	if (IsA(node, Query))
-	{
-		return query_tree_walker((Query *) node, UpdateReferenceTablesWithShard,
-								 NULL, QTW_EXAMINE_RTES_BEFORE);
-	}
-
-	if (!IsA(node, RangeTblEntry))
-	{
-		return expression_tree_walker(node, UpdateReferenceTablesWithShard,
-									  NULL);
-	}
-
-	RangeTblEntry *newRte = (RangeTblEntry *) node;
-
-	if (newRte->rtekind != RTE_RELATION)
-	{
-		return false;
-	}
-
-	Oid relationId = newRte->relid;
-	if (!IsCitusTable(relationId))
-	{
-		return false;
-	}
-
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE)
-	{
-		return false;
-	}
-
-	ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 shardId = shardInterval->shardId;
-
-	char *relationName = get_rel_name(relationId);
-	AppendShardIdToName(&relationName, shardId);
-
-	Oid schemaId = get_rel_namespace(relationId);
-	newRte->relid = get_relname_relid(relationName, schemaId);
-
-	/*
-	 * Parser locks relations in addRangeTableEntry(). So we should lock the
-	 * modified ones too.
-	 */
-	LockRelationOid(newRte->relid, AccessShareLock);
-
-	return false;
 }

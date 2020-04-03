@@ -339,7 +339,7 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 		return true;
 	}
 
-	Oid shardOid = GetShardLocalTableOid(relationShard->relationId,
+	Oid shardOid = GetTableLocalShardOid(relationShard->relationId,
 										 relationShard->shardId);
 
 	newRte->relid = shardOid;
