@@ -399,6 +399,11 @@ WARNING:  not propagating VACUUM command to worker nodes
 HINT:  Provide a specific table in order to VACUUM distributed tables.
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
+\c - - - :worker_1_port
+REFRESH MATERIALIZED VIEW prevcounts;
+\c - - - :worker_2_port
+REFRESH MATERIALIZED VIEW prevcounts;
+\c - - - :master_port
 -- check the current number of vacuum and analyze run on dustbunnies
 SELECT run_command_on_workers($$SELECT wait_for_stats()$$);
  run_command_on_workers
