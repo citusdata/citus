@@ -105,6 +105,9 @@ s/read_intermediate_result\('insert_select_[0-9]+_/read_intermediate_result('ins
 # ignore job id in repartitioned insert/select
 s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
 
+# ignore job id in worker_hash_partition_table
+s/worker_hash_partition_table  \([0-9]+/worker_hash_partition_table  \(xxxxxxx/g
+
 # ignore first parameter for citus_extradata_container due to differences between pg11 and pg12
 # can be removed when we remove PG_VERSION_NUM >= 120000
 s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_container\(XXX/g

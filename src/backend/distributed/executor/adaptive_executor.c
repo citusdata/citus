@@ -887,7 +887,13 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 	TransactionProperties xactProperties =
 		DecideTransactionPropertiesForTaskList(modLevel, taskList, true);
 
-	bool localExecutionSupported = true;
+	/*
+	 * As we are going to run the tasks outside transaction, we shouldn't use local execution.
+	 * However, there is some problem when using local execution related to
+	 * repartition joins, when we solve that problem, we can execute the tasks
+	 * coming to this path with local execution. See PR:3711
+	 */
+	bool localExecutionSupported = false;
 	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
 								   tupleStore, hasReturning, targetPoolSize,
 								   &xactProperties, jobIdList, localExecutionSupported);

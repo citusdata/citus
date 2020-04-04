@@ -174,6 +174,11 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 		numParams = paramListInfo->numParams;
 	}
 
+	if (tupleStoreState == NULL)
+	{
+		tupleStoreState = tuplestore_begin_heap(true, false, work_mem);
+	}
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
@@ -186,6 +191,8 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 		{
 			TransactionAccessedLocalPlacement = true;
 		}
+		LogLocalCommand(task);
+
 
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
@@ -231,7 +238,6 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 			if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
 			{
 				List *queryStringList = task->taskQuery.data.queryStringList;
-				LogLocalCommand(task);
 				totalRowsProcessed += LocallyPlanAndExecuteMultipleQueries(
 					queryStringList,
 					tupleStoreState);
@@ -256,7 +262,6 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 		}
 
-		LogLocalCommand(task);
 
 		char *shardQueryString = NULL;
 		if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
@@ -287,10 +292,6 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, Tuplestorestate *tupleS
 {
 	char *queryString = NULL;
 	uint64 totalProcessedRows = 0;
-	if (tupleStoreState == NULL)
-	{
-		tupleStoreState = tuplestore_begin_heap(true, false, work_mem);
-	}
 	foreach_ptr(queryString, queryStrings)
 	{
 		Query *shardQuery = ParseQueryString(queryString,
