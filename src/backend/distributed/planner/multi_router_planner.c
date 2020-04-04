@@ -2197,10 +2197,7 @@ CreateDummyPlacement(void)
 		int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
 														 workerNodeIndex);
-		dummyPlacement->nodeName = workerNode->workerName;
-		dummyPlacement->nodePort = workerNode->workerPort;
-		dummyPlacement->nodeId = workerNode->nodeId;
-		dummyPlacement->groupId = workerNode->groupId;
+		SetPlacementNodeMetadata(dummyPlacement, workerNode);
 
 		zeroShardQueryRoundRobin++;
 	}

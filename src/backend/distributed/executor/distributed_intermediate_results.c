@@ -26,6 +26,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/transaction_management.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
@@ -546,9 +547,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 		WorkerNode *workerNode = ForceLookupNodeByNodeId(targetNodeId);
 
 		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
-		targetPlacement->nodeName = workerNode->workerName;
-		targetPlacement->nodePort = workerNode->workerPort;
-		targetPlacement->groupId = workerNode->groupId;
+		SetPlacementNodeMetadata(targetPlacement, workerNode);
 
 		Task *task = CitusMakeNode(Task);
 		task->taskType = SELECT_TASK;

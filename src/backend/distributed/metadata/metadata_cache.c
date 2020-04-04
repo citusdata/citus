@@ -41,6 +41,7 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_local_group.h"
 #include "distributed/pg_dist_node_metadata.h"
 #include "distributed/pg_dist_node.h"
@@ -521,9 +522,7 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 	*shardPlacementAsGroupPlacement = *groupShardPlacement;
 	shardPlacement->type = header;
 
-	shardPlacement->nodeName = pstrdup(workerNode->workerName);
-	shardPlacement->nodePort = workerNode->workerPort;
-	shardPlacement->nodeId = workerNode->nodeId;
+	SetPlacementNodeMetadata(shardPlacement, workerNode);
 
 	/* fill in remaining fields */
 	Assert(tableEntry->partitionMethod != 0);
