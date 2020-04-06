@@ -85,6 +85,10 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
 
 /* local function forward declarations */
+static void create_citus_table_internal(Oid relationOid, text *distributionColumnText,
+										char distributionMethodOid,
+										text *colocateWithTableNameText,
+										bool viaDeprecatedApi);
 static char AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
 static void CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 											 bool localTableEmpty);
@@ -132,58 +136,18 @@ PG_FUNCTION_INFO_V1(create_reference_table);
 Datum
 master_create_distributed_table(PG_FUNCTION_ARGS)
 {
-	Oid relationId = PG_GETARG_OID(0);
+	Oid relationOid = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
+	text *colocateWithTableNameText = NULL;
+
 	Oid distributionMethodOid = PG_GETARG_OID(2);
-
-	char *colocateWithTableName = NULL;
-	bool viaDeprecatedAPI = true;
-	ObjectAddress tableAddress = { 0 };
-
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureTableOwner(relationId);
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
-
-	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																 distributionColumnName);
-	Assert(distributionColumn != NULL);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
-						   colocateWithTableName, viaDeprecatedAPI);
+	const bool viaDeprecatedApi = true;
 
-	relation_close(relation, NoLock);
+	create_citus_table_internal(relationOid, distributionColumnText,
+								distributionMethod, colocateWithTableNameText,
+								viaDeprecatedApi);
 
 	PG_RETURN_VOID();
 }
@@ -197,28 +161,72 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
 {
-	ObjectAddress tableAddress = { 0 };
-
-
-	bool viaDeprecatedAPI = false;
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	Oid relationId = PG_GETARG_OID(0);
+	Oid relationOid = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
-	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
-	EnsureTableOwner(relationId);
+	Oid distributionMethodOid = PG_GETARG_OID(2);
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+
+	const bool viaDeprecatedApi = false;
+
+	create_citus_table_internal(relationOid, distributionColumnText,
+								distributionMethod, colocateWithTableNameText,
+								viaDeprecatedApi);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * create_reference_table creates a distributed table with the given relationId.
+ * The created table has one shard and replication factor is set to the active
+ * worker count. In fact, the above is the definition of a reference table in
+ * Citus.
+ */
+Datum
+create_reference_table(PG_FUNCTION_ARGS)
+{
+	Oid relationOid = PG_GETARG_OID(0);
+
+	text *distributionColumnText = NULL;
+	text *colocateWithTableNameText = NULL;
+
+	char distributionMethod = DISTRIBUTE_BY_NONE;
+
+	const bool viaDeprecatedApi = false;
+
+	create_citus_table_internal(relationOid, distributionColumnText,
+								distributionMethod, colocateWithTableNameText,
+								viaDeprecatedApi);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * create_citus_table_internal is the internal method to be used via udfs
+ * creating citus tables
+ */
+static void
+create_citus_table_internal(Oid relationOid, text *distributionColumnText,
+							char distributionMethod, text *colocateWithTableNameText,
+							bool viaDeprecatedApi)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(relationOid);
 
 	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
+	 * citus tables might have dependencies on different objects.
+	 * Since we create shard placements for a citus table via multiple sessions,
+	 * these objects will be created via their own connection and they will
+	 * be committed immediately so they become visible to all sessions creating
+	 * shards.
 	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationOid);
+
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
@@ -226,7 +234,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	Relation relation = try_relation_open(relationOid, ExclusiveLock);
 
 	if (relation == NULL)
 	{
@@ -239,87 +247,67 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 * on this relation to have a supported relation kind. More extensive checks
 	 * will be performed in CreateDistributedTable.
 	 */
-	EnsureRelationKindSupported(relationId);
+	EnsureRelationKindSupported(relationOid);
 
-	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																 distributionColumnName);
-	Assert(distributionColumn != NULL);
-	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	Var *distributionColumn;
+	char *colocateWithTableName;
 
-	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
-
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
-						   colocateWithTableName, viaDeprecatedAPI);
-
-	relation_close(relation, NoLock);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * CreateReferenceTable creates a distributed table with the given relationId. The
- * created table has one shard and replication factor is set to the active worker
- * count. In fact, the above is the definition of a reference table in Citus.
- */
-Datum
-create_reference_table(PG_FUNCTION_ARGS)
-{
-	Oid relationId = PG_GETARG_OID(0);
-
-	char *colocateWithTableName = NULL;
-	Var *distributionColumn = NULL;
-	ObjectAddress tableAddress = { 0 };
-
-	bool viaDeprecatedAPI = false;
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
-	EnsureTableOwner(relationId);
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = relation_open(relationId, ExclusiveLock);
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
-
-	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
-	int workerCount = list_length(workerNodeList);
-
-	/* if there are no workers, error out */
-	if (workerCount == 0)
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		char *relationName = get_rel_name(relationId);
+		/* create reference table */
 
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("cannot create reference table \"%s\"", relationName),
-						errdetail("There are no active worker nodes.")));
+		/* no path via deprecated api to create reference tables */
+		Assert(viaDeprecatedApi == false);
+
+		/* following should be NULL when creating reference table */
+		Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
+
+		List *workerNodeList = ActivePrimaryNodeList(ShareLock);
+		int workerCount = list_length(workerNodeList);
+
+		/* if there are no workers, error out */
+		if (workerCount == 0)
+		{
+			char *relationName = get_rel_name(relationOid);
+
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("cannot create reference table \"%s\"", relationName),
+							errdetail("There are no active worker nodes.")));
+		}
+
+		distributionColumn = NULL;
+		colocateWithTableName = NULL;
+	}
+	else
+	{
+		/* create distributed table */
+
+		/*
+		 * We pass colocateWithTableNameText to be NULL only when using the
+		 * deprecated method master_create_distributed_table
+		 */
+		Assert(viaDeprecatedApi == (colocateWithTableNameText == NULL));
+
+		char *distributionColumnName = text_to_cstring(distributionColumnText);
+		distributionColumn = BuildDistributionKeyFromColumnName(relation,
+																distributionColumnName);
+
+		Assert(distributionColumn != NULL);
+
+		if (viaDeprecatedApi)
+		{
+			colocateWithTableName = NULL;
+		}
+		else
+		{
+			colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+		}
 	}
 
-	CreateDistributedTable(relationId, distributionColumn, DISTRIBUTE_BY_NONE,
-						   colocateWithTableName, viaDeprecatedAPI);
+	CreateDistributedTable(relationOid, distributionColumn, distributionMethod,
+						   colocateWithTableName, viaDeprecatedApi);
 
 	relation_close(relation, NoLock);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -393,7 +381,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		CreateReferenceTableShard(relationId);
 	}
-
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
@@ -863,16 +850,18 @@ static void
 EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
 								 bool viaDepracatedAPI)
 {
-	if (viaDepracatedAPI)
-	{
-		EnsureLocalTableEmpty(relationId);
-	}
-	else if (distributionMethod != DISTRIBUTE_BY_HASH &&
-			 distributionMethod != DISTRIBUTE_BY_NONE)
-	{
-		EnsureLocalTableEmpty(relationId);
-	}
-	else if (!RegularTable(relationId))
+	bool shouldEnsureLocalTableEmpty = viaDepracatedAPI;
+
+	bool distributionMethodRequiresEmptyTable = (distributionMethod !=
+												 DISTRIBUTE_BY_HASH &&
+												 distributionMethod !=
+												 DISTRIBUTE_BY_NONE);
+	shouldEnsureLocalTableEmpty |= distributionMethodRequiresEmptyTable;
+
+	bool notRegularTable = !RegularTable(relationId);
+	shouldEnsureLocalTableEmpty |= notRegularTable;
+
+	if (shouldEnsureLocalTableEmpty)
 	{
 		EnsureLocalTableEmpty(relationId);
 	}
