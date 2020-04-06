@@ -676,14 +676,13 @@ ShouldExecuteTasksLocally(List *taskList)
 	if (!singleTask)
 	{
 		/*
-		 * For multi-task executions, switching to local execution would likely
-		 * to perform poorly, because we'd lose the parallelism. Note that the
-		 * local execution is happening one task at a time (e.g., similar to
-		 * sequential distributed execution).
+		 * For multi-task executions, we prefer to use connections for parallelism,
+		 * except when in a multi-statement transaction since there could be other
+		 * commands that require local execution.
 		 */
 		Assert(!TransactionAccessedLocalPlacement);
 
-		return false;
+		return IsMultiStatementTransaction() && AnyTaskAccessesLocalNode(taskList);
 	}
 
 	return false;
