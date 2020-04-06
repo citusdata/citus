@@ -2558,6 +2558,12 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	if (RelationGetRelid(triggerData->tg_relation) != DistPartitionRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
+
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
@@ -2619,6 +2625,12 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	if (RelationGetRelid(triggerData->tg_relation) != DistShardRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
+
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
@@ -2679,6 +2691,23 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 	}
 
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * Before 7.0-2 this trigger is on pg_dist_shard_placement,
+	 * ignore trigger in this scenario.
+	 */
+	Oid pgDistShardPlacementId = get_relname_relid("pg_dist_shard_placement",
+												   PG_CATALOG_NAMESPACE);
+	if (RelationGetRelid(triggerData->tg_relation) == pgDistShardPlacementId)
+	{
+		PG_RETURN_DATUM(PointerGetDatum(NULL));
+	}
+
+	if (RelationGetRelid(triggerData->tg_relation) != DistPlacementRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
 
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
