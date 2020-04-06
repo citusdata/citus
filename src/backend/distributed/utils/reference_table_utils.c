@@ -40,7 +40,7 @@
 
 
 /* local function forward declarations */
-static List * WorkersWithoutReferenceTablePlacement(uint64 shardId);
+static List * WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode);
 static void CopyShardPlacementToWorkerNode(ShardPlacement *sourceShardPlacement,
 										   WorkerNode *workerNode, const char *userName);
 static void ReplicateSingleShardTableToAllNodes(Oid relationId);
@@ -110,7 +110,20 @@ EnsureReferenceTablesExistOnAllNodes(void)
 		return;
 	}
 
-	/* prevent this function from running concurrently with itself */
+	/*
+	 * Prevent this function from running concurrently with itself.
+	 *
+	 * It also prevents concurrent DROP TABLE or DROP SCHEMA. We need this
+	 * because through-out this function we assume values in referenceTableIdList
+	 * are still valid.
+	 *
+	 * We don't need to handle other kinds of reference table DML/DDL here, since
+	 * master_copy_shard_placement gets enough locks for that.
+	 *
+	 * We also don't need special handling for concurrent create_refernece_table.
+	 * Since that will trigger a call to this function from another backend,
+	 * which will block until our call is finished.
+	 */
 	int colocationId = CreateReferenceTableColocationId();
 	LockColocationId(colocationId, ExclusiveLock);
 
@@ -134,7 +147,14 @@ EnsureReferenceTablesExistOnAllNodes(void)
 	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 	uint64 shardId = shardInterval->shardId;
 
-	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId);
+	/*
+	 * We only take an access share lock, otherwise we'll hold up master_add_node.
+	 * In case of create_reference_table() and upgrade_to_reference_table(), where
+	 * we don't want concurrent writes to pg_dist_node, we have already acquired
+	 * ShareLock on pg_dist_node.
+	 */
+	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
+																 AccessShareLock);
 	if (list_length(newWorkersList) == 0)
 	{
 		/* nothing to do, no need for lock */
@@ -224,14 +244,13 @@ AnyRelationsModifiedInTransaction(List *relationIdList)
  * supposed to.
  */
 static List *
-WorkersWithoutReferenceTablePlacement(uint64 shardId)
+WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode)
 {
 	List *workersWithoutPlacements = NIL;
 
 	List *shardPlacementList = ActiveShardPlacementList(shardId);
 
-	/* we only take an access share lock, otherwise we'll hold up master_add_node */
-	List *workerNodeList = ReferenceTablePlacementNodeList(AccessShareLock);
+	List *workerNodeList = ReferenceTablePlacementNodeList(lockMode);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	WorkerNode *workerNode = NULL;
