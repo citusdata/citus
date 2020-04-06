@@ -2453,9 +2453,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 
 /*
- * ConnectionThrottlingRequired contains the logic to decide whether a new connection
- * can be considered as optional or not. When the function return true, the connection
- * can be established with optinal flag, else it should not be an optional connection.
+ * CanUseOptionalConnection contains the logic to decide whether a new connection
+ * can be considered as optional or not. When the function returns true, the connection
+ * can be established with optional flag, else it should not be an optional connection.
  */
 static bool
 CanUseOptionalConnection(WorkerPool *workerPool)
@@ -2483,7 +2483,13 @@ CanUseOptionalConnection(WorkerPool *workerPool)
 	}
 	else if (UseConnectionPerPlacement())
 	{
-		/* user wants one connection per placement, so no throttling is desired */
+		/*
+		 * User wants one connection per placement, so no throttling is desired.
+		 * The primary reason for this is that allowing multiple backends to use
+		 * connection per placement could lead to unresolved self deadlocks. In other
+		 * words, each backend may stuck waiting for other backends to get a slot
+		 * in the shared connection counters.
+		 */
 		return false;
 	}
 

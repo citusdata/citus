@@ -324,7 +324,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	{
 		/*
 		 * The caller doesn't want the connection manager to wait
-		 * until a connection slot is avaliable on the remote node.
+		 * until a connection slot is available on the remote node.
 		 * In the end, we might fail to establish connection to the
 		 * remote node as it might not have any space in
 		 * max_connections for this connection establishment.
@@ -362,7 +362,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	PG_CATCH();
 	{
 		/*
-		 * Something went wrong, make sure to decement
+		 * Something went wrong, make sure to decrement
 		 * here otherwise we'd leak the increment we have done for this
 		 * connection attempt.
 		 */

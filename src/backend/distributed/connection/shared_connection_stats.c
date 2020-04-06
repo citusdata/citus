@@ -37,7 +37,7 @@
 
 
 /*
- * The data structure used to store data in shared memory. This data structure only
+ * The data structure used to store data in shared memory. This data structure is only
  * used for storing the lock. The actual statistics about the connections are stored
  * in the hashmap, which is allocated separately, as Postgres provides different APIs
  * for allocating hashmaps in the shared memory.
@@ -85,7 +85,7 @@ typedef struct SharedConnStatsHashEntry
  */
 int MaxSharedPoolSize = 0;
 
-/* the following two structs used for accessing shared memory */
+/* the following two structs are used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
 static ConnectionStatsSharedData *ConnectionStatsSharedState = NULL;
 
@@ -185,7 +185,7 @@ RemoveAllSharedConnectionEntriesForNode(char *hostname, int port)
 	connKey.port = port;
 	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
 
-	/* we're reading all shared connections, prevent any changes */
+	/* we're modifying the hashmap, prevent any concurrent access */
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	bool entryFound = false;
@@ -269,11 +269,9 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	/*
-	 * Note that while holding a spinlock, it would not allowed to use HASH_ENTER_NULL
-	 * if the entries in SharedConnStatsHash were allocated via palloc (as palloc
-	 * might throw OOM errors). However, in this case we're safe as the hash map is
-	 * allocated in shared memory, which doesn't rely on palloc for memory allocation.
-	 * This is already asserted in hash_search() by Postgres.
+	 * As the hash map is  allocated in shared memory, it doesn't rely on palloc for
+	 * memory allocation, so we could get NULL via HASH_ENTER_NULL. That's why we prefer
+	 * continuing the execution instead of throwing an error.
 	 */
 	bool entryFound = false;
 	SharedConnStatsHashEntry *connectionEntry =
