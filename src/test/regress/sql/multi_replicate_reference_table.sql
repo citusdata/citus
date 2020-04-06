@@ -11,6 +11,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
 
+SET citus.replicate_reference_tables_on_activate TO off;
+
 -- only query shards created in this test
 CREATE VIEW pg_dist_shard_placement_view AS
 SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1370000 AND 1380000;
@@ -544,6 +546,34 @@ SELECT count(*), sum(a) FROM ref_table;
 UPDATE ref_table SET a = a + 1;
 SELECT sum(a) FROM ref_table;
 COMMIT;
+
+SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
+
+SET client_min_messages TO WARNING;
+
+SELECT count(*) AS ref_table_placements FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass \gset
+
+-- remove reference table replica from worker 2
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
+
+-- test setting citus.replicate_reference_tables_on_activate to on
+-- master_add_node
+SET citus.replicate_reference_tables_on_activate TO on;
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
+
+-- master_activate_node
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
 

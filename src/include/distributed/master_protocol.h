@@ -48,6 +48,11 @@
 #define CANDIDATE_NODE_FIELDS 2
 #define WORKER_NODE_FIELDS 2
 
+/* transfer mode for master_copy_shard_placement */
+#define TRANSFER_MODE_AUTOMATIC 'a'
+#define TRANSFER_MODE_FORCE_LOGICAL 'l'
+#define TRANSFER_MODE_BLOCK_WRITES 'b'
+
 /* Name of columnar foreign data wrapper */
 #define CSTORE_FDW_NAME "cstore_fdw"
 

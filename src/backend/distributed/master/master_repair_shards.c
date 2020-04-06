@@ -43,12 +43,6 @@
 #include "utils/lsyscache.h"
 #include "utils/palloc.h"
 
-
-#define TRANSFER_MODE_AUTOMATIC 'a'
-#define TRANSFER_MODE_FORCE_LOGICAL 'l'
-#define TRANSFER_MODE_BLOCK_WRITES 'b'
-
-
 /* local function forward declarations */
 static char LookupShardTransferMode(Oid shardReplicationModeOid);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);

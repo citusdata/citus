@@ -7,6 +7,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
 
 SET citus.shard_count TO 4;
+SET client_min_messages TO WARNING;
 
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then ROLLBACK
 CREATE TABLE transactional_drop_shards(column1 int);
@@ -362,6 +363,7 @@ ORDER BY
     shardid, nodename, nodeport;
 
 \c - - - :master_port
+SET client_min_messages TO WARNING;
 
 -- try using the coordinator as a worker and then dropping the table
 SELECT 1 FROM master_add_node('localhost', :master_port);

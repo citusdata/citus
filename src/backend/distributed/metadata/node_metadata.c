@@ -60,6 +60,12 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
+/*
+ * Config variable to control whether we should replicate reference tables on
+ * node activation or we should defer it to shard creation.
+ */
+bool ReplicateReferenceTablesOnActivate = true;
+
 /* did current transaction modify pg_dist_node? */
 bool TransactionModifiedNodeMetadata = false;
 
@@ -380,6 +386,12 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		EnsureNoModificationsHaveBeenDone();
 		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 									   newWorkerNode->workerPort);
+
+		if (ReplicateReferenceTablesOnActivate)
+		{
+			ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
+											  newWorkerNode->workerPort);
+		}
 
 		/*
 		 * Let the maintenance daemon do the hard work of syncing the metadata.

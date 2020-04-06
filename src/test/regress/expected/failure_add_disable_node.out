@@ -11,6 +11,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 SET citus.next_shard_id TO 200000;
+SET citus.replicate_reference_tables_on_activate TO off;
 -- verify we have all worker nodes present
 SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;

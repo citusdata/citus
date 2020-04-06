@@ -61,6 +61,7 @@ typedef struct WorkerNode
 extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
 extern char *CurrentCluster;
+extern bool ReplicateReferenceTablesOnActivate;
 
 
 /* Function declarations for finding worker nodes to place shards on */

@@ -4,6 +4,7 @@
 -- Tests that check the metadata returned by the master node.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
 SET citus.shard_count TO 4;
+SET client_min_messages TO WARNING;
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then ROLLBACK
 CREATE TABLE transactional_drop_shards(column1 int);
 SELECT create_distributed_table('transactional_drop_shards', 'column1');
@@ -653,6 +654,7 @@ ORDER BY
 (0 rows)
 
 \c - - - :master_port
+SET client_min_messages TO WARNING;
 -- try using the coordinator as a worker and then dropping the table
 SELECT 1 FROM master_add_node('localhost', :master_port);
  ?column?
@@ -685,8 +687,6 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
       run_command_on_workers
 ---------------------------------------------------------------------
