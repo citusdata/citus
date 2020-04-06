@@ -215,6 +215,14 @@ from aggdata group by key, val order by 1, 2;
 select key, grouping(val), sum(distinct valf)
 from aggdata group by key, val order by 1, 2;
 
+-- https://github.com/citusdata/citus/issues/3717
+WITH a AS (SELECT avg(id) FROM aggdata),
+b AS (
+    INSERT INTO aggdata (id, key) SELECT id, count(*)
+    FROM aggdata WHERE val > (SELECT * FROM a)
+    GROUP BY id HAVING count(*) < (SELECT * FROM a)
+    LIMIT 3 RETURNING *)
+SELECT * FROM b;
 
 -- Test https://github.com/citusdata/citus/issues/3328
 create table nulltable(id int);

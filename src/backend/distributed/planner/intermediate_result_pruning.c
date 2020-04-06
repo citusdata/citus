@@ -179,6 +179,23 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 							 DistributedPlan *distributedPlan,
 							 int workerNodeCount)
 {
+	if (distributedPlan->insertSelectQuery != NULL)
+	{
+		/* select planned separately, so we may need to broadcast */
+
+		entry->writeLocalFile = true;
+
+		List *workerNodeList = ActiveReadableWorkerNodeList();
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodeList)
+		{
+			entry->nodeIdList =
+				list_append_unique_int(entry->nodeIdList, workerNode->nodeId);
+		}
+
+		return;
+	}
+
 	List *taskList = distributedPlan->workerJob->taskList;
 	ListCell *taskCell = NULL;
 

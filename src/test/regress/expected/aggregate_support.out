@@ -455,6 +455,19 @@ select key, grouping(val), sum(distinct valf)
 from aggdata group by key, val order by 1, 2;
 ERROR:  could not run distributed query with GROUPING
 HINT:  Consider using an equality filter on the distributed table's partition column.
+-- https://github.com/citusdata/citus/issues/3717
+WITH a AS (SELECT avg(id) FROM aggdata),
+b AS (
+    INSERT INTO aggdata (id, key) SELECT id, count(*)
+    FROM aggdata WHERE val > (SELECT * FROM a)
+    GROUP BY id HAVING count(*) < (SELECT * FROM a)
+    LIMIT 3 RETURNING *)
+SELECT * FROM b;
+ id | key | val | valf
+---------------------------------------------------------------------
+ 10 |   1 |     |
+(1 row)
+
 -- Test https://github.com/citusdata/citus/issues/3328
 create table nulltable(id int);
 insert into nulltable values (0);

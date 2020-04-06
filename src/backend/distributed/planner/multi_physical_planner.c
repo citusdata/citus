@@ -483,6 +483,7 @@ BuildJobTree(MultiTreeRoot *multiTree)
 		parentNode = ParentNode(currentNode);
 	}
 
+	Assert(topLevelJob != NULL);
 	return topLevelJob;
 }
 
