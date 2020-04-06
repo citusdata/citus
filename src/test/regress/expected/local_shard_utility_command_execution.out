@@ -126,12 +126,34 @@ NOTICE:  executing the command locally: INSERT INTO local_commands_test_schema.d
 -- for regular distributed tables, TRUNCATE would also be executed remotely.
 BEGIN;
   SELECT COUNT(*) FROM dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500001 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500004 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500007 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500010 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500013 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500016 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500019 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500022 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500025 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500028 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500031 dist_table WHERE true
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
   TRUNCATE dist_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
 COMMIT;
 -- show that TRUNCATE is successfull
 SELECT COUNT(*) FROM dist_table;
@@ -164,6 +186,7 @@ NOTICE:  executing the command locally: INSERT INTO local_commands_test_schema.r
 BEGIN;
   CREATE TABLE ref_table_1(a int);
   SELECT create_reference_table('ref_table_1');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.ref_table_1 (a integer)');SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.ref_table_1 OWNER TO postgres')
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -171,7 +194,9 @@ BEGIN;
 
   -- insert some data
   INSERT INTO ref_table_1 VALUES(5);
+NOTICE:  executing the command locally: INSERT INTO local_commands_test_schema.ref_table_1_1500033 (a) VALUES (5)
   TRUNCATE ref_table_1;
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.ref_table_1_xxxxx CASCADE
 COMMIT;
 -- show that TRUNCATE is successfull
 SELECT COUNT(*) FROM ref_table_1;
@@ -186,6 +211,17 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_comm
 -- out
 BEGIN;
   SELECT COUNT(*) FROM dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500001 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500004 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500007 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500010 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500013 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500016 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500019 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500022 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500025 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500028 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500031 dist_table WHERE true
  count
 ---------------------------------------------------------------------
      0
@@ -193,6 +229,18 @@ BEGIN;
 
   TRUNCATE ref_table CASCADE;
 NOTICE:  truncate cascades to table "dist_table"
+NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.ref_table_xxxxx CASCADE
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
+NOTICE:  truncate cascades to table "dist_table_xxxxx"
 ERROR:  cannot execute DDL on reference table "ref_table" because there was a parallel SELECT access to distributed table "dist_table" in the same transaction
 COMMIT;
 -- as we do not support local ANALYZE execution yet, below block would error out
@@ -340,12 +388,34 @@ SELECT create_distributed_table('another_dist_table', 'a', colocate_with:='dist_
 
 BEGIN;
   SELECT COUNT(*) FROM another_dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500068 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500071 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500074 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500077 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500080 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500083 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500086 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500089 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500092 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500095 another_dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.another_dist_table_1500098 another_dist_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
   DROP TABLE another_dist_table;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.another_dist_table_xxxxx CASCADE
 COMMIT;
 -- show that DROP command is committed successfully
 SELECT 1 FROM pg_tables where tablename='another_dist_table';
@@ -499,18 +569,51 @@ CREATE SCHEMA foo_schema;
 -- As SELECT will be executed remotely, ALTER TABLE SET SCHEMA command should alse be executed remotely
 BEGIN;
   SELECT COUNT(*) FROM dist_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500100 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500103 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500106 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500109 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500112 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500115 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500118 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500121 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500124 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500127 dist_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.dist_table_1500130 dist_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
   ALTER TABLE dist_table SET SCHEMA foo_schema;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500100, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500103, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500106, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500109, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500112, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500115, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500118, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500121, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500124, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500127, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500130, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.dist_table SET SCHEMA foo_schema;')
   -- show that ALTER TABLE SET SCHEMA is successfull
   SELECT tablename FROM pg_tables where schemaname='foo_schema' ORDER BY tablename;
- tablename
+     tablename
 ---------------------------------------------------------------------
  dist_table
-(1 row)
+ dist_table_1500100
+ dist_table_1500103
+ dist_table_1500106
+ dist_table_1500109
+ dist_table_1500112
+ dist_table_1500115
+ dist_table_1500118
+ dist_table_1500121
+ dist_table_1500124
+ dist_table_1500127
+ dist_table_1500130
+(12 rows)
 
 ROLLBACK;
 -- However, below ALTER TABLE SET SCHEMA command will be executed locally

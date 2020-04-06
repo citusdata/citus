@@ -680,7 +680,6 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * except when in a multi-statement transaction since there could be other
 		 * commands that require local execution.
 		 */
-		Assert(!TransactionAccessedLocalPlacement);
 
 		return IsMultiStatementTransaction() && AnyTaskAccessesLocalNode(taskList);
 	}

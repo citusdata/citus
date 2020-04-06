@@ -114,7 +114,10 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 ROLLBACK;
 BEGIN;
 ALTER TABLE test DROP COLUMN z;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503000, 'coordinator_shouldhaveshards', 'ALTER TABLE test DROP COLUMN z;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503003, 'coordinator_shouldhaveshards', 'ALTER TABLE test DROP COLUMN z;')
 SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
  y
 ---------------------------------------------------------------------
  1

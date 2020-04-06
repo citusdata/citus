@@ -109,6 +109,9 @@ BEGIN;
 	TRUNCATE on_update_fkey_table;
 	TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
+NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
+NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
+NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
 ROLLBACK;
 -- fill some data for the next test
 \c - - - :master_port
