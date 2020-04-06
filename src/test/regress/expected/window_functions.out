@@ -9,6 +9,17 @@ SELECT
 FROM
 	users_table
 ORDER BY
+	1 DESC, 2 DESC, 3 DESC
+LIMIT 5;
+ user_id | count | rank
+---------------------------------------------------------------------
+       6 |    10 |    1
+       6 |    10 |    1
+       6 |    10 |    1
+       6 |    10 |    1
+       6 |    10 |    1
+(5 rows)
+
 -- a more complicated window clause, including an aggregate
 -- in both the window clause and the target entry
 SELECT
@@ -19,7 +30,16 @@ GROUP BY
 	1
 ORDER BY
 	2 DESC NULLS LAST, 1 DESC;
-ERROR:  syntax error at or near "SELECT"
+ user_id |       avg
+---------------------------------------------------------------------
+       2 |                3
+       4 | 2.82608695652174
+       3 | 2.70588235294118
+       6 |              2.6
+       1 | 2.57142857142857
+       5 | 2.46153846153846
+(6 rows)
+
 -- window clause operates on the results of a subquery
 SELECT
 	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))

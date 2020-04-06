@@ -10,6 +10,8 @@ SELECT
 FROM
 	users_table
 ORDER BY
+	1 DESC, 2 DESC, 3 DESC
+LIMIT 5;
 
 -- a more complicated window clause, including an aggregate
 -- in both the window clause and the target entry
