@@ -9,17 +9,6 @@ SELECT
 FROM
 	users_table
 ORDER BY
-	1 DESC, 2 DESC, 3 DESC
-LIMIT 5;
- user_id | count | rank
----------------------------------------------------------------------
-       6 |    10 |    1
-       6 |    10 |    1
-       6 |    10 |    1
-       6 |    10 |    1
-       6 |    10 |    1
-(5 rows)
-
 -- a more complicated window clause, including an aggregate
 -- in both the window clause and the target entry
 SELECT
@@ -30,16 +19,7 @@ GROUP BY
 	1
 ORDER BY
 	2 DESC NULLS LAST, 1 DESC;
- user_id |       avg
----------------------------------------------------------------------
-       2 |                3
-       4 | 2.82608695652174
-       3 | 2.70588235294118
-       6 |              2.6
-       1 | 2.57142857142857
-       5 | 2.46153846153846
-(6 rows)
-
+ERROR:  syntax error at or near "SELECT"
 -- window clause operates on the results of a subquery
 SELECT
 	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
@@ -196,6 +176,20 @@ ORDER BY
 (6 rows)
 
 DROP VIEW users_view, window_view;
+-- window functions along with subquery in HAVING
+SELECT
+	user_id, count (user_id) OVER (PARTITION BY user_id)
+FROM
+	users_table
+GROUP BY
+	user_id HAVING avg(value_1) < (SELECT min(k_no) FROM users_ref_test_table)
+ORDER BY 1 DESC,2 DESC
+LIMIT 1;
+ user_id | count
+---------------------------------------------------------------------
+       6 |     1
+(1 row)
+
 -- window function uses columns from two different tables
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk

@@ -10,8 +10,6 @@ SELECT
 FROM
 	users_table
 ORDER BY
-	1 DESC, 2 DESC, 3 DESC
-LIMIT 5;
 
 -- a more complicated window clause, including an aggregate
 -- in both the window clause and the target entry
@@ -109,6 +107,16 @@ ORDER BY
 	2 DESC, 1;
 
 DROP VIEW users_view, window_view;
+
+-- window functions along with subquery in HAVING
+SELECT
+	user_id, count (user_id) OVER (PARTITION BY user_id)
+FROM
+	users_table
+GROUP BY
+	user_id HAVING avg(value_1) < (SELECT min(k_no) FROM users_ref_test_table)
+ORDER BY 1 DESC,2 DESC
+LIMIT 1;
 
 -- window function uses columns from two different tables
 SELECT
