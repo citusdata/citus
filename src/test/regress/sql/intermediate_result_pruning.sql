@@ -607,6 +607,24 @@ FROM
     FROM accounts_cte
     INNER JOIN joined_stats_cte_2 USING (account_id)
 ) inner_query;
+RESET citus.task_assignment_policy;
+
+-- Insert..select is planned differently, make sure we have results everywhere.
+-- We put the insert..select in a CTE here to prevent the CTE from being moved
+-- into the select, which would follow the regular code path for select.
+WITH stats AS (
+  SELECT count(key) m FROM table_3
+),
+inserts AS (
+  INSERT INTO table_2
+  SELECT key, count(*)
+  FROM table_1
+  WHERE key > (SELECT m FROM stats)
+  GROUP BY key
+  HAVING count(*) < (SELECT m FROM stats)
+  LIMIT 1
+  RETURNING *
+) SELECT count(*) FROM inserts;
 
 SET citus.task_assignment_policy to DEFAULT;
 SET client_min_messages TO DEFAULT;

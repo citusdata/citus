@@ -26,15 +26,15 @@
 bool LogIntermediateResults = false;
 
 
-static List * FindSubPlansUsedInNode(Node *node);
+static List * FindSubPlansUsedInNode(Node *node, SubPlanAccessType accessType);
 static void AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 										 DistributedPlan *distributedPlan,
 										 int workerNodeCount);
+static void AppendAllWorkerNodes(IntermediateResultsHashEntry *entry);
 static List * FindAllRemoteWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry);
 static List * RemoveLocalNodeFromWorkerList(List *workerNodeList);
 static void LogIntermediateResultMulticastSummary(IntermediateResultsHashEntry *entry,
 												  List *workerNodeList);
-static void UpdateUsedPlanListLocation(List *subPlanList, int locationMask);
 
 
 /*
@@ -53,18 +53,33 @@ FindSubPlanUsages(DistributedPlan *plan)
 
 	if (plan->masterQuery != NULL)
 	{
-		localSubPlans = FindSubPlansUsedInNode((Node *) plan->masterQuery);
-		UpdateUsedPlanListLocation(localSubPlans, SUBPLAN_ACCESS_LOCAL);
+		localSubPlans = FindSubPlansUsedInNode((Node *) plan->masterQuery,
+											   SUBPLAN_ACCESS_LOCAL);
 	}
 
 	if (plan->workerJob != NULL)
 	{
 		/*
-		 * Mark the subplans as needed on remote side. Note that this decision is revisited
-		 * on execution, when the query only consists of intermediate results.
+		 * Mark the subplans as needed on remote side. Note that this decision is
+		 * revisited on execution, when the query only consists of intermediate
+		 * results.
 		 */
-		remoteSubPlans = FindSubPlansUsedInNode((Node *) plan->workerJob->jobQuery);
-		UpdateUsedPlanListLocation(remoteSubPlans, SUBPLAN_ACCESS_REMOTE);
+		remoteSubPlans = FindSubPlansUsedInNode((Node *) plan->workerJob->jobQuery,
+												SUBPLAN_ACCESS_REMOTE);
+	}
+
+	if (plan->insertSelectQuery != NULL)
+	{
+		/* INSERT..SELECT plans currently do not have a workerJob */
+		Assert(plan->workerJob == NULL);
+
+		/*
+		 * The SELECT in an INSERT..SELECT is not fully planned yet and we cannot
+		 * perform pruning. We therefore require all subplans used in the
+		 * INSERT..SELECT to be available all nodes.
+		 */
+		remoteSubPlans = FindSubPlansUsedInNode((Node *) plan->insertSelectQuery,
+												SUBPLAN_ACCESS_ANYWHERE);
 	}
 
 	/* merge the used subplans */
@@ -77,7 +92,7 @@ FindSubPlanUsages(DistributedPlan *plan)
  * the input node.
  */
 static List *
-FindSubPlansUsedInNode(Node *node)
+FindSubPlansUsedInNode(Node *node, SubPlanAccessType accessType)
 {
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
@@ -106,9 +121,7 @@ FindSubPlansUsedInNode(Node *node)
 			UsedDistributedSubPlan *usedPlan = CitusMakeNode(UsedDistributedSubPlan);
 
 			usedPlan->subPlanId = pstrdup(resultId);
-
-			/* the callers are responsible for setting the accurate location */
-			usedPlan->locationMask = SUBPLAN_ACCESS_NONE;
+			usedPlan->accessType = accessType;
 
 			usedSubPlanList = lappend(usedSubPlanList, usedPlan);
 		}
@@ -160,13 +173,12 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			continue;
 		}
 
-		if (usedPlan->locationMask & SUBPLAN_ACCESS_LOCAL)
+		if (usedPlan->accessType == SUBPLAN_ACCESS_LOCAL)
 		{
 			/* subPlan needs to be written locally as the planner decided */
 			entry->writeLocalFile = true;
 		}
-
-		if (usedPlan->locationMask & SUBPLAN_ACCESS_REMOTE)
+		else if (usedPlan->accessType == SUBPLAN_ACCESS_REMOTE)
 		{
 			/*
 			 * traverse the plan and add find all worker nodes
@@ -178,6 +190,12 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			AppendAllAccessedWorkerNodes(entry, distributedPlan, workerNodeCount);
 
 			elog(DEBUG4, "Subplan %s is used in %lu", resultId, distributedPlan->planId);
+		}
+		else if (usedPlan->accessType == SUBPLAN_ACCESS_ANYWHERE)
+		{
+			/* subplan is needed on all nodes */
+			entry->writeLocalFile = true;
+			AppendAllWorkerNodes(entry);
 		}
 	}
 
@@ -239,6 +257,25 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 				return;
 			}
 		}
+	}
+}
+
+
+/*
+ * AppendAllWorkerNodes appends all node IDs of readable worker nodes to the
+ * nodeIdList, meaning the corresponding intermediate result should be sent
+ * to all readable nodes.
+ */
+static void
+AppendAllWorkerNodes(IntermediateResultsHashEntry *entry)
+{
+	List *workerNodeList = ActiveReadableWorkerNodeList();
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		entry->nodeIdList =
+			list_append_unique_int(entry->nodeIdList, workerNode->nodeId);
 	}
 }
 
@@ -413,21 +450,4 @@ SearchIntermediateResult(HTAB *intermediateResultsHash, char *resultId)
 	}
 
 	return entry;
-}
-
-
-/*
- * UpdateUsedPlanListLocation is a utility function which iterates over the list
- * and updates the subPlanLocation to the input location.
- */
-static void
-UpdateUsedPlanListLocation(List *subPlanList, int locationMask)
-{
-	ListCell *subPlanCell = NULL;
-	foreach(subPlanCell, subPlanList)
-	{
-		UsedDistributedSubPlan *subPlan = lfirst(subPlanCell);
-
-		subPlan->locationMask |= locationMask;
-	}
 }
