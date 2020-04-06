@@ -598,6 +598,15 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
+	if (TransactionConnectedToLocalGroup)
+	{
+		/*
+		 * if the current transaction accessed the local node over a connection
+		 * then we can't use local execution because of visibility problems.
+		 */
+		return false;
+	}
+
 	if (TransactionAccessedLocalPlacement)
 	{
 		bool isValidLocalExecutionPath PG_USED_FOR_ASSERTS_ONLY = false;
@@ -657,7 +666,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * has happened because that'd break transaction visibility rules and
 		 * many other things.
 		 */
-		return !TransactionConnectedToLocalGroup;
+		return true;
 	}
 
 	if (!singleTask)
