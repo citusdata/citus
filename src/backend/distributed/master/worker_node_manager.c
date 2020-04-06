@@ -17,6 +17,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
@@ -398,6 +399,26 @@ static bool
 NodeIsPrimaryWorker(WorkerNode *node)
 {
 	return !NodeIsCoordinator(node) && NodeIsPrimary(node);
+}
+
+
+/*
+ * CoordinatorCanHaveNoDistributionKeyTablePlacements returns true if coordinator
+ * can have no-distribution-key table placements, i.e reference tables & coordinator
+ * tables.
+ */
+bool
+CoordinatorCanHaveNoDistributionKeyTablePlacements()
+{
+	bool hasNoDistributionKeyTablePlacements = false;
+
+	/*
+	 * All groups that have pg_dist_node entries, also have placements for
+	 * those tables.
+	 */
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasNoDistributionKeyTablePlacements);
+
+	return hasNoDistributionKeyTablePlacements;
 }
 
 

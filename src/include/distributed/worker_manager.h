@@ -73,6 +73,7 @@ extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryWorkerNodeCount(void);
 extern List * ActivePrimaryWorkerNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
+extern bool CoordinatorCanHaveNoDistributionKeyTablePlacements(void);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
 extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
