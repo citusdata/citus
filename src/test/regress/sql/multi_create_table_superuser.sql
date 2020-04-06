@@ -1,5 +1,5 @@
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360005;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 
 -- Since we're superuser, we can set the replication model to 'streaming' to
@@ -89,6 +89,8 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 DROP TABLE repmodel_test;
 
 RESET citus.replication_model;
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 
 -- There should be no table on the worker node
 \c - - :public_worker_1_host :worker_1_port

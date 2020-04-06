@@ -7,6 +7,8 @@
 -- need to cover both reference join and partitioned join, we have created
 -- reference and append distributed version of orders, customer and part tables.
 
+SET citus.next_shard_id TO 360000;
+
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -137,6 +139,8 @@ CREATE TABLE supplier_single_shard
 SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
 
 CREATE TABLE mx_table_test (col1 int, col2 text);
+
+SET citus.next_shard_id TO 360009;
 
 -- Test initial data loading
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);

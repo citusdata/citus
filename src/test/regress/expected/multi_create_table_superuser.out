@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360005;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 -- Since we're superuser, we can set the replication model to 'streaming' to
 -- create a one-off MX table... but if we forget to set the replication factor to one,
@@ -222,6 +222,7 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 
 DROP TABLE repmodel_test;
 RESET citus.replication_model;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 -- There should be no table on the worker node
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
