@@ -10,11 +10,12 @@ SELECT create_distributed_table('text_dist_column', 'key');
 
 (1 row)
 
-SET client_min_messages TO DEBUG;
+-- it seems that sometimes the pruning is deferred and sometimes not.
+-- what we care about is that these queries don't crash and the log for this
+-- one shouldn't matter. This is to prevent these test being from flaky in our CI.
+SET client_min_messages to NOTICE;
 PREPARE null_select_on_text AS SELECT count(*) FROM text_dist_column WHERE key = NULL;
 EXECUTE null_select_on_text;
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -52,54 +53,36 @@ EXECUTE null_select_on_text;
 
 PREPARE null_select_on_text_param(text) AS SELECT count(*) FROM text_dist_column WHERE key = $1;
 EXECUTE null_select_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param(5::text);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -137,54 +120,36 @@ EXECUTE null_select_on_text_param(5::text);
 
 PREPARE null_select_on_text_param_and_false(text) AS SELECT count(*) FROM text_dist_column WHERE key = $1 AND false;
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -198,54 +163,36 @@ EXECUTE null_select_on_text_param_and_false(NULL);
 
 PREPARE null_select_on_text_param_and_in(text) AS SELECT count(*) FROM text_dist_column WHERE key IN ($1);
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -253,55 +200,36 @@ DEBUG:  Plan is router executable
 
 PREPARE null_select_on_text_param_and_in_2(text) AS SELECT count(*) FROM text_dist_column WHERE key IN ($1, 'test');
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_2(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
@@ -309,43 +237,36 @@ DETAIL:  distribution column value: test
 
 PREPARE null_select_on_text_param_and_in_3(text, text) AS SELECT count(*) FROM text_dist_column WHERE key IN ($1, $2);
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -353,54 +274,36 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 PREPARE null_select_on_text_param_and_in_4(text) AS SELECT count(*) FROM text_dist_column WHERE key IN ($1) AND false;
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -409,75 +312,54 @@ DEBUG:  Plan is router executable
 -- not a fast-path, still good to run
 PREPARE null_select_on_text_param_and_in_5(text, text) AS SELECT count(*) FROM text_dist_column WHERE key = $1 OR key = $2;
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(1, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_5(1, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
@@ -486,85 +368,42 @@ DETAIL:  distribution column value: 1
 -- not a fast-path, still good to have
 PREPARE null_select_on_text_param_and_in_6(text) AS SELECT count(*) FROM text_dist_column WHERE key NOT IN (SELECT value FROM text_dist_column WHERE key = $1);
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_and_in_6(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM null_parameters.text_dist_column WHERE (key OPERATOR(pg_catalog.=) NULL::text)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM null_parameters.text_dist_column WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text))))
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -573,57 +412,42 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_7(text) AS SELECT count(*) FROM text_dist_column WHERE (key = $1) is true;
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_7(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -632,50 +456,42 @@ DEBUG:  Plan is router executable
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_8(text) AS SELECT count(*) FROM text_dist_column WHERE key = ANY(ARRAY[$1]);
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_8(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -683,64 +499,42 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 PREPARE null_select_on_text_param_9(text) AS SELECT count(*) FROM text_dist_column WHERE key = ANY(ARRAY[$1, 'test']);
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_9(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
  count
 ---------------------------------------------------------------------
      0
@@ -749,50 +543,42 @@ DETAIL:  distribution column value: test
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_10(text) AS SELECT count(*) FROM text_dist_column WHERE key = ALL(ARRAY[$1]);
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_10(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -801,65 +587,48 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_11(text) AS SELECT count(*) FROM text_dist_column WHERE (CASE WHEN key > $1 THEN key::int / 100 > 1 ELSE false END);
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_11(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -868,57 +637,42 @@ DEBUG:  Plan is router executable
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_12(text) AS SELECT count(*) FROM text_dist_column WHERE COALESCE(($1::int/50000)::bool, false);
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_12(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -927,50 +681,42 @@ DEBUG:  Plan is router executable
 -- different expression types which may not be fast-path queries
 PREPARE null_select_on_text_param_13(text) AS SELECT count(*) FROM text_dist_column WHERE NULLIF(($1::int/50000)::bool, false);
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_13(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -978,54 +724,36 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 PREPARE null_select_on_text_param_14(text) AS SELECT count(*) FROM text_dist_column WHERE key = $1 AND 0!=0;
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_14(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -1045,57 +773,48 @@ EXECUTE null_select_on_text_param_14(NULL);
 
 PREPARE null_select_on_text_param_15(text) AS SELECT count(*) FROM text_dist_column WHERE row(key, 100) > row($1, 0);
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_15(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -1103,57 +822,48 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 PREPARE null_select_on_text_param_16(text) AS SELECT count(*) FROM text_dist_column WHERE key IS DISTINCT FROM $1;
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_16(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
  count
 ---------------------------------------------------------------------
      0
@@ -1161,54 +871,36 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 PREPARE null_select_on_text_param_17(text) AS SELECT count(*) FROM text_dist_column WHERE key = $1 AND 0!=1;
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_17(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -1228,57 +920,42 @@ EXECUTE null_select_on_text_param_17(NULL);
 
 PREPARE null_select_on_text_param_18(text) AS SELECT count(*) FROM text_dist_column WHERE key = upper($1);
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_18(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -1286,57 +963,42 @@ DEBUG:  Plan is router executable
 
 PREPARE null_select_on_text_param_19(text) AS SELECT count(*) FROM text_dist_column WHERE key = $1::varchar(4);
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_text_param_19(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -1344,8 +1006,6 @@ DEBUG:  Plan is router executable
 
 PREPARE null_update_on_text AS UPDATE text_dist_column SET value = '' WHERE key = NULL;
 EXECUTE null_update_on_text(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text(NULL);
 EXECUTE null_update_on_text(NULL);
 EXECUTE null_update_on_text(NULL);
@@ -1353,167 +1013,54 @@ EXECUTE null_update_on_text(NULL);
 EXECUTE null_update_on_text(NULL);
 PREPARE null_update_on_text_param(text) AS UPDATE text_dist_column SET value = '' WHERE key = $1;
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param(NULL);
 PREPARE null_update_on_text_param_and_false(text) AS UPDATE text_dist_column SET value = '' WHERE key = $1 AND false;
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_false(NULL);
 PREPARE null_update_on_text_param_and_in(text) AS UPDATE text_dist_column SET value = '' WHERE key IN ($1);
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in(NULL);
 PREPARE null_update_on_text_param_and_in_2(text) AS UPDATE text_dist_column SET value = '' WHERE key IN ($1, 'test');
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 EXECUTE null_update_on_text_param_and_in_2(NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 PREPARE null_update_on_text_param_and_in_3(text, text) AS UPDATE text_dist_column SET value = '' WHERE key IN ($1, $2);
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, NULL);
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_3(NULL, 'test');
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: test
 PREPARE null_update_on_text_param_and_in_4(text) AS UPDATE text_dist_column SET value = '' WHERE key IN ($1) and false;
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE null_update_on_text_param_and_in_4(NULL);
 -- sanity check with JSBONB column
 CREATE TABLE jsonb_dist_column (key jsonb, value text);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 SELECT create_distributed_table('jsonb_dist_column', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -1522,63 +1069,41 @@ SELECT create_distributed_table('jsonb_dist_column', 'key');
 
 PREPARE null_select_on_json_param(jsonb) AS SELECT count(*) FROM jsonb_dist_column WHERE key = $1;
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 EXECUTE null_select_on_json_param(NULL);
-DEBUG:  Deferred pruning for a fast-path router query
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
--- it seems that sometimes the pruning is deferred and sometimes not.
--- what we care about is that this doesn't crash and the log for this
--- one shouldn't matter. This is to prevent this test being from flaky.
-SET client_min_messages to ERROR;
 EXECUTE null_select_on_json_param(NULL);
  count
 ---------------------------------------------------------------------
