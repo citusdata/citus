@@ -35,6 +35,8 @@
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4
 
+#define ADJUST_POOLSIZE_AUTOMATICALLY 0
+#define DISABLE_CONNECTION_THROTTLING -1
 
 /*
  * The data structure used to store data in shared memory. This data structure is only
@@ -205,7 +207,7 @@ RemoveAllSharedConnectionEntriesForNode(char *hostname, int port)
 int
 GetMaxSharedPoolSize(void)
 {
-	if (MaxSharedPoolSize == 0)
+	if (MaxSharedPoolSize == ADJUST_POOLSIZE_AUTOMATICALLY)
 	{
 		return MaxConnections;
 	}
@@ -246,7 +248,7 @@ WaitOrErrorForSharedConnection(const char *hostname, int port)
 bool
 TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 {
-	if (GetMaxSharedPoolSize() == -1)
+	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
 		return true;
@@ -322,7 +324,7 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 {
 	SharedConnStatsHashKey connKey;
 
-	if (GetMaxSharedPoolSize() == -1)
+	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
 		return;
@@ -368,7 +370,7 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 {
 	SharedConnStatsHashKey connKey;
 
-	if (GetMaxSharedPoolSize() == -1)
+	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
 		return;
