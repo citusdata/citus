@@ -80,6 +80,10 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	/* lock relation to ensure its owner won't change */
+	LockRelationOid(sourceRelationId, AccessShareLock);
+
 	EnsureTableOwner(sourceRelationId);
 
 	Datum *relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
@@ -87,6 +91,9 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	for (int relationIndex = 0; relationIndex < relationCount; relationIndex++)
 	{
 		Oid nextRelationOid = DatumGetObjectId(relationIdDatumArray[relationIndex]);
+
+		/* lock relation to ensure its owner won't change */
+		LockRelationOid(sourceRelationId, AccessShareLock);
 
 		/* we require that the user either owns all tables or is superuser */
 		EnsureTableOwner(nextRelationOid);
@@ -111,6 +118,10 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	/* lock relation to ensure its owner won't change */
+	LockRelationOid(targetRelationId, AccessShareLock);
+
 	EnsureTableOwner(targetRelationId);
 	EnsureHashDistributedTable(targetRelationId);
 

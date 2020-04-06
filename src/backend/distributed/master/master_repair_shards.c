@@ -395,6 +395,9 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	{
 		char relationKind = '\0';
 
+		/* lock the relation to ensure its owner won't change concurrently*/
+		LockRelationOid(colocatedTableId, AccessShareLock);
+
 		/* check that user has owner rights in all co-located tables */
 		EnsureTableOwner(colocatedTableId);
 

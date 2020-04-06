@@ -110,6 +110,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	bool colocatedShard = false;
 	List *insertedShardPlacements = NIL;
 
+	/* we plan to add shards: get an exclusive lock on relation oid */
+	LockRelationOid(distributedTableId, ExclusiveLock);
+
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
 
@@ -120,9 +123,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	 * partitioning types.
 	 */
 	EnsureTableOwner(distributedTableId);
-
-	/* we plan to add shards: get an exclusive lock on relation oid */
-	LockRelationOid(distributedTableId, ExclusiveLock);
 
 	/* validate that shards haven't already been created for this table */
 	List *existingShardList = LoadShardList(distributedTableId);
@@ -241,6 +241,12 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	bool colocatedShard = true;
 	List *insertedShardPlacements = NIL;
 
+	/* we plan to add shards: get an exclusive lock on target relation oid */
+	LockRelationOid(targetRelationId, ExclusiveLock);
+
+	/* we don't want source table to get dropped before we colocate with it */
+	LockRelationOid(sourceRelationId, AccessShareLock);
+
 	/* make sure that tables are hash partitioned */
 	CheckHashPartitionedTable(targetRelationId);
 	CheckHashPartitionedTable(sourceRelationId);
@@ -252,12 +258,6 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	 * partitioning types.
 	 */
 	EnsureTableOwner(targetRelationId);
-
-	/* we plan to add shards: get an exclusive lock on target relation oid */
-	LockRelationOid(targetRelationId, ExclusiveLock);
-
-	/* we don't want source table to get dropped before we colocate with it */
-	LockRelationOid(sourceRelationId, AccessShareLock);
 
 	/* prevent placement changes of the source relation until we colocate with them */
 	List *sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
@@ -336,6 +336,9 @@ CreateReferenceTableShard(Oid distributedTableId)
 	bool useExclusiveConnection = false;
 	bool colocatedShard = false;
 
+	/* we plan to add shards: get an exclusive lock on relation oid */
+	LockRelationOid(distributedTableId, ExclusiveLock);
+
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
 	 * require ownership privileges - shards for reference tables are
@@ -343,9 +346,6 @@ CreateReferenceTableShard(Oid distributedTableId)
 	 * partitioning types such as append and range.
 	 */
 	EnsureTableOwner(distributedTableId);
-
-	/* we plan to add shards: get an exclusive lock on relation oid */
-	LockRelationOid(distributedTableId, ExclusiveLock);
 
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);

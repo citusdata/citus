@@ -1333,6 +1333,9 @@ EnsureTablePermissions(Oid relationId, AclMode mode)
 /*
  * Check that the current user has owner rights to relationId, error out if
  * not. Superusers are regarded as owners.
+ *
+ * In most cases, caller should have acquired a lock on relation if it wants
+ * to make sure this check still holds after this function returns.
  */
 void
 EnsureTableOwner(Oid relationId)

@@ -225,6 +225,14 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/*
+	 * master_drop_all_shards is typically called from the DROP TABLE trigger,
+	 * but could be called by a user directly. Make sure we have an
+	 * AccessExclusiveLock to prevent any other commands from running on this table
+	 * concurrently.
+	 */
+	LockRelationOid(relationId, AccessExclusiveLock);
+
+	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore and return -1.
 	 */
@@ -235,14 +243,6 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
-
-	/*
-	 * master_drop_all_shards is typically called from the DROP TABLE trigger,
-	 * but could be called by a user directly. Make sure we have an
-	 * AccessExclusiveLock to prevent any other commands from running on this table
-	 * concurrently.
-	 */
-	LockRelationOid(relationId, AccessExclusiveLock);
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	int droppedShardCount = DropShards(relationId, schemaName, relationName,

@@ -195,7 +195,7 @@ step s1-drop: DROP TABLE drop_hash;
 step s2-distribute-table: SELECT create_distributed_table('drop_hash', 'id'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-distribute-table: <... completed>
-error in steps s1-commit s2-distribute-table: ERROR:  could not create distributed table: relation does not exist
+error in steps s1-commit s2-distribute-table: ERROR:  could not open relation with OID xxxxx
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist

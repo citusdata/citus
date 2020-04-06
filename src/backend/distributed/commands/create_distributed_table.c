@@ -135,6 +135,14 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	/*
+	 * Lock target relation with an exclusive lock - there's no way to make
+	 * sense of this table until we've committed, and we don't want multiple
+	 * backends manipulating this relation.
+	 */
+	Relation relation = relation_open(relationId, ExclusiveLock);
+
 	EnsureTableOwner(relationId);
 
 	/*
@@ -145,19 +153,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
@@ -202,6 +197,13 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
+	/*
+	 * Lock target relation with an exclusive lock - there's no way to make
+	 * sense of this table until we've committed, and we don't want multiple
+	 * backends manipulating this relation.
+	 */
+	Relation relation = relation_open(relationId, ExclusiveLock);
+
 	EnsureTableOwner(relationId);
 
 	/*
@@ -212,19 +214,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
@@ -268,6 +257,14 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * Lock target relation with an exclusive lock - there's no way to make
+	 * sense of this table until we've committed, and we don't want multiple
+	 * backends manipulating this relation.
+	 */
+	Relation relation = relation_open(relationId, ExclusiveLock);
+
 	EnsureTableOwner(relationId);
 
 	/*
@@ -278,13 +275,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = relation_open(relationId, ExclusiveLock);
 
 	/*
 	 * We should do this check here since the codes in the following lines rely

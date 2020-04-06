@@ -218,7 +218,7 @@ SELECT column_to_column_name('pg_dist_node'::regclass,'{FROMEXPR :fromlist ({RAN
 ERROR:  not a valid column
 -- test column_name_to_column with illegal arguments
 SELECT column_name_to_column(1204127312,'');
-ERROR:  could not open relation with OID 1204127312
+ERROR:  could not open relation with OID xxxxx
 SELECT column_name_to_column('customers','notacolumn');
 ERROR:  column "notacolumn" of relation "customers" does not exist
 -- make one huge shard and manually inspect shard row

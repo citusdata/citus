@@ -58,6 +58,9 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	LockRelationOid(relationId, AccessExclusiveLock);
+
 	EnsureTableOwner(relationId);
 
 	if (!IsCitusTable(relationId))
@@ -90,8 +93,6 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								  "replicated tables but \"%s\" is streaming replicated",
 								  relationName)));
 	}
-
-	LockRelationOid(relationId, AccessExclusiveLock);
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	if (list_length(shardIntervalList) != 1)
