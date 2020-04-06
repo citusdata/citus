@@ -483,8 +483,6 @@ SharedConnectionStatsShmemSize(void)
 
 	size = add_size(size, sizeof(ConnectionStatsSharedData));
 
-	/* size = add_size(size, mul_size(sizeof(LWLock), MaxWorkerNodesTracked)); */
-
 	Size hashSize = hash_estimate_size(MaxWorkerNodesTracked,
 									   sizeof(SharedConnStatsHashEntry));
 
