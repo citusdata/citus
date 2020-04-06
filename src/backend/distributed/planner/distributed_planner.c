@@ -1171,12 +1171,23 @@ RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
 		subplansInHaving = FindSubPlansUsedInNode(havingQual);
 
 		/*
-		 * If we have the master query, it is likely that the result is needed locally.
+		 * If the master query requires the intermediate results in HAVING, we
+		 * need the result locally.
 		 *
-		 * Although this is not optimal, we always write all intermediate results
-		 * used in HAVING locally.
+		 * Although it is not optimal to write the intermediate results in HAVING
+		 * for all the distributed plans with masterQuery, we always write all
+		 * intermediate results used in HAVING locally for non-router queries. The
+		 * main motivation being as it it hard to distinguish which results are needed
+		 * locally by just checking the distributedPlan.
+		 *
+		 * If we one day want to optimize this, the distributedPlan should have the
+		 * necessary information about which subqueries in HAVING is needed only
+		 * locally.
 		 */
-		UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
+		if (plan->masterQuery)
+		{
+			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
+		}
 	}
 
 	plan->usedSubPlanNodeList = MergeUsedSubPlanLists(subplansUsedInQuery,
