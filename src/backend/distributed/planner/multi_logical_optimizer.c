@@ -328,9 +328,6 @@ static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
 static bool HasOrderByHllType(List *sortClauseList, List *targetList);
-static bool ShouldPushDownGroupingToWorker(MultiExtendedOp *opNode,
-										   ExtendedOpNodeProperties *
-										   extendedOpNodeProperties);
 static bool ShouldProcessDistinctOrderAndLimitForWorker(
 	ExtendedOpNodeProperties *extendedOpNodeProperties,
 	bool pushingDownOriginalGrouping,
@@ -2223,7 +2220,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	/* targetProjectionNumber starts from 1 */
 	queryTargetList.targetProjectionNumber = 1;
 
-	if (ShouldPushDownGroupingToWorker(originalOpNode, extendedOpNodeProperties))
+	if (!extendedOpNodeProperties->pullUpIntermediateRows)
 	{
 		queryGroupClause.groupClauseList = copyObject(originalGroupClauseList);
 	}
@@ -4714,46 +4711,6 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
 	}
 
 	return hasOrderByHllType;
-}
-
-
-/*
- * ShouldPushDownGroupingToWorker returns whether we push down GROUP BY.
- * This may return true even when GROUP BY is necessary on master.
- */
-static bool
-ShouldPushDownGroupingToWorker(MultiExtendedOp *opNode,
-							   ExtendedOpNodeProperties *extendedOpNodeProperties)
-{
-	if (extendedOpNodeProperties->pushDownGroupingAndHaving)
-	{
-		return true;
-	}
-
-	if (extendedOpNodeProperties->pullUpIntermediateRows)
-	{
-		return false;
-	}
-
-	/*
-	 * Duplicate grouping if we have LIMIT without HAVING, as this can
-	 * often result in LIMIT being pushed down.
-	 */
-	if (opNode->havingQual == NULL && opNode->limitCount != NULL)
-	{
-		return true;
-	}
-
-	/*
-	 * If aggregates are being split across worker & master, so must grouping.
-	 */
-	if (contain_aggs_of_level(opNode->havingQual, 0) ||
-		contain_aggs_of_level((Node *) opNode->targetList, 0))
-	{
-		return true;
-	}
-
-	return false;
 }
 
 
