@@ -94,6 +94,70 @@ SELECT y FROM test WHERE x = 1;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 ROLLBACK;
 
+CREATE TABLE ref (a int, b int);
+SELECT create_reference_table('ref');
+
+CREATE TABLE local (x int, y int);
+
+BEGIN;
+SELECT count(*) FROM test;
+SELECT * FROM ref JOIN local ON (a = x);
+TRUNCATE ref;
+ROLLBACK;
+
+
+BEGIN;
+SELECT count(*) FROM test;
+TRUNCATE ref;
+SELECT * FROM ref JOIN local ON (a = x);
+ROLLBACK;
+
+BEGIN;
+SELECT count(*) FROM test;
+INSERT INTO ref VALUES (1,2);
+INSERT INTO local VALUES (1,2);
+SELECT * FROM ref JOIN local ON (a = x);
+ROLLBACK;
+
+set citus.enable_cte_inlining to off;
+
+BEGIN;
+SELECT count(*) FROM test;
+-- we wont see the modifying cte in this query because we will use local execution and
+-- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
+WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
+TRUNCATE ref;
+SELECT * FROM ref JOIN local ON (a = x);
+-- we wont see the modifying cte in this query because we will use local execution and
+-- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
+WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
+ROLLBACK;
+
+
+BEGIN;
+-- we wont see the modifying cte in this query because we will use local execution and
+-- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
+WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
+ROLLBACK;
+
+BEGIN;
+-- we wont see the modifying cte in this query because we will use local execution and
+-- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
+WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref SELECT *,* FROM generate_series(1,10) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
+ROLLBACK;
+
+-- same local table reference table tests, but outside a transaction block
+INSERT INTO ref VALUES (1,2);
+INSERT INTO local VALUES (1,2);
+SELECT * FROM ref JOIN local ON (a = x);
+
+-- we wont see the modifying cte in this query because we will use local execution and
+-- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
+WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
+
+
+RESET citus.enable_cte_inlining;
+
 DELETE FROM test;
 DROP TABLE test;
 

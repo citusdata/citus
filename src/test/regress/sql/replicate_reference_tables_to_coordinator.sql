@@ -24,7 +24,7 @@ CREATE TABLE numbers(a int);
 SELECT create_reference_table('numbers');
 INSERT INTO numbers VALUES (20), (21);
 
-CREATE OR REPLACE FUNCTION my_random()
+CREATE OR REPLACE FUNCTION my_volatile_fn()
 RETURNS INT AS $$
 BEGIN
   RETURN 1;
@@ -103,24 +103,24 @@ ROLLBACK;
 
 BEGIN;
 WITH t1 AS (
-	SELECT my_random() r, a FROM local_table
+	SELECT my_volatile_fn() r, a FROM local_table
 ) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
 END;
 
 BEGIN;
 WITH t1 AS (
-	SELECT my_random() r, a FROM numbers
+	SELECT my_volatile_fn() r, a FROM numbers
 ) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
 END;
 
 BEGIN;
 SELECT count(*) FROM local_table
-WHERE EXISTS(SELECT my_random() FROM numbers WHERE local_table.a = numbers.a);
+WHERE EXISTS(SELECT my_volatile_fn() FROM numbers WHERE local_table.a = numbers.a);
 END;
 
 BEGIN;
 SELECT count(*) FROM numbers
-WHERE EXISTS(SELECT my_random() FROM local_table WHERE local_table.a = numbers.a);
+WHERE EXISTS(SELECT my_volatile_fn() FROM local_table WHERE local_table.a = numbers.a);
 END;
 
 DROP SCHEMA s1 CASCADE;
@@ -139,12 +139,12 @@ SELECT test_reference_local_join_func();
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;
 
-WITH t AS (SELECT *, my_random() x FROM numbers FOR UPDATE)
+WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
 -- but this should be fine
-WITH t AS (SELECT *, my_random() x FROM numbers)
+WITH t AS (SELECT *, my_volatile_fn() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
@@ -153,12 +153,12 @@ CREATE TABLE dist(a int);
 SELECT create_distributed_table('dist', 'a');
 INSERT INTO dist VALUES (20),(30);
 
-WITH t AS (SELECT *, my_random() x FROM dist)
+WITH t AS (SELECT *, my_volatile_fn() x FROM dist)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
 -- test CTE being reference/local join for distributed query
-WITH t as (SELECT n.a, my_random() x FROM numbers n NATURAL JOIN local_table l)
+WITH t as (SELECT n.a, my_volatile_fn() x FROM numbers n NATURAL JOIN local_table l)
 SELECT a FROM t NATURAL JOIN dist;
 
  -- shouldn't error if FOR UPDATE/FOR SHARE
@@ -230,7 +230,7 @@ ROLLBACK;
 
 BEGIN;
 INSERT INTO local_table VALUES (1), (2), (3);
-WITH t as (SELECT n.a, my_random() x FROM numbers n NATURAL JOIN local_table l ORDER BY n.a, x)
+WITH t as (SELECT n.a, my_volatile_fn() x FROM numbers n NATURAL JOIN local_table l ORDER BY n.a, x)
 SELECT a FROM t NATURAL JOIN dist ORDER BY a;
 ROLLBACK;
 
@@ -242,6 +242,8 @@ SELECT COUNT(*) FROM local_table JOIN numbers using (a);
 UPDATE numbers SET a = a + 1;
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);
 ROLLBACK;
+
+
 
 
 -- verify that we can drop columns from reference tables replicated to the coordinator
