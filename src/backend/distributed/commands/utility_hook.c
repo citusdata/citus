@@ -53,7 +53,6 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
-#include "distributed/shared_connection_stats.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
@@ -454,7 +453,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsDropCitusStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
-		RemoveAllSharedConnectionEntries();
 	}
 
 	pstmt->utilityStmt = parsetree;

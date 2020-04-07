@@ -178,21 +178,6 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 
 
 /*
- * RemoveAllSharedConnectionEntries removes all the entries in SharedConnStatsHash.
- */
-void
-RemoveAllSharedConnectionEntries(void)
-{
-	/* we're reading all shared connections, prevent any changes */
-	LockConnectionSharedMemory(LW_EXCLUSIVE);
-
-	hash_delete_all(SharedConnStatsHash);
-
-	UnLockConnectionSharedMemory();
-}
-
-
-/*
  * RemoveInactiveNodesFromSharedConnections goes over the SharedConnStatsHash
  * and removes the inactive entries.
  */
@@ -205,12 +190,20 @@ RemoveInactiveNodesFromSharedConnections(void)
 	HASH_SEQ_STATUS status;
 	SharedConnStatsHashEntry *connectionEntry = NULL;
 
+	int entryCount = hash_get_num_entries(SharedConnStatsHash);
+	if (entryCount + 1 < MaxWorkerNodesTracked)
+	{
+		UnLockConnectionSharedMemory();
+
+		return;
+	}
+
 	hash_seq_init(&status, SharedConnStatsHash);
 	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
 	{
 		SharedConnStatsHashKey connectionKey = connectionEntry->key;
-		WorkerNode *workerNode = FindWorkerNode(connectionKey.hostname,
-												connectionKey.port);
+		WorkerNode *workerNode =
+			FindWorkerNode(connectionKey.hostname, connectionKey.port);
 
 		if (workerNode == NULL || !workerNode->isActive)
 		{
