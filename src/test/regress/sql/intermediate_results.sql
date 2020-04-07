@@ -44,34 +44,14 @@ JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x int,
 ORDER BY x;
 END;
 
-
-CREATE FUNCTION raise_failed_execution_int_result(query text) RETURNS void AS $$
-BEGIN
-        EXECUTE query;
-        EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM LIKE '%does not exist%' THEN
-                RAISE 'Task failed to execute';
-        ELSIF SQLERRM LIKE '%could not receive query results%' THEN
-          RAISE 'Task failed to execute';
-        END IF;
-END;
-$$LANGUAGE plpgsql;
-
--- don't print the worker port
-\set VERBOSITY terse
-SET client_min_messages TO ERROR;
-
 -- files should now be cleaned up
-SELECT raise_failed_execution_int_result($$
-	SELECT x, x2
-	FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
-	WHERE user_id = 'jon'
-	ORDER BY x;
-$$);
+SET client_min_messages TO DEBUG;
+SELECT x, x2
+FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
+WHERE user_id = 'jon' OR true
+ORDER BY x;
 
-\set VERBOSITY DEFAULT
-SET client_min_messages TO DEFAULT;
-
+RESET client_min_messages;
 -- try to read the file as text, will fail because of binary encoding
 BEGIN;
 SELECT create_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,5) s');
