@@ -222,7 +222,7 @@ OutUsedDistributedSubPlan(OUTFUNC_ARGS)
 	WRITE_NODE_TYPE("USEDDISTRIBUTEDSUBPLAN");
 
 	WRITE_STRING_FIELD(subPlanId);
-	WRITE_INT_FIELD(locationMask);
+	WRITE_ENUM_FIELD(accessType, SubPlanAccessType);
 }
 
 

@@ -732,6 +732,9 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	jobQuery->hasDistinctOn = hasDistinctOn;
 	jobQuery->windowClause = windowClause;
 	jobQuery->hasWindowFuncs = hasWindowFuncs;
+	jobQuery->hasSubLinks = checkExprHasSubLink((Node *) jobQuery);
+
+	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
 
 	return jobQuery;
 }
@@ -1271,6 +1274,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 																	funcColumnTypes,
 																	funcColumnTypeMods,
 																	funcCollations);
+
 			RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 
 			rangeTableRef->rtindex = list_length(*rangeTableList) + 1;
@@ -1604,6 +1608,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->distinctClause = distinctClause;
 	jobQuery->hasWindowFuncs = hasWindowFuncs;
 	jobQuery->windowClause = windowClause;
+	jobQuery->hasSubLinks = checkExprHasSubLink((Node *) jobQuery);
 
 	return jobQuery;
 }

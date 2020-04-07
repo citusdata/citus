@@ -22,6 +22,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/cte_inline.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
@@ -91,8 +92,6 @@ static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQue
 											   bool hasUnresolvedParams,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
-static void FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery);
-static void RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -955,8 +954,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
-
 			return distributedPlan;
 		}
 		else
@@ -977,8 +974,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 										   plannerRestrictionContext);
 		if (distributedPlan->planningError == NULL)
 		{
-			FinalizeDistributedPlan(distributedPlan, originalQuery);
-
 			return distributedPlan;
 		}
 		else
@@ -1075,8 +1070,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		Assert(distributedPlan != NULL);
 		distributedPlan->subPlanList = subPlanList;
 
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
-
 		return distributedPlan;
 	}
 
@@ -1087,8 +1080,6 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	if (IsModifyCommand(originalQuery))
 	{
-		FinalizeDistributedPlan(distributedPlan, originalQuery);
-
 		return distributedPlan;
 	}
 
@@ -1120,84 +1111,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	/* distributed plan currently should always succeed or error out */
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
-	FinalizeDistributedPlan(distributedPlan, originalQuery);
-
 	return distributedPlan;
-}
-
-
-/*
- * FinalizeDistributedPlan is the final step of distributed planning. The function
- * currently only implements some optimizations for intermediate result(s) pruning.
- */
-static void
-FinalizeDistributedPlan(DistributedPlan *plan, Query *originalQuery)
-{
-	/*
-	 * Fast path queries, we cannot have any subplans by their definition,
-	 * so skip expensive traversals.
-	 */
-	if (!plan->fastPathRouterPlan)
-	{
-		RecordSubPlansUsedInPlan(plan, originalQuery);
-	}
-}
-
-
-/*
- * RecordSubPlansUsedInPlan gets a distributed plan a queryTree, and
- * updates the usedSubPlanNodeList of the distributed plan.
- *
- * The function simply pulls all the subPlans that are used in the queryTree
- * with one exception: subPlans in the HAVING clause. The reason is explained
- * in the function.
- */
-static void
-RecordSubPlansUsedInPlan(DistributedPlan *plan, Query *originalQuery)
-{
-	Node *havingQual = originalQuery->havingQual;
-
-	/* temporarily set to NULL, we're going to restore before the function returns */
-	originalQuery->havingQual = NULL;
-
-	/*
-	 * Mark the subplans as needed on remote side. Note that this decision is revisited
-	 * on execution, when the query only consists of intermediate results.
-	 */
-	List *subplansExceptHaving = FindSubPlansUsedInNode((Node *) originalQuery);
-	UpdateUsedPlanListLocation(subplansExceptHaving, SUBPLAN_ACCESS_REMOTE);
-
-	/* do the same for HAVING part of the query */
-	List *subplansInHaving = NIL;
-	if (originalQuery->hasSubLinks &&
-		FindNodeCheck(havingQual, IsNodeSubquery))
-	{
-		subplansInHaving = FindSubPlansUsedInNode(havingQual);
-		if (plan->masterQuery)
-		{
-			/*
-			 * If we have the master query, we're sure that the result is needed locally.
-			 * Otherwise, such as router queries, the plan may not be required locally.
-			 * Note that if the query consists of only intermediate results, the executor
-			 * may still prefer to write locally.
-			 *
-			 * If any of the subplansInHaving is used in other parts of the query,
-			 * we'll later merge those subPlans and send to remote.
-			 */
-			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_LOCAL);
-		}
-		else
-		{
-			UpdateUsedPlanListLocation(subplansInHaving, SUBPLAN_ACCESS_REMOTE);
-		}
-	}
-
-	/* set back the havingQual and the calculated subplans */
-	originalQuery->havingQual = havingQual;
-
-	/* merge the used subplans */
-	plan->usedSubPlanNodeList =
-		MergeUsedSubPlanLists(subplansExceptHaving, subplansInHaving);
 }
 
 
@@ -1425,6 +1339,22 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	customScan->custom_private = list_make1(distributedPlanData);
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+
+	/*
+	 * Fast path queries cannot have any subplans by definition, so skip
+	 * expensive traversals.
+	 */
+	if (!distributedPlan->fastPathRouterPlan)
+	{
+		/*
+		 * Record subplans used by distributed plan to make intermediate result
+		 * pruning easier.
+		 *
+		 * We do this before finalizing the plan, because the masterQuery is
+		 * rewritten by standard_planner in FinalizeNonRouterPlan.
+		 */
+		distributedPlan->usedSubPlanNodeList = FindSubPlanUsages(distributedPlan);
+	}
 
 	if (distributedPlan->masterQuery)
 	{
