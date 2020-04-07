@@ -10,7 +10,7 @@
 SET citus.next_shard_id TO 580000;
 
 SELECT $definition$
-CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
+CREATE OR REPLACE FUNCTION test.maintenance_worker()
     RETURNS pg_stat_activity
     LANGUAGE plpgsql
 AS $$
@@ -22,7 +22,7 @@ BEGIN
     FOR i IN 1 .. 200 LOOP
         PERFORM pg_stat_clear_snapshot();
         SELECT * INTO activity FROM pg_stat_activity
-        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = current_database();
         IF activity.pid IS NOT NULL THEN
             RETURN activity;
         ELSE
