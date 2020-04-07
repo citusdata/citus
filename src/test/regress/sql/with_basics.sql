@@ -697,9 +697,7 @@ LEFT JOIN
 
 -- some test  with failures
 WITH a AS (SELECT * FROM users_table LIMIT 10)
-	SELECT 1/(random() * 0) FROM users_table JOIN a USING (user_id);
-WITH a AS (SELECT * FROM users_table LIMIT 10)
-	SELECT 1/0 FROM users_table JOIN a USING (user_id);
+	SELECT user_id/0 FROM users_table JOIN a USING (user_id);
 
 RESET citus.enable_cte_inlining;
 
