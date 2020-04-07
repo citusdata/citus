@@ -209,7 +209,8 @@ RemoveInactiveNodesFromSharedConnections(void)
 	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
 	{
 		SharedConnStatsHashKey connectionKey = connectionEntry->key;
-		WorkerNode *workerNode = FindWorkerNode(connectionKey.hostname, connectionKey.port);
+		WorkerNode *workerNode = FindWorkerNode(connectionKey.hostname,
+												connectionKey.port);
 
 		if (workerNode == NULL || !workerNode->isActive)
 		{

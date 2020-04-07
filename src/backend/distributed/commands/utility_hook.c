@@ -53,6 +53,7 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
@@ -63,7 +64,6 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "distributed/shared_connection_stats.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
