@@ -136,12 +136,13 @@ EnsureReferenceTablesExistOnAllNodes(void)
 	}
 
 	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	const char *referenceTableName = get_rel_name(referenceTableId);
 	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 	if (list_length(shardIntervalList) == 0)
 	{
 		/* check for corrupt metadata */
 		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
-							   get_rel_name(referenceTableId))));
+							   referenceTableName)));
 	}
 
 	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
@@ -199,6 +200,10 @@ EnsureReferenceTablesExistOnAllNodes(void)
 	WorkerNode *newWorkerNode = NULL;
 	foreach_ptr(newWorkerNode, newWorkersList)
 	{
+		ereport(NOTICE, (errmsg("replicating reference table '%s' to %s:%d ...",
+								referenceTableName, newWorkerNode->workerName,
+								newWorkerNode->workerPort)));
+
 		/*
 		 * Call master_copy_shard_placement using citus extension owner. Current
 		 * user might not have permissions to do the copy.
