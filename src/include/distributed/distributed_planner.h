@@ -104,6 +104,14 @@ typedef struct FastPathRestrictionContext
 	bool distributionKeyHasParam;
 }FastPathRestrictionContext;
 
+typedef struct CitusLocalPlanRestrictionContext
+{
+	bool citusLocalQuery;
+
+	/* citus local table RTE list is set in distributed_planner hook */
+	List *citusLocalTableRTEList;
+} CitusLocalPlanRestrictionContext;
+
 typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
@@ -116,6 +124,9 @@ typedef struct PlannerRestrictionContext
 	 * Instead, we keep this struct to pass some extra information.
 	 */
 	FastPathRestrictionContext *fastPathRestrictionContext;
+
+	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext;
+
 	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
@@ -181,15 +192,35 @@ typedef struct CitusCustomScanPath
 	CustomScan *remoteScan;
 } CitusCustomScanPath;
 
+/*
+ * Parameters to be set according to range table entries of a query to decide
+ * which planner to use or error out for some cases.
+ * (see ErrorIfUnsupportedQueryWithCitusLocalTables and its usage)
+ */
+typedef struct RTEListProperties
+{
+	bool hasLocalTable;
+	bool hasFunction;
+	bool hasView;
+
+	bool hasReferenceTable;
+	bool hasCitusLocalTable;
+	bool hasDistributedTable;
+
+	/* union of above three */
+	bool hasCitusTable;
+} RTEListProperties;
 
 extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 										 ParamListInfo boundParams);
 extern List * ExtractRangeTableEntryList(Query *query);
-extern List * ExtractReferenceTableRTEList(List *rteList);
+extern List * ExtractTableRTEListByDistMethod(List *rteList, char distributionMethod);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);
+extern bool QueryIsNotSimpleSelect(Node *node);
+extern void UpdateTablesWithoutDistKeysWithShards(Query *query, List *rangeTableList);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,
@@ -202,8 +233,10 @@ extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
+extern bool IsUpdateOrDelete(Query *query);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
+extern LOCKMODE GetQueryLockMode(Query *query);
 extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,

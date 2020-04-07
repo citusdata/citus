@@ -20,6 +20,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "distributed/citus_local_planner.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
@@ -75,7 +76,6 @@ static uint64 NextPlanId = 1;
 int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
-static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -124,9 +124,10 @@ static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
-static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
-static bool QueryIsNotSimpleSelect(Node *node);
-static void UpdateReferenceTablesWithShard(List *rangeTableList);
+static bool CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties);
+static RTEListProperties * GetRTEListProperties(List *rangeTableList);
+static PlannedStmt * PlanCitusLocalStmt(DistributedPlanningContext *planContext,
+										List *rangeTableList);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
@@ -139,6 +140,7 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
+	bool citusLocalQuery = false;
 	Node *distributionKeyValue = NULL;
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
@@ -152,24 +154,50 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		if (IsLocalReferenceTableJoin(parse, rangeTableList))
-		{
-			/*
-			 * For joins between reference tables and local tables, we replace
-			 * reference table names with shard tables names in the query, so
-			 * we can use the standard_planner for planning it locally.
-			 */
-			UpdateReferenceTablesWithShard(rangeTableList);
+		RTEListProperties *rteListProperties = GetRTEListProperties(rangeTableList);
 
-			needsDistributedPlanning = false;
+		/* TODO: want to move this downward on top CreateCitusLocalPlan */
+
+		/*
+		 * Actually, we will replace citus local tables with their shards
+		 * anyway and as we will behaving them as local tables, we could
+		 * error out for the cases that we are not supporting citus local
+		 * tables in planner as well. However, error messages for those cases
+		 * would print the placement name of the citus local table in that
+		 * case. As that would seem to be a bit weird, we will error out here
+		 * for unsupported queries with citus local tables.
+		 */
+		ErrorIfUnsupportedQueryWithCitusLocalTables(parse, rteListProperties);
+
+		bool canSkipCitusPlanners = CanSkipCitusPlanners(parse, rteListProperties);
+
+		if (canSkipCitusPlanners)
+		{
+			List *referenceTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
+																		  DISTRIBUTE_BY_NONE);
+
+			UpdateTablesWithoutDistKeysWithShards(parse, referenceTableRTEList);
+		}
+
+		if (!canSkipCitusPlanners && rteListProperties->hasCitusTable)
+		{
+			needsDistributedPlanning = true;
+
+			/*
+			 * Note that, we should definitely decide to use CitusLocalPlanner
+			 * if the query contains a citus local table in it. However, as
+			 * FastPathRouterQuery may return true for the queries including
+			 * citus local tables as well, it is not appropriate to first check
+			 * for fast path router queries.
+			 */
+			citusLocalQuery = rteListProperties->hasCitusLocalTable;
+
+			fastPathRouterQuery =
+				!citusLocalQuery && FastPathRouterQuery(parse, &distributionKeyValue);
 		}
 		else
 		{
-			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
-			if (needsDistributedPlanning)
-			{
-				fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
-			}
+			needsDistributedPlanning = false;
 		}
 	}
 
@@ -181,13 +209,13 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		.boundParams = boundParams,
 	};
 
-	if (fastPathRouterQuery)
+	if (fastPathRouterQuery || citusLocalQuery)
 	{
 		/*
-		 *  We need to copy the parse tree because the FastPathPlanner modifies
-		 *  it. In the next branch we do the same for other distributed queries
-		 *  too, but for those it needs to be done AFTER calling
-		 *  AssignRTEIdentities.
+		 * We need to copy the parse tree because the FastPathPlanner and
+		 * CitusLocalPlanner modifies it. In the next branch we do the same
+		 * for other distributed queries too, but for those it needs to be
+		 * done AFTER calling AssignRTEIdentities.
 		 */
 		planContext.originalQuery = copyObject(parse);
 	}
@@ -243,20 +271,28 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	PG_TRY();
 	{
-		if (fastPathRouterQuery)
-		{
-			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
-		}
-		else
+		if (!fastPathRouterQuery)
 		{
 			/*
-			 * Call into standard_planner because the Citus planner relies on both the
-			 * restriction information per table and parse tree transformations made by
-			 * postgres' planner.
+			 * Call into standard_planner because the Citus planners except
+			 * the FastPathRouter planner rely on both the restriction information
+			 * per table and parse tree transformations made by postgres' planner.
 			 */
 			planContext.plan = standard_planner(planContext.query,
 												planContext.cursorOptions,
 												planContext.boundParams);
+		}
+
+		if (fastPathRouterQuery)
+		{
+			result = PlanFastPathDistributedStmt(&planContext, distributionKeyValue);
+		}
+		else if (citusLocalQuery)
+		{
+			result = PlanCitusLocalStmt(&planContext, rangeTableList);
+		}
+		else
+		{
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
@@ -319,15 +355,13 @@ ExtractRangeTableEntryList(Query *query)
 
 
 /*
- * ExtractClassifiedRangeTableEntryList extracts reference table rte's from
- * the given rte list.
- * Callers of this function are responsible for passing referenceTableRTEList
- * to be non-null and initially pointing to an empty list.
+ * ExtractTableRTEListByDistMethod extracts and returns citus table rte's from
+ * the given rte list acoording to distributionMethod.
  */
 List *
-ExtractReferenceTableRTEList(List *rteList)
+ExtractTableRTEListByDistMethod(List *rteList, char distributionMethod)
 {
-	List *referenceTableRTEList = NIL;
+	List *distMethodTableRTEList = NIL;
 
 	RangeTblEntry *rte = NULL;
 	foreach_ptr(rte, rteList)
@@ -338,14 +372,20 @@ ExtractReferenceTableRTEList(List *rteList)
 		}
 
 		Oid relationOid = rte->relid;
-		if (IsCitusTable(relationOid) && PartitionMethod(relationOid) ==
-			DISTRIBUTE_BY_NONE)
+
+		if (!IsCitusTable(relationOid))
 		{
-			referenceTableRTEList = lappend(referenceTableRTEList, rte);
+			continue;
+		}
+
+		char partititonMethod = PartitionMethod(relationOid);
+		if (partititonMethod == distributionMethod)
+		{
+			distMethodTableRTEList = lappend(distMethodTableRTEList, rte);
 		}
 	}
 
-	return referenceTableRTEList;
+	return distMethodTableRTEList;
 }
 
 
@@ -607,6 +647,37 @@ bool
 IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 {
 	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
+}
+
+
+/*
+ * PlanCitusLocalStmt creates a distributed planned statement using
+ * CitusLocalPlanner for the queries involving citus log tables.
+ * Before calling CreateDistributedPlannedStmt, here we first extract range
+ * table entries for citus local tables. This is because, as we do not pass
+ * rangeTableRTEList into planner methods, we should extract citus local
+ * table entries here to prevent another recursive pass on query tree.
+ */
+static PlannedStmt *
+PlanCitusLocalStmt(DistributedPlanningContext *planContext, List *rangeTableList)
+{
+	PlannerRestrictionContext *plannerRestrictionContext =
+		planContext->plannerRestrictionContext;
+
+	/*
+	 * As we decided to use CitusLocalPlanner, we know that it can't be a
+	 * FastPathRouterQuery
+	 */
+	Assert(!plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery);
+
+	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext =
+		plannerRestrictionContext->citusLocalPlanRestrictionContext;
+
+	citusLocalPlanRestrictionContext->citusLocalQuery = true;
+	citusLocalPlanRestrictionContext->citusLocalTableRTEList =
+		ExtractTableRTEListByDistMethod(rangeTableList, CITUS_LOCAL_TABLE);
+
+	return CreateDistributedPlannedStmt(planContext);
 }
 
 
@@ -928,8 +999,11 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 
 
 /*
- * CreateDistributedPlan generates a distributed plan for a query.
- * It goes through 3 steps:
+ * CreateDistributedPlan generates a distributed plan for a query following
+ * below steps.
+ *
+ * 0. Prefer CitusLocalPlanner if query has citus local tables to replace them
+ *    with their local shard relations. Then goes through below 3 steps.
  *
  * 1. Try router planner
  * 2. Generate subplans for CTEs and complex subqueries
@@ -944,7 +1018,14 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
-	if (IsModifyCommand(originalQuery))
+	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext =
+		plannerRestrictionContext->citusLocalPlanRestrictionContext;
+
+	if (citusLocalPlanRestrictionContext->citusLocalQuery)
+	{
+		return CreateCitusLocalPlan(query, plannerRestrictionContext);
+	}
+	else if (IsModifyCommand(originalQuery))
 	{
 		EnsureModificationsCanRun();
 
@@ -2193,6 +2274,9 @@ CreateAndPushPlannerRestrictionContext(void)
 	plannerRestrictionContext->fastPathRestrictionContext =
 		palloc0(sizeof(FastPathRestrictionContext));
 
+	plannerRestrictionContext->citusLocalPlanRestrictionContext =
+		palloc0(sizeof(CitusLocalPlanRestrictionContext));
+
 	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
 
 	/* we'll apply logical AND as we add tables */
@@ -2330,51 +2414,48 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
- * IsLocalReferenceTableJoin returns if the given query is a join between
- * reference tables and local tables.
+ * CanSkipCitusPlanners returns true if the query can skip citus planners, which
+ * depends on the following conditions:
+ *
+ *  - If query includes distributed tables, citus local tables, views or function,
+ *    we cannot skip citus planners.
+ *  - If query includes reference tables, we allow it to skip citus planners
+ *    only when if it is replicated to coordinator and query is a simple join
+ *    with a coordinator local table.
  */
 static bool
-IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
+CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties)
 {
-	bool hasReferenceTable = false;
-	bool hasLocalTable = false;
-	ListCell *rangeTableCell = false;
-
-	bool hasReferenceTableReplica = false;
-
-	/*
-	 * We only allow join between reference tables and local tables in the
-	 * coordinator.
-	 */
-	if (!IsCoordinator())
+	if (rteListProperties->hasDistributedTable)
 	{
+		/*
+		 * If query includes a distributed table, we should not skip distributed
+		 * planner.
+		 */
 		return false;
 	}
 
-	/*
-	 * All groups that have pg_dist_node entries, also have reference
-	 * table replicas.
-	 */
-	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasReferenceTableReplica);
-
-	/*
-	 * If reference table doesn't have replicas on the coordinator, we don't
-	 * allow joins with local tables.
-	 */
-	if (!hasReferenceTableReplica)
+	if (rteListProperties->hasCitusLocalTable)
 	{
+		/*
+		 * If query includes a citus local table, we should not skip distributed
+		 * planner.
+		 */
 		return false;
 	}
 
-	if (FindNodeCheck((Node *) parse, QueryIsNotSimpleSelect))
+	if (rteListProperties->hasView)
 	{
+		/*
+		 * We only allow local join for the relation kinds for which we can
+		 * determine if the access to them are local or distributed. For this
+		 * reason, we don't allow non-materialized views.
+		 */
 		return false;
 	}
 
-	foreach(rangeTableCell, rangeTableList)
+	if (rteListProperties->hasFunction)
 	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
 		/*
 		 * Don't plan joins involving functions locally since we are not sure if
 		 * they do distributed accesses or not, and defaulting to local planning
@@ -2389,9 +2470,51 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 		 * Looking at gram.y, RTE_TABLEFUNC is used only for XMLTABLE() which
 		 * is okay to be planned locally, so allowing that.
 		 */
+		return false;
+	}
+
+	/*
+	 * At this point we can only have local tables and reference tables in the
+	 * query.
+	 */
+
+	if (!rteListProperties->hasReferenceTable)
+	{
+		/* we may only have local tables in query */
+		return true;
+	}
+
+	/*
+	 * If query has reference table, we can skip distributed planner only if:
+	 *  - it is a simple select query with a local table and
+	 *  - we are in the coordinator and
+	 *  - coordinator have reference table placements.
+	 */
+	bool queryIsNotSimpleSelect = FindNodeCheck((Node *) parse, QueryIsNotSimpleSelect);
+	bool hasNoDistKeyTableCoordinatorPlacements = (IsCoordinator() &&
+												   CoordinatorAddedAsWorkerNode());
+
+	return rteListProperties->hasLocalTable && !queryIsNotSimpleSelect &&
+		   hasNoDistKeyTableCoordinatorPlacements;
+}
+
+
+/*
+ * GetRTEListProperties returns RTEListProperties struct processing the given
+ * rangeTableList.
+ */
+static RTEListProperties *
+GetRTEListProperties(List *rangeTableList)
+{
+	RTEListProperties *rteListProperties = palloc0(sizeof(RTEListProperties));
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
 		if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
-			return false;
+			rteListProperties->hasFunction = true;
+			continue;
 		}
 
 		if (rangeTableEntry->rtekind != RTE_RELATION)
@@ -2399,43 +2522,47 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
-		/*
-		 * We only allow local join for the relation kinds for which we can
-		 * determine deterministically that access to them are local or distributed.
-		 * For this reason, we don't allow non-materialized views.
-		 */
 		if (rangeTableEntry->relkind == RELKIND_VIEW)
 		{
-			return false;
+			rteListProperties->hasView = true;
+			continue;
 		}
 
 		if (!IsCitusTable(rangeTableEntry->relid))
 		{
-			hasLocalTable = true;
+			rteListProperties->hasLocalTable = true;
 			continue;
 		}
 
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
-			rangeTableEntry->relid);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		char distributionMethod = PartitionMethod(rangeTableEntry->relid);
+		if (distributionMethod == DISTRIBUTE_BY_NONE)
 		{
-			hasReferenceTable = true;
+			rteListProperties->hasReferenceTable = true;
+		}
+		else if (distributionMethod == CITUS_LOCAL_TABLE)
+		{
+			rteListProperties->hasCitusLocalTable = true;
 		}
 		else
 		{
-			return false;
+			rteListProperties->hasDistributedTable = true;
 		}
 	}
 
-	return hasLocalTable && hasReferenceTable;
+	rteListProperties->hasCitusTable = (rteListProperties->hasDistributedTable ||
+										rteListProperties->hasReferenceTable ||
+										rteListProperties->hasCitusLocalTable);
+
+	return rteListProperties;
 }
 
 
 /*
  * QueryIsNotSimpleSelect returns true if node is a query which modifies or
  * marks for modifications.
+ * TODO: needs a better name
  */
-static bool
+bool
 QueryIsNotSimpleSelect(Node *node)
 {
 	if (!IsA(node, Query))
@@ -2449,26 +2576,51 @@ QueryIsNotSimpleSelect(Node *node)
 
 
 /*
- * UpdateReferenceTablesWithShard recursively replaces the reference table names
- * in the given range table list with the local shard table names.
+ * UpdateTablesWithoutDistKeysWithShards replaces OID fields of the given range
+ * table entries with their local shard relation OID's and acquires necessary
+ * locks for those local shard relations.
+ *
+ * Callers of this function are responsible to provide range table entries only
+ * for citus tables without distribution keys, i.e reference tables or citus
+ * local tables.
  */
-static void
-UpdateReferenceTablesWithShard(List *rangeTableList)
+void
+UpdateTablesWithoutDistKeysWithShards(Query *query, List *noDistributionKeyTableRTEList)
 {
-	List *referenceTableRTEList = ExtractReferenceTableRTEList(rangeTableList);
+#if PG_VERSION_NUM < PG_VERSION_12
+
+	/*
+	 * We cannot infer the required lock mode per range table entries as they
+	 * do not have rellockmode field if PostgreSQL version < 12.0, but we can
+	 * deduce it from the query itself for all the range table entries.
+	 */
+	LOCKMODE localShardLockMode = GetQueryLockMode(query);
+#endif
 
 	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, referenceTableRTEList)
+	foreach_ptr(rangeTableEntry, noDistributionKeyTableRTEList)
 	{
-		Oid referenceTableLocalShardOid = GetReferenceTableLocalShardOid(
+		Oid singleShardTableLocalShardOid = GetLocalShardOidOfTableWithoutDistributionKey(
 			rangeTableEntry->relid);
 
-		rangeTableEntry->relid = referenceTableLocalShardOid;
+		Assert(IsCitusTable(rangeTableEntry->relid) && CitusTableWithoutDistributionKey(
+				   PartitionMethod(rangeTableEntry->relid)));
+
+		rangeTableEntry->relid = singleShardTableLocalShardOid;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+
+		/*
+		 * We can infer the required lock mode from the rte itself if PostgreSQL
+		 * version >= 12.0
+		 */
+		LOCKMODE localShardLockMode = rangeTableEntry->rellockmode;
+#endif
 
 		/*
 		 * Parser locks relations in addRangeTableEntry(). So we should lock the
 		 * modified ones too.
 		 */
-		LockRelationOid(referenceTableLocalShardOid, AccessShareLock);
+		LockRelationOid(singleShardTableLocalShardOid, localShardLockMode);
 	}
 }

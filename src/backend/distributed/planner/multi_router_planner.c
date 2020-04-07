@@ -123,7 +123,6 @@ static void CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan,
 									   Query *query,
 									   PlannerRestrictionContext *
 									   plannerRestrictionContext);
-static Oid ResultRelationOidForQuery(Query *query);
 static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
 															 PlannerRestrictionContext *
@@ -138,8 +137,6 @@ static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 static Job * RouterInsertJob(Query *originalQuery);
 static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
-static Job * CreateJob(Query *query);
-static Task * CreateTask(TaskType taskType);
 static Job * RouterJob(Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext,
 					   DeferredErrorMessage **planningError);
@@ -501,7 +498,7 @@ ModifyQueryResultRelationId(Query *query)
  * ResultRelationOidForQuery returns the OID of the relation this is modified
  * by a given query.
  */
-static Oid
+Oid
 ResultRelationOidForQuery(Query *query)
 {
 	RangeTblEntry *resultRTE = rt_fetch(query->resultRelation, query->rtable);
@@ -1433,7 +1430,7 @@ RouterInsertJob(Query *originalQuery)
 /*
  * CreateJob returns a new Job for the given query.
  */
-static Job *
+Job *
 CreateJob(Query *query)
 {
 	Job *job = CitusMakeNode(Job);
@@ -1520,7 +1517,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 /*
  * CreateTask returns a new Task with the given type.
  */
-static Task *
+Task *
 CreateTask(TaskType taskType)
 {
 	Task *task = CitusMakeNode(Task);

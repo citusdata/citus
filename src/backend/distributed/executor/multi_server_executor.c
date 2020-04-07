@@ -91,7 +91,8 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
-	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
+	/* TODO: consider before commenting below out */
+	/* Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY); */
 
 
 	if (executorType == MULTI_EXECUTOR_ADAPTIVE)

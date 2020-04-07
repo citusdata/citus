@@ -49,6 +49,7 @@ extern List * FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 								   bool replacePrunedQueryWithDummy);
 extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 								   DeferredErrorMessage **planningError);
+extern Task * CreateTask(TaskType taskType);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
 												  restrictionContext,
@@ -68,12 +69,14 @@ extern RelationRestrictionContext * CopyRelationRestrictionContext(
 extern Oid ExtractFirstCitusTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern Oid ModifyQueryResultRelationId(Query *query);
+extern Oid ResultRelationOidForQuery(Query *query);
 extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 extern bool UpdateOrDeleteQuery(Query *query);
+extern Job * CreateJob(Query *query);
 extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 extern uint64 GetAnchorShardId(List *relationShardList);
