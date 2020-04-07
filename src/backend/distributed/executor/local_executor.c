@@ -241,10 +241,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		if (localPlan != NULL)
 		{
 			Query *jobQuery = distributedPlan->workerJob->jobQuery;
-			LOCKMODE lockMode =
-				IsModifyCommand(jobQuery) ? RowExclusiveLock : (jobQuery->hasForUpdate ?
-																RowShareLock :
-																AccessShareLock);
+			LOCKMODE lockMode = GetQueryLockMode(jobQuery);
 
 			Oid relationId = InvalidOid;
 			foreach_oid(relationId, localPlan->relationOids)

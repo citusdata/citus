@@ -528,6 +528,31 @@ GetRTEIdentity(RangeTblEntry *rte)
 
 
 /*
+ * GetQueryLockMode returns the necessary lock mode to be acquired for given
+ * query according to "rellockmode" field of RangeTblEntry struct from
+ * parsenodes.h in PostgreSQL 12.x.
+ */
+LOCKMODE
+GetQueryLockMode(Query *query)
+{
+	Assert(query != NULL && IsA(query, Query));
+
+	if (IsModifyCommand(query))
+	{
+		return RowExclusiveLock;
+	}
+	else if (query->hasForUpdate)
+	{
+		return RowShareLock;
+	}
+	else
+	{
+		return AccessShareLock;
+	}
+}
+
+
+/*
  * IsModifyCommand returns true if the query performs modifications, false
  * otherwise.
  */
