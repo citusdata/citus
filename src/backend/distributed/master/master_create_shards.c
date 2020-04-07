@@ -167,7 +167,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
 
 	/* don't allow concurrent node list changes that require an exclusive lock */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
+	LockRelationOid(DistNodeRelationId(), ShareLock);
 
 	/* load and sort the worker node list for deterministic placement */
 	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
