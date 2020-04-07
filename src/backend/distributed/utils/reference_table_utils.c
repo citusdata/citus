@@ -681,3 +681,63 @@ ReferenceTableReplicationFactor(void)
 	int replicationFactor = list_length(nodeList);
 	return replicationFactor;
 }
+
+
+/*
+ * ReplicateAllReferenceTablesToNode function finds all reference tables and
+ * replicates them to the given worker node. It also modifies pg_dist_colocation
+ * table to update the replication factor column when necessary. This function
+ * skips reference tables if that node already has healthy placement of that
+ * reference table to prevent unnecessary data transfer.
+ */
+void
+ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
+{
+	List *referenceTableList = ReferenceTableOidList();
+
+	/* if there is no reference table, we do not need to replicate anything */
+	if (list_length(referenceTableList) > 0)
+	{
+		List *referenceShardIntervalList = NIL;
+
+		/*
+		 * We sort the reference table list to prevent deadlocks in concurrent
+		 * ReplicateAllReferenceTablesToAllNodes calls.
+		 */
+		referenceTableList = SortList(referenceTableList, CompareOids);
+		Oid referenceTableId = InvalidOid;
+		foreach_oid(referenceTableId, referenceTableList)
+		{
+			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+
+			referenceShardIntervalList = lappend(referenceShardIntervalList,
+												 shardInterval);
+		}
+
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			BlockWritesToShardList(referenceShardIntervalList);
+		}
+
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, referenceShardIntervalList)
+		{
+			uint64 shardId = shardInterval->shardId;
+
+			LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+			ReplicateShardToNode(shardInterval, nodeName, nodePort);
+		}
+
+		/* create foreign constraints between reference tables */
+		foreach_ptr(shardInterval, referenceShardIntervalList)
+		{
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
+
+			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
+													   commandList);
+		}
+	}
+}
