@@ -63,7 +63,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-
+#include "distributed/shared_connection_stats.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
@@ -454,6 +454,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsDropCitusStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
+		RemoveAllSharedConnectionEntries();
 	}
 
 	pstmt->utilityStmt = parsetree;

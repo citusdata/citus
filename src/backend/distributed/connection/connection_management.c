@@ -372,7 +372,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		}
 		else
 		{
-			CitusPQFinish(connection);
+			CitusPQFinish((MultiConnection *) connection);
 		}
 
 		PG_RE_THROW();

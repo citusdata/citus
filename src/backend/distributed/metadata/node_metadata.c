@@ -284,9 +284,6 @@ master_disable_node(PG_FUNCTION_ARGS)
 	/* remove the shared connection counters to have some space */
 	RemoveInactiveNodesFromSharedConnections();
 
-	/* make sure we don't have any lingering session lifespan connections */
-	//CloseNodeConnectionsAfterTransaction(nodeName, nodePort);
-
 	PG_TRY();
 	{
 		if (NodeIsPrimary(workerNode))
@@ -706,12 +703,6 @@ master_update_node(PG_FUNCTION_ARGS)
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
 
-	char *oldWorkerName = pstrdup(workerNode->workerName);
-	int oldWorkerPort = workerNode->workerPort;
-
-	/* make sure we don't have any lingering session lifespan connections */
-	//CloseNodeConnectionsAfterTransaction(oldWorkerName, oldWorkerPort);
-
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
 	/* we should be able to find the new node from the metadata */
@@ -1035,9 +1026,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-
-	/* make sure we don't have any lingering session lifespan connections */
-	//CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }

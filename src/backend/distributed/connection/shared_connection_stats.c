@@ -23,6 +23,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shared_connection_stats.h"
@@ -176,6 +177,20 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 }
 
 
+/*
+ * RemoveAllSharedConnectionEntries removes all the entries in SharedConnStatsHash.
+ */
+void
+RemoveAllSharedConnectionEntries(void)
+{
+	/* we're reading all shared connections, prevent any changes */
+	LockConnectionSharedMemory(LW_EXCLUSIVE);
+
+	hash_delete_all(SharedConnStatsHash);
+
+	UnLockConnectionSharedMemory();
+}
+
 
 /*
  * RemoveInactiveNodesFromSharedConnections goes over the SharedConnStatsHash
@@ -184,7 +199,6 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 void
 RemoveInactiveNodesFromSharedConnections(void)
 {
-
 	/* we're reading all shared connections, prevent any changes */
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
@@ -200,8 +214,6 @@ RemoveInactiveNodesFromSharedConnections(void)
 		if (workerNode == NULL || !workerNode->isActive)
 		{
 			hash_search(SharedConnStatsHash, &connectionKey, HASH_REMOVE, NULL);
-			if (connectionEntry->connectionCount < 0)
-			elog(INFO, "removing %s %d count: %d", connectionKey.hostname, connectionKey.port, connectionEntry->connectionCount);
 		}
 	}
 
@@ -382,10 +394,6 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 		connectionEntry->connectionCount = 0;
 	}
 
-	/* we should never have a negative entry */
-	if (connectionEntry->connectionCount < 0 )
-		elog(WARNING,"IncrementSharedConnectionCounter: connectionEntry->connectionCount %s %d: %d",hostname, port, connectionEntry->connectionCount);
-
 	connectionEntry->connectionCount += 1;
 
 	UnLockConnectionSharedMemory();
@@ -432,17 +440,9 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 		/* wake up any waiters in case any backend is waiting for this node */
 		WakeupWaiterBackendsForSharedConnection();
 
-		/* make sure we don't have any lingering session lifespan connections */
-		CloseNodeConnectionsAfterTransaction(hostname, port);
-
 		return;
 	}
 
-	/* we should never decrement a counter that has not been incremented */
-	if (connectionEntry->connectionCount < 1)
-	{
-		elog(WARNING, "DecrementSharedConnectionCounter %s %d connectionEntry->connectionCount:%d",hostname, port, connectionEntry->connectionCount);
-	}
 	connectionEntry->connectionCount -= 1;
 
 	UnLockConnectionSharedMemory();
