@@ -82,6 +82,7 @@ typedef struct RemoteFileDestReceiver
 
 static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 										  TupleDesc inputTupleDescriptor);
+static void PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest);
 static StringInfo ConstructCopyResultStatement(const char *resultId);
 static void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 static bool RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
@@ -233,13 +234,8 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) dest;
 
-	const char *resultId = resultDest->resultId;
-
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
-
-	List *initialNodeList = resultDest->initialNodeList;
-	List *connectionList = NIL;
 
 	resultDest->tupleDescriptor = inputTupleDescriptor;
 
@@ -255,6 +251,21 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 	resultDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															  copyOutState->binary);
+}
+
+
+/*
+ * PrepareIntermediateResultBroadcast gets a RemoteFileDestReceiver and does
+ * the necessary initilizations including initiating the remote connnections
+ * and creating the local file, which is necessary (it might be both).
+ */
+static void
+PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest)
+{
+	List *initialNodeList = resultDest->initialNodeList;
+	const char *resultId = resultDest->resultId;
+	List *connectionList = NIL;
+	CopyOutState copyOutState = resultDest->copyOutState;
 
 	if (resultDest->writeLocalFile)
 	{
@@ -274,16 +285,10 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, initialNodeList)
 	{
+		int flags = 0;
+
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-
-		/*
-		 * We prefer to use a connection that is not associcated with
-		 * any placements. The reason is that we claim this connection
-		 * exclusively and that would prevent the consecutive DML/DDL
-		 * use the same connection.
-		 */
-		int flags = REQUIRE_SIDECHANNEL;
 
 		MultiConnection *connection = StartNodeConnection(flags, nodeName, nodePort);
 		ClaimConnectionExclusively(connection);
@@ -365,6 +370,15 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) dest;
 
+	if (resultDest->tuplesSent == 0)
+	{
+		/*
+		 *  We get the first tuple, lets initialize the remote connections
+		 *  and/or the local file.
+		 */
+		PrepareIntermediateResultBroadcast(resultDest);
+	}
+
 	TupleDesc tupleDescriptor = resultDest->tupleDescriptor;
 
 	List *connectionList = resultDest->connectionList;
@@ -433,6 +447,17 @@ static void
 RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
 {
 	RemoteFileDestReceiver *resultDest = (RemoteFileDestReceiver *) destReceiver;
+
+	if (resultDest->tuplesSent == 0)
+	{
+		/*
+		 *  We have not received any tuples (when the intermediate result
+		 *  returns zero rows). Still, we want to create the necessary
+		 *  intermediate result files even if they are empty, as the query
+		 *  execution requires the files to be present.
+		 */
+		PrepareIntermediateResultBroadcast(resultDest);
+	}
 
 	List *connectionList = resultDest->connectionList;
 	CopyOutState copyOutState = resultDest->copyOutState;
@@ -770,11 +795,32 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 		int statOK = stat(resultFileName, &fileStat);
 		if (statOK != 0)
 		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("result \"%s\" does not exist", resultId)));
+			/*
+			 * When the file does not exist, it could mean two different things.
+			 * First -- and a lot more common -- case is that a failure happened
+			 * in a concurrent backend on the same distributed transaction. And,
+			 * one of the backends in that transaction has already been roll
+			 * backed, which has already removed the file. If we throw an error
+			 * here, the user might see this error instead of the actual error
+			 * message. Instead, we prefer to WARN the user and pretend that the
+			 * file has no data in it. In the end, the user would see the actual
+			 * error message for the failure.
+			 *
+			 * Second, in case of any bugs in intermediate result broadcasts,
+			 * we could try to read a non-existing file. That is most likely
+			 * to happen during development.
+			 */
+			ereport(WARNING, (errcode_for_file_access(),
+							  errmsg("Query could not find the intermediate result file "
+									 "\"%s\", it was mostly likely deleted due to an "
+									 "error in a parallel process within the same "
+									 "distributed transaction", resultId)));
 		}
-
-		ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor, tupleStore);
+		else
+		{
+			ReadFileIntoTupleStore(resultFileName, copyFormat, tupleDescriptor,
+								   tupleStore);
+		}
 	}
 
 	tuplestore_donestoring(tupleStore);
