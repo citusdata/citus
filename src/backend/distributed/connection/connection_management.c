@@ -385,7 +385,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	dlist_push_tail(entry->connections, &newConnection->connectionNode);
 
 	ResetShardPlacementAssociation(newConnection);
-	GivePurposeToConnection(newConnection, flags);
 
 	return newConnection;
 }
