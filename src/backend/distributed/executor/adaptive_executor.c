@@ -1953,6 +1953,8 @@ FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int node
 	dlist_init(&workerPool->pendingTaskQueue);
 	dlist_init(&workerPool->readyTaskQueue);
 
+	workerPool->distributedExecution = execution;
+
 	execution->workerList = lappend(execution->workerList, workerPool);
 
 	return workerPool;
