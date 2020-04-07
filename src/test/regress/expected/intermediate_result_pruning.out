@@ -1031,6 +1031,37 @@ DEBUG:  Subplan XXX_4 will be sent to localhost:xxxxx
  100
 (1 row)
 
+RESET citus.task_assignment_policy;
+-- Insert..select is planned differently, make sure we have results everywhere.
+-- We put the insert..select in a CTE here to prevent the CTE from being moved
+-- into the select, which would follow the regular code path for select.
+WITH stats AS (
+  SELECT count(key) m FROM table_3
+),
+inserts AS (
+  INSERT INTO table_2
+  SELECT key, count(*)
+  FROM table_1
+  WHERE key > (SELECT m FROM stats)
+  GROUP BY key
+  HAVING count(*) < (SELECT m FROM stats)
+  LIMIT 1
+  RETURNING *
+) SELECT count(*) FROM inserts;
+DEBUG:  generating subplan XXX_1 for CTE stats: SELECT count(key) AS m FROM intermediate_result_pruning.table_3
+DEBUG:  generating subplan XXX_2 for CTE inserts: INSERT INTO intermediate_result_pruning.table_2 (key, value) SELECT key, count(*) AS count FROM intermediate_result_pruning.table_1 WHERE (key OPERATOR(pg_catalog.>) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) GROUP BY key HAVING (count(*) OPERATOR(pg_catalog.<) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) LIMIT 1 RETURNING table_2.key, table_2.value
+DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) inserts
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 SET citus.task_assignment_policy to DEFAULT;
 SET client_min_messages TO DEFAULT;
 DROP TABLE table_1, table_2, table_3, ref_table, accounts, stats, range_partitioned;

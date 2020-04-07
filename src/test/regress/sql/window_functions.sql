@@ -110,6 +110,16 @@ ORDER BY
 
 DROP VIEW users_view, window_view;
 
+-- window functions along with subquery in HAVING
+SELECT
+	user_id, count (user_id) OVER (PARTITION BY user_id)
+FROM
+	users_table
+GROUP BY
+	user_id HAVING avg(value_1) < (SELECT min(k_no) FROM users_ref_test_table)
+ORDER BY 1 DESC,2 DESC
+LIMIT 1;
+
 -- window function uses columns from two different tables
 SELECT
 	DISTINCT ON (events_table.user_id, rnk) events_table.user_id, rank() OVER my_win AS rnk

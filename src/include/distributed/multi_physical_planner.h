@@ -48,10 +48,6 @@
 #define MERGE_FILES_AND_RUN_QUERY_COMMAND \
 	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, %s, %s)"
 
-#define SUBPLAN_ACCESS_NONE 0
-#define SUBPLAN_ACCESS_LOCAL 1
-#define SUBPLAN_ACCESS_REMOTE 2
-
 
 typedef enum CitusRTEKind
 {
@@ -407,10 +403,14 @@ typedef struct DistributedPlan
 	/*
 	 * List of subPlans that are used in the DistributedPlan
 	 * Note that this is different that "subPlanList" field which
-	 * contains the subplans generated part of the DistributedPlan.
+	 * contains the subplans generated as part of the DistributedPlan.
 	 *
 	 * On the other hand, usedSubPlanNodeList keeps track of which subPlans
-	 * are used within this distributed plan.
+	 * are used within this distributed plan as a list of
+	 * UsedDistributedSubPlan pointers.
+	 *
+	 * The list may contain duplicates if the subplan is referenced multiple
+	 * times (e.g. a CTE appears in the query tree multiple times).
 	 */
 	List *usedSubPlanNodeList;
 
@@ -444,6 +444,16 @@ typedef struct DistributedSubPlan
 } DistributedSubPlan;
 
 
+/* defines how a subplan is used by a distributed query */
+typedef enum SubPlanAccessType
+{
+	SUBPLAN_ACCESS_NONE,
+	SUBPLAN_ACCESS_LOCAL,
+	SUBPLAN_ACCESS_REMOTE,
+	SUBPLAN_ACCESS_ANYWHERE
+} SubPlanAccessType;
+
+
 /*
  * UsedDistributedSubPlan contains information about a subPlan that is used in a
  * distributed plan.
@@ -452,8 +462,11 @@ typedef struct UsedDistributedSubPlan
 {
 	CitusNode type;
 
+	/* subplan used by the distributed query */
 	char *subPlanId;
-	int locationMask;
+
+	/* how the subplan is used by a distributed query */
+	SubPlanAccessType accessType;
 } UsedDistributedSubPlan;
 
 

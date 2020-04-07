@@ -20,7 +20,7 @@
 
 extern bool LogIntermediateResults;
 
-extern List * FindSubPlansUsedInNode(Node *node);
+extern List * FindSubPlanUsages(DistributedPlan *plan);
 extern List * FindAllWorkerNodesUsingSubplan(HTAB *intermediateResultsHash,
 											 char *resultId);
 extern HTAB * MakeIntermediateResultHTAB(void);
@@ -28,9 +28,5 @@ extern void RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 										   DistributedPlan *distributedPlan);
 extern IntermediateResultsHashEntry * SearchIntermediateResult(HTAB *resultsHash,
 															   char *resultId);
-
-/* utility functions related to UsedSubPlans */
-extern List * MergeUsedSubPlanLists(List *leftSubPlanList, List *rightSubPlanList);
-extern void UpdateUsedPlanListLocation(List *subPlanList, int localtionMask);
 
 #endif /* INTERMEDIATE_RESULT_PRUNING_H */

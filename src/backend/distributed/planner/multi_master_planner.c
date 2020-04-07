@@ -207,10 +207,6 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
 	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
 
-	/* probably want to do this where we add sublinks to the master plan */
-	masterQuery->hasSubLinks = checkExprHasSubLink((Node *) masterQuery);
-	Assert(masterQuery->hasWindowFuncs == contain_window_function((Node *) masterQuery));
-
 	/*
 	 * We will overwrite the alias of the rangetable which describes the custom scan.
 	 * Ideally we would have set the correct column names and alias on the range table in
