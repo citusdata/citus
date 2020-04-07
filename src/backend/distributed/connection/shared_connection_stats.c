@@ -437,6 +437,9 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 		return;
 	}
 
+	/* we should never go below 0 */
+	Assert (connectionEntry->connectionCount > 0);
+
 	connectionEntry->connectionCount -= 1;
 
 	UnLockConnectionSharedMemory();
