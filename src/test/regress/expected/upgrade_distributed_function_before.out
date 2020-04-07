@@ -27,7 +27,7 @@ SELECT create_distributed_function('count_values(int)', '$1', colocate_with:='t1
 (1 row)
 
 -- make sure that the metadata synced before running the queries
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(5000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
