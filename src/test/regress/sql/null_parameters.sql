@@ -7,8 +7,10 @@ SET citus.next_shard_id TO 1680000;
 CREATE TABLE text_dist_column (key text, value text);
 SELECT create_distributed_table('text_dist_column', 'key');
 
-SET client_min_messages TO DEBUG;
-
+-- it seems that sometimes the pruning is deferred and sometimes not.
+-- what we care about is that these queries don't crash and the log for this
+-- one shouldn't matter. This is to prevent these test being from flaky in our CI.
+SET client_min_messages to NOTICE;
 
 PREPARE null_select_on_text AS SELECT count(*) FROM text_dist_column WHERE key = NULL;
 EXECUTE null_select_on_text;
@@ -309,10 +311,6 @@ EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
 EXECUTE null_select_on_json_param(NULL);
--- it seems that sometimes the pruning is deferred and sometimes not.
--- what we care about is that this doesn't crash and the log for this
--- one shouldn't matter. This is to prevent this test being from flaky.
-SET client_min_messages to ERROR;
 EXECUTE null_select_on_json_param(NULL);
 
 SET client_min_messages TO ERROR;

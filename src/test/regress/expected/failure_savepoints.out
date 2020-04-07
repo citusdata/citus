@@ -342,6 +342,39 @@ WHERE shardstate = 3 AND shardid IN (
 (0 rows)
 
 TRUNCATE researchers;
+-- test that we don't mark reference placements unhealthy
+CREATE TABLE ref(a int, b int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SAVEPOINT start;
+INSERT INTO ref VALUES (1001,2);
+SELECT * FROM ref;
+  a   | b
+---------------------------------------------------------------------
+ 1001 | 2
+(1 row)
+
+ROLLBACK TO SAVEPOINT start;
+WARNING:  connection not open
+WARNING:  connection not open
+SELECT * FROM ref;
+WARNING:  connection not open
+WARNING:  connection error: localhost:xxxxx
+WARNING:  connection not open
+WARNING:  connection not open
+ERROR:  connection error: localhost:xxxxx
+END;
 -- clean up
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -351,3 +384,4 @@ SELECT citus.mitmproxy('conn.allow()');
 
 DROP TABLE artists;
 DROP TABLE researchers;
+DROP TABLE ref;

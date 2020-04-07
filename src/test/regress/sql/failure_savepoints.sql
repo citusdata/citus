@@ -188,7 +188,21 @@ WHERE shardstate = 3 AND shardid IN (
 ) RETURNING placementid;
 TRUNCATE researchers;
 
+-- test that we don't mark reference placements unhealthy
+CREATE TABLE ref(a int, b int);
+SELECT create_reference_table('ref');
+
+SELECT citus.mitmproxy('conn.onQuery(query="^ROLLBACK").kill()');
+BEGIN;
+SAVEPOINT start;
+INSERT INTO ref VALUES (1001,2);
+SELECT * FROM ref;
+ROLLBACK TO SAVEPOINT start;
+SELECT * FROM ref;
+END;
+
 -- clean up
 SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE artists;
 DROP TABLE researchers;
+DROP TABLE ref;

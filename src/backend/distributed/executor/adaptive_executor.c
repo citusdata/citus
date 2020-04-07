@@ -2103,6 +2103,13 @@ RunDistributedExecution(DistributedExecution *execution)
 
 	PG_TRY();
 	{
+		/* Preemptively step state machines in case of immediate errors */
+		WorkerSession *session = NULL;
+		foreach_ptr(session, execution->sessionList)
+		{
+			ConnectionStateMachine(session);
+		}
+
 		bool cancellationReceived = false;
 
 		int eventSetSize = GetEventSetSize(execution->sessionList);
