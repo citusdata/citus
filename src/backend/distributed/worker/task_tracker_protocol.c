@@ -242,7 +242,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 
 /*
  * task_tracker_conninfo_cache_invalidate is a trigger function that signals to
- * the task tracker to refresh its conn params cache after a authinfo change.
+ * the task tracker to refresh its conn params cache after an authinfo change.
  *
  * NB: We decided there is little point in checking permissions here, there
  * are much easier ways to waste CPU than causing cache invalidations.
