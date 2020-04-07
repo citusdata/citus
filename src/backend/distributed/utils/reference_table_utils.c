@@ -103,16 +103,6 @@ void
 EnsureReferenceTablesExistOnAllNodes(void)
 {
 	/*
-	 * TODO: remove this. This is here so we don't have to update regression test
-	 * outputs because of reference table colocation id being changed. Specially
-	 * multi_colocation_utils which requires the test itself being updated.
-	 */
-	if (ReferenceTableOidList() == NIL)
-	{
-		return;
-	}
-
-	/*
 	 * Prevent this function from running concurrently with itself.
 	 *
 	 * It also prevents concurrent DROP TABLE or DROP SCHEMA. We need this
