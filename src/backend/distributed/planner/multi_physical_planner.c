@@ -5579,9 +5579,7 @@ AssignDualHashTaskList(List *taskList)
 			WorkerNode *workerNode = list_nth(workerNodeList, assignmentIndex);
 
 			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-			taskPlacement->nodeName = pstrdup(workerNode->workerName);
-			taskPlacement->nodePort = workerNode->workerPort;
-			taskPlacement->nodeId = workerNode->nodeId;
+			SetPlacementNodeMetadata(taskPlacement, workerNode);
 
 			taskPlacementList = lappend(taskPlacementList, taskPlacement);
 		}
@@ -5599,6 +5597,19 @@ AssignDualHashTaskList(List *taskList)
 	}
 
 	return assignedTaskList;
+}
+
+
+/*
+ * SetPlacementNodeMetadata sets nodename, nodeport, nodeid and groupid for the placement.
+ */
+void
+SetPlacementNodeMetadata(ShardPlacement *placement, WorkerNode *workerNode)
+{
+	placement->nodeName = pstrdup(workerNode->workerName);
+	placement->nodePort = workerNode->workerPort;
+	placement->nodeId = workerNode->nodeId;
+	placement->groupId = workerNode->groupId;
 }
 
 

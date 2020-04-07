@@ -1938,6 +1938,7 @@ FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int node
 	workerPool = (WorkerPool *) palloc0(sizeof(WorkerPool));
 	workerPool->nodeName = pstrdup(nodeName);
 	workerPool->nodePort = nodePort;
+
 	INSTR_TIME_SET_ZERO(workerPool->poolStartTime);
 	workerPool->distributedExecution = execution;
 

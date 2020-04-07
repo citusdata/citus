@@ -25,6 +25,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/worker_manager.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
 #include "lib/stringinfo.h"
@@ -517,6 +518,7 @@ extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
 extern List * RoundRobinAssignTaskList(List *taskList);
 extern List * RoundRobinReorder(Task *task, List *placementList);
+extern void SetPlacementNodeMetadata(ShardPlacement *placement, WorkerNode *workerNode);
 extern int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
 
 /* function declaration for creating Task */
