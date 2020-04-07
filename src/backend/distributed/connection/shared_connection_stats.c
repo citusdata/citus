@@ -23,6 +23,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/time_constants.h"
@@ -86,6 +87,7 @@ typedef struct SharedConnStatsHashEntry
  * Anything else means use that number
  */
 int MaxSharedPoolSize = 0;
+
 
 /* the following two structs are used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
@@ -174,24 +176,34 @@ StoreAllConnections(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
 }
 
 
+
 /*
- * RemoveAllSharedConnectionEntriesForNode gets a nodename and nodeport, and removes
- * the corresponding entry in the shared memory for the current database.
+ * RemoveInactiveNodesFromSharedConnections goes over the SharedConnStatsHash
+ * and removes the inactive entries.
  */
 void
-RemoveAllSharedConnectionEntriesForNode(char *hostname, int port)
+RemoveInactiveNodesFromSharedConnections(void)
 {
-	SharedConnStatsHashKey connKey;
 
-	connKey.databaseOid = MyDatabaseId;
-	connKey.port = port;
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-
-	/* we're modifying the hashmap, prevent any concurrent access */
+	/* we're reading all shared connections, prevent any changes */
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
-	bool entryFound = false;
-	hash_search(SharedConnStatsHash, &connKey, HASH_REMOVE, &entryFound);
+	HASH_SEQ_STATUS status;
+	SharedConnStatsHashEntry *connectionEntry = NULL;
+
+	hash_seq_init(&status, SharedConnStatsHash);
+	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		SharedConnStatsHashKey connectionKey = connectionEntry->key;
+		WorkerNode *workerNode = FindWorkerNode(connectionKey.hostname, connectionKey.port);
+
+		if (workerNode == NULL || !workerNode->isActive)
+		{
+			hash_search(SharedConnStatsHash, &connectionKey, HASH_REMOVE, NULL);
+			if (connectionEntry->connectionCount < 0)
+			elog(INFO, "removing %s %d count: %d", connectionKey.hostname, connectionKey.port, connectionEntry->connectionCount);
+		}
+	}
 
 	UnLockConnectionSharedMemory();
 }
@@ -272,8 +284,9 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 
 	/*
 	 * As the hash map is  allocated in shared memory, it doesn't rely on palloc for
-	 * memory allocation, so we could get NULL via HASH_ENTER_NULL. That's why we prefer
-	 * continuing the execution instead of throwing an error.
+	 * memory allocation, so we could get NULL via HASH_ENTER_NULL when there is no
+	 * space in the shared memory. That's why we prefer continuing the execution
+	 * instead of throwing an error.
 	 */
 	bool entryFound = false;
 	SharedConnStatsHashEntry *connectionEntry =
@@ -287,7 +300,6 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	if (!connectionEntry)
 	{
 		UnLockConnectionSharedMemory();
-
 		return true;
 	}
 
@@ -343,17 +355,36 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
+	/*
+	 * As the hash map is  allocated in shared memory, it doesn't rely on palloc for
+	 * memory allocation, so we could get NULL via HASH_ENTER_NULL. That's why we prefer
+	 * continuing the execution instead of throwing an error.
+	 */
 	bool entryFound = false;
 	SharedConnStatsHashEntry *connectionEntry =
-		hash_search(SharedConnStatsHash, &connKey, HASH_FIND, &entryFound);
+		hash_search(SharedConnStatsHash, &connKey, HASH_ENTER_NULL, &entryFound);
 
-	/* this worker node is removed or updated */
-	if (!entryFound)
+	/*
+	 * It is possible to throw an error at this point, but that doesn't help us in anyway.
+	 * Instead, we try our best, let the connection establishment continue by-passing the
+	 * connection throttling.
+	 */
+	if (!connectionEntry)
 	{
 		UnLockConnectionSharedMemory();
 
 		return;
 	}
+
+	if (!entryFound)
+	{
+		/* we successfully allocated the entry for the first time, so initialize it */
+		connectionEntry->connectionCount = 0;
+	}
+
+	/* we should never have a negative entry */
+	if (connectionEntry->connectionCount < 0 )
+		elog(WARNING,"IncrementSharedConnectionCounter: connectionEntry->connectionCount %s %d: %d",hostname, port, connectionEntry->connectionCount);
 
 	connectionEntry->connectionCount += 1;
 
@@ -393,24 +424,25 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	SharedConnStatsHashEntry *connectionEntry =
 		hash_search(SharedConnStatsHash, &connKey, HASH_FIND, &entryFound);
 
-	/* this worker node is removed or updated */
+	/* this worker node is removed or updated, no need to care */
 	if (!entryFound)
 	{
 		UnLockConnectionSharedMemory();
 
+		/* wake up any waiters in case any backend is waiting for this node */
+		WakeupWaiterBackendsForSharedConnection();
+
+		/* make sure we don't have any lingering session lifespan connections */
+		CloseNodeConnectionsAfterTransaction(hostname, port);
+
 		return;
 	}
 
-	/*
-	 * We might have some connection lingering for worker nodes
-	 * that are removed/updated.
-	 */
-	if (connectionEntry->connectionCount <= 0)
+	/* we should never decrement a counter that has not been incremented */
+	if (connectionEntry->connectionCount < 1)
 	{
-		UnLockConnectionSharedMemory();
-		return;
+		elog(WARNING, "DecrementSharedConnectionCounter %s %d connectionEntry->connectionCount:%d",hostname, port, connectionEntry->connectionCount);
 	}
-
 	connectionEntry->connectionCount -= 1;
 
 	UnLockConnectionSharedMemory();

@@ -281,6 +281,12 @@ master_disable_node(PG_FUNCTION_ARGS)
 	bool onlyConsiderActivePlacements = false;
 	MemoryContext savedContext = CurrentMemoryContext;
 
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
+
+	/* make sure we don't have any lingering session lifespan connections */
+	//CloseNodeConnectionsAfterTransaction(nodeName, nodePort);
+
 	PG_TRY();
 	{
 		if (NodeIsPrimary(workerNode))
@@ -584,6 +590,9 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
+
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -625,6 +634,9 @@ master_update_node(PG_FUNCTION_ARGS)
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
+
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
 
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
@@ -698,13 +710,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	int oldWorkerPort = workerNode->workerPort;
 
 	/* make sure we don't have any lingering session lifespan connections */
-	CloseNodeConnectionsAfterTransaction(oldWorkerName, oldWorkerPort);
-
-	/*
-	 * We're not sure that there is no concurrent queries going on, so remove all
-	 * entries in shared connection stats for the current database.
-	 */
-	RemoveAllSharedConnectionEntriesForNode(oldWorkerName, oldWorkerPort);
+	//CloseNodeConnectionsAfterTransaction(oldWorkerName, oldWorkerPort);
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
@@ -1004,8 +1010,10 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
+	/* remove the shared connection counters to have some space */
+	RemoveInactiveNodesFromSharedConnections();
 
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{
 		bool onlyConsiderActivePlacements = false;
@@ -1029,7 +1037,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
 	/* make sure we don't have any lingering session lifespan connections */
-	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
+	//CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }
