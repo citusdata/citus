@@ -189,6 +189,21 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
 (1 row)
 
 ROLLBACK;
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
+-- trigger local execution
+SELECT y FROM test WHERE x = 1;
+NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshards.test_1503000 test WHERE (x OPERATOR(pg_catalog.=) 1)
+ y
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
+DETAIL:  Some parallel commands cannot be executed if a previous command has already been executed locally
+HINT:  Try re-running the transaction with "SET LOCAL citus.enable_local_execution TO OFF;"
+ROLLBACK;
 DELETE FROM test;
 DROP TABLE test;
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
