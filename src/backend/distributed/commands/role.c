@@ -48,8 +48,6 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
-static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
-											   TupleDesc DbRoleSettingDescription);
 static const char * CreateQueryArray(List *stmts);
 static char * CreateCreateOrAlterRoleCommand(const char *roleName,
 											 CreateRoleStmt *createRoleStmt,
@@ -545,22 +543,27 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		createRoleStmt,
 		alterRoleStmt,
 		grantRoleStmts);
-	return list_make1(createOrAlterRoleQuery);
+
+	List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(roleOid);
+
+	List *completeRoleList = list_make1(createOrAlterRoleQuery);
+	completeRoleList = list_concat(completeRoleList, alterRoleSetCommands);
+	return completeRoleList;
 }
 
 
 /*
- * GenerateAlterRoleSetIfExistsCommands creates ALTER ROLE .. SET commands
- * that copies all session defaults for roles from the pg_db_role_setting table.
+ * GenerateAlterRoleSetCommandForRole returns the list of database wide settings for a
+ * specifc role. If the roleid is InvalidOid it returns the commands that apply to all
+ * users for the database or postgres wide.
  */
 List *
-GenerateAlterRoleSetIfExistsCommands()
+GenerateAlterRoleSetCommandForRole(Oid roleid)
 {
 	Relation DbRoleSetting = heap_open(DbRoleSettingRelationId, AccessShareLock);
 	TupleDesc DbRoleSettingDescription = RelationGetDescr(DbRoleSetting);
 	HeapTuple tuple = NULL;
 	List *commands = NIL;
-	List *alterRoleSetQueries = NIL;
 
 
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -571,12 +574,23 @@ GenerateAlterRoleSetIfExistsCommands()
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
-		if (ShouldPropagateAlterRoleSetQueries(tuple, DbRoleSettingDescription))
+		Form_pg_db_role_setting roleSetting = (Form_pg_db_role_setting) GETSTRUCT(tuple);
+		if (roleSetting->setrole != roleid)
 		{
-			alterRoleSetQueries =
-				GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
-			commands = list_concat(commands, alterRoleSetQueries);
+			/* not the user we are looking for */
+			continue;
 		}
+
+		if (OidIsValid(roleSetting->setdatabase) &&
+			roleSetting->setdatabase != MyDatabaseId)
+		{
+			/* setting is database specific for a different database */
+			continue;
+		}
+
+		List *alterRoleSetQueries = GenerateAlterRoleSetIfExistsCommandList(tuple,
+																			DbRoleSettingDescription);
+		commands = list_concat(commands, alterRoleSetQueries);
 	}
 
 	heap_endscan(scan);
@@ -796,48 +810,4 @@ ConfigGenericNameCompare(const void *a, const void *b)
 	 * not use this function to order the guc list.
 	 */
 	return pg_strcasecmp(confa->name, confb->name);
-}
-
-
-/*
- * ShouldPropagateAlterRoleSetQueries decides if the set of AlterRoleSetStmt
- * queries should be propagated to worker nodes
- *
- * A single DbRoleSetting tuple can be used to create multiple AlterRoleSetStmt
- * queries as all of the configs are stored in a text[] column and each entry
- * creates a seperate statement
- */
-static bool
-ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
-								   TupleDesc DbRoleSettingDescription)
-{
-	if (!ShouldPropagate())
-	{
-		return false;
-	}
-
-	const char *currentDatabaseName = CurrentDatabaseName();
-	const char *databaseName =
-		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-
-	/*
-	 * session defaults for databases other than the current one are not propagated
-	 */
-	if (databaseName != NULL &&
-		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
-	{
-		return false;
-	}
-
-	/*
-	 * default roles are skipped, because reserved roles
-	 * cannot be altered.
-	 */
-	if (roleName != NULL && IsReservedName(roleName))
-	{
-		return false;
-	}
-
-	return true;
 }

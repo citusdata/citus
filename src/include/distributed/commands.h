@@ -185,7 +185,7 @@ extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString)
 /* role.c - forward declarations*/
 extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString);
-extern List * GenerateAlterRoleSetIfExistsCommands(void);
+extern List * GenerateAlterRoleSetCommandForRole(Oid roleid);
 extern ObjectAddress AlterRoleStmtObjectAddress(Node *node,
 												bool missing_ok);
 extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
