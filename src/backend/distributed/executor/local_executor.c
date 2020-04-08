@@ -136,6 +136,10 @@ static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 uint64
 ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 {
+	if (list_length(taskList) == 0)
+	{
+		return 0;
+	}
 	DistributedPlan *distributedPlan = NULL;
 	ParamListInfo paramListInfo = NULL;
 	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,

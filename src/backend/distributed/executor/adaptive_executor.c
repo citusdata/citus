@@ -961,11 +961,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
 	{
 		bool readOnlyPlan = false;
-
-		/* set local (if any) & remote tasks */
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
 								   &remoteTaskList);
-		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, tupleStore);
 	}
 	else
 	{
@@ -982,6 +979,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
+
+	locallyProcessedRows += ExecuteLocalTaskList(localTaskList, tupleStore);
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
