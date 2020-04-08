@@ -1,202 +1,25 @@
 CREATE SCHEMA alter_role;
-SET citus.enable_alter_role_propagation to ON;
-CREATE ROLE alter_role_1 WITH LOGIN;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE ROLE alter_role_1 WITH LOGIN;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
--- postgres errors out
-ALTER ROLE alter_role_1 WITH SUPERUSER NOSUPERUSER;
-ERROR:  conflicting or redundant options
--- make sure that we propagate all options accurately
-ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05';
-SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
-                  row
----------------------------------------------------------------------
- (alter_role_1,t,t,t,t,t,t,t,66,,2032)
-(1 row)
-
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                   run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
- (localhost,57638,t,"(alter_role_1,t,t,t,t,t,t,t,66,,2032)")
-(2 rows)
-
--- make sure that we propagate all options accurately
-ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05';
-SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
-                 row
----------------------------------------------------------------------
- (alter_role_1,f,f,f,f,f,f,f,0,,2052)
-(1 row)
-
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                   run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,,2052)")
-(2 rows)
-
--- make sure that non-existent users are handled properly
-ALTER ROLE alter_role_2 WITH SUPERUSER NOSUPERUSER;
-ERROR:  conflicting or redundant options
-ALTER ROLE alter_role_2 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05';
-ERROR:  role "alter_role_2" does not exist
--- make sure that CURRENT_USER just works fine
-ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 123;
-SELECT rolconnlimit FROM pg_authid WHERE rolname = CURRENT_USER;
- rolconnlimit
----------------------------------------------------------------------
-          123
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = CURRENT_USER;$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,123)
- (localhost,57638,t,123)
-(2 rows)
-
--- make sure that SESSION_USER just works fine
-ALTER ROLE SESSION_USER WITH CONNECTION LIMIT 124;
-SELECT rolconnlimit FROM pg_authid WHERE rolname = SESSION_USER;
- rolconnlimit
----------------------------------------------------------------------
-          124
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = SESSION_USER;$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,124)
- (localhost,57638,t,124)
-(2 rows)
-
--- now lets test the passwords in more detail
-ALTER ROLE alter_role_1 WITH PASSWORD NULL;
-SELECT rolpassword is NULL FROM pg_authid WHERE rolname = 'alter_role_1';
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolpassword is NULL FROM pg_authid WHERE rolname = 'alter_role_1'$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
-(2 rows)
-
-ALTER ROLE alter_role_1 WITH PASSWORD 'test1';
-SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
-             rolpassword
----------------------------------------------------------------------
- md52f9cc8d65e37edcc45c4a489bdfc699d
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                 run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
- (localhost,57638,t,md52f9cc8d65e37edcc45c4a489bdfc699d)
-(2 rows)
-
-ALTER ROLE  alter_role_1 WITH ENCRYPTED PASSWORD 'test2';
-SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
-             rolpassword
----------------------------------------------------------------------
- md5e17f7818c5ec023fa87bdb97fd3e842e
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                 run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
- (localhost,57638,t,md5e17f7818c5ec023fa87bdb97fd3e842e)
-(2 rows)
-
-ALTER ROLE  alter_role_1 WITH ENCRYPTED PASSWORD 'md59cce240038b7b335c6aa9674a6f13e72';
-SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1';
-             rolpassword
----------------------------------------------------------------------
- md59cce240038b7b335c6aa9674a6f13e72
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                 run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,md59cce240038b7b335c6aa9674a6f13e72)
- (localhost,57638,t,md59cce240038b7b335c6aa9674a6f13e72)
-(2 rows)
-
--- edge case role names
-CREATE ROLE "alter_role'1" WITH LOGIN;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE ROLE "alter_role'1" WITH LOGIN;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
-ALTER ROLE "alter_role'1" CREATEROLE;
-SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role''1';
- rolcreaterole
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role''1'$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
-(2 rows)
-
-CREATE ROLE "alter_role""1" WITH LOGIN;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE ROLE "alter_role""1" WITH LOGIN;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
-ALTER ROLE "alter_role""1" CREATEROLE;
-SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role"1';
- rolcreaterole
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT run_command_on_workers($$SELECT rolcreaterole FROM pg_authid WHERE rolname = 'alter_role"1'$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,t)
- (localhost,57638,t,t)
-(2 rows)
-
--- add node
-ALTER ROLE alter_role_1 WITH SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 66 VALID UNTIL '2032-05-05' PASSWORD 'test3';
-SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
-                                   row
----------------------------------------------------------------------
- (alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)
-(1 row)
-
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
+-- test if the passowrd of the extension owner can be upgraded
+ALTER ROLE CURRENT_USER PASSWORD 'password123';
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
                                      run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
- (localhost,57638,t,"(alter_role_1,t,t,t,t,t,t,t,66,md5ead5c53df946838b1291bba7757f41a7,2032)")
+ (localhost,57637,t,"(postgres,t,t,t,t,t,t,t,-1,md5891d7d5079424b1cb973187d354d78de,Infinity)")
+ (localhost,57638,t,"(postgres,t,t,t,t,t,t,t,-1,md5891d7d5079424b1cb973187d354d78de,Infinity)")
+(2 rows)
+
+-- test if the password and some connection settings are propagated when a node gets added
+ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 66 VALID UNTIL '2032-05-05' PASSWORD 'password456';
+SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
+ row
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
+                                   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(postgres,t,t,t,t,t,t,t,66,md568701dc40be546e0357027fb0109338c,2032)")
+ (localhost,57638,t,"(postgres,t,t,t,t,t,t,t,66,md568701dc40be546e0357027fb0109338c,2032)")
 (2 rows)
 
 SELECT master_remove_node('localhost', :worker_1_port);
@@ -205,17 +28,16 @@ SELECT master_remove_node('localhost', :worker_1_port);
 
 (1 row)
 
-ALTER ROLE alter_role_1 WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOLOGIN NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 0 VALID UNTIL '2052-05-05' PASSWORD 'test4';
+ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 0 VALID UNTIL '2052-05-05' PASSWORD 'password789';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
-                                   row
+ row
 ---------------------------------------------------------------------
- (alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)
-(1 row)
+(0 rows)
 
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                                    run_command_on_workers
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
+                                  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
+ (localhost,57638,t,"(postgres,t,t,t,t,t,t,t,0,md53e559cc1fcf0c70f1f8e05c9a79c3133,2052)")
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
@@ -225,169 +47,15 @@ SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 (1 row)
 
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
-                                   row
+ row
 ---------------------------------------------------------------------
- (alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)
-(1 row)
+(0 rows)
 
-SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1'$$);
-                                    run_command_on_workers
+SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
+                                  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
- (localhost,57638,t,"(alter_role_1,f,f,f,f,f,f,f,0,md5be308f25c7b1a2d50c85cf7e6f074df9,2052)")
+ (localhost,57637,t,"(postgres,t,t,t,t,t,t,t,0,md53e559cc1fcf0c70f1f8e05c9a79c3133,2052)")
+ (localhost,57638,t,"(postgres,t,t,t,t,t,t,t,0,md53e559cc1fcf0c70f1f8e05c9a79c3133,2052)")
 (2 rows)
 
--- give login permissions so that we can connect and check if the previous queries were propagated
-ALTER ROLE alter_role_1 LOGIN CONNECTION LIMIT 10;
--- alter configuration_parameter defaults for a user
-ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
-SELECT run_command_on_workers('SHOW enable_hashagg');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,off)
- (localhost,57638,t,off)
-(2 rows)
-
--- reset to default values
-ALTER ROLE CURRENT_USER RESET enable_hashagg;
-SELECT run_command_on_workers('SHOW enable_hashagg');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,on)
- (localhost,57638,t,on)
-(2 rows)
-
--- provide role and database names
-ALTER ROLE alter_role_1 IN DATABASE regression SET enable_hashjoin TO 0;
-SET ROLE alter_role_1;
-SELECT run_command_on_workers('SHOW enable_hashjoin');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,off)
- (localhost,57638,t,off)
-(2 rows)
-
--- make sure that only alter_role_1 was affected
-RESET ROLE;
-SELECT run_command_on_workers('SHOW enable_hashjoin');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,on)
- (localhost,57638,t,on)
-(2 rows)
-
--- RESET ALL with IN DATABASE clause
-ALTER ROLE alter_role_1 IN DATABASE regression RESET ALL;
-ALTER ROLE alter_role_1 RESET ALL;
-ALTER ROLE ALL RESET ALL;
--- FROM CURRENT clauses
-SET statement_timeout TO '1min';
-ALTER ROLE alter_role_1 SET statement_timeout FROM CURRENT;
-SET ROLE alter_role_1;
-SELECT run_command_on_workers('SHOW statement_timeout');
-  run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,1min)
- (localhost,57638,t,1min)
-(2 rows)
-
-RESET statement_timeout;
-RESET ROLE;
--- the session defaults should be updated on master_add_node
-SELECT master_remove_node('localhost', :worker_1_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER ROLE SESSION_USER SET enable_mergejoin TO false;
-ALTER ROLE CURRENT_USER SET statement_timeout TO '2min';
-ALTER ROLE CURRENT_USER SET log_min_duration_statement TO '123s';
-ALTER ROLE CURRENT_USER SET "app.dev""" TO 'a\nb';
-ALTER ROLE CURRENT_USER SET myvar.foobar TO "007";
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT run_command_on_workers('SHOW enable_mergejoin');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,off)
- (localhost,57638,t,off)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW statement_timeout');
-  run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,2min)
- (localhost,57638,t,2min)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW log_min_duration_statement');
-  run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,123s)
- (localhost,57638,t,123s)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW "app.dev"""');
-   run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"a\\nb")
- (localhost,57638,t,"a\\nb")
-(2 rows)
-
-SELECT run_command_on_workers('SHOW myvar.foobar');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,007)
- (localhost,57638,t,007)
-(2 rows)
-
--- revert back to defaults
-ALTER ROLE SESSION_USER RESET ALL;
-SELECT run_command_on_workers('SHOW enable_mergejoin');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,on)
- (localhost,57638,t,on)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW statement_timeout');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,0)
- (localhost,57638,t,0)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW log_min_duration_statement');
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,-1)
- (localhost,57638,t,-1)
-(2 rows)
-
-SELECT run_command_on_workers('SHOW "app.dev"""');
-                              run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  unrecognized configuration parameter ""app.dev""""")
- (localhost,57638,f,"ERROR:  unrecognized configuration parameter ""app.dev""""")
-(2 rows)
-
-SELECT run_command_on_workers('SHOW myvar.foobar');
-                               run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,f,"ERROR:  unrecognized configuration parameter ""myvar.foobar""")
- (localhost,57638,f,"ERROR:  unrecognized configuration parameter ""myvar.foobar""")
-(2 rows)
-
--- we don't support propagation of ALTER ROLE ... RENAME TO commands.
-ALTER ROLE alter_role_1 RENAME TO alter_role_1_new;
-NOTICE:  MD5 password cleared because of role rename
-NOTICE:  Citus partially supports ALTER ROLE for distributed databases
-DETAIL:  Citus does not propagate ALTER ROLE ... RENAME TO commands to workers
-HINT:  You can manually alter roles on workers.
-SET citus.enable_alter_role_propagation to OFF;
 DROP SCHEMA alter_role CASCADE;
