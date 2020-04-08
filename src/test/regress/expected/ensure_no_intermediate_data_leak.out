@@ -28,3 +28,20 @@ $$) WHERE result <> '';
 ---------------------------------------------------------------------
 (0 rows)
 
+-- ensure that we didn't leak any schemas in repartition joins
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';
+ nspname
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM run_command_on_workers($$
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';
+$$) WHERE result <> '';
+ nodename | nodeport | success | result
+---------------------------------------------------------------------
+(0 rows)
+
