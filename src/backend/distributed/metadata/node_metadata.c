@@ -390,6 +390,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	{
 		EnsureNoModificationsHaveBeenDone();
 
+		PropagateNodeWideObjects(newWorkerNode);
 		if (EnableDependencyCreation)
 		{
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
@@ -643,7 +644,6 @@ ActivateNode(char *nodeName, int nodePort)
 
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
-	PropagateNodeWideObjects(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }
