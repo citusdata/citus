@@ -329,7 +329,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	dlist_push_tail(entry->connections, &connection->connectionNode);
 
 	/* these two flags are by nature cannot happen at the same time */
-	Assert((!(flags & OPTIONAL_CONNECTION) && (flags & WAIT_FOR_CONNECTION)));
+	Assert (!((flags & WAIT_FOR_CONNECTION) && (flags & OPTIONAL_CONNECTION)));
 
 	if (flags & WAIT_FOR_CONNECTION)
 	{
