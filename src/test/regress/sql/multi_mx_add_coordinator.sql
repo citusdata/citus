@@ -10,6 +10,7 @@ SET client_min_messages TO WARNING;
 CREATE USER reprefuser WITH LOGIN;
 SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');
 SET citus.enable_alter_role_propagation TO ON;
+-- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
 
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
