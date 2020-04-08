@@ -1027,6 +1027,9 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
+	/* make sure we don't have any lingering session lifespan connections */
+	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
+
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }
 

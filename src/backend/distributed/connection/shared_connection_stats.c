@@ -23,7 +23,6 @@
 #include "commands/dbcommands.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
-#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shared_connection_stats.h"

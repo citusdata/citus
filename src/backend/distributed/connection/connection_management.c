@@ -380,6 +380,10 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	PG_END_TRY();
 
 
+	/*
+	 * Cast volatile MultiConnection pointer to MultiConnection pointer
+	 * for ease of use.
+	 */
 	MultiConnection *newConnection = (MultiConnection *) connection;
 
 	dlist_push_tail(entry->connections, &newConnection->connectionNode);

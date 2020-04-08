@@ -963,7 +963,7 @@ RegisterCitusConfigVariables(void)
 		&MaxSharedPoolSize,
 		0, -1, INT_MAX,
 		PGC_SIGHUP, /* TODO: is PGC_POSTMASTER more convinient? */
-		GUC_STANDARD,
+		GUC_SUPERUSER_ONLY,
 		NULL, NULL, MaxSharedPoolSizeGucShowHook);
 
 	DefineCustomIntVariable(
