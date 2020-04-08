@@ -976,10 +976,10 @@ CitusPQFinish(MultiConnection *connection)
 {
 	if (connection->pgConn != NULL)
 	{
-		DecrementSharedConnectionCounter(connection->hostname, connection->port);
-
 		PQfinish(connection->pgConn);
 		connection->pgConn = NULL;
+
+		DecrementSharedConnectionCounter(connection->hostname, connection->port);
 	}
 }
 
