@@ -320,6 +320,14 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	}
 
 
+	/*
+	 * Either no caching desired, or no pre-established, non-claimed,
+	 * connection present. Initiate connection establishment.
+	 */
+	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
+														 sizeof(MultiConnection));
+	dlist_push_tail(entry->connections, &connection->connectionNode);
+
 	if (flags & WAIT_FOR_CONNECTION)
 	{
 		WaitLoopForSharedConnection(hostname, port);
@@ -351,17 +359,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		IncrementSharedConnectionCounter(hostname, port);
 	}
 
+
 	/*
-	 * Either no caching desired, or no pre-established, non-claimed,
-	 * connection present. Initiate connection establishment.
+	 * We've already incremented the counter above, so we should decrement
+	 * when we're done with the connection.
 	 */
-	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
-														 sizeof(MultiConnection));
-
-	/* we've already incremented the counter above */
 	connection->sharedCounterIncremented = true;
-
-	dlist_push_tail(entry->connections, &connection->connectionNode);
 
 	StartConnectionEstablishment(connection, &key);
 
