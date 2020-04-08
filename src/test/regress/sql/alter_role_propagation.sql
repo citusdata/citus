@@ -19,8 +19,11 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
 -- check user, database and postgres wide SET settings.
 -- pre check
 SELECT run_command_on_workers('SHOW enable_hashjoin');
-SELECT run_command_on_workers('SHOW enable_hashagg');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
+SELECT run_command_on_workers('SHOW enable_hashagg');
+
+-- remove 1 node to verify settings are copied when the node gets added back
+SELECT master_remove_node('localhost', :worker_1_port);
 
 -- change a setting for all users
 ALTER ROLE ALL SET enable_hashjoin TO FALSE;
@@ -30,6 +33,12 @@ SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 
 -- alter configuration_parameter defaults for a user
 ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
+SELECT run_command_on_workers('SHOW enable_hashagg');
+
+-- add worker and check all settings are copied
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
 
 -- reset to default values

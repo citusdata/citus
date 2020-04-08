@@ -67,6 +67,13 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
  (localhost,57638,t,on)
 (2 rows)
 
+SELECT run_command_on_workers('SHOW enable_indexonlyscan');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,on)
+ (localhost,57638,t,on)
+(2 rows)
+
 SELECT run_command_on_workers('SHOW enable_hashagg');
  run_command_on_workers
 ---------------------------------------------------------------------
@@ -74,15 +81,43 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
  (localhost,57638,t,on)
 (2 rows)
 
-SELECT run_command_on_workers('SHOW enable_indexonlyscan');
- run_command_on_workers
+-- remove 1 node to verify settings are copied when the node gets added back
+SELECT master_remove_node('localhost', :worker_1_port);
+ master_remove_node
 ---------------------------------------------------------------------
- (localhost,57637,t,on)
- (localhost,57638,t,on)
-(2 rows)
+
+(1 row)
 
 -- change a setting for all users
 ALTER ROLE ALL SET enable_hashjoin TO FALSE;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,off)
+(1 row)
+
+ALTER ROLE ALL IN DATABASE regression SET enable_indexonlyscan TO FALSE;
+SELECT run_command_on_workers('SHOW enable_indexonlyscan');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,off)
+(1 row)
+
+-- alter configuration_parameter defaults for a user
+ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
+SELECT run_command_on_workers('SHOW enable_hashagg');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,off)
+(1 row)
+
+-- add worker and check all settings are copied
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT run_command_on_workers('SHOW enable_hashjoin');
  run_command_on_workers
 ---------------------------------------------------------------------
@@ -90,7 +125,6 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
  (localhost,57638,t,off)
 (2 rows)
 
-ALTER ROLE ALL IN DATABASE regression SET enable_indexonlyscan TO FALSE;
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
  run_command_on_workers
 ---------------------------------------------------------------------
@@ -98,8 +132,6 @@ SELECT run_command_on_workers('SHOW enable_indexonlyscan');
  (localhost,57638,t,off)
 (2 rows)
 
--- alter configuration_parameter defaults for a user
-ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
 SELECT run_command_on_workers('SHOW enable_hashagg');
  run_command_on_workers
 ---------------------------------------------------------------------
@@ -129,7 +161,7 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,off)
+ (localhost,57637,t,on)
  (localhost,57638,t,off)
 (2 rows)
 
