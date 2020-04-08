@@ -345,6 +345,10 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 */
 		if (!TryToIncrementSharedConnectionCounter(hostname, port))
 		{
+			/* do not track the connection anymore */
+			dlist_delete(&connection->connectionNode);
+			pfree(connection);
+
 			return NULL;
 		}
 	}
