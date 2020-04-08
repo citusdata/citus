@@ -65,7 +65,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -97,7 +97,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -143,7 +143,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -177,7 +177,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -209,7 +209,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -243,7 +243,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -279,7 +279,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -314,7 +314,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -356,7 +356,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -391,7 +391,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -433,7 +433,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -481,7 +481,7 @@ WHERE
 ORDER BY
     shardid;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -514,7 +514,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -553,7 +553,7 @@ WHERE
 ORDER BY
     shardid;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
@@ -586,7 +586,7 @@ FROM
 WHERE
     nodeport = :worker_2_port;
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid

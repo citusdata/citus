@@ -135,15 +135,15 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -188,15 +188,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -266,15 +266,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -320,15 +320,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -367,15 +367,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -421,15 +421,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -476,15 +476,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -531,15 +531,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 --verify the data is inserted
@@ -599,15 +599,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -654,15 +654,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -718,15 +718,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 BEGIN;
@@ -805,15 +805,15 @@ ORDER BY
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -861,15 +861,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -918,15 +918,15 @@ ORDER BY
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -971,15 +971,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
