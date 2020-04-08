@@ -274,6 +274,8 @@ WaitLoopForSharedConnection(const char *hostname, int port)
 {
 	while (!TryToIncrementSharedConnectionCounter(hostname, port))
 	{
+		CHECK_FOR_INTERRUPTS();
+
 		WaitForSharedConnection();
 	}
 
