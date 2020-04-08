@@ -198,7 +198,7 @@ SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 (1 row)
 
 -- run VACUUM and ANALYZE against the table on the master
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 VACUUM dustbunnies;
 NOTICE:  issuing VACUUM public.dustbunnies_990002
@@ -229,13 +229,13 @@ NOTICE:  issuing VACUUM (ANALYZE) public.dustbunnies_990002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (ANALYZE) public.dustbunnies_990002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 -- disable auto-VACUUM for next test
 ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
 \gset
 -- send a VACUUM FREEZE after adding a new row
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 INSERT INTO dustbunnies VALUES (5, 'peter');
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
@@ -256,7 +256,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (FREEZE) public.dustbunnies_990002
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- verify that relfrozenxid increased
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
  frozen_performed
@@ -275,7 +275,7 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 (3 rows)
 
 -- add NULL values, then perform column-specific ANALYZE
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
@@ -304,7 +304,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- verify that name's NULL ratio is updated but age's is not
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
  attname | null_frac
@@ -314,7 +314,7 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
  name    |  0.166667
 (3 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 -- verify warning for unqualified VACUUM
 VACUUM;

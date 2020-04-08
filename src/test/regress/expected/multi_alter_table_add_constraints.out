@@ -462,13 +462,13 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regc
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
  Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- Tests to check the effect of rollback
 BEGIN;
 -- Add constraints (which will be rollbacked)
@@ -482,13 +482,13 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regc
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
  Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP TABLE products;
 SET citus.shard_count to 2;
 -- Test if the ALTER TABLE %s ADD %s PRIMARY KEY %s works

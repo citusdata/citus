@@ -105,12 +105,12 @@ SELECT create_distributed_table('foreign_table', 'id');
 ALTER FOREIGN TABLE foreign_table rename to renamed_foreign_table;
 ALTER FOREIGN TABLE renamed_foreign_table rename full_name to rename_name;
 ALTER FOREIGN TABLE renamed_foreign_table alter rename_name type char(8);
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 select table_name, column_name, data_type
 from information_schema.columns
 where table_schema='public' and table_name like 'renamed_foreign_table_%' and column_name <> 'id'
 order by table_name;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 SELECT master_get_table_ddl_events('renamed_foreign_table');
 
@@ -122,12 +122,12 @@ SELECT master_get_table_ddl_events('local_view');
 -- clean up
 DROP VIEW IF EXISTS local_view;
 DROP FOREIGN TABLE IF EXISTS renamed_foreign_table;
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 select table_name, column_name, data_type
 from information_schema.columns
 where table_schema='public' and table_name like 'renamed_foreign_table_%' and column_name <> 'id'
 order by table_name;
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP TABLE IF EXISTS simple_table, not_null_table, column_constraint_table,
 					 table_constraint_table, default_value_table, pkey_table,
 					 unique_table, clustered_table, fiddly_table;

@@ -7,7 +7,7 @@ SET citus.next_shard_id TO 830000;
 
 
 -- Create UDF in master and workers
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
 CREATE FUNCTION median(double precision[]) RETURNS double precision
@@ -18,7 +18,7 @@ LANGUAGE sql IMMUTABLE AS $_$
 	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub;
 $_$;
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
 CREATE FUNCTION median(double precision[]) RETURNS double precision
@@ -29,7 +29,7 @@ LANGUAGE sql IMMUTABLE AS $_$
 	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub;
 $_$;
 
-\c - - - :worker_2_port
+\c - - :public_worker_2_host :worker_2_port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
 CREATE FUNCTION median(double precision[]) RETURNS double precision
@@ -41,7 +41,7 @@ LANGUAGE sql IMMUTABLE AS $_$
 $_$;
 
 -- Run query on master
-\c - - - :master_port
+\c - - :master_host :master_port
 
 SET citus.task_executor_type TO 'task-tracker';
 

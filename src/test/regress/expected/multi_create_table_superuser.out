@@ -224,13 +224,13 @@ DROP TABLE repmodel_test;
 RESET citus.replication_model;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
  relname
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- creating an index after loading data works
 BEGIN;
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
@@ -333,7 +333,7 @@ SELECT * FROM master_get_table_ddl_events('unlogged_table');
  ALTER TABLE public.unlogged_table OWNER TO postgres
 (2 rows)
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
  relpersistence
 ---------------------------------------------------------------------
@@ -343,7 +343,7 @@ SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
  u
 (4 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- Test rollback of create table
 BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
@@ -355,13 +355,13 @@ SELECT create_distributed_table('rollback_table','id');
 
 ROLLBACK;
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- Insert 3 rows to make sure that copy after shard creation touches the same
 -- worker node twice.
 BEGIN;
@@ -378,13 +378,13 @@ NOTICE:  Copying data from local table...
 
 ROLLBACK;
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 BEGIN;
 CREATE TABLE rollback_table(id int, name varchar(20));
 SELECT create_distributed_table('rollback_table','id');
@@ -415,13 +415,13 @@ SELECT create_distributed_table('rollback_table','id');
 \copy rollback_table from stdin delimiter ','
 ROLLBACK;
 -- Table should not exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 BEGIN;
 CREATE TABLE tt1(id int);
 SELECT create_distributed_table('tt1','id');
@@ -441,7 +441,7 @@ INSERT INTO tt1 VALUES(1);
 INSERT INTO tt2 SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 -- Table should exist on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360069'::regclass;
  Column |  Type   | Modifiers
 ---------------------------------------------------------------------
@@ -454,7 +454,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_3
  id     | integer |
 (1 row)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP TABLE tt1;
 DROP TABLE tt2;
 -- It is known that creating a table with master_create_empty_shard is not
@@ -475,22 +475,22 @@ SELECT master_create_empty_shard('append_tt1');
 
 ROLLBACK;
 -- Table exists on the worker node.
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360077'::regclass;
  Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  id     | integer |
 (1 row)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE relname LIKE 'public.tt1%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- Queries executing with router executor is allowed in the same transaction
 -- with create_distributed_table
 BEGIN;
@@ -512,14 +512,14 @@ SELECT * FROM tt1 WHERE id = 1;
 
 COMMIT;
 -- Placements should be created on the worker
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360078'::regclass;
  Column |  Type   | Modifiers
 ---------------------------------------------------------------------
  id     | integer |
 (1 row)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 DROP TABLE tt1;
 BEGIN;
 CREATE TABLE tt1(id int);
@@ -532,13 +532,13 @@ SELECT create_distributed_table('tt1','id');
 DROP TABLE tt1;
 COMMIT;
 -- There should be no table on the worker node
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE  relname LIKE 'tt1%');
  Column | Type | Modifiers
 ---------------------------------------------------------------------
 (0 rows)
 
-\c - - - :master_port
+\c - - :master_host :master_port
 -- Tests with create_distributed_table & DDL & DML commands
 -- Test should pass since GetPlacementListConnection can provide connections
 -- in this order of execution
