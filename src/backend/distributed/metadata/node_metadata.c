@@ -96,6 +96,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
@@ -426,6 +427,44 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 
 
 /*
+ * PropagateNodeWideObjects is called during node activation to propagate any object that
+ * should be propagated for every node. These are generally not linked to any distributed
+ * object but change system wide behaviour.
+ */
+static void
+PropagateNodeWideObjects(WorkerNode *newWorkerNode)
+{
+	if (!ShouldPropagate())
+	{
+		/* dependency propagation has been turned off, do nothing. */
+		return;
+	}
+
+	/* collect all commands */
+	List *ddlCommands = NIL;
+
+	if (EnableAlterRolePropagation)
+	{
+		/*
+		 * Get commands for database and postgres wide settings. Since these settings are not
+		 * linked to any role that can be distributed we need to distribute them seperately
+		 */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
+		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
+	}
+
+	if (list_length(ddlCommands) > 0)
+	{
+		/* send commands to new workers*/
+		SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+												   newWorkerNode->workerPort,
+												   CitusExtensionOwnerName(),
+												   ddlCommands);
+	}
+}
+
+
+/*
  * ModifiableWorkerNode gets the requested WorkerNode and also gets locks
  * required for modifying it. This fails if the node does not exist.
  */
@@ -604,6 +643,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
+	PropagateNodeWideObjects(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }

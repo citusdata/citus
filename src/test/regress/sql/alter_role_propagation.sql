@@ -1,7 +1,7 @@
 CREATE SCHEMA alter_role;
 
 -- test if the passowrd of the extension owner can be upgraded
-ALTER ROLE CURRENT_USER PASSWORD 'password123';
+ALTER ROLE CURRENT_USER PASSWORD 'password123' VALID UNTIL 'infinity';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
 
 -- test if the password and some connection settings are propagated when a node gets added

@@ -1,6 +1,6 @@
 CREATE SCHEMA alter_role;
 -- test if the passowrd of the extension owner can be upgraded
-ALTER ROLE CURRENT_USER PASSWORD 'password123';
+ALTER ROLE CURRENT_USER PASSWORD 'password123' VALID UNTIL 'infinity';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
                                      run_command_on_workers
 ---------------------------------------------------------------------
@@ -161,7 +161,7 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,on)
+ (localhost,57637,t,off)
  (localhost,57638,t,off)
 (2 rows)
 

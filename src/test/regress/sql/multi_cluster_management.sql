@@ -1,5 +1,6 @@
 SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- Tests functions related to cluster membership
 
@@ -97,6 +98,7 @@ ABORT;
 
 \c - postgres - :master_port
 SET citus.next_shard_id TO 1220016;
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
@@ -166,6 +168,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -173,6 +176,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- check that removing two nodes in the same transaction works
 SELECT
@@ -207,6 +211,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
@@ -243,6 +248,7 @@ DELETE FROM pg_dist_shard;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_node;
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
