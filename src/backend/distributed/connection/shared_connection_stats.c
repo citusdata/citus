@@ -288,9 +288,9 @@ WaitLoopForSharedConnection(const char *hostname, int port)
  * connection counter for the given nodeId and the current database in
  * SharedConnStatsHash.
  *
- * The function first checks whether the number of connections is less than
- * citus.max_shared_pool_size. If so, the function increments the counter
- * by one and returns true. Else, the function returns false.
+ * If the function returns true, the caller is allowed (and expected)
+ * to establish a new connection to the given node. Else, the caller
+ * is not allowed to establish a new connection.
  */
 bool
 TryToIncrementSharedConnectionCounter(const char *hostname, int port)
