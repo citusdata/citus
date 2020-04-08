@@ -124,6 +124,7 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
 PG_FUNCTION_INFO_V1(create_distributed_table);
 PG_FUNCTION_INFO_V1(create_reference_table);
+PG_FUNCTION_INFO_V1(create_citus_local_table);
 
 
 /*
@@ -205,6 +206,33 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 
 /*
+ * create_citus_local_table creates a citus table with the given relationId.
+ * The created table has one shard, replication factor is set to the 1. On the
+ * contrary of reference tables, a citus local table has only one placement and
+ * that placement will be in the coordinator for now.
+ * In fact, the above is the definition of a citus local table in Citus.
+ */
+Datum
+create_citus_local_table(PG_FUNCTION_ARGS)
+{
+	Oid relationOid = PG_GETARG_OID(0);
+
+	text *distributionColumnText = NULL;
+	text *colocateWithTableNameText = NULL;
+
+	char distributionMethod = CITUS_LOCAL_TABLE;
+
+	const bool viaDeprecatedApi = false;
+
+	create_citus_table_internal(relationOid, distributionColumnText,
+								distributionMethod, colocateWithTableNameText,
+								viaDeprecatedApi);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * create_citus_table_internal is the internal method to be used via udfs
  * creating citus tables
  */
@@ -252,7 +280,32 @@ create_citus_table_internal(Oid relationOid, text *distributionColumnText,
 	Var *distributionColumn;
 	char *colocateWithTableName;
 
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (distributionMethod == CITUS_LOCAL_TABLE)
+	{
+		/* create citus local table */
+
+		/* no path via deprecated api to create citus local tables */
+		Assert(viaDeprecatedApi == false);
+
+		/* following should be NULL when creating citus local table */
+		Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
+
+		if (!(IsCoordinator() && CoordinatorAddedAsWorkerNode()))
+		{
+			const char *relationName = get_rel_name(relationOid);
+
+			Assert(relationName != NULL);
+
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("cannot create citus local table \"%s\", citus local "
+								   "tables can only be created from coordinator node if "
+								   "it is added to pg_dist_node", relationName)));
+		}
+
+		distributionColumn = NULL;
+		colocateWithTableName = NULL;
+	}
+	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		/* create reference table */
 
@@ -372,14 +425,17 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		return;
 	}
 
-	/* create shards for hash distributed and reference tables */
+	/*
+	 * Create shards for hash distributed tables and citus tables having no
+	 * distribution keys
+	 */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
 	{
 		CreateHashDistributedTableShards(relationId, colocatedTableId, localTableEmpty);
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_NONE)
+	else if (CitusTableWithoutDistributionKey(distributionMethod))
 	{
-		CreateReferenceTableShard(relationId);
+		CreateSingleShardTableWithoutDistKey(relationId, distributionMethod);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))
@@ -409,9 +465,16 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		}
 	}
 
-	/* copy over data for hash distributed and reference tables */
+	/*
+	 * Copy over data for hash distributed tables and citus tables having no
+	 * distribution keys.
+	 * FIXME: For citus local tables, we follow the same approach as we do for
+	 * other tables, copying the data from the shell table to the shard.
+	 * Instead, we could do this much faster by renaming the table to the shard,
+	 * and making sure that we do these accurately for indexes, constraints etc.
+	 */
 	if (distributionMethod == DISTRIBUTE_BY_HASH ||
-		distributionMethod == DISTRIBUTE_BY_NONE)
+		CitusTableWithoutDistributionKey(distributionMethod))
 	{
 		if (RegularTable(relationId))
 		{
@@ -448,7 +511,8 @@ AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
 	{
 		return REPLICATION_MODEL_2PC;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH)
+	else if (distributionMethod == DISTRIBUTE_BY_HASH || distributionMethod ==
+			 CITUS_LOCAL_TABLE)
 	{
 		return ReplicationModel;
 	}
@@ -546,6 +610,11 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return CreateReferenceTableColocationId();
+	}
+	else if (distributionMethod == CITUS_LOCAL_TABLE)
+	{
+		/* citus local tables have no colocation id's for now */
+		return INVALID_COLOCATION_ID;
 	}
 	else
 	{
@@ -669,7 +738,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	}
 
 	/* verify target relation is not distributed by a generated columns */
-	if (distributionMethod != DISTRIBUTE_BY_NONE &&
+	if (!CitusTableWithoutDistributionKey(distributionMethod) &&
 		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -850,15 +919,19 @@ static void
 EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
 								 bool viaDepracatedAPI)
 {
+	/* we don't support copying local data via deprecated APIs */
 	bool shouldEnsureLocalTableEmpty = viaDepracatedAPI;
 
-	bool distributionMethodRequiresEmptyTable = (distributionMethod !=
-												 DISTRIBUTE_BY_HASH &&
-												 distributionMethod !=
-												 DISTRIBUTE_BY_NONE);
+	bool distributionMethodRequiresEmptyTable =
+		(distributionMethod != DISTRIBUTE_BY_HASH &&
+		 !CitusTableWithoutDistributionKey(distributionMethod));
+
+	/* we only support hash, reference and citus local tables for initial data loading */
 	shouldEnsureLocalTableEmpty |= distributionMethodRequiresEmptyTable;
 
 	bool notRegularTable = !RegularTable(relationId);
+
+	/* we only support tables and partitioned tables for initial data loading */
 	shouldEnsureLocalTableEmpty |= notRegularTable;
 
 	if (shouldEnsureLocalTableEmpty)

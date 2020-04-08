@@ -215,9 +215,9 @@ ClusterHasKnownMetadataWorkers()
 
 /*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
- * propagated to metadata workers, i.e. the table is an MX table or reference table.
- * Tables with streaming replication model (which means RF=1) and hash distribution are
- * considered as MX tables while tables with none distribution are reference tables.
+ * propagated to metadata workers, i.e. the table is an MX table or does not have
+ * a distribution key. Tables with streaming replication model (which means RF=1)
+ * and hash distribution are considered as MX tables.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
@@ -229,9 +229,9 @@ ShouldSyncTableMetadata(Oid relationId)
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
 	bool mxTable = (streamingReplicated && hashDistributed);
-	bool referenceTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+	bool noDistKeyTable = CitusTableWithoutDistributionKey(tableEntry->partitionMethod);
 
-	if (mxTable || referenceTable)
+	if (mxTable || noDistKeyTable)
 	{
 		return true;
 	}
@@ -630,7 +630,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
 
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (CitusTableWithoutDistributionKey(distributionMethod))
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
 	}

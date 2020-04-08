@@ -364,9 +364,8 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 			}
 		}
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_NONE)
+	else if (CitusTableWithoutDistributionKey(partitionMethod))
 	{
-		/* reference tables has a single shard, all values mapped to that shard */
 		Assert(shardCount == 1);
 
 		shardIndex = 0;

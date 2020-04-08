@@ -1348,22 +1348,20 @@ RightColumnOrNULL(OpExpr *joinClause)
  * PartitionColumn builds the partition column for the given relation, and sets
  * the partition column's range table references to the given table identifier.
  *
- * Note that reference tables do not have partition column. Thus, this function
- * returns NULL when called for reference tables.
+ * Note that this function returns NULL when called for tables having no
+ * distribution keys (i.e reference tables & citus local tables).
  */
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
 	Var *partitionKey = DistPartitionKey(relationId);
-	Var *partitionColumn = NULL;
 
-	/* short circuit for reference tables */
 	if (partitionKey == NULL)
 	{
-		return partitionColumn;
+		return NULL;
 	}
 
-	partitionColumn = partitionKey;
+	Var *partitionColumn = partitionKey;
 	partitionColumn->varno = rangeTableId;
 	partitionColumn->varnoold = rangeTableId;
 
@@ -1372,21 +1370,19 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 
 
 /*
- * DistPartitionKey returns the partition key column for the given relation. Note
- * that in the context of distributed join and query planning, the callers of
- * this function *must* set the partition key column's range table reference
+ * DistPartitionKey returns the partition key column for the given relation.
+ * Note that in the context of distributed join and query planning, the callers
+ * of this function *must* set the partition key column's range table reference
  * (varno) to match the table's location in the query range table list.
  *
- * Note that reference tables do not have partition column. Thus, this function
- * returns NULL when called for reference tables.
+ * This function returns NULL when called for tables without distribution keys.
  */
 Var *
 DistPartitionKey(Oid relationId)
 {
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
-	/* reference tables do not have partition column */
-	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (CitusTableWithoutDistributionKey(partitionEntry->partitionMethod))
 	{
 		return NULL;
 	}
@@ -1406,9 +1402,9 @@ ForceDistPartitionKey(Oid relationId)
 
 	if (partitionKey == NULL)
 	{
-		ereport(ERROR, (errmsg(
-							"no distribution column found for relation %d, because it is a reference table",
-							relationId)));
+		ereport(ERROR, (errmsg("no distribution column found for relation %d, "
+							   "because it is either a reference table or a "
+							   "citus local table", relationId)));
 	}
 
 	return partitionKey;

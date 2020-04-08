@@ -2119,7 +2119,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* error if any shard missing min/max values */
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (!CitusTableWithoutDistributionKey(partitionMethod) &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2180,7 +2180,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		attributeList = lappend(attributeList, columnNameValue);
 	}
 
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (!CitusTableWithoutDistributionKey(partitionMethod) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

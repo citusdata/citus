@@ -122,7 +122,8 @@ extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shard
 											 bool useExclusiveConnections);
 extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,
 								  bool useExclusiveConnections);
-extern void CreateReferenceTableShard(Oid distributedTableId);
+extern void CreateSingleShardTableWithoutDistKey(Oid distributedTableId, char
+												 distributionMethod);
 extern List * WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 										   List *ddlCommandList,
 										   List *foreignConstraintCommandList);

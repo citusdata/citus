@@ -974,8 +974,8 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
-	/* set partkey column to NULL for reference tables */
-	if (distributionMethod != DISTRIBUTE_BY_NONE)
+	/* set partkey column to NULL for citus tables having no distribution keys */
+	if (!CitusTableWithoutDistributionKey(distributionMethod))
 	{
 		distributionColumnString = nodeToString((Node *) distributionColumn);
 

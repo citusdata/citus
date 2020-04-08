@@ -1232,23 +1232,26 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		shardIntervalCompareFunction = NULL;
 	}
 
-	/* reference tables has a single shard which is not initialized */
-	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	/*
+	 * A citus table without distribution key would have a single and
+	 * uninitialized shard
+	 */
+	if (CitusTableWithoutDistributionKey(cacheEntry->partitionMethod))
 	{
 		cacheEntry->hasUninitializedShardInterval = true;
 		cacheEntry->hasOverlappingShardInterval = true;
 
 		/*
-		 * Note that during create_reference_table() call,
-		 * the reference table do not have any shards.
+		 * Note that during creating a reference table or a citus local table,
+		 * we do not have any shards for table yet.
 		 */
 		if (shardIntervalArrayLength > 1)
 		{
 			char *relationName = get_rel_name(cacheEntry->relationId);
 
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("reference table \"%s\" has more than 1 shard",
-								   relationName)));
+							errmsg("table without distribution key \"%s\" cannot "
+								   "have more than 1 shard", relationName)));
 		}
 
 		/* since there is a zero or one shard, it is already sorted */
@@ -3829,6 +3832,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		}
 
 		case DISTRIBUTE_BY_NONE:
+		case CITUS_LOCAL_TABLE:
 		{
 			break;
 		}
