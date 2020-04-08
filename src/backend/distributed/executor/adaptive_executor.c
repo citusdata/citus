@@ -2437,8 +2437,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 			 * The worker pool has just started to establish connections. We need to
 			 * defer this initilization after StartNodeUserDatabaseConnection()
 			 * because for non-optional connections, we have some logic to wait
-			 * until a connection is allowed to be established for a duration of
-			 * citus.connection_retry_timeout.
+			 * until a connection is allowed to be established.
 			 */
 			INSTR_TIME_SET_ZERO(workerPool->poolStartTime);
 		}

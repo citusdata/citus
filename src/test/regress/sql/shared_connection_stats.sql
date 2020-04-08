@@ -125,7 +125,6 @@ SELECT pg_sleep(0.1);
 
 BEGIN;
 	SET LOCAL citus.node_connection_timeout TO 1000;
-	SET LOCAL citus.connection_retry_timeout TO 2000;
 	SET LOCAL citus.force_max_query_parallelization TO ON;
 	SELECT count(*) FROM test;
 COMMIT;
@@ -219,12 +218,6 @@ BEGIN;
 	ORDER BY
 		hostname, port;
 COMMIT;
-
-
-
-
--- connection_retry_timeout cannot be smaller than node_connection_timeout
-SET citus.connection_retry_timeout TO 1000;
 
 -- in case other tests relies on these setting, reset them
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
