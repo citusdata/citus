@@ -263,15 +263,14 @@ GetMaxSharedPoolSize(void)
 
 
 /*
- * WaitOrErrorForSharedConnection tries to increment the shared connection
+ * WaitLoopForSharedConnection tries to increment the shared connection
  * counter for the given hostname/port and the current database in
  * SharedConnStatsHash.
  *
- * The function implements a retry mechanism. If the function cannot increment
- * the counter withing the specificed amount of the time, it throws an error.
+ * The function implements a retry mechanism via a condition variable.
  */
 void
-WaitOrErrorForSharedConnection(const char *hostname, int port)
+WaitLoopForSharedConnection(const char *hostname, int port)
 {
 	while (!TryToIncrementSharedConnectionCounter(hostname, port))
 	{

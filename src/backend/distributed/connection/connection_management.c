@@ -319,18 +319,9 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	}
 
 
-	if (flags & NEVER_WAIT_FOR_CONNECTION)
+	if (flags & WAIT_FOR_CONNECTION)
 	{
-		/*
-		 * The caller doesn't want the connection manager to wait
-		 * until a connection slot is available on the remote node.
-		 * In the end, we might fail to establish connection to the
-		 * remote node as it might not have any space in
-		 * max_connections for this connection establishment.
-		 *
-		 * Still, we keep track of the connnection counter.
-		 */
-		IncrementSharedConnectionCounter(hostname, port);
+		WaitLoopForSharedConnection(hostname, port);
 	}
 	else if (flags & OPTIONAL_CONNECTION)
 	{
@@ -347,7 +338,16 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	}
 	else
 	{
-		WaitOrErrorForSharedConnection(hostname, port);
+		/*
+		 * The caller doesn't want the connection manager to wait
+		 * until a connection slot is available on the remote node.
+		 * In the end, we might fail to establish connection to the
+		 * remote node as it might not have any space in
+		 * max_connections for this connection establishment.
+		 *
+		 * Still, we keep track of the connnection counter.
+		 */
+		IncrementSharedConnectionCounter(hostname, port);
 	}
 
 	/*

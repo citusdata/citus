@@ -2395,16 +2395,15 @@ ManageWorkerPool(WorkerPool *workerPool)
 			 */
 			connectionFlags |= OPTIONAL_CONNECTION;
 		}
-		else if (UseConnectionPerPlacement())
+		else if (!UseConnectionPerPlacement())
 		{
 			/*
 			 * Via connection throttling, the connection establishments may be suspended
-			 * until a connection slot is empty to the remote host. When forced to use
-			 * one connection per placement, do not enforce this restriction as it could
-			 * deadlock against concurrent operation where each operation is blocked on
-			 * waiting for others.
+			 * until a connection slot is empty to the remote host. Adaptive executor can
+			 * always finish the execution with a single connection, so wait until we get
+			 * one connection.
 			 */
-			connectionFlags |= NEVER_WAIT_FOR_CONNECTION;
+			connectionFlags |= WAIT_FOR_CONNECTION;
 		}
 
 		/* open a new connection to the worker */

@@ -67,7 +67,7 @@ enum MultiConnectionMode
 	 * until a connection slot is empty to the remote host. When this flag is passed,
 	 * the connection manager skips waiting.
 	 */
-	NEVER_WAIT_FOR_CONNECTION = 1 << 6
+	WAIT_FOR_CONNECTION = 1 << 6
 };
 
 
