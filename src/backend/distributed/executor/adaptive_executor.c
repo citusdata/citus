@@ -2400,7 +2400,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 			/*
 			 * Via connection throttling, the connection establishments may be suspended
 			 * until a connection slot is empty to the remote host. When forced to use
-			 * one connection per placement, do not enforce this restriction.
+			 * one connection per placement, do not enforce this restriction as it could
+			 * deadlock against concurrent operation where each operation is blocked on
+			 * waiting for others.
 			 */
 			connectionFlags |= NEVER_WAIT_FOR_CONNECTION;
 		}
