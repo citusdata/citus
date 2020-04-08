@@ -36,12 +36,19 @@ WHERE nspname like 'pg_merge_job%';
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * FROM run_command_on_workers($$
+\c - - - :worker_1_port
 SELECT nspname
 FROM pg_catalog.pg_namespace
 WHERE nspname like 'pg_merge_job%';
-$$) WHERE result <> '';
- nodename | nodeport | success | result
+ nspname
+---------------------------------------------------------------------
+(0 rows)
+
+\c - - - :worker_2_port
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';
+ nspname
 ---------------------------------------------------------------------
 (0 rows)
 
