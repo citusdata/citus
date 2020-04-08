@@ -3592,6 +3592,55 @@ DistTableOidList(void)
 
 
 /*
+ * ReferenceTableOidList function scans pg_dist_partition to create a list of all
+ * reference tables. To create the list, it performs sequential scan. Since it is not
+ * expected that this function will be called frequently, it is OK not to use index scan.
+ * If this function becomes performance bottleneck, it is possible to modify this function
+ * to perform index scan.
+ */
+List *
+ReferenceTableOidList()
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	List *referenceTableOidList = NIL;
+
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		Datum relationIdDatum = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_logicalrelid,
+											 tupleDescriptor, &isNull);
+		Oid relationId = DatumGetObjectId(relationIdDatum);
+		char partitionMethod = heap_getattr(heapTuple,
+											Anum_pg_dist_partition_partmethod,
+											tupleDescriptor, &isNull);
+
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, AccessShareLock);
+
+	return referenceTableOidList;
+}
+
+
+/*
  * InvalidateNodeRelationCacheCallback destroys the WorkerNodeHash when
  * any change happens on pg_dist_node table. It also set WorkerNodeHash to
  * NULL, which allows consequent accesses to the hash read from the

@@ -16,12 +16,12 @@
 
 #include "listutils.h"
 
+extern bool IsReferenceTable(Oid relationId);
+extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern uint32 CreateReferenceTableColocationId(void);
-extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
-extern List * ReferenceTableOidList(void);
 extern int CompareOids(const void *leftElement, const void *rightElement);
 extern int ReferenceTableReplicationFactor(void);
-
+extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
 
 #endif /* REFERENCE_TABLE_UTILS_H_ */

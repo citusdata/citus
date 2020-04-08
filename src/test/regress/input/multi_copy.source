@@ -502,7 +502,9 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
+SET client_min_messages TO ERROR;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
+RESET client_min_messages;
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv');

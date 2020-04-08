@@ -16,9 +16,9 @@ setup
 // ensure neither node's added for the remaining of the isolation tests
 teardown
 {
-	DROP TABLE test_reference_table;
-	DROP TABLE test_reference_table_2;
-	DROP TABLE test_table;
+	DROP TABLE IF EXISTS test_reference_table;
+	DROP TABLE IF EXISTS test_reference_table_2;
+	DROP TABLE IF EXISTS test_table;
 	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
@@ -29,6 +29,16 @@ step "s1-begin"
     BEGIN;
 }
 
+step "s1-replicate-on-activate"
+{
+	SET citus.replicate_reference_tables_on_activate TO on;
+}
+
+step "s1-do-not-replicate-on-activate"
+{
+	SET citus.replicate_reference_tables_on_activate TO off;
+}
+
 step "s1-add-second-worker"
 {
 	SELECT 1 FROM master_add_node('localhost', 57638);
@@ -37,6 +47,11 @@ step "s1-add-second-worker"
 step "s1-remove-second-worker"
 {
 	SELECT master_remove_node('localhost', 57638);
+}
+
+step "s1-drop-reference-table"
+{
+	DROP TABLE test_reference_table;
 }
 
 step "s1-commit"
@@ -56,6 +71,13 @@ step "s2-load-metadata-cache"
 step "s2-copy-to-reference-table"
 {
 	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+}
+
+step "s2-replicate-reference-tables"
+{
+	SET client_min_messages TO DEBUG2;
+	SELECT replicate_reference_tables();
+	RESET client_min_messages;
 }
 
 step "s2-insert-to-reference-table"
@@ -117,23 +139,35 @@ step "s2-print-index-count"
 // note that we need to run "s1-load-metadata-cache" and "s2-load-metadata-cache"
 // to ensure that metadata is cached otherwise the test would be useless since
 // the cache would be empty and the metadata data is gathered from the tables directly
-permutation "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-copy-to-reference-table" "s1-commit" "s2-print-content"
-permutation "s2-load-metadata-cache" "s2-begin" "s2-copy-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
-permutation "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-insert-to-reference-table" "s1-commit" "s2-print-content"
-permutation "s2-load-metadata-cache" "s2-begin" "s2-insert-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
-permutation "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-ddl-on-reference-table" "s1-commit" "s2-print-index-count"
-permutation "s2-load-metadata-cache" "s2-begin" "s2-ddl-on-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-index-count"
-permutation "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-create-reference-table-2" "s1-commit" "s2-print-content-2"
-permutation "s2-load-metadata-cache" "s2-begin" "s2-create-reference-table-2" "s1-add-second-worker" "s2-commit" "s2-print-content-2"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-copy-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s2-begin" "s2-copy-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-insert-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s2-begin" "s2-insert-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-ddl-on-reference-table" "s1-commit" "s2-print-index-count"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s2-begin" "s2-ddl-on-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-index-count"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s1-begin" "s1-add-second-worker" "s2-create-reference-table-2" "s1-commit" "s2-print-content-2"
+permutation "s1-do-not-replicate-on-activate" "s2-load-metadata-cache" "s2-begin" "s2-create-reference-table-2" "s1-add-second-worker" "s2-commit" "s2-print-content-2"
 
 
 // same tests without loading the cache
-permutation "s1-begin" "s1-add-second-worker" "s2-copy-to-reference-table" "s1-commit" "s2-print-content"
-permutation "s2-begin" "s2-copy-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
-permutation "s1-begin" "s1-add-second-worker" "s2-insert-to-reference-table" "s1-commit" "s2-print-content"
-permutation "s2-begin" "s2-insert-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
-permutation "s1-begin" "s1-add-second-worker" "s2-ddl-on-reference-table" "s1-commit" "s2-print-index-count"
-permutation "s2-begin" "s2-ddl-on-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-index-count"
-permutation "s1-begin" "s1-add-second-worker" "s2-create-reference-table-2" "s1-commit" "s2-print-content-2"
-permutation "s2-begin" "s2-create-reference-table-2" "s1-add-second-worker" "s2-commit" "s2-print-content-2"
+permutation "s1-do-not-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-copy-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-begin" "s2-copy-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-insert-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s2-begin" "s2-insert-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-do-not-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-ddl-on-reference-table" "s1-commit" "s2-print-index-count"
+permutation "s1-do-not-replicate-on-activate" "s2-begin" "s2-ddl-on-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-index-count"
+permutation "s1-do-not-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-create-reference-table-2" "s1-commit" "s2-print-content-2"
+permutation "s1-do-not-replicate-on-activate" "s2-begin" "s2-create-reference-table-2" "s1-add-second-worker" "s2-commit" "s2-print-content-2"
 
+// same tests with replicate on activate
+permutation "s1-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-copy-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-replicate-on-activate" "s2-begin" "s2-copy-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-insert-to-reference-table" "s1-commit" "s2-print-content"
+permutation "s1-replicate-on-activate" "s2-begin" "s2-insert-to-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-content"
+permutation "s1-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-ddl-on-reference-table" "s1-commit" "s2-print-index-count"
+permutation "s1-replicate-on-activate" "s2-begin" "s2-ddl-on-reference-table" "s1-add-second-worker" "s2-commit" "s2-print-index-count"
+permutation "s1-replicate-on-activate" "s1-begin" "s1-add-second-worker" "s2-create-reference-table-2" "s1-commit" "s2-print-content-2"
+permutation "s1-replicate-on-activate" "s2-begin" "s2-create-reference-table-2" "s1-add-second-worker" "s2-commit" "s2-print-content-2"
+
+// verify drop table blocks replicate reference tables
+permutation "s1-do-not-replicate-on-activate" "s1-add-second-worker" "s2-begin" "s1-begin" "s1-drop-reference-table" "s2-replicate-reference-tables" "s1-commit" "s2-commit"

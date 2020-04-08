@@ -449,6 +449,7 @@ ResetGlobalVariables()
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
+	TransactionModifiedNodeMetadata = false;
 }
 
 
