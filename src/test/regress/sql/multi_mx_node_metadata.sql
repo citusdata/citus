@@ -85,7 +85,6 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 --------------------------------------------------------------------------
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
-
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 

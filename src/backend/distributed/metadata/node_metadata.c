@@ -456,6 +456,10 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 
 	if (list_length(ddlCommands) > 0)
 	{
+		/* if there are command wrap them in enable_ddl_propagation off */
+		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
+
 		/* send commands to new workers*/
 		SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
 												   newWorkerNode->workerPort,
