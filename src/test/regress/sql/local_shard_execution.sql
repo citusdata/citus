@@ -343,6 +343,12 @@ BEGIN;
 	INSERT INTO distributed_table (key) SELECT i FROM generate_series(1,1) i;
 ROLLBACK;
 
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM distributed_table;
+SELECT count(*) FROM distributed_table d1 join distributed_table d2 using(age);
+ROLLBACK;
+
 -- a local query is followed by a command that cannot be executed locally
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
