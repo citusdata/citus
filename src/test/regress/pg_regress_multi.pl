@@ -327,10 +327,10 @@ if ( $conninfo )
     print $out "s/", substr("$masterPort", 0, length("$masterPort")-2), "[0-9][0-9]/xxxxx/g\n";
 
 
-    my $worker1host = `psql "$conninfo" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
-    my $worker1port = `psql "$conninfo" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
-    my $worker2host = `psql "$conninfo" -t -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
-    my $worker2port = `psql "$conninfo" -t -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
+    my $worker1host = `psql "$conninfo" -qtAX -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
+    my $worker1port = `psql "$conninfo" -qtAX -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid LIMIT 1;"`;
+    my $worker2host = `psql "$conninfo" -qtAX -c "SELECT nodename FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
+    my $worker2port = `psql "$conninfo" -qtAX -c "SELECT nodeport FROM pg_dist_node ORDER BY nodeid OFFSET 1 LIMIT 1;"`;
 
     $worker1host =~ s/^\s+|\s+$//g;
     $worker1port =~ s/^\s+|\s+$//g;
