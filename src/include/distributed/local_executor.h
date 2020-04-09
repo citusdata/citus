@@ -17,8 +17,14 @@
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
-extern bool TransactionAccessedLocalPlacement;
-extern bool TransactionConnectedToLocalGroup;
+typedef enum LocalExecutionStatus
+{
+	LOCAL_EXECUTION_REQUIRED,
+	LOCAL_EXECUTION_OPTIONAL,
+	LOCAL_EXECUTION_DISABLED
+} LocalExecutionStatus;
+
+extern enum LocalExecutionStatus CurrentLocalExecutionStatus;
 
 /* extern function declarations */
 extern uint64 ExecuteLocalTaskList(List *taskList,
@@ -35,5 +41,6 @@ extern bool AnyTaskAccessesLocalNode(List *taskList);
 extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void DisableLocalExecution(void);
+extern void SetLocalExecutionStatus(LocalExecutionStatus newStatus);
 
 #endif /* LOCAL_EXECUTION_H */

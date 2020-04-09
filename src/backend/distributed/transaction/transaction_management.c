@@ -445,8 +445,7 @@ ResetGlobalVariables()
 {
 	CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 	XactModificationLevel = XACT_MODIFICATION_NONE;
-	TransactionAccessedLocalPlacement = false;
-	TransactionConnectedToLocalGroup = false;
+	SetLocalExecutionStatus(LOCAL_EXECUTION_OPTIONAL);
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;

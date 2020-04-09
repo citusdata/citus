@@ -458,7 +458,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 				if (isLocalShardPlacement)
 				{
-					TransactionConnectedToLocalGroup = true;
+					SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
 				}
 			}
 

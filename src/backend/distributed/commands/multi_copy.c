@@ -2029,7 +2029,7 @@ ShouldExecuteCopyLocally(bool isIntermediateResult)
 		return false;
 	}
 
-	if (TransactionAccessedLocalPlacement)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -2052,7 +2052,8 @@ ShouldExecuteCopyLocally(bool isIntermediateResult)
 	}
 
 	/* if we connected to the localhost via a connection, we might not be able to see some previous changes that are done via the connection */
-	return !TransactionConnectedToLocalGroup && IsMultiStatementTransaction();
+	return CurrentLocalExecutionStatus != LOCAL_EXECUTION_DISABLED &&
+		   IsMultiStatementTransaction();
 }
 
 
@@ -3294,7 +3295,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 			 */
 			if (!isCopyToIntermediateFile)
 			{
-				TransactionConnectedToLocalGroup = true;
+				SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
 			}
 		}
 

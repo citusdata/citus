@@ -83,10 +83,11 @@ static void
 EnsureCompatibleLocalExecutionState(List *taskList)
 {
 	/*
-	 * We have TransactionAccessedLocalPlacement check here to avoid unnecessarily
+	 * We have LOCAL_EXECUTION_REQUIRED check here to avoid unnecessarily
 	 * iterating the task list in AnyTaskAccessesLocalNode.
 	 */
-	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(taskList))
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED &&
+		AnyTaskAccessesLocalNode(taskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}

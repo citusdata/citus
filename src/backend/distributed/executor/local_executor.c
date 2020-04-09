@@ -107,8 +107,7 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
-bool TransactionAccessedLocalPlacement = false;
-bool TransactionConnectedToLocalGroup = false;
+LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
@@ -124,6 +123,8 @@ static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   const char ***parameterValues);
 static void LocallyExecuteUtilityTask(const char *utilityCommand);
 static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
+static void EnsureTransitionPossible(LocalExecutionStatus from,
+									 LocalExecutionStatus to);
 
 /*
  * ExecuteLocalTasks executes the given tasks locally.
@@ -193,7 +194,7 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 		 */
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
-			TransactionAccessedLocalPlacement = true;
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 		}
 		LogLocalCommand(task);
 
@@ -351,7 +352,7 @@ ExecuteLocalUtilityTaskList(List *localTaskList)
 		 * We should register the access to local placement to force the local
 		 * execution of the following commands withing the current transaction.
 		 */
-		TransactionAccessedLocalPlacement = true;
+		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
 		LogLocalCommand(localTask);
 
@@ -590,6 +591,47 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 
 
 /*
+ * SetLocalExecutionStatus sets the local execution status to
+ * the given status, it errors if the transition is not possible from the
+ * current status.
+ */
+void
+SetLocalExecutionStatus(LocalExecutionStatus newStatus)
+{
+	EnsureTransitionPossible(CurrentLocalExecutionStatus, newStatus);
+
+	CurrentLocalExecutionStatus = newStatus;
+}
+
+
+/*
+ * EnsureTransitionPossible errors if we cannot switch to the 'to' status
+ * from the 'from' status.
+ */
+static void
+EnsureTransitionPossible(LocalExecutionStatus from, LocalExecutionStatus
+						 to)
+{
+	if (from == LOCAL_EXECUTION_REQUIRED && to == LOCAL_EXECUTION_DISABLED)
+	{
+		ereport(ERROR,
+				(errmsg(
+					 "cannot switch local execution status from local execution required "
+					 "to local execution disabled since it can cause "
+					 "visibility problems in the current transaction")));
+	}
+	if (from == LOCAL_EXECUTION_DISABLED && to == LOCAL_EXECUTION_REQUIRED)
+	{
+		ereport(ERROR,
+				(errmsg(
+					 "cannot switch local execution status from local execution disabled "
+					 "to local execution enabled since it can cause "
+					 "visibility problems in the current transaction")));
+	}
+}
+
+
+/*
  *  ShouldExecuteTasksLocally gets a task list and returns true if the
  *  any of the tasks should be executed locally. This function does not
  *  guarantee that any task have to be executed locally.
@@ -602,7 +644,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (TransactionConnectedToLocalGroup)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_DISABLED)
 	{
 		/*
 		 * if the current transaction accessed the local node over a connection
@@ -611,7 +653,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (TransactionAccessedLocalPlacement)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
 	{
 		bool isValidLocalExecutionPath PG_USED_FOR_ASSERTS_ONLY = false;
 
@@ -743,7 +785,7 @@ TaskAccessesLocalNode(Task *task)
 void
 ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (TransactionAccessedLocalPlacement)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
 	{
 		ereport(ERROR,
 				(errmsg("cannot execute command because a local execution has "

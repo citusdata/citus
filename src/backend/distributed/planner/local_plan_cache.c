@@ -179,7 +179,7 @@ IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistribute
 		return false;
 	}
 
-	if (TransactionConnectedToLocalGroup)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_DISABLED)
 	{
 		/* transaction already connected to localhost */
 		return false;

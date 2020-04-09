@@ -975,7 +975,8 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 	 * then we should error out as it would cause inconsistencies across the
 	 * remote connection and local execution.
 	 */
-	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(remoteTaskList))
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED &&
+		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
@@ -1111,7 +1112,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (TransactionAccessedLocalPlacement)
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
 	{
 		/*
 		 * In case localExecutionHappened, we force the executor to use 2PC.
@@ -1835,10 +1836,9 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				placementExecutionReady = false;
 			}
 
-			if (!TransactionConnectedToLocalGroup && taskPlacement->groupId ==
-				localGroupId)
+			if (taskPlacement->groupId == localGroupId)
 			{
-				TransactionConnectedToLocalGroup = true;
+				SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
 			}
 		}
 	}
