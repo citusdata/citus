@@ -1013,7 +1013,7 @@ master_remove_node
 
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s3-commit s2-commit s2-print-distributed-objects
 ?column?
 
 1
@@ -1109,10 +1109,10 @@ step s3-create-table: <... completed>
 create_distributed_table
 
 
-step s2-commit:
+step s3-commit:
  COMMIT;
 
-step s3-commit:
+step s2-commit:
  COMMIT;
 
 step s2-print-distributed-objects:

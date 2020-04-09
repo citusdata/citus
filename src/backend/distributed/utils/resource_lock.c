@@ -320,6 +320,36 @@ IntToLockMode(int mode)
 
 
 /*
+ * LockColocationId returns after acquiring a co-location ID lock, typically used
+ * for rebalancing and replication.
+ */
+void
+LockColocationId(int colocationId, LOCKMODE lockMode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
+	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
+}
+
+
+/*
+ * UnlockColocationId releases a co-location ID lock.
+ */
+void
+UnlockColocationId(int colocationId, LOCKMODE lockMode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+
+	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
+	LockRelease(&tag, lockMode, sessionLock);
+}
+
+
+/*
  * LockShardDistributionMetadata returns after grabbing a lock for distribution
  * metadata related to the specified shard, blocking if required. Any locks
  * acquired using this method are released at transaction end.

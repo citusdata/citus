@@ -8,6 +8,7 @@ SELECT nextval('pg_catalog.pg_dist_shardid_seq') AS last_shard_id \gset
 SET citus.replication_model TO streaming;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
+SET citus.replicate_reference_tables_on_activate TO off;
 -- Simulates a readonly node by setting default_transaction_read_only.
 CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
     RETURNS TEXT
@@ -173,7 +174,6 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 -- Test updating a node when another node is in readonly-mode
 ---------------------------------------------------------------------
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
@@ -383,7 +383,6 @@ SELECT verify_metadata('localhost', :worker_1_port);
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -449,7 +448,6 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -511,7 +509,6 @@ SELECT wait_until_metadata_sync();
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "ref_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1

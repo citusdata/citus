@@ -3,6 +3,8 @@ CREATE SCHEMA "extension'test";
 -- use  a schema name with escape character
 SET search_path TO "extension'test";
 
+SET client_min_messages TO WARNING;
+
 -- create an extension on the given search_path
 -- the extension is on contrib, so should be avaliable for the regression tests
 CREATE EXTENSION seg;
@@ -48,10 +50,8 @@ CREATE TABLE ref_table (a public.issn);
 SELECT create_reference_table('ref_table');
 
 -- now,  drop the extension, recreate it with an older version and update it to latest version
-SET client_min_messages TO WARNING;
 DROP EXTENSION isn CASCADE;
 CREATE EXTENSION isn WITH VERSION "1.1";
-RESET client_min_messages;
 
 -- before updating the version, ensure the current version
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'isn'$$);
@@ -77,26 +77,20 @@ SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_exte
 -- show that the ALTER EXTENSION command is propagated
 SELECT run_command_on_workers($$SELECT nspname from pg_namespace where oid=(SELECT extnamespace FROM pg_extension WHERE extname = 'isn')$$);
 
--- SET client_min_messages TO WARNING before executing a DROP EXTENSION statement
-SET client_min_messages TO WARNING;
 -- drop the extension finally
 DROP EXTENSION isn CASCADE;
--- restore client_min_messages after DROP EXTENSION
-RESET client_min_messages;
 
 -- now make sure that the reference tables depending on an extension can be succesfully created.
 -- we should also ensure that we replicate this reference table (and hence the extension)
 -- to new nodes after calling master_activate_node.
 
 -- now, first drop seg and existing objects before next test
-SET client_min_messages TO WARNING;
 DROP EXTENSION seg CASCADE;
 
 -- but as we have only 2 ports in postgresql tests, let's remove one of the nodes first
 -- before remove, first remove the existing relations (due to the other tests)
 
 DROP SCHEMA "extension'test" CASCADE;
-RESET client_min_messages;
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
 
 -- then create the extension
@@ -189,24 +183,14 @@ set citus.enable_ddl_propagation to 'off';
 CREATE EXTENSION pg_buffercache;
 set citus.enable_ddl_propagation to 'on';
 
--- SET client_min_messages TO WARNING before executing a DROP EXTENSION statement
-SET client_min_messages TO WARNING;
 DROP EXTENSION pg_buffercache, isn CASCADE;
 SELECT count(*) FROM pg_extension WHERE extname IN ('pg_buffercache', 'isn');
--- restore client_min_messages after DROP EXTENSION
-RESET client_min_messages;
-
--- SET client_min_messages TO WARNING before executing a DROP EXTENSION statement
-SET client_min_messages TO WARNING;
 
 -- drop extension should just work
 DROP EXTENSION seg CASCADE;
 
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'seg'$$);
-
--- restore client_min_messages after DROP EXTENSION
-RESET client_min_messages;
 
 -- make sure that the extension is not avaliable anymore as a distributed object
 SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
@@ -229,7 +213,6 @@ ROLLBACK;
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
 
 -- drop the schema and all the objects
-SET client_min_messages TO WARNING;
 DROP SCHEMA "extension'test" CASCADE;
 
 -- recreate for the next tests
@@ -237,8 +220,6 @@ CREATE SCHEMA "extension'test";
 
 -- use  a schema name with escape character
 SET search_path TO "extension'test";
-
-RESET client_min_messages;
 
 -- remove the node, we'll add back again
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
@@ -269,5 +250,4 @@ SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_ext
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
 
 -- drop the schema and all the objects
-SET client_min_messages TO WARNING;
 DROP SCHEMA "extension'test" CASCADE;

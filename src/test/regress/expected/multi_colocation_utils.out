@@ -337,6 +337,13 @@ SELECT find_shard_interval_index(1300016);
 (1 row)
 
 -- check external colocation API
+SELECT count(*) FROM pg_dist_partition WHERE colocationid = 4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DELETE FROM pg_dist_colocation WHERE colocationid = 4;
 SET citus.shard_count = 2;
 CREATE TABLE table1_groupA ( id int );
 SELECT create_distributed_table('table1_groupA', 'id');
@@ -433,12 +440,11 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
-(5 rows)
+(4 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -557,13 +563,12 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
            11 |          3 |                 2 |                     23 |                           0
-(6 rows)
+(5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -652,13 +657,12 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            3 |          4 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
            11 |          3 |                 2 |                     23 |                           0
-(6 rows)
+(5 rows)
 
 -- cross check with internal colocation API
 SELECT
