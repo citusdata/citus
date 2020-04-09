@@ -1024,6 +1024,17 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
+	if (FindNodeCheck((Node *) queryTree->limitCount, IsNodeSubquery))
+	{
+		preconditionsSatisfied = false;
+		errorMessage = "subquery in LIMIT is not supported in multi-shard queries";
+	}
+
+	if (FindNodeCheck((Node *) queryTree->limitOffset, IsNodeSubquery))
+	{
+		preconditionsSatisfied = false;
+		errorMessage = "subquery in OFFSET is not supported in multi-shard queries";
+	}
 
 	/* finally check and error out if not satisfied */
 	if (!preconditionsSatisfied)
