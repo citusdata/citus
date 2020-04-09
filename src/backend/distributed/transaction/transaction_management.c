@@ -28,6 +28,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/subplan_execution.h"
@@ -449,6 +450,7 @@ ResetGlobalVariables()
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
+	TransactionModifiedNodeMetadata = false;
 }
 
 

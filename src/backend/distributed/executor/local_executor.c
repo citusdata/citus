@@ -136,6 +136,10 @@ static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 uint64
 ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 {
+	if (list_length(taskList) == 0)
+	{
+		return 0;
+	}
 	DistributedPlan *distributedPlan = NULL;
 	ParamListInfo paramListInfo = NULL;
 	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,
@@ -598,6 +602,15 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
+	if (TransactionConnectedToLocalGroup)
+	{
+		/*
+		 * if the current transaction accessed the local node over a connection
+		 * then we can't use local execution because of visibility problems.
+		 */
+		return false;
+	}
+
 	if (TransactionAccessedLocalPlacement)
 	{
 		bool isValidLocalExecutionPath PG_USED_FOR_ASSERTS_ONLY = false;
@@ -657,7 +670,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		 * has happened because that'd break transaction visibility rules and
 		 * many other things.
 		 */
-		return !TransactionConnectedToLocalGroup;
+		return true;
 	}
 
 	if (!singleTask)

@@ -29,6 +29,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
@@ -83,6 +84,13 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 		if (relationId == InvalidOid || !IsCitusTable(relationId))
 		{
 			continue;
+		}
+
+		if (IsReferenceTable(relationId))
+		{
+			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
+			int colocationId = CreateReferenceTableColocationId();
+			LockColocationId(colocationId, ExclusiveLock);
 		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */

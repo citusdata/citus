@@ -111,3 +111,6 @@ s/worker_hash_partition_table  \([0-9]+/worker_hash_partition_table  \(xxxxxxx/g
 # ignore first parameter for citus_extradata_container due to differences between pg11 and pg12
 # can be removed when we remove PG_VERSION_NUM >= 120000
 s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_container\(XXX/g
+
+# ignore referene table replication messages
+/replicating reference table.*$/d

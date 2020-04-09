@@ -52,28 +52,9 @@ enum MultiConnectionMode
 	/* open a connection per (co-located set of) placement(s) */
 	CONNECTION_PER_PLACEMENT = 1 << 3,
 
-	OUTSIDE_TRANSACTION = 1 << 4,
-
-	/* connection has not been used to access data */
-	REQUIRE_SIDECHANNEL = 1 << 5
+	OUTSIDE_TRANSACTION = 1 << 4
 };
 
-/*
- * ConnectionPurpose defines what a connection is used for during the
- * current transaction. This is primarily to not allocate connections
- * that are needed for data access to other purposes.
- */
-typedef enum ConnectionPurpose
-{
-	/* connection can be used for any purpose */
-	CONNECTION_PURPOSE_ANY,
-
-	/* connection can be used to access placements */
-	CONNECTION_PURPOSE_DATA_ACCESS,
-
-	/* connection can be used for auxiliary functions, but not data access */
-	CONNECTION_PURPOSE_SIDECHANNEL
-} ConnectionPurpose;
 
 typedef enum MultiConnectionState
 {
@@ -115,9 +96,6 @@ typedef struct MultiConnection
 
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
-
-	/* defines the purpose of the connection */
-	ConnectionPurpose purpose;
 
 	/* time connection establishment was started, for timeout */
 	TimestampTz connectionStart;

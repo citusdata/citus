@@ -53,6 +53,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/query_pushdown_planning.h"
@@ -1366,6 +1367,16 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&IsolationTestSessionProcessID,
 		-1, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.replicate_reference_tables_on_activate",
+		NULL,
+		NULL,
+		&ReplicateReferenceTablesOnActivate,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);

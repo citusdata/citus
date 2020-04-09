@@ -301,18 +301,6 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 			 placementIndex++)
 		{
 			GroupShardPlacement *placement = &placementArray[placementIndex];
-			uint64 shardId = placement->shardId;
-
-			bool metadataLock = TryLockShardDistributionMetadata(shardId, ShareLock);
-
-			/* if the lock is not acquired warn the user */
-			if (metadataLock == false)
-			{
-				ereport(WARNING, (errcode(ERRCODE_LOCK_NOT_AVAILABLE),
-								  errmsg("lock is not acquired, size of shard "
-										 UINT64_FORMAT " will be ignored", shardId)));
-				continue;
-			}
 
 			if (placement->groupId == workerNode->groupId)
 			{

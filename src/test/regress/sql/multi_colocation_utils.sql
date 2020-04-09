@@ -151,8 +151,10 @@ SELECT find_shard_interval_index(1300002);
 SELECT find_shard_interval_index(1300003);
 SELECT find_shard_interval_index(1300016);
 
-
 -- check external colocation API
+
+SELECT count(*) FROM pg_dist_partition WHERE colocationid = 4;
+DELETE FROM pg_dist_colocation WHERE colocationid = 4;
 
 SET citus.shard_count = 2;
 

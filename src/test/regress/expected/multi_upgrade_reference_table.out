@@ -126,16 +126,17 @@ SELECT create_distributed_table('upgrade_reference_table_append', 'column1', 'ap
 (1 row)
 
 COPY upgrade_reference_table_append FROM STDIN;
+SELECT colocationid AS reference_table_colocationid FROM pg_dist_colocation WHERE distributioncolumntype=0 \gset
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- a          | f             |            0 | c
+ a          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -149,13 +150,13 @@ WHERE
  1360009 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -182,14 +183,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_append');
 
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_append'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -203,15 +204,15 @@ WHERE
  1360009 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -240,14 +241,14 @@ SELECT create_distributed_table('upgrade_reference_table_one_worker', 'column1')
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_one_worker'::regclass;
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360001 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -261,15 +262,15 @@ WHERE
  1360010 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360001 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -294,14 +295,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_one_worker');
 
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_one_worker'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -315,15 +316,15 @@ WHERE
  1360010 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -354,14 +355,14 @@ UPDATE pg_dist_shard_placement SET shardstate = 3
 WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass::oid) AND nodeport = :worker_1_port;
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360002 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -375,15 +376,15 @@ WHERE
  1360011 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360002 |          1 |                 2 |                     23 |                           0
+          1 |                 2 |                     23
 (1 row)
 
 SELECT
@@ -409,14 +410,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_one_unhealthy');
 
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -430,15 +431,15 @@ WHERE
  1360011 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -467,14 +468,14 @@ SELECT create_distributed_table('upgrade_reference_table_both_healthy', 'column1
 
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360003 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -488,15 +489,15 @@ WHERE
  1360012 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360003 |          1 |                 2 |                     23 |                           0
+          1 |                 2 |                     23
 (1 row)
 
 SELECT
@@ -521,14 +522,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_both_healthy');
 
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_both_healthy'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -542,15 +543,15 @@ WHERE
  1360012 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -580,14 +581,14 @@ SELECT create_distributed_table('upgrade_reference_table_transaction_rollback', 
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_transaction_rollback'::regclass;
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360004 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -601,15 +602,15 @@ WHERE
  1360013 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360004 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -636,14 +637,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_rollback'
 ROLLBACK;
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360004 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -657,15 +658,15 @@ WHERE
  1360013 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360004 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -695,14 +696,14 @@ SELECT create_distributed_table('upgrade_reference_table_transaction_commit', 'c
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='upgrade_reference_table_transaction_commit'::regclass;
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360004 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -716,15 +717,15 @@ WHERE
  1360014 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360004 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -751,14 +752,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_transaction_commit');
 COMMIT;
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -772,15 +773,15 @@ WHERE
  1360014 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -821,14 +822,14 @@ SELECT create_distributed_table('upgrade_reference_table_mx', 'column1');
 
 -- verify that streaming replicated tables cannot be upgraded to reference tables
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360005 | s
+ h          | f             | f                                 | s
 (1 row)
 
 SELECT
@@ -842,15 +843,15 @@ WHERE
  1360015 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360005 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -872,14 +873,14 @@ ERROR:  cannot upgrade to reference table
 DETAIL:  Upgrade is only supported for statement-based replicated tables but "upgrade_reference_table_mx" is streaming replicated
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360005 | s
+ h          | f             | f                                 | s
 (1 row)
 
 SELECT
@@ -893,15 +894,15 @@ WHERE
  1360015 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360005 |          1 |                 1 |                     23 |                           0
+          1 |                 1 |                     23
 (1 row)
 
 SELECT
@@ -941,14 +942,14 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- situation before upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- h          | f             |      1360006 | c
+ h          | f             | f                                 | c
 (1 row)
 
 SELECT
@@ -962,15 +963,15 @@ WHERE
  1360016 | f                   | f
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-      1360006 |          1 |                 2 |                     23 |                           0
+          1 |                 2 |                     23
 (1 row)
 
 SELECT
@@ -996,14 +997,14 @@ SELECT upgrade_to_reference_table('upgrade_reference_table_mx');
 
 -- situation after upgrade_reference_table
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT
@@ -1017,15 +1018,15 @@ WHERE
  1360016 | t                   | t
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_mx'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 SELECT
@@ -1045,14 +1046,14 @@ ORDER BY shardid;
 -- situation on metadata worker
 \c - - - :worker_1_port
 SELECT
-    partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+    partmethod, (partkey IS NULL) as partkeyisnull, colocationid = :reference_table_colocationid AS has_reference_table_colocation_id, repmodel
 FROM
     pg_dist_partition
 WHERE
     logicalrelid = 'upgrade_reference_table_mx'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel
+ partmethod | partkeyisnull | has_reference_table_colocation_id | repmodel
 ---------------------------------------------------------------------
- n          | t             |        10004 | t
+ n          | t             | t                                 | t
 (1 row)
 
 SELECT

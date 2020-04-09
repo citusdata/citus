@@ -7,6 +7,7 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
+SET citus.replicate_reference_tables_on_activate TO off;
 
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
 \gset

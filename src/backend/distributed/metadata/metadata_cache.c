@@ -2558,6 +2558,12 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	if (RelationGetRelid(triggerData->tg_relation) != DistPartitionRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
+
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
@@ -2619,6 +2625,12 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
+	if (RelationGetRelid(triggerData->tg_relation) != DistShardRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
+
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
 
@@ -2679,6 +2691,23 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 	}
 
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * Before 7.0-2 this trigger is on pg_dist_shard_placement,
+	 * ignore trigger in this scenario.
+	 */
+	Oid pgDistShardPlacementId = get_relname_relid("pg_dist_shard_placement",
+												   PG_CATALOG_NAMESPACE);
+	if (RelationGetRelid(triggerData->tg_relation) == pgDistShardPlacementId)
+	{
+		PG_RETURN_DATUM(PointerGetDatum(NULL));
+	}
+
+	if (RelationGetRelid(triggerData->tg_relation) != DistPlacementRelationId())
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("triggered on incorrect relation")));
+	}
 
 	HeapTuple newTuple = triggerData->tg_newtuple;
 	HeapTuple oldTuple = triggerData->tg_trigtuple;
@@ -3559,6 +3588,55 @@ DistTableOidList(void)
 	heap_close(pgDistPartition, AccessShareLock);
 
 	return distTableOidList;
+}
+
+
+/*
+ * ReferenceTableOidList function scans pg_dist_partition to create a list of all
+ * reference tables. To create the list, it performs sequential scan. Since it is not
+ * expected that this function will be called frequently, it is OK not to use index scan.
+ * If this function becomes performance bottleneck, it is possible to modify this function
+ * to perform index scan.
+ */
+List *
+ReferenceTableOidList()
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	List *referenceTableOidList = NIL;
+
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		Datum relationIdDatum = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_logicalrelid,
+											 tupleDescriptor, &isNull);
+		Oid relationId = DatumGetObjectId(relationIdDatum);
+		char partitionMethod = heap_getattr(heapTuple,
+											Anum_pg_dist_partition_partmethod,
+											tupleDescriptor, &isNull);
+
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, AccessShareLock);
+
+	return referenceTableOidList;
 }
 
 

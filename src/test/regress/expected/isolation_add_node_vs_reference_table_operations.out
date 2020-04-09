@@ -1,263 +1,274 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s2-load-metadata-cache s1-begin s1-add-second-worker s2-copy-to-reference-table s1-commit s2-print-content
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s1-begin s1-add-second-worker s2-copy-to-reference-table s1-commit s2-print-content
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-copy-to-reference-table:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
- <waiting ...>
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+
 step s1-commit:
     COMMIT;
 
-step s2-copy-to-reference-table: <... completed>
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              10
-57638          t              10
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s2-begin s2-copy-to-reference-table s1-add-second-worker s2-commit s2-print-content
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s2-begin s2-copy-to-reference-table s1-add-second-worker s2-commit s2-print-content
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-copy-to-reference-table:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
- <waiting ...>
-step s2-commit:
-	COMMIT;
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
-step s1-add-second-worker: <... completed>
 ?column?
 
 1
+step s2-commit:
+ COMMIT;
+
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              10
-57638          t              10
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-insert-to-reference-table:
-	INSERT INTO test_reference_table VALUES (6);
- <waiting ...>
+ INSERT INTO test_reference_table VALUES (6);
+
 step s1-commit:
     COMMIT;
 
-step s2-insert-to-reference-table: <... completed>
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              6
-57638          t              6
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s2-begin s2-insert-to-reference-table s1-add-second-worker s2-commit s2-print-content
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s2-begin s2-insert-to-reference-table s1-add-second-worker s2-commit s2-print-content
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-insert-to-reference-table:
-	INSERT INTO test_reference_table VALUES (6);
+ INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
- <waiting ...>
-step s2-commit:
-	COMMIT;
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
-step s1-add-second-worker: <... completed>
 ?column?
 
 1
+step s2-commit:
+ COMMIT;
+
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              6
-57638          t              6
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s1-begin s1-add-second-worker s2-ddl-on-reference-table s1-commit s2-print-index-count
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s1-begin s1-add-second-worker s2-ddl-on-reference-table s1-commit s2-print-index-count
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-ddl-on-reference-table:
-	CREATE INDEX reference_index ON test_reference_table(test_id);
+ CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
 step s1-commit:
     COMMIT;
 
 step s2-ddl-on-reference-table: <... completed>
 step s2-print-index-count:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              1
-57638          t              1
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s2-begin s2-ddl-on-reference-table s1-add-second-worker s2-commit s2-print-index-count
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s2-begin s2-ddl-on-reference-table s1-add-second-worker s2-commit s2-print-index-count
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-ddl-on-reference-table:
-	CREATE INDEX reference_index ON test_reference_table(test_id);
+ CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-index-count:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              1
-57638          t              1
 master_remove_node
 
 
 
 
-starting permutation: s2-load-metadata-cache s1-begin s1-add-second-worker s2-create-reference-table-2 s1-commit s2-print-content-2
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s1-begin s1-add-second-worker s2-create-reference-table-2 s1-commit s2-print-content-2
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-create-reference-table-2:
-	SELECT create_reference_table('test_reference_table_2');
+ SELECT create_reference_table('test_reference_table_2');
  <waiting ...>
 step s1-commit:
     COMMIT;
@@ -267,12 +278,12 @@ create_reference_table
 
 
 step s2-print-content-2:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -283,39 +294,314 @@ master_remove_node
 
 
 
-starting permutation: s2-load-metadata-cache s2-begin s2-create-reference-table-2 s1-add-second-worker s2-commit s2-print-content-2
+starting permutation: s1-do-not-replicate-on-activate s2-load-metadata-cache s2-begin s2-create-reference-table-2 s1-add-second-worker s2-commit s2-print-content-2
 create_distributed_table
 
 
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
 step s2-load-metadata-cache:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-reference-table-2:
-	SELECT create_reference_table('test_reference_table_2');
+ SELECT create_reference_table('test_reference_table_2');
 
 create_reference_table
 
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-content-2:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s1-begin s1-add-second-worker s2-copy-to-reference-table s1-commit s2-print-content
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s1-begin:
+    BEGIN;
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-copy-to-reference-table:
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+
+step s1-commit:
+    COMMIT;
+
+step s2-print-content:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              5
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s2-begin s2-copy-to-reference-table s1-add-second-worker s2-commit s2-print-content
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s2-begin:
+ BEGIN;
+
+step s2-copy-to-reference-table:
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-commit:
+ COMMIT;
+
+step s2-print-content:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              5
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s1-begin:
+    BEGIN;
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-insert-to-reference-table:
+ INSERT INTO test_reference_table VALUES (6);
+
+step s1-commit:
+    COMMIT;
+
+step s2-print-content:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s2-begin s2-insert-to-reference-table s1-add-second-worker s2-commit s2-print-content
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s2-begin:
+ BEGIN;
+
+step s2-insert-to-reference-table:
+ INSERT INTO test_reference_table VALUES (6);
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-commit:
+ COMMIT;
+
+step s2-print-content:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s1-begin s1-add-second-worker s2-ddl-on-reference-table s1-commit s2-print-index-count
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s1-begin:
+    BEGIN;
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-ddl-on-reference-table:
+ CREATE INDEX reference_index ON test_reference_table(test_id);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-ddl-on-reference-table: <... completed>
+step s2-print-index-count:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s2-begin s2-ddl-on-reference-table s1-add-second-worker s2-commit s2-print-index-count
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s2-begin:
+ BEGIN;
+
+step s2-ddl-on-reference-table:
+ CREATE INDEX reference_index ON test_reference_table(test_id);
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit:
+ COMMIT;
+
+step s1-add-second-worker: <... completed>
+?column?
+
+1
+step s2-print-index-count:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s1-begin s1-add-second-worker s2-create-reference-table-2 s1-commit s2-print-content-2
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s1-begin:
+    BEGIN;
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-create-reference-table-2:
+ SELECT create_reference_table('test_reference_table_2');
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-reference-table-2: <... completed>
+create_reference_table
+
+
+step s2-print-content-2:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -326,33 +612,78 @@ master_remove_node
 
 
 
-starting permutation: s1-begin s1-add-second-worker s2-copy-to-reference-table s1-commit s2-print-content
+starting permutation: s1-do-not-replicate-on-activate s2-begin s2-create-reference-table-2 s1-add-second-worker s2-commit s2-print-content-2
 create_distributed_table
 
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s2-begin:
+ BEGIN;
+
+step s2-create-reference-table-2:
+ SELECT create_reference_table('test_reference_table_2');
+
+create_reference_table
+
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit:
+ COMMIT;
+
+step s1-add-second-worker: <... completed>
+?column?
+
+1
+step s2-print-content-2:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
+
+nodeport       success        result
+
+57637          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-replicate-on-activate s1-begin s1-add-second-worker s2-copy-to-reference-table s1-commit s2-print-content
+create_distributed_table
+
+
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-copy-to-reference-table:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
 step s1-commit:
     COMMIT;
 
 step s2-copy-to-reference-table: <... completed>
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -363,33 +694,36 @@ master_remove_node
 
 
 
-starting permutation: s2-begin s2-copy-to-reference-table s1-add-second-worker s2-commit s2-print-content
+starting permutation: s1-replicate-on-activate s2-begin s2-copy-to-reference-table s1-add-second-worker s2-commit s2-print-content
 create_distributed_table
 
 
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
+
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-copy-to-reference-table:
-	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
+ COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -400,33 +734,36 @@ master_remove_node
 
 
 
-starting permutation: s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
+starting permutation: s1-replicate-on-activate s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
 create_distributed_table
 
+
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-insert-to-reference-table:
-	INSERT INTO test_reference_table VALUES (6);
+ INSERT INTO test_reference_table VALUES (6);
  <waiting ...>
 step s1-commit:
     COMMIT;
 
 step s2-insert-to-reference-table: <... completed>
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -437,33 +774,36 @@ master_remove_node
 
 
 
-starting permutation: s2-begin s2-insert-to-reference-table s1-add-second-worker s2-commit s2-print-content
+starting permutation: s1-replicate-on-activate s2-begin s2-insert-to-reference-table s1-add-second-worker s2-commit s2-print-content
 create_distributed_table
 
 
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
+
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-insert-to-reference-table:
-	INSERT INTO test_reference_table VALUES (6);
+ INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-content:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -474,33 +814,36 @@ master_remove_node
 
 
 
-starting permutation: s1-begin s1-add-second-worker s2-ddl-on-reference-table s1-commit s2-print-index-count
+starting permutation: s1-replicate-on-activate s1-begin s1-add-second-worker s2-ddl-on-reference-table s1-commit s2-print-index-count
 create_distributed_table
 
+
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-ddl-on-reference-table:
-	CREATE INDEX reference_index ON test_reference_table(test_id);
+ CREATE INDEX reference_index ON test_reference_table(test_id);
  <waiting ...>
 step s1-commit:
     COMMIT;
 
 step s2-ddl-on-reference-table: <... completed>
 step s2-print-index-count:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -511,33 +854,36 @@ master_remove_node
 
 
 
-starting permutation: s2-begin s2-ddl-on-reference-table s1-add-second-worker s2-commit s2-print-index-count
+starting permutation: s1-replicate-on-activate s2-begin s2-ddl-on-reference-table s1-add-second-worker s2-commit s2-print-index-count
 create_distributed_table
 
 
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
+
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-ddl-on-reference-table:
-	CREATE INDEX reference_index ON test_reference_table(test_id);
+ CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-index-count:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -548,21 +894,24 @@ master_remove_node
 
 
 
-starting permutation: s1-begin s1-add-second-worker s2-create-reference-table-2 s1-commit s2-print-content-2
+starting permutation: s1-replicate-on-activate s1-begin s1-add-second-worker s2-create-reference-table-2 s1-commit s2-print-content-2
 create_distributed_table
 
+
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
 
 step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-create-reference-table-2:
-	SELECT create_reference_table('test_reference_table_2');
+ SELECT create_reference_table('test_reference_table_2');
  <waiting ...>
 step s1-commit:
     COMMIT;
@@ -572,12 +921,12 @@ create_reference_table
 
 
 step s2-print-content-2:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
@@ -588,41 +937,86 @@ master_remove_node
 
 
 
-starting permutation: s2-begin s2-create-reference-table-2 s1-add-second-worker s2-commit s2-print-content-2
+starting permutation: s1-replicate-on-activate s2-begin s2-create-reference-table-2 s1-add-second-worker s2-commit s2-print-content-2
 create_distributed_table
 
 
+step s1-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO on;
+
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-reference-table-2:
-	SELECT create_reference_table('test_reference_table_2');
+ SELECT create_reference_table('test_reference_table_2');
 
 create_reference_table
 
 
 step s1-add-second-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-add-second-worker: <... completed>
 ?column?
 
 1
 step s2-print-content-2:
-	SELECT
-		nodeport, success, result
-	FROM
-		run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
-	ORDER BY
-		nodeport;
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('test_reference_table_2', 'select count(*) from %s')
+ ORDER BY
+  nodeport;
 
 nodeport       success        result
 
 57637          t              1
 57638          t              1
+master_remove_node
+
+
+
+
+starting permutation: s1-do-not-replicate-on-activate s1-add-second-worker s2-begin s1-begin s1-drop-reference-table s2-replicate-reference-tables s1-commit s2-commit
+create_distributed_table
+
+
+step s1-do-not-replicate-on-activate:
+ SET citus.replicate_reference_tables_on_activate TO off;
+
+step s1-add-second-worker:
+ SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?
+
+1
+step s2-begin:
+ BEGIN;
+
+step s1-begin:
+    BEGIN;
+
+step s1-drop-reference-table:
+ DROP TABLE test_reference_table;
+
+step s2-replicate-reference-tables:
+ SET client_min_messages TO DEBUG2;
+ SELECT replicate_reference_tables();
+ RESET client_min_messages;
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-replicate-reference-tables: <... completed>
+replicate_reference_tables
+
+
+step s2-commit:
+ COMMIT;
+
 master_remove_node
 
 

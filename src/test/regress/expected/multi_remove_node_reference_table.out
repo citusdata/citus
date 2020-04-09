@@ -3,6 +3,7 @@
 --
 -- Tests that check the metadata after master_remove_node.
 SET citus.next_shard_id TO 1380000;
+SET citus.replicate_reference_tables_on_activate TO off;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
@@ -134,15 +135,15 @@ WHERE
  1380000 |          1 |           0 | localhost |    57638
 (1 row)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -187,15 +188,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -216,12 +217,12 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  node at "localhost:xxxxx" does not exist
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -242,7 +243,6 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for the next test
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -262,20 +262,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -291,10 +290,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -318,20 +316,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -347,10 +344,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 -- remove node in a transaction and COMMIT
@@ -367,20 +363,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -396,10 +391,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -427,15 +421,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -456,9 +450,9 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -478,20 +472,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -507,10 +500,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -539,15 +531,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 --verify the data is inserted
@@ -581,9 +573,9 @@ SELECT * FROM remove_node_reference_table;
 (1 row)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -603,20 +595,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -632,10 +623,9 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
 \c - - - :master_port
 BEGIN;
@@ -664,15 +654,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -693,6 +683,7 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 SET citus.next_shard_id TO 1380001;
 -- verify table structure is changed
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;
@@ -704,7 +695,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -724,20 +714,19 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
-(1 row)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 BEGIN;
@@ -816,15 +805,15 @@ ORDER BY
  1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -872,15 +861,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -901,10 +890,9 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -926,21 +914,19 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY
     shardid;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
-(2 rows)
+(0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -957,11 +943,9 @@ FROM
 WHERE
     nodeport = :worker_2_port
 ORDER BY shardid ASC;
- shardid | shardstate | shardlength | nodename  | nodeport
+ shardid | shardstate | shardlength | nodename | nodeport
 ---------------------------------------------------------------------
- 1380001 |          1 |           0 | localhost |    57638
- 1380002 |          1 |           0 | localhost |    57638
-(2 rows)
+(0 rows)
 
 \c - - - :master_port
 SELECT master_disable_node('localhost', :worker_2_port);
@@ -987,15 +971,15 @@ WHERE
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT *
+SELECT shardcount, replicationfactor, distributioncolumntype
 FROM pg_dist_colocation
 WHERE colocationid IN
     (SELECT colocationid
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
- colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
+ shardcount | replicationfactor | distributioncolumntype
 ---------------------------------------------------------------------
-        10004 |          1 |                -1 |                      0 |                           0
+          1 |                -1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -1016,10 +1000,9 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
+SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "table1" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1
