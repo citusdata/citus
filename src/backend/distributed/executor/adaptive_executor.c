@@ -2393,7 +2393,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 			 * remaining are optional. If the executor can get more connections,
 			 * it can increase the parallelism.
 			 */
-			connectionFlags |= OPTIONAL_CONNECTION;
+			SetCriticalConnectionFlag(&connectionFlags, OPTIONAL_CONNECTION);
 		}
 		else if (!UseConnectionPerPlacement())
 		{
@@ -2403,7 +2403,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 			 * always finish the execution with a single connection, so wait until we get
 			 * one connection.
 			 */
-			connectionFlags |= WAIT_FOR_CONNECTION;
+			SetCriticalConnectionFlag(&connectionFlags, WAIT_FOR_CONNECTION);
 		}
 
 		/* open a new connection to the worker */

@@ -222,6 +222,8 @@ extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownAllConnections(void);
 extern void ShutdownConnection(MultiConnection *connection);
 
+extern void SetCriticalConnectionFlag(int *prevFlags, MultiConnectionMode connectionFlag);
+
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);

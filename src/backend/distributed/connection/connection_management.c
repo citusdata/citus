@@ -381,6 +381,18 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 }
 
 
+void
+SetCriticalConnectionFlag(int *prevFlags, MultiConnectionMode connectionFlag)
+{
+	*prevFlags |= connectionFlag;
+	if ((*prevFlags & WAIT_FOR_CONNECTION) && (*prevFlags & OPTIONAL_CONNECTION))
+	{
+		ereport(ERROR, (errmsg(
+							"connection cannot have both wait for connection and optional connection flag")));
+	}
+}
+
+
 /*
  * FindAvailableConnection searches the given list of connections for one that
  * is not claimed exclusively.
