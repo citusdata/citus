@@ -24,3 +24,18 @@ SELECT * FROM run_command_on_workers($$
   SELECT array_agg((xact_dirs.dir, result_files.result_file)) FROM xact_dirs LEFT OUTER JOIN result_files ON xact_dirs.dir = result_files.dir;
 $$) WHERE result <> '';
 
+
+-- ensure that we didn't leak any schemas in repartition joins
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';
+
+\c - - - :worker_1_port
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';
+
+\c - - - :worker_2_port
+SELECT nspname
+FROM pg_catalog.pg_namespace
+WHERE nspname like 'pg_merge_job%';

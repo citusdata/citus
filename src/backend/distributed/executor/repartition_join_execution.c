@@ -32,6 +32,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/directed_acyclic_graph_execution.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -49,6 +50,7 @@ static void TraverseJobTree(Job *curJob, List **jobs);
 static char * GenerateCreateSchemasCommand(List *jobIds, char *schemaOwner);
 static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
+static void EnsureCompatibleLocalExecutionState(List *taskList);
 
 
 /*
@@ -63,11 +65,31 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 
 	List *allTasks = TaskAndExecutionList(topLevelTasks);
 
+	EnsureCompatibleLocalExecutionState(allTasks);
+
 	List *jobIds = CreateTemporarySchemasForMergeTasks(topLevelJob);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks, jobIds);
 
 	return jobIds;
+}
+
+
+/*
+ * EnsureCompatibleLocalExecutionState makes sure that the tasks won't have
+ * any visibility problems because of local execution.
+ */
+static void
+EnsureCompatibleLocalExecutionState(List *taskList)
+{
+	/*
+	 * We have TransactionAccessedLocalPlacement check here to avoid unnecessarily
+	 * iterating the task list in AnyTaskAccessesLocalNode.
+	 */
+	if (TransactionAccessedLocalPlacement && AnyTaskAccessesLocalNode(taskList))
+	{
+		ErrorIfTransactionAccessedPlacementsLocally();
+	}
 }
 
 
