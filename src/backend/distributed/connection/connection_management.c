@@ -995,6 +995,16 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	ConnParamsHashEntry *entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
 	if (!found || !entry->isValid)
 	{
+		if (!found)
+		{
+			/*
+			 * Zero out entry, but not the key part.
+			 * Avoids leaving invalid pointers in hash table if GetConnParam throws with MemoryContextAllocZero.
+			 */
+			memset(((char *) entry) + sizeof(ConnectionHashKey), 0,
+				   sizeof(ConnParamsHashEntry) - sizeof(ConnectionHashKey));
+		}
+
 		/* avoid leaking memory in the keys and values arrays */
 		if (found && !entry->isValid)
 		{
@@ -1043,9 +1053,6 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 static void
 FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 {
-	char **keyword = NULL;
-	char **value = NULL;
-
 	/*
 	 * if there was a memory error during the initialization of ConnParamHashEntry in
 	 * GetConnParams the keywords or values might not have been initialized completely.
@@ -1058,7 +1065,7 @@ FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 
 	if (entry->keywords != NULL)
 	{
-		keyword = &entry->keywords[entry->runtimeParamStart];
+		char **keyword = &entry->keywords[entry->runtimeParamStart];
 		while (*keyword != NULL)
 		{
 			pfree(*keyword);
@@ -1070,7 +1077,7 @@ FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 
 	if (entry->values != NULL)
 	{
-		value = &entry->values[entry->runtimeParamStart];
+		char **value = &entry->values[entry->runtimeParamStart];
 		while (*value != NULL)
 		{
 			pfree(*value);
@@ -1079,6 +1086,8 @@ FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 		pfree(entry->values);
 		entry->values = NULL;
 	}
+
+	entry->runtimeParamStart = 0;
 }
 
 
