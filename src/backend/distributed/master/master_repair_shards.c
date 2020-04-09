@@ -426,15 +426,28 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
 					targetNodeName, targetNodePort);
 
-	/* finally insert the placements to pg_dist_placement */
+	/*
+	 * Finally insert the placements to pg_dist_placement and sync it to the
+	 * metadata workers.
+	 */
 	foreach_ptr(colocatedShard, colocatedShardList)
 	{
 		uint64 colocatedShardId = colocatedShard->shardId;
 		uint32 groupId = GroupForNode(targetNodeName, targetNodePort);
+		uint64 placementId = GetNextPlacementId();
 
-		InsertShardPlacementRow(colocatedShardId, INVALID_PLACEMENT_ID,
+		InsertShardPlacementRow(colocatedShardId, placementId,
 								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
 								groupId);
+
+		if (ShouldSyncTableMetadata(colocatedShard->relationId))
+		{
+			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
+															SHARD_STATE_ACTIVE, 0,
+															groupId);
+
+			SendCommandToWorkersWithMetadata(placementCommand);
+		}
 	}
 }
 
