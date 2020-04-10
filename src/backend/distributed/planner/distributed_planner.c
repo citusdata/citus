@@ -258,8 +258,27 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			planContext.plan = standard_planner(planContext.query,
 												planContext.cursorOptions,
 												planContext.boundParams);
+
 			if (needsDistributedPlanning)
 			{
+				/*
+				 * standard_planner rewrites simple queries like 'select 10' to PARAM_EXEC nodes,
+				 * which we're unable to handle. Meanwhile we only optimize rewrites to Const.
+				 * So deoptimize non-Const LIMIT/OFFSET, standard_planner will handle it again later.
+				 */
+				if (planContext.query->limitCount &&
+					!IsA(planContext.query->limitCount, Const))
+				{
+					planContext.query->limitCount = planContext.originalQuery->limitCount;
+				}
+
+				if (planContext.query->limitOffset &&
+					!IsA(planContext.query->limitOffset, Const))
+				{
+					planContext.query->limitOffset =
+						planContext.originalQuery->limitOffset;
+				}
+
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
@@ -806,7 +825,7 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
-	#if PG_VERSION_NUM < PG_VERSION_12
+#if PG_VERSION_NUM < PG_VERSION_12
 	Query *query = planContext->query;
 
 	/*

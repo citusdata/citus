@@ -553,8 +553,40 @@ SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET my_limi
 
 DROP FUNCTION my_limit();
 -- subqueries should error out
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT min(l_linenumber) FROM lineitem_hash) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
+ l_orderkey
+---------------------------------------------------------------------
+       8997
+(1 row)
+
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
-ERROR:  subquery in LIMIT is not supported in multi-shard queries
+ l_orderkey
+---------------------------------------------------------------------
+          1
+          1
+          1
+          1
+          1
+          1
+          2
+          3
+          3
+          3
+(10 rows)
+
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
-ERROR:  subquery in OFFSET is not supported in multi-shard queries
+ l_orderkey
+---------------------------------------------------------------------
+          3
+          3
+          3
+          4
+          5
+          5
+          5
+          6
+          7
+          7
+(10 rows)
+
 DROP TABLE lineitem_hash;
