@@ -131,7 +131,7 @@ SELECT master_create_distributed_table('second_dustbunnies', 'id', 'hash');
 SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 
 -- run VACUUM and ANALYZE against the table on the master
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
 VACUUM dustbunnies;
@@ -143,21 +143,21 @@ ANALYZE dustbunnies;
 VACUUM (FULL) dustbunnies;
 VACUUM ANALYZE dustbunnies;
 
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 -- disable auto-VACUUM for next test
 ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
 \gset
 
 -- send a VACUUM FREEZE after adding a new row
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
 INSERT INTO dustbunnies VALUES (5, 'peter');
 VACUUM (FREEZE) dustbunnies;
 
 -- verify that relfrozenxid increased
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
@@ -166,18 +166,18 @@ SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 -- add NULL values, then perform column-specific ANALYZE
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
 ANALYZE dustbunnies (name);
 
 -- verify that name's NULL ratio is updated but age's is not
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
-\c - - - :master_port
+\c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
 -- verify warning for unqualified VACUUM

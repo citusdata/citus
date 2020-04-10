@@ -58,7 +58,7 @@ BEGIN;
 
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
 
-	\c - - - :master_port
+	\c - - :master_host :master_port
 
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp, (process_id = pg_backend_pid()) FROM get_current_transaction_id();
 

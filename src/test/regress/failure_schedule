@@ -3,7 +3,7 @@ test: failure_test_helpers
 
 # this should only be run by pg_regress_multi, you don't need it
 test: failure_setup
-test: multi_test_helpers
+test: multi_test_helpers multi_test_helpers_superuser
 test: failure_parallel_connection
 test: failure_replicated_partitions
 test: multi_test_catalog_views

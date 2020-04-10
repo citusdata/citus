@@ -25,7 +25,7 @@ test: multi_cluster_management
 test: alter_role_propagation
 test: propagate_extension_commands
 test: escape_extension_name
-test: multi_test_helpers
+test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_name_lengths
@@ -40,8 +40,9 @@ test: multi_read_from_secondaries
 # uploading data to it.
 # ----------
 test: multi_create_table
-test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
-test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select
+test: multi_create_table_superuser
+test: multi_create_table_constraints multi_master_protocol multi_load_data multi_load_data_superuser multi_behavioral_analytics_create_table
+test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_behavioral_analytics_create_table_superuser
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict
