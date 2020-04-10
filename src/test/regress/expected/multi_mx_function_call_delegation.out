@@ -406,7 +406,7 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 \set VERBOSITY terse
 select mx_call_func_raise(2);
 DEBUG:  pushing down the function call
-DEBUG:  warning
+WARNING:  warning
 ERROR:  error
 \set VERBOSITY default
 -- Don't push-down when doing INSERT INTO ... SELECT func();

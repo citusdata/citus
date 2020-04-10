@@ -68,7 +68,7 @@
 
 
 static List *plannerRestrictionContextList = NIL;
-int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
+int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
 static uint64 NextPlanId = 1;
 
 /* keep track of planner call stack levels */
@@ -1321,7 +1321,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	if (IsMultiTaskPlan(distributedPlan))
 	{
 		/* if it is not a single task executable plan, inform user according to the log level */
-		if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF)
+		if (MultiTaskQueryLogLevel != CITUS_LOG_LEVEL_OFF)
 		{
 			ereport(MultiTaskQueryLogLevel, (errmsg(
 												 "multi-task query about to be executed"),

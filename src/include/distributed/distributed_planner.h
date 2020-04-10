@@ -30,7 +30,6 @@
 /* values used by jobs and tasks which do not require identifiers */
 #define INVALID_JOB_ID 0
 #define INVALID_TASK_ID 0
-#define MULTI_TASK_QUERY_INFO_OFF 0  /* do not log multi-task queries */
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 

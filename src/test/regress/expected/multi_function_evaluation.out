@@ -180,10 +180,46 @@ SELECT create_distributed_function('stable_squared(int)');
 
 UPDATE example SET value = timestamp '10-10-2000 00:00'
 FROM (SELECT key, stable_squared(count(*)::int) y FROM example GROUP BY key) a WHERE example.key = a.key;
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
 UPDATE example SET value = timestamp '10-10-2000 00:00'
 FROM (SELECT key, stable_squared((count(*) OVER ())::int) y FROM example GROUP BY key) a WHERE example.key = a.key;
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
 UPDATE example SET value = timestamp '10-10-2000 00:00'
 FROM (SELECT key, stable_squared(grouping(key)) y FROM example GROUP BY key) a WHERE example.key = a.key;
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
+NOTICE:  stable_fn called
+DETAIL:  from localhost:xxxxx
 DROP SCHEMA multi_function_evaluation CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table example

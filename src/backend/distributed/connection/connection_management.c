@@ -21,6 +21,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/error_codes.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/memutils.h"
@@ -32,6 +33,7 @@
 #include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_log_messages.h"
 #include "mb/pg_wchar.h"
 #include "portability/instr_time.h"
 #include "storage/ipc.h"
@@ -55,10 +57,10 @@ static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isC
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
 									 cachedConnectionCount);
 static void ResetConnection(MultiConnection *connection);
-static void DefaultCitusNoticeProcessor(void *arg, const char *message);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
+
 
 /* types for async connection management */
 enum MultiConnectionPhase
@@ -82,9 +84,6 @@ static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
 static uint32 MultiConnectionStateEventMask(MultiConnectionPollState *connectionState);
 static void CitusPQFinish(MultiConnection *connection);
-
-static int CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
-
 
 /*
  * Initialize per-backend connection management infrastructure.
@@ -1108,7 +1107,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 	 */
 	PQsetnonblocking(connection->pgConn, true);
 
-	SetCitusNoticeProcessor(connection);
+	SetCitusNoticeReceiver(connection);
 }
 
 
@@ -1280,73 +1279,4 @@ RemoteTransactionIdle(MultiConnection *connection)
 	}
 
 	return PQtransactionStatus(connection->pgConn) == PQTRANS_IDLE;
-}
-
-
-/*
- * SetCitusNoticeProcessor sets the NoticeProcessor to DefaultCitusNoticeProcessor
- */
-void
-SetCitusNoticeProcessor(MultiConnection *connection)
-{
-	PQsetNoticeProcessor(connection->pgConn, DefaultCitusNoticeProcessor,
-						 connection);
-}
-
-
-/*
- * UnsetCitusNoticeLevel sets the CitusNoticeLogLevel back to
- * its default value.
- */
-void
-UnsetCitusNoticeLevel()
-{
-	CitusNoticeLogLevel = DEFAULT_CITUS_NOTICE_LEVEL;
-}
-
-
-/*
- * DefaultCitusNoticeProcessor is used to redirect worker notices
- * from logfile to console.
- */
-static void
-DefaultCitusNoticeProcessor(void *arg, const char *message)
-{
-	MultiConnection *connection = (MultiConnection *) arg;
-	char *nodeName = connection->hostname;
-	uint32 nodePort = connection->port;
-	char *trimmedMessage = TrimLogLevel(message);
-	char *strtokPosition;
-	char *level = strtok_r((char *) message, ":", &strtokPosition);
-
-	ereport(CitusNoticeLogLevel,
-			(errmsg("%s", ApplyLogRedaction(trimmedMessage)),
-			 errdetail("%s from %s:%d", level, nodeName, nodePort)));
-}
-
-
-/*
- * TrimLogLevel returns a copy of the string with the leading log level
- * and spaces removed such as
- *      From:
- *          INFO:  "normal2_102070": scanned 0 of 0 pages...
- *      To:
- *          "normal2_102070": scanned 0 of 0 pages...
- */
-char *
-TrimLogLevel(const char *message)
-{
-	char *chompedMessage = pchomp(message);
-
-	size_t n = 0;
-	while (n < strlen(chompedMessage) && chompedMessage[n] != ':')
-	{
-		n++;
-	}
-
-	do {
-		n++;
-	} while (n < strlen(chompedMessage) && chompedMessage[n] == ' ');
-
-	return chompedMessage + n;
 }

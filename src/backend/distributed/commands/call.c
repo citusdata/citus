@@ -30,6 +30,7 @@
 #include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_log_messages.h"
 #include "optimizer/clauses.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -186,6 +187,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 			.requires2PC = false
 		};
 
+		EnableWorkerMessagePropagation();
+
 		bool localExecutionSupported = true;
 		ExecutionParams *executionParams = CreateBasicExecutionParams(
 			ROW_MODIFY_NONE, list_make1(task), MaxAdaptiveExecutorPoolSize,
@@ -196,6 +199,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		executionParams->hasReturning = hasReturning;
 		executionParams->xactProperties = xactProperties;
 		ExecuteTaskListExtended(executionParams);
+
+		DisableWorkerMessagePropagation();
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{

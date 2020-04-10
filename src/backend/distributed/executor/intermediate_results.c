@@ -20,6 +20,7 @@
 #include "commands/copy.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
+#include "distributed/error_codes.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
@@ -810,7 +811,7 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 			 * we could try to read a non-existing file. That is most likely
 			 * to happen during development.
 			 */
-			ereport(WARNING, (errcode_for_file_access(),
+			ereport(WARNING, (errcode(ERRCODE_CITUS_INTERMEDIATE_RESULT_NOT_FOUND),
 							  errmsg("Query could not find the intermediate result file "
 									 "\"%s\", it was mostly likely deleted due to an "
 									 "error in a parallel process within the same "

@@ -19,6 +19,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/insert_select_executor.h"
@@ -31,6 +32,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -165,6 +167,12 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	MarkCitusInitiatedCoordinatorBackend();
 
 	CitusScanState *scanState = (CitusScanState *) node;
+
+	/*
+	 * Make sure we can see notices during regular queries, which would typically
+	 * be the result of a function that raises a notices being called.
+	 */
+	EnableWorkerMessagePropagation();
 
 #if PG_VERSION_NUM >= PG_VERSION_12
 
@@ -637,6 +645,15 @@ CitusEndScan(CustomScanState *node)
 	MultiExecutorType executorType = scanState->executorType;
 	Const *partitionKeyConst = NULL;
 	char *partitionKeyString = NULL;
+
+	/* stop propagating notices */
+	DisableWorkerMessagePropagation();
+
+	/*
+	 * Check whether we received warnings that should not have been
+	 * ignored.
+	 */
+	ErrorIfWorkerErrorIndicationReceived();
 
 	if (workerJob != NULL)
 	{

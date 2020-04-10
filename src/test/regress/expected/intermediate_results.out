@@ -94,12 +94,16 @@ FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares',
 WHERE user_id = 'jon' OR true
 ORDER BY x;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Query could not find the intermediate result file "squares", it was mostly likely deleted due to an error in a parallel process within the same distributed transaction
-DETAIL:  WARNING from localhost:xxxxx
- x | x2
----------------------------------------------------------------------
-(0 rows)
-
+ERROR:  Query could not find the intermediate result file "squares", it was mostly likely deleted due to an error in a parallel process within the same distributed transaction
+SET client_min_messages TO DEBUG;
+SELECT x, x2
+FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
+WHERE user_id = 'jon'
+ORDER BY x;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: jon
+ERROR:  Query could not find the intermediate result file "squares", it was mostly likely deleted due to an error in a parallel process within the same distributed transaction
 RESET client_min_messages;
 -- try to read the file as text, will fail because of binary encoding
 BEGIN;
