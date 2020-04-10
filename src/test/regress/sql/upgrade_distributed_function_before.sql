@@ -20,7 +20,7 @@ $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('count_values(int)', '$1', colocate_with:='t1');
 
 -- make sure that the metadata synced before running the queries
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(5000);
 SELECT bool_and(metadatasynced) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
 SET client_min_messages TO DEBUG1;
 
