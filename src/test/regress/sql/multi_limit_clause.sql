@@ -237,7 +237,14 @@ SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET my_limi
 DROP FUNCTION my_limit();
 
 -- subqueries should error out
-SELECT min(l_linenumber) FROM lineitem;
+select count(*) from lineitem;
+set citus.task_executor_type to 'task-tracker';
+set client_min_messages to debug4;
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT min(l_linenumber) FROM lineitem) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
+reset client_min_messages;
+reset citus.task_executor_type;
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT min(l_linenumber) FROM lineitem) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
