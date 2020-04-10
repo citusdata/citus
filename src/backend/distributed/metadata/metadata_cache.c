@@ -84,7 +84,7 @@ typedef struct CitusTableCacheEntrySlot
 	/* lookup key - must be first. A pg_class.oid oid. */
 	Oid relationId;
 
-	CitusTableCacheEntryRef *ref;
+	CitusTableCacheEntry *ref;
 } CitusTableCacheEntrySlot;
 
 
@@ -170,6 +170,7 @@ static ScanKeyData DistShardScanKey[1];
 static ScanKeyData DistObjectScanKey[3];
 
 /* local function forward declarations */
+static void DecrementCacheEntryRefCount(CitusTableCacheEntry *cacheEntry);
 static bool IsCitusTableViaCatalog(Oid relationId);
 static CitusTableCacheEntryRef * LookupShardIndex(int64 shardId, int *shardIndex);
 static CitusTableCacheEntryRef * LookupCitusTableCacheEntry(Oid relationId);
@@ -255,6 +256,23 @@ EnsureModificationsCanRun(void)
 
 
 /*
+ * DecrementCacheEntryRefCount decrements the cache entry's refCount,
+ * & frees the entry if it is no longer referenced.
+ */
+static void
+DecrementCacheEntryRefCount(CitusTableCacheEntry *cacheEntry)
+{
+	Assert(cacheEntry->refCount > 0);
+	cacheEntry->refCount--;
+	if (cacheEntry->refCount == 0)
+	{
+		ResetCitusTableCacheEntry(cacheEntry);
+		pfree(cacheEntry);
+	}
+}
+
+
+/*
  * ReleaseTableCacheEntry releases a pointer loaned out by cache.
  * This only asserts correctness, without asserts this is a nop.
  */
@@ -265,14 +283,7 @@ ReleaseTableCacheEntry(CitusTableCacheEntryRef *ref)
 	if (cacheEntry)
 	{
 		ref->cacheEntry = NULL;
-
-		Assert(cacheEntry->refCount > 0);
-		cacheEntry->refCount--;
-		if (cacheEntry->refCount == 0)
-		{
-			ResetCitusTableCacheEntry(cacheEntry);
-			pfree(cacheEntry);
-		}
+		DecrementCacheEntryRefCount(cacheEntry);
 	}
 }
 
@@ -827,15 +838,11 @@ LookupCitusTableCacheEntry(Oid relationId)
 	{
 		if (cacheSlot->ref == NULL)
 		{
-			/* this can happen when InitCitusTableCacheEntryRef triggers a lookup of this entry */
+			/* this can happen when InitCitusTableCacheEntry triggers a lookup of this entry */
 			return NULL;
 		}
 
-		if (cacheSlot->ref->cacheEntry != NULL)
-		{
-			return InitCitusTableCacheEntryRef(CurrentMemoryContext,
-											   cacheSlot->ref->cacheEntry);
-		}
+		return InitCitusTableCacheEntryRef(CurrentMemoryContext, cacheSlot->ref);
 	}
 
 	/* zero out entry, but not the key part */
@@ -852,8 +859,7 @@ LookupCitusTableCacheEntry(Oid relationId)
 
 	/* actually fill out entry */
 	CitusTableCacheEntry *cacheEntry = InitCitusTableCacheEntry(relationId);
-
-	cacheSlot->ref = InitCitusTableCacheEntryRef(MetadataCacheMemoryContext, cacheEntry);
+	cacheSlot->ref = cacheEntry;
 
 	RESUME_INTERRUPTS();
 
@@ -994,6 +1000,7 @@ InitCitusTableCacheEntry(Oid relationId)
 	CitusTableCacheEntry *cacheEntry =
 		MemoryContextAllocZero(TopMemoryContext, sizeof(CitusTableCacheEntry));
 	cacheEntry->relationId = relationId;
+	cacheEntry->refCount = 1;
 
 	MemoryContext oldContext = NULL;
 	Datum datumArray[Natts_pg_dist_partition];
@@ -3349,7 +3356,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 														  HASH_REMOVE, NULL);
 		if (cacheSlot != NULL && cacheSlot->ref != NULL)
 		{
-			ReleaseTableCacheEntry(cacheSlot->ref);
+			DecrementCacheEntryRefCount(cacheSlot->ref);
 		}
 
 		/*
@@ -3389,7 +3396,7 @@ InvalidateDistTableCache(void)
 		Assert(removedSlot == cacheSlot);
 		if (cacheSlot->ref != NULL)
 		{
-			ReleaseTableCacheEntry(cacheSlot->ref);
+			DecrementCacheEntryRefCount(cacheSlot->ref);
 		}
 	}
 }
@@ -3427,9 +3434,9 @@ FlushDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		CitusTableCacheEntryRef *ref = cacheSlot->ref;
+		CitusTableCacheEntry *ref = cacheSlot->ref;
 		cacheSlot->ref = NULL;
-		ReleaseTableCacheEntry(ref);
+		DecrementCacheEntryRefCount(ref);
 	}
 
 	hash_destroy(DistTableCacheHash);
