@@ -254,7 +254,7 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 												 taskNumParams);
 
 
-			int cursorOptions = 0;
+			int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
 			/*
 			 * Altough the shardQuery is local to this node, we prefer planner()
