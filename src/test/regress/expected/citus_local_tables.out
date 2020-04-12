@@ -206,6 +206,8 @@ ERROR:  citus local tables cannot be colocated with other tables
 ---------------------------------------------------------------------
 ---- utility command execution ----
 ---------------------------------------------------------------------
+-- at this point, we want to see which planner is preferred by citus
+SET client_min_messages TO DEBUG2;
 -- any foreign key between citus local tables and other tables cannot be set for now
 -- each should error out (for now meaningless error messages)
 -- between citus local tables
@@ -225,6 +227,199 @@ ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504023" do
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
 ERROR:  cannot create foreign key constraint
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+DEBUG:  validating foreign key constraint "fkey_local_to_c"
+DEBUG:  Creating citus local plan
+-- prevent verbose logs from DROP command
+RESET client_min_messages;
+-- drop them for next tests
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.reference_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+SET client_min_messages TO DEBUG2;
+---------------------------------------------------------------------
+------- SELECT / INSERT / UPDATE / DELETE -------
+---------------------------------------------------------------------
+CREATE TABLE citus_local_table(a int, b int);
+SELECT create_citus_local_table('citus_local_table');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504030, 'citus_local_tables_test_schema', 'CREATE TABLE citus_local_tables_test_schema.citus_local_table (a integer, b integer)');SELECT worker_apply_shard_ddl_command (1504030, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_tables_test_schema.citus_local_table OWNER TO postgres')
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE citus_local_table_2(a int, b int);
+SELECT create_citus_local_table('citus_local_table_2');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504031, 'citus_local_tables_test_schema', 'CREATE TABLE citus_local_tables_test_schema.citus_local_table_2 (a integer, b integer)');SELECT worker_apply_shard_ddl_command (1504031, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_tables_test_schema.citus_local_table_2 OWNER TO postgres')
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE reference_table(a int, b int);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE local_table(a int, b int);
+---------------------------------------------------------------------
+---- SELECT ----
+---------------------------------------------------------------------
+-- join between citus local tables and reference tables would success
+SELECT count(*) FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM ONLY citus_local_tables_test_schema.citus_local_table_1504030, ONLY citus_local_tables_test_schema.reference_table WHERE (citus_local_table_1504030.a OPERATOR(pg_catalog.=) reference_table.a)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- join between citus local tables and distributed tables would fail
+SELECT citus_local_table.a FROM citus_local_table, distributed_table;
+ERROR:  cannot plan SELECT queries with citus local tables and distributed tables
+-- join between citus local tables and local tables are okey
+SELECT citus_local_table.b, local_table.a
+FROM citus_local_table, local_table
+WHERE citus_local_table.a = local_table.b;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: SELECT citus_local_table_1504030.b, local_table.a FROM ONLY citus_local_tables_test_schema.citus_local_table_1504030, ONLY citus_local_tables_test_schema.local_table WHERE (citus_local_table_1504030.a OPERATOR(pg_catalog.=) local_table.b)
+ b | a
+---------------------------------------------------------------------
+(0 rows)
+
+---------------------------------------------------------------------
+----- INSERT / SELECT -----
+---------------------------------------------------------------------
+-- those would fail as they are inserting into citus local table
+-- from distributed table or reference table
+INSERT INTO citus_local_table
+SELECT * FROM reference_table;
+ERROR:  cannot plan INSERT .. SELECT queries to citus local tables selecting from reference tables or distributed tables
+INSERT INTO citus_local_table
+SELECT * from distributed_table;
+ERROR:  cannot plan INSERT .. SELECT queries to citus local tables selecting from reference tables or distributed tables
+-- below are ok (simple cases)
+INSERT INTO citus_local_table VALUES (1, 2);
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_1504030 (a, b) VALUES (1, 2)
+INSERT INTO citus_local_table
+SELECT * from local_table;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_1504030 (a, b) SELECT a, b FROM citus_local_tables_test_schema.local_table
+INSERT INTO local_table
+SELECT * from citus_local_table;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.local_table (a, b) SELECT a, b FROM citus_local_tables_test_schema.citus_local_table_1504030
+INSERT INTO citus_local_table
+SELECT * FROM citus_local_table_2;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_1504030 (a, b) SELECT a, b FROM citus_local_tables_test_schema.citus_local_table_2_1504031
+-- INSERT SELECT into distributed or reference table from
+-- citus local table is okay, see below two
+INSERT INTO distributed_table
+SELECT * from citus_local_table;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.distributed_table (a, b) SELECT a, b FROM citus_local_tables_test_schema.citus_local_table_1504030
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO reference_table
+SELECT * from citus_local_table;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.reference_table (a, b) SELECT a, b FROM citus_local_tables_test_schema.citus_local_table_1504030
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO reference_table
+SELECT citus_local_table.a, citus_local_table.b
+FROM citus_local_table, local_table
+WHERE citus_local_table.a > local_table.b;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.reference_table (a, b) SELECT citus_local_table_1504030.a, citus_local_table_1504030.b FROM citus_local_tables_test_schema.citus_local_table_1504030, citus_local_tables_test_schema.local_table WHERE (citus_local_table_1504030.a OPERATOR(pg_catalog.>) local_table.b)
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+---------------------------------------------------------------------
+----- DELETE / UPDATE -----
+---------------------------------------------------------------------
+-- DELETE/UPDATE commands on local tables and citus local tables are all ok
+DELETE FROM citus_local_table
+USING local_table
+WHERE citus_local_table.b = local_table.b;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: DELETE FROM ONLY citus_local_tables_test_schema.citus_local_table_1504030 USING ONLY citus_local_tables_test_schema.local_table WHERE (citus_local_table_1504030.b OPERATOR(pg_catalog.=) local_table.b)
+UPDATE citus_local_table
+SET b = 5
+FROM local_table
+WHERE citus_local_table.a = 3 AND citus_local_table.b = local_table.b;
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: UPDATE ONLY citus_local_tables_test_schema.citus_local_table_1504030 SET b = 5 FROM ONLY citus_local_tables_test_schema.local_table WHERE ((citus_local_table_1504030.a OPERATOR(pg_catalog.=) 3) AND (citus_local_table_1504030.b OPERATOR(pg_catalog.=) local_table.b))
+-- all should fail (either updating citus local table or reference table or distributed table)
+-- as they include citus local table along with other citus tables
+UPDATE distributed_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+UPDATE reference_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table
+WHERE citus_local_table.a = reference_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+DELETE FROM distributed_table
+USING citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+DELETE FROM citus_local_table
+USING distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+DELETE FROM reference_table
+USING citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+DELETE FROM citus_local_table
+USING reference_table
+WHERE citus_local_table.a = reference_table.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+-- even if we use subquery or cte, they would still fail. see below
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM distributed_table);
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM reference_table);
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+WITH distributed_table_cte AS (SELECT * FROM distributed_table)
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table_cte
+WHERE citus_local_table.a = distributed_table_cte.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+WITH reference_table_cte AS (SELECT * FROM reference_table)
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table_cte
+WHERE citus_local_table.a = reference_table_cte.a;
+ERROR:  cannot plan UPDATE/DELETE queries with citus local tables involving reference tables or distributed tables
+-- prevent verbose logs from DROP command
+RESET client_min_messages;
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema CASCADE;
 NOTICE:  drop cascades to 9 other objects

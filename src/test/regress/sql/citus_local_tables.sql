@@ -154,6 +154,9 @@ SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 ---- utility command execution ----
 -----------------------------------
 
+-- at this point, we want to see which planner is preferred by citus
+SET client_min_messages TO DEBUG2;
+
 -- any foreign key between citus local tables and other tables cannot be set for now
 -- each should error out (for now meaningless error messages)
 
@@ -171,6 +174,163 @@ ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) refer
 -- between citus local tables and local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+
+-- prevent verbose logs from DROP command
+RESET client_min_messages;
+
+-- drop them for next tests
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+
+SET client_min_messages TO DEBUG2;
+
+-------------------------------------------------
+------- SELECT / INSERT / UPDATE / DELETE -------
+-------------------------------------------------
+
+CREATE TABLE citus_local_table(a int, b int);
+SELECT create_citus_local_table('citus_local_table');
+
+CREATE TABLE citus_local_table_2(a int, b int);
+SELECT create_citus_local_table('citus_local_table_2');
+
+CREATE TABLE reference_table(a int, b int);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+
+CREATE TABLE local_table(a int, b int);
+
+----------------
+---- SELECT ----
+----------------
+
+-- join between citus local tables and reference tables would success
+SELECT count(*) FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a;
+
+-- join between citus local tables and distributed tables would fail
+SELECT citus_local_table.a FROM citus_local_table, distributed_table;
+
+-- join between citus local tables and local tables are okey
+SELECT citus_local_table.b, local_table.a
+FROM citus_local_table, local_table
+WHERE citus_local_table.a = local_table.b;
+
+---------------------------
+----- INSERT / SELECT -----
+---------------------------
+
+-- those would fail as they are inserting into citus local table
+-- from distributed table or reference table
+
+INSERT INTO citus_local_table
+SELECT * FROM reference_table;
+
+INSERT INTO citus_local_table
+SELECT * from distributed_table;
+
+-- below are ok (simple cases)
+
+INSERT INTO citus_local_table VALUES (1, 2);
+
+INSERT INTO citus_local_table
+SELECT * from local_table;
+
+INSERT INTO local_table
+SELECT * from citus_local_table;
+
+INSERT INTO citus_local_table
+SELECT * FROM citus_local_table_2;
+
+-- INSERT SELECT into distributed or reference table from
+-- citus local table is okay, see below two
+
+INSERT INTO distributed_table
+SELECT * from citus_local_table;
+
+INSERT INTO reference_table
+SELECT * from citus_local_table;
+
+INSERT INTO reference_table
+SELECT citus_local_table.a, citus_local_table.b
+FROM citus_local_table, local_table
+WHERE citus_local_table.a > local_table.b;
+
+---------------------------
+----- DELETE / UPDATE -----
+---------------------------
+
+-- DELETE/UPDATE commands on local tables and citus local tables are all ok
+
+DELETE FROM citus_local_table
+USING local_table
+WHERE citus_local_table.b = local_table.b;
+
+UPDATE citus_local_table
+SET b = 5
+FROM local_table
+WHERE citus_local_table.a = 3 AND citus_local_table.b = local_table.b;
+
+-- all should fail (either updating citus local table or reference table or distributed table)
+-- as they include citus local table along with other citus tables
+
+UPDATE distributed_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+
+UPDATE reference_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table
+WHERE citus_local_table.a = reference_table.a;
+
+DELETE FROM distributed_table
+USING citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+
+DELETE FROM citus_local_table
+USING distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+
+DELETE FROM reference_table
+USING citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+
+DELETE FROM citus_local_table
+USING reference_table
+WHERE citus_local_table.a = reference_table.a;
+
+-- even if we use subquery or cte, they would still fail. see below
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM distributed_table);
+
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM reference_table);
+
+WITH distributed_table_cte AS (SELECT * FROM distributed_table)
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table_cte
+WHERE citus_local_table.a = distributed_table_cte.a;
+
+WITH reference_table_cte AS (SELECT * FROM reference_table)
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table_cte
+WHERE citus_local_table.a = reference_table_cte.a;
+
+-- prevent verbose logs from DROP command
+RESET client_min_messages;
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema CASCADE;
