@@ -30,8 +30,15 @@ fi
 if test -z "${VANILLATEST:-}"
 then
 	touch "$file1"  # when adding a new test the expected file does not exist
-	sed -Ef "$BASEDIR/normalize.sed" < "$file1" > "$file1.modified"
-	sed -Ef "$BASEDIR/normalize.sed" < "$file2" > "$file2.modified"
+	normalize_file="$BASEDIR/normalize.sed"
+	# when running tests on an existing cluster some changes need to be done on
+	# normalize.sed file. So a new file is used.
+	if [[ -f "$BASEDIR/normalize_modified.sed" ]]
+	then
+		normalize_file="$BASEDIR/normalize_modified.sed"
+	fi
+	sed -Ef "$normalize_file" < "$file1" > "$file1.modified"
+	sed -Ef "$normalize_file" < "$file2" > "$file2.modified"
 	"$DIFF" -w $args "$file1.modified" "$file2.modified" | LC_CTYPE=C.UTF-8 diff-filter "$BASEDIR/normalize.sed"
 	exit ${PIPESTATUS[0]}
 else

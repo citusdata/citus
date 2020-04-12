@@ -5,13 +5,13 @@ SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
 
 -- create a type on a worker that should not cause data loss once overwritten with a type
 -- from the coordinator
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET citus.enable_ddl_propagation TO off;
 SET search_path TO type_conflict;
 CREATE TYPE my_precious_type AS (secret text, should bool);
 CREATE TABLE local_table (a int, b my_precious_type);
 INSERT INTO local_table VALUES (42, ('always bring a towel', true)::my_precious_type);
-\c - - - :master_port
+\c - - :master_host :master_port
 SET search_path TO type_conflict;
 
 -- overwrite the type on the worker from the coordinator. The type should be over written
@@ -19,7 +19,7 @@ SET search_path TO type_conflict;
 CREATE TYPE my_precious_type AS (scatterd_secret text);
 
 -- verify the data is retained
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SET search_path TO type_conflict;
 -- show fields for table
   SELECT pg_class.relname,
@@ -34,7 +34,7 @@ ORDER BY attnum;
 
 SELECT * FROM local_table;
 
-\c - - - :master_port
+\c - - :master_host :master_port
 SET search_path TO type_conflict;
 
 -- make sure worker_create_or_replace correctly generates new names while types are existing

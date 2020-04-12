@@ -1588,7 +1588,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	const AttrNumber argumentId = 1; /* our aggregates have single arguments */
 	AggregateType aggregateType = GetAggregateType(originalAggregate);
 	Expr *newMasterExpression = NULL;
-	AggClauseCosts aggregateCosts;
 
 	if (walkerContext->extendedOpNodeProperties->pullUpIntermediateRows)
 	{
@@ -2073,12 +2072,6 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	{
 		newMasterExpression = typeConvertedExpression;
 	}
-
-	/* Run AggRefs through cost machinery to mark required fields sanely */
-	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
-
-	get_agg_clause_costs(NULL, (Node *) newMasterExpression, AGGSPLIT_SIMPLE,
-						 &aggregateCosts);
 
 	return newMasterExpression;
 }
@@ -2968,7 +2961,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	}
 
 	AggregateType aggregateType = GetAggregateType(originalAggregate);
-	AggClauseCosts aggregateCosts;
 
 	if (aggregateType == AGGREGATE_COUNT && originalAggregate->aggdistinct &&
 		CountDistinctErrorRate == DISABLE_DISTINCT_APPROXIMATION &&
@@ -3144,13 +3136,6 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Aggref *workerAggregate = copyObject(originalAggregate);
 		workerAggregateList = lappend(workerAggregateList, workerAggregate);
 	}
-
-
-	/* Run AggRefs through cost machinery to mark required fields sanely */
-	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
-
-	get_agg_clause_costs(NULL, (Node *) workerAggregateList, AGGSPLIT_SIMPLE,
-						 &aggregateCosts);
 
 	return workerAggregateList;
 }

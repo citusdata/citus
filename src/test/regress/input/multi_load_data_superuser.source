@@ -1,0 +1,4 @@
+\copy lineitem_hash_part FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_hash_part FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy orders_hash_part FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders_hash_part FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'

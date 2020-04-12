@@ -224,11 +224,11 @@ CREATE TABLE check_example
 	other_other_col integer CHECK (abs(other_other_col) >= 100)
 );
 SELECT create_distributed_table('check_example', 'partition_col', 'hash');
-\c - - - :worker_1_port
+\c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'check_example_partition_col_key_365056'::regclass;
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
-\c - - - :master_port
+\c - - :master_host :master_port
 
 -- Index-based constraints are created with shard-extended names, but others
 -- (e.g. expression-based table CHECK constraints) do _not_ have shardids in
