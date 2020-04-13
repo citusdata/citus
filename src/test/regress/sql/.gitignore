@@ -3,6 +3,7 @@
 /multi_alter_table_statements.sql
 /multi_append_table_to_shard.sql
 /multi_behavioral_analytics_create_table.sql
+/multi_behavioral_analytics_create_table_superuser.sql
 /multi_copy.sql
 /multi_create_schema.sql
 /multi_large_shardid.sql
@@ -10,6 +11,7 @@
 /multi_outer_join.sql
 /multi_outer_join_reference.sql
 /multi_load_data.sql
+/multi_load_data_superuser.sql
 /multi_load_large_records.sql
 /multi_load_more_data.sql
 /worker_copy.sql
