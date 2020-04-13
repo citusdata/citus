@@ -880,13 +880,6 @@ uint64
 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 								  int targetPoolSize, List *jobIdList)
 {
-	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	bool hasReturning = false;
-
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList, true);
-
 	/*
 	 * As we are going to run the tasks outside transaction, we shouldn't use local execution.
 	 * However, there is some problem when using local execution related to
@@ -894,9 +887,13 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 	 * coming to this path with local execution. See PR:3711
 	 */
 	bool localExecutionSupported = false;
-	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
-								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, jobIdList, localExecutionSupported);
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, targetPoolSize, localExecutionSupported
+		);
+
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, true);
+	return ExecuteTaskListExtended(executionParams);
 }
 
 
@@ -905,19 +902,15 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
  * for some of the arguments.
  */
 uint64
-ExecuteTaskList(RowModifyLevel modLevel, List *taskList, int targetPoolSize, bool
-				localExecutionSupported)
+ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
+				int targetPoolSize, bool localExecutionSupported)
 {
-	TupleDesc tupleDescriptor = NULL;
-	Tuplestorestate *tupleStore = NULL;
-	bool hasReturning = false;
-
-	TransactionProperties xactProperties =
-		DecideTransactionPropertiesForTaskList(modLevel, taskList, false);
-
-	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
-								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, NIL, localExecutionSupported);
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, targetPoolSize, localExecutionSupported
+		);
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
+	return ExecuteTaskListExtended(executionParams);
 }
 
 
@@ -931,13 +924,18 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 							  bool hasReturning)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-
-	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
 	bool localExecutionSupported = true;
-	return ExecuteTaskListExtended(modLevel, taskList, tupleDescriptor,
-								   tupleStore, hasReturning, targetPoolSize,
-								   &xactProperties, NIL, localExecutionSupported);
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, targetPoolSize, localExecutionSupported
+		);
+
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, false);
+	executionParams->hasReturning = hasReturning;
+	executionParams->tupleStore = tupleStore;
+	executionParams->tupleDescriptor = tupleDescriptor;
+
+	return ExecuteTaskListExtended(executionParams);
 }
 
 
@@ -946,27 +944,24 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
  * runs it.
  */
 uint64
-ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
-						TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-						bool hasReturning, int targetPoolSize,
-						TransactionProperties *xactProperties,
-						List *jobIdList,
-						bool localExecutionSupported)
+ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
 	ParamListInfo paramListInfo = NULL;
 	uint64 locallyProcessedRows = 0;
 	List *localTaskList = NIL;
 	List *remoteTaskList = NIL;
 
-	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
+	if (executionParams->localExecutionSupported && ShouldExecuteTasksLocally(
+			executionParams->taskList))
 	{
 		bool readOnlyPlan = false;
-		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
+		ExtractLocalAndRemoteTasks(readOnlyPlan, executionParams->taskList,
+								   &localTaskList,
 								   &remoteTaskList);
 	}
 	else
 	{
-		remoteTaskList = taskList;
+		remoteTaskList = executionParams->taskList;
 	}
 
 	/*
@@ -981,23 +976,52 @@ ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
 
-	locallyProcessedRows += ExecuteLocalTaskList(localTaskList, tupleStore);
+	locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
+												 executionParams->tupleStore);
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
-		targetPoolSize = 1;
+		executionParams->targetPoolSize = 1;
 	}
 
 	DistributedExecution *execution =
-		CreateDistributedExecution(modLevel, remoteTaskList, hasReturning, paramListInfo,
-								   tupleDescriptor, tupleStore, targetPoolSize,
-								   xactProperties, jobIdList);
+		CreateDistributedExecution(
+			executionParams->modLevel, remoteTaskList,
+			executionParams->hasReturning, paramListInfo,
+			executionParams->tupleDescriptor, executionParams->tupleStore,
+			executionParams->targetPoolSize, &executionParams->xactProperties,
+			executionParams->jobIdList);
 
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
 	FinishDistributedExecution(execution);
 
 	return execution->rowsProcessed + locallyProcessedRows;
+}
+
+
+/*
+ * CreateBasicExecutionParams creates basic execution parameters with some common
+ * fields.
+ */
+ExecutionParams *
+CreateBasicExecutionParams(RowModifyLevel modLevel,
+						   List *taskList,
+						   int targetPoolSize,
+						   bool localExecutionSupported)
+{
+	ExecutionParams *executionParams = palloc0(sizeof(ExecutionParams));
+	executionParams->modLevel = modLevel;
+	executionParams->taskList = taskList;
+	executionParams->targetPoolSize = targetPoolSize;
+	executionParams->localExecutionSupported = localExecutionSupported;
+
+	executionParams->tupleStore = NULL;
+	executionParams->tupleDescriptor = NULL;
+	executionParams->hasReturning = false;
+	executionParams->jobIdList = NIL;
+
+	return executionParams;
 }
 
 
