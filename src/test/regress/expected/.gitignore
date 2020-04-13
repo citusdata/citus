@@ -4,6 +4,7 @@
 /multi_alter_table_statements_0.out
 /multi_append_table_to_shard.out
 /multi_behavioral_analytics_create_table.out
+/multi_behavioral_analytics_create_table_superuser.out
 /multi_copy.out
 /multi_create_schema.out
 /multi_large_shardid.out
@@ -11,6 +12,7 @@
 /multi_outer_join.out
 /multi_outer_join_reference.out
 /multi_load_data.out
+/multi_load_data_superuser.out
 /multi_load_large_records.out
 /multi_load_more_data.out
 /worker_copy.out
