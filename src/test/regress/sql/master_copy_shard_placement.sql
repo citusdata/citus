@@ -5,7 +5,7 @@ SET citus.next_shard_id TO 8139000;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'statement';
 
-CREATE TABLE ref_table(a int);
+CREATE TABLE ref_table(a int, b text unique);
 SELECT create_reference_table('ref_table');
 
 CREATE TABLE data (
@@ -51,6 +51,18 @@ SELECT master_copy_shard_placement(
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
            do_repair := false);
+
+-- verify we error out if table has foreign key constraints
+INSERT INTO ref_table SELECT 1, value FROM data;
+
+ALTER TABLE data ADD CONSTRAINT distfk FOREIGN KEY (value) REFERENCES ref_table (b) MATCH FULL;
+SELECT master_copy_shard_placement(
+           get_shard_id_for_distribution_column('data', 'key-1'),
+           'localhost', :worker_2_port,
+           'localhost', :worker_1_port,
+           do_repair := false);
+
+ALTER TABLE data DROP CONSTRAINT distfk;
 
 -- replicate shard that contains key-1
 SELECT master_copy_shard_placement(
