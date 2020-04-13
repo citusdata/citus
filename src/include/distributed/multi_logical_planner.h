@@ -172,6 +172,8 @@ typedef struct MultiExtendedOp
 	List *targetList;
 	List *groupClauseList;
 	List *sortClauseList;
+	Node *originalLimitCount;
+	Node *originalLimitOffset;
 	Node *limitCount;
 	Node *limitOffset;
 	Node *havingQual;
@@ -219,10 +221,10 @@ extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 extern MultiProject * MultiProjectNode(List *targetEntryList);
-extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree, Query *originalQuery);
+extern MultiExtendedOp * MultiExtendedOpNode(Query *originalQuery, Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
 																		 subqueryTree);
-extern MultiNode * MultiNodeTree(Query *queryTree);
+extern MultiNode * MultiNodeTree(Query *originalQuery, Query *queryTree);
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */

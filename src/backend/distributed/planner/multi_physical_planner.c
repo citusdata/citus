@@ -666,8 +666,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
-		limitCount = extendedOp->limitCount;
-		limitOffset = extendedOp->limitOffset;
+		limitCount = extendedOp->originalLimitCount;
+		limitOffset = extendedOp->originalLimitOffset;
 		sortClauseList = extendedOp->sortClauseList;
 		havingQual = extendedOp->havingQual;
 	}
@@ -814,8 +814,8 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
 	reduceQuery->jointree = joinTree;
 	reduceQuery->sortClause = extendedOpNode->sortClauseList;
 	reduceQuery->groupClause = extendedOpNode->groupClauseList;
-	reduceQuery->limitOffset = extendedOpNode->limitOffset;
-	reduceQuery->limitCount = extendedOpNode->limitCount;
+	reduceQuery->limitOffset = extendedOpNode->originalLimitOffset;
+	reduceQuery->limitCount = extendedOpNode->originalLimitCount;
 	reduceQuery->havingQual = extendedOpNode->havingQual;
 	reduceQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0);
 
@@ -1551,8 +1551,8 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
-		limitCount = extendedOp->limitCount;
-		limitOffset = extendedOp->limitOffset;
+		limitCount = extendedOp->originalLimitCount;
+		limitOffset = extendedOp->originalLimitOffset;
 		sortClauseList = extendedOp->sortClauseList;
 		havingQual = extendedOp->havingQual;
 		distinctClause = extendedOp->distinctClause;

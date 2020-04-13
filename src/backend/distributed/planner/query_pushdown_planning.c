@@ -551,7 +551,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		}
 
 		/* all checks have passed, safe to create the multi plan */
-		multiQueryNode = MultiNodeTree(queryTree);
+		multiQueryNode = MultiNodeTree(originalQuery, queryTree);
 	}
 
 	Assert(multiQueryNode != NULL);
@@ -1623,7 +1623,7 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, originalQuery);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(originalQuery, queryTree);
 
 	/*
 	 * Postgres standard planner converts having qual node to a list of and
@@ -1665,6 +1665,10 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * expression on the LIMIT and OFFSET clauses. Note that logical optimizer
 	 * expects those clauses to be already evaluated.
 	 */
+	extendedOpNode->originalLimitCount =
+		PartiallyEvaluateExpression(extendedOpNode->originalLimitCount, NULL);
+	extendedOpNode->originalLimitOffset =
+		PartiallyEvaluateExpression(extendedOpNode->originalLimitOffset, NULL);
 	extendedOpNode->limitCount =
 		PartiallyEvaluateExpression(extendedOpNode->limitCount, NULL);
 	extendedOpNode->limitOffset =

@@ -157,7 +157,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	}
 	else
 	{
-		multiQueryNode = MultiNodeTree(queryTree);
+		multiQueryNode = MultiNodeTree(originalQuery, queryTree);
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
@@ -640,7 +640,7 @@ SubqueryEntryList(Query *queryTree)
  * group, and limit nodes if they appear in the original query tree.
  */
 MultiNode *
-MultiNodeTree(Query *queryTree)
+MultiNodeTree(Query *originalQuery, Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
@@ -672,7 +672,7 @@ MultiNodeTree(Query *queryTree)
 	 * If we have a subquery, build a multi table node for the subquery and
 	 * add a collect node on top of the multi table node.
 	 */
-	List *subqueryEntryList = SubqueryEntryList(queryTree);
+	List *subqueryEntryList = SubqueryEntryList(originalQuery);
 	if (subqueryEntryList != NIL)
 	{
 		MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
@@ -715,7 +715,7 @@ MultiNodeTree(Query *queryTree)
 		}
 
 		/* recursively create child nested multitree */
-		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree);
+		MultiNode *subqueryExtendedNode = MultiNodeTree(subqueryTree, subqueryTree);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -769,7 +769,7 @@ MultiNodeTree(Query *queryTree)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, queryTree);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(originalQuery, queryTree);
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;
 
@@ -1821,12 +1821,14 @@ MultiProjectNode(List *targetEntryList)
 
 /* Builds the extended operator node using fields from the given query tree. */
 MultiExtendedOp *
-MultiExtendedOpNode(Query *queryTree, Query *originalQuery)
+MultiExtendedOpNode(Query *originalQuery, Query *queryTree)
 {
 	MultiExtendedOp *extendedOpNode = CitusMakeNode(MultiExtendedOp);
 	extendedOpNode->targetList = queryTree->targetList;
 	extendedOpNode->groupClauseList = queryTree->groupClause;
 	extendedOpNode->sortClauseList = queryTree->sortClause;
+	extendedOpNode->originalLimitCount = originalQuery->limitCount;
+	extendedOpNode->originalLimitOffset = originalQuery->limitOffset;
 	extendedOpNode->limitCount = queryTree->limitCount;
 	extendedOpNode->limitOffset = queryTree->limitOffset;
 	extendedOpNode->havingQual = queryTree->havingQual;

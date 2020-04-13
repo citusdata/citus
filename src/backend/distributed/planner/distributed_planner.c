@@ -266,19 +266,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 				 * which we're unable to handle. Meanwhile we only optimize rewrites to Const.
 				 * So deoptimize non-Const LIMIT/OFFSET, standard_planner will handle it again later.
 				 */
-				if (planContext.query->limitCount &&
-					!IsA(planContext.query->limitCount, Const))
-				{
-					planContext.query->limitCount = planContext.originalQuery->limitCount;
-				}
-
-				if (planContext.query->limitOffset &&
-					!IsA(planContext.query->limitOffset, Const))
-				{
-					planContext.query->limitOffset =
-						planContext.originalQuery->limitOffset;
-				}
-
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
