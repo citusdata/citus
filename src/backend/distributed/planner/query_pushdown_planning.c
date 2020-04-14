@@ -1665,10 +1665,6 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * expression on the LIMIT and OFFSET clauses. Note that logical optimizer
 	 * expects those clauses to be already evaluated.
 	 */
-	extendedOpNode->originalLimitCount =
-		PartiallyEvaluateExpression(extendedOpNode->originalLimitCount, NULL);
-	extendedOpNode->originalLimitOffset =
-		PartiallyEvaluateExpression(extendedOpNode->originalLimitOffset, NULL);
 	extendedOpNode->limitCount =
 		PartiallyEvaluateExpression(extendedOpNode->limitCount, NULL);
 	extendedOpNode->limitOffset =
