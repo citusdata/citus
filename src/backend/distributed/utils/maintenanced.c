@@ -108,6 +108,7 @@ static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
 static size_t MaintenanceDaemonShmemSize(void);
 static void MaintenanceDaemonShmemInit(void);
+static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool LockCitusExtension(void);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
@@ -258,17 +259,21 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
 													HASH_FIND, NULL);
-	if (!myDbData || myDbData->workerPid != 0)
+	if (!myDbData)
 	{
 		/*
 		 * When the database crashes, background workers are restarted, but
 		 * the state in shared memory is lost. In that case, we exit and
 		 * wait for a session to call InitializeMaintenanceDaemonBackend
 		 * to properly add it to the hash.
-		 * Alternatively, don't continue if another worker exists.
 		 */
+
 		proc_exit(0);
 	}
+
+	before_shmem_exit(MaintenanceDaemonShmemExit, main_arg);
+
+	Assert(myDbData->workerPid == 0);
 
 	/* from this point, DROP DATABASE will attempt to kill the worker */
 	myDbData->workerPid = MyProcPid;
@@ -307,7 +312,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	/* enter main loop */
 	while (!got_SIGTERM)
 	{
-		int rc;
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
@@ -326,8 +330,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 */
 
 		/*
-		 * Perform Work.  If a specific task needs to be called sooner than
-		 * timeout indicates, it's ok to lower it to that value.  Expensive
+		 * Perform Work. If a specific task needs to be called sooner than
+		 * timeout indicates, it's ok to lower it to that value. Expensive
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
@@ -524,7 +528,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to
 		 * integer where we've calculated it using double for not losing the precision.
 		 */
-		rc = WaitLatch(MyLatch, latchFlags, (long) timeout, PG_WAIT_EXTENSION);
+		int rc = WaitLatch(MyLatch, latchFlags, (long) timeout, PG_WAIT_EXTENSION);
 
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -644,6 +648,29 @@ MaintenanceDaemonShmemInit(void)
 	{
 		prev_shmem_startup_hook();
 	}
+}
+
+
+/*
+ * MaintenaceDaemonShmemExit is the before_shmem_exit handler for cleaning up MaintenanceDaemonDBHash
+ */
+static void
+MaintenanceDaemonShmemExit(int code, Datum arg)
+{
+	Oid databaseOid = DatumGetObjectId(arg);
+
+	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+
+	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
+										hash_search(MaintenanceDaemonDBHash, &databaseOid,
+													HASH_FIND, NULL);
+	if (myDbData && myDbData->workerPid == MyProcPid)
+	{
+		myDbData->daemonStarted = false;
+		myDbData->workerPid = 0;
+	}
+
+	LWLockRelease(&MaintenanceDaemonControl->lock);
 }
 
 
