@@ -52,10 +52,29 @@ enum MultiConnectionMode
 	/* open a connection per (co-located set of) placement(s) */
 	CONNECTION_PER_PLACEMENT = 1 << 3,
 
-	OUTSIDE_TRANSACTION = 1 << 4
+	OUTSIDE_TRANSACTION = 1 << 4,
+
+	/*
+	 * Some connections are optional such as when adaptive executor is executing
+	 * a multi-shard command and requires the second (or further) connections
+	 * per node. In that case, the connection manager may decide not to allow the
+	 * connection.
+	 */
+	OPTIONAL_CONNECTION = 1 << 5,
+
+	/*
+	 * When this flag is passed, via connection throttling, the connection
+	 * establishments may be suspended until a connection slot is available to
+	 * the remote host.
+	 */
+	WAIT_FOR_CONNECTION = 1 << 6
 };
 
 
+/*
+ * This state is used for keeping track of the initilization
+ * of the underlying pg_conn struct.
+ */
 typedef enum MultiConnectionState
 {
 	MULTI_CONNECTION_INITIAL,
@@ -64,6 +83,21 @@ typedef enum MultiConnectionState
 	MULTI_CONNECTION_FAILED,
 	MULTI_CONNECTION_LOST
 } MultiConnectionState;
+
+
+/*
+ * This state is used for keeping track of the initilization
+ * of MultiConnection struct, not specifically the underlying
+ * pg_conn. The state is useful to determine the action during
+ * clean-up of connections.
+ */
+typedef enum MultiConnectionStructInitializationState
+{
+	POOL_STATE_NOT_INITIALIZED,
+	POOL_STATE_COUNTER_INCREMENTED,
+	POOL_STATE_INITIALIZED
+} MultiConnectionStructInitializationState;
+
 
 /* declaring this directly above makes uncrustify go crazy */
 typedef enum MultiConnectionMode MultiConnectionMode;
@@ -114,6 +148,8 @@ typedef struct MultiConnection
 
 	/* number of bytes sent to PQputCopyData() since last flush */
 	uint64 copyBytesWrittenSinceLastFlush;
+
+	MultiConnectionStructInitializationState initilizationState;
 } MultiConnection;
 
 

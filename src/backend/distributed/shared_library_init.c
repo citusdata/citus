@@ -56,6 +56,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
@@ -72,6 +73,7 @@
 #include "distributed/adaptive_executor.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
+#include "storage/ipc.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
@@ -88,9 +90,10 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
-static void CitusBackendAtExit(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
+static void RegisterConnectionCleanup(void);
+static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
@@ -98,6 +101,7 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
+static const char * MaxSharedPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 
@@ -271,8 +275,7 @@ _PG_init(void)
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
 	InitializeCitusQueryStats();
-
-	atexit(CitusBackendAtExit);
+	InitializeSharedConnectionStats();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -280,18 +283,6 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
-}
-
-
-/*
- * CitusBackendAtExit is called atexit of the backend for the purposes of
- * any clean-up needed.
- */
-static void
-CitusBackendAtExit(void)
-{
-	/* properly close all the cached connections */
-	ShutdownAllConnections();
 }
 
 
@@ -380,6 +371,37 @@ StartupCitusBackend(void)
 {
 	InitializeMaintenanceDaemonBackend();
 	InitializeBackendData();
+	RegisterConnectionCleanup();
+}
+
+
+/*
+ * RegisterConnectionCleanup cleans up any resources left at the end of the
+ * session. We prefer to cleanup before shared memory exit to make sure that
+ * this session properly releases anything hold in the shared memory.
+ */
+static void
+RegisterConnectionCleanup(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(CitusCleanupConnectionsAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
+ * CitusCleanupConnectionsAtExit is called before_shmem_exit() of the
+ * backend for the purposes of any clean-up needed.
+ */
+static void
+CitusCleanupConnectionsAtExit(int code, Datum arg)
+{
+	/* properly close all the cached connections */
+	ShutdownAllConnections();
 }
 
 
@@ -929,15 +951,34 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_shared_pool_size",
+		gettext_noop("Sets the maximum number of connections allowed per worker node "
+					 "across all the backends from this node. Setting to -1 disables "
+					 "connections throttling. Setting to 0 makes it auto-adjust, meaning "
+					 "equal to max_connections on the coordinator."),
+		gettext_noop("As a rule of thumb, the value should be at most equal to the "
+					 "max_connections on the remote nodes."),
+		&MaxSharedPoolSize,
+		0, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, MaxSharedPoolSizeGucShowHook);
+
+	DefineCustomIntVariable(
 		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
 		gettext_noop("Worker nodes' network locations, their membership and "
 					 "health status are tracked in a shared hash table on "
 					 "the master node. This configuration value limits the "
 					 "size of the hash table, and consequently the maximum "
-					 "number of worker nodes that can be tracked."),
+					 "number of worker nodes that can be tracked."
+					 "Citus keeps some information about the worker nodes "
+					 "in the shared memory for certain optimizations. The "
+					 "optimizations are enforced up to this number of worker "
+					 "nodes. Any additional worker nodes may not benefit from"
+					 "the optimizations."),
 		&MaxWorkerNodesTracked,
-		2048, 8, INT_MAX,
+		2048, 1024, INT_MAX,
 		PGC_POSTMASTER,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -1517,6 +1558,28 @@ NodeConninfoGucAssignHook(const char *newval, void *extra)
 	 * be unencrypted when the user doesn't want that.
 	 */
 	CloseAllConnectionsAfterTransaction();
+}
+
+
+/*
+ * MaxSharedPoolSizeGucShowHook overrides the value that is shown to the
+ * user when the default value has not been set.
+ */
+static const char *
+MaxSharedPoolSizeGucShowHook(void)
+{
+	StringInfo newvalue = makeStringInfo();
+
+	if (MaxSharedPoolSize == 0)
+	{
+		appendStringInfo(newvalue, "%d", GetMaxSharedPoolSize());
+	}
+	else
+	{
+		appendStringInfo(newvalue, "%d", MaxSharedPoolSize);
+	}
+
+	return (const char *) newvalue->data;
 }
 
 
