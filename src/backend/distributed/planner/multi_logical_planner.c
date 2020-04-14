@@ -672,7 +672,7 @@ MultiNodeTree(Query *originalQuery, Query *queryTree)
 	 * If we have a subquery, build a multi table node for the subquery and
 	 * add a collect node on top of the multi table node.
 	 */
-	List *subqueryEntryList = SubqueryEntryList(originalQuery);
+	List *subqueryEntryList = SubqueryEntryList(queryTree);
 	if (subqueryEntryList != NIL)
 	{
 		MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
