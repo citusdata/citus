@@ -1,0 +1,33 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s3-lower-pool-size s1-begin s1-count-slow s3-increase-pool-size s2-select s1-commit
+step s3-lower-pool-size:
+	SELECT set_max_shared_pool_size(5);
+
+set_max_shared_pool_size
+
+
+step s1-begin:
+	BEGIN;
+
+step s1-count-slow:
+	SELECT pg_sleep(0.1), count(*) FROM test;
+
+pg_sleep       count
+
+               101
+step s3-increase-pool-size:
+	SELECT set_max_shared_pool_size(100);
+
+set_max_shared_pool_size
+
+
+step s2-select:
+       SELECT count(*) FROM test;
+
+count
+
+101
+step s1-commit:
+	COMMIT;
+

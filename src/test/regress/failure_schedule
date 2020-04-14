@@ -37,3 +37,9 @@ test: failure_connection_establishment
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
+
+# ---------
+# ensures that we never leak any connection counts
+# in the shared memory
+# --------
+test: ensure_no_shared_connection_leak

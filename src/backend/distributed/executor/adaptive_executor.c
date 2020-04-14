@@ -589,6 +589,7 @@ static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
+static bool ShouldWaitForConnection(WorkerPool *workerPool);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
 static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
@@ -1944,15 +1945,14 @@ FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int node
 	workerPool->nodeName = pstrdup(nodeName);
 	workerPool->nodePort = nodePort;
 
-	INSTR_TIME_SET_ZERO(workerPool->poolStartTime);
-	workerPool->distributedExecution = execution;
-
 	/* "open" connections aggressively when there are cached connections */
 	int nodeConnectionCount = MaxCachedConnectionsPerWorker;
 	workerPool->maxNewConnectionsPerCycle = Max(1, nodeConnectionCount);
 
 	dlist_init(&workerPool->pendingTaskQueue);
 	dlist_init(&workerPool->readyTaskQueue);
+
+	workerPool->distributedExecution = execution;
 
 	execution->workerList = lappend(execution->workerList, workerPool);
 
@@ -2385,11 +2385,48 @@ ManageWorkerPool(WorkerPool *workerPool)
 			connectionFlags |= OUTSIDE_TRANSACTION;
 		}
 
+		if (UseConnectionPerPlacement())
+		{
+			/*
+			 * User wants one connection per placement, so no throttling is desired
+			 * and we do not set any flags.
+			 *
+			 * The primary reason for this is that allowing multiple backends to use
+			 * connection per placement could lead to unresolved self deadlocks. In other
+			 * words, each backend may stuck waiting for other backends to get a slot
+			 * in the shared connection counters.
+			 */
+		}
+		else if (ShouldWaitForConnection(workerPool))
+		{
+			/*
+			 * We need this connection to finish the execution. If it is not
+			 * available based on the current number of connections to the worker
+			 * then wait for it.
+			 */
+			connectionFlags |= WAIT_FOR_CONNECTION;
+		}
+		else
+		{
+			/*
+			 * The executor can finish the execution with a single connection,
+			 * remaining are optional. If the executor can get more connections,
+			 * it can increase the parallelism.
+			 */
+			connectionFlags |= OPTIONAL_CONNECTION;
+		}
+
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  workerPool->nodeName,
 																	  workerPool->nodePort,
 																	  NULL, NULL);
+		if (!connection)
+		{
+			/* connection can only be NULL for optional connections */
+			Assert((connectionFlags & OPTIONAL_CONNECTION));
+			continue;
+		}
 
 		/*
 		 * Assign the initial state in the connection state machine. The connection
@@ -2404,6 +2441,17 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		connection->claimedExclusively = true;
 
+		if (list_length(workerPool->sessionList) == 0)
+		{
+			/*
+			 * The worker pool has just started to establish connections. We need to
+			 * defer this initilization after StartNodeUserDatabaseConnection()
+			 * because for non-optional connections, we have some logic to wait
+			 * until a connection is allowed to be established.
+			 */
+			INSTR_TIME_SET_ZERO(workerPool->poolStartTime);
+		}
+
 		/* create a session for the connection */
 		WorkerSession *session = FindOrCreateWorkerSession(workerPool, connection);
 
@@ -2413,6 +2461,42 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
 	execution->connectionSetChanged = true;
+}
+
+
+/*
+ * ShouldWaitForConnection returns true if the workerPool should wait to
+ * get the next connection until one slot is empty within
+ * citus.max_shared_pool_size on the worker. Note that, if there is an
+ * empty slot, the connection will not wait anyway.
+ */
+static bool
+ShouldWaitForConnection(WorkerPool *workerPool)
+{
+	if (list_length(workerPool->sessionList) == 0)
+	{
+		/*
+		 * We definitely need at least 1 connection to finish the execution.
+		 * All single shard queries hit here with the default settings.
+		 */
+		return true;
+	}
+
+	if (list_length(workerPool->sessionList) < MaxCachedConnectionsPerWorker)
+	{
+		/*
+		 * Until this session caches MaxCachedConnectionsPerWorker connections,
+		 * this might lead some optional connections to be considered as non-optional
+		 * when MaxCachedConnectionsPerWorker > 1.
+		 *
+		 * However, once the session caches MaxCachedConnectionsPerWorker (which is
+		 * the second transaction executed in the session), Citus would utilize the
+		 * cached connections as much as possible.
+		 */
+		return true;
+	}
+
+	return false;
 }
 
 
