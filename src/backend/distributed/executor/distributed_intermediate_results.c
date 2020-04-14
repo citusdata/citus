@@ -422,9 +422,15 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 	 * query string for the local placement.
 	 */
 	bool localExecutionSupported = false;
-	ExecuteTaskListExtended(ROW_MODIFY_READONLY, taskList, resultDescriptor,
-							resultStore, hasReturning, targetPoolSize, &xactProperties,
-							NIL, localExecutionSupported);
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		ROW_MODIFY_READONLY, taskList, targetPoolSize, localExecutionSupported
+		);
+	executionParams->tupleDescriptor = resultDescriptor;
+	executionParams->tupleStore = resultStore;
+	executionParams->xactProperties = xactProperties;
+	executionParams->hasReturning = hasReturning;
+
+	ExecuteTaskListExtended(executionParams);
 
 	return resultStore;
 }

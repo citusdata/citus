@@ -187,10 +187,15 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		};
 
 		bool localExecutionSupported = true;
-		ExecuteTaskListExtended(ROW_MODIFY_NONE, list_make1(task),
-								tupleDesc, tupleStore, hasReturning,
-								MaxAdaptiveExecutorPoolSize,
-								&xactProperties, NIL, localExecutionSupported);
+		ExecutionParams *executionParams = CreateBasicExecutionParams(
+			ROW_MODIFY_NONE, list_make1(task), MaxAdaptiveExecutorPoolSize,
+			localExecutionSupported
+			);
+		executionParams->tupleStore = tupleStore;
+		executionParams->tupleDescriptor = tupleDesc;
+		executionParams->hasReturning = hasReturning;
+		executionParams->xactProperties = xactProperties;
+		ExecuteTaskListExtended(executionParams);
 
 		while (tuplestore_gettupleslot(tupleStore, true, false, slot))
 		{

@@ -74,13 +74,48 @@ extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint
 							 bool execute_once);
 extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
 extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
-extern uint64 ExecuteTaskListExtended(RowModifyLevel modLevel, List *taskList,
-									  TupleDesc tupleDescriptor,
-									  Tuplestorestate *tupleStore,
-									  bool hasReturning, int targetPoolSize,
-									  TransactionProperties *xactProperties,
-									  List *jobIdList,
-									  bool localExecutionSupported);
+
+/*
+ * ExecutionParams contains parameters that are used during the execution.
+ * Some of these can be the zero value if it is not needed during the execution.
+ */
+typedef struct ExecutionParams
+{
+	/* modLevel is the access level for rows.*/
+	RowModifyLevel modLevel;
+
+	/* taskList contains the tasks for the execution.*/
+	List *taskList;
+
+	/* tupleDescriptor contains the description for the result tuples.*/
+	TupleDesc tupleDescriptor;
+
+	/* tupleStore is where the results will be stored for this execution */
+	Tuplestorestate *tupleStore;
+
+	/* hasReturning is true if this execution will return some result. */
+	bool hasReturning;
+
+	/* targetPoolSize is the maximum amount of connections per worker */
+	int targetPoolSize;
+
+	/* xactProperties contains properties for transactions, such as if we should use 2pc. */
+	TransactionProperties xactProperties;
+
+	/* jobIdList contains all job ids for the execution */
+	List *jobIdList;
+
+	/* localExecutionSupported is true if we can use local execution, if it is false
+	 * local execution will not be used. */
+	bool localExecutionSupported;
+} ExecutionParams;
+
+ExecutionParams * CreateBasicExecutionParams(RowModifyLevel modLevel,
+											 List *taskList,
+											 int targetPoolSize,
+											 bool localExecutionSupported);
+
+extern uint64 ExecuteTaskListExtended(ExecutionParams *executionParams);
 extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
