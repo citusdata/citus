@@ -331,7 +331,7 @@ CreateCreateOrAlterRoleCommand(const char *roleName,
 
 	initStringInfo(&createOrAlterRoleQueryBuffer);
 	appendStringInfo(&createOrAlterRoleQueryBuffer,
-					 "SELECT create_or_alter_role(%s, %s, %s, %s)",
+					 "SELECT worker_create_or_alter_role(%s, %s, %s, %s)",
 					 quote_literal_cstr(roleName),
 					 createRoleQuery,
 					 alterRoleQuery,

@@ -18,7 +18,7 @@
 #include "utils/builtins.h"
 
 PG_FUNCTION_INFO_V1(alter_role_if_exists);
-PG_FUNCTION_INFO_V1(create_or_alter_role);
+PG_FUNCTION_INFO_V1(worker_create_or_alter_role);
 
 /*
  * alter_role_if_exists checks if the role, whose name is given
@@ -49,13 +49,13 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 
 
 /*
- * create_or_alter_role checks if the role, whose name is given
+ * worker_create_or_alter_role checks if the role, whose name is given
  * in the first parameter exists and then runs the query, which is the second
  * parameter. This UDF is particularly used for ALTER ROLE queries, how ever it
  * can run any other query too.
  */
 Datum
-create_or_alter_role(PG_FUNCTION_ARGS)
+worker_create_or_alter_role(PG_FUNCTION_ARGS)
 {
 	text *rolenameText = PG_GETARG_TEXT_P(0);
 	const char *rolename = text_to_cstring(rolenameText);
