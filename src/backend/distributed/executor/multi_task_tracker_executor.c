@@ -2894,7 +2894,6 @@ TaskTrackerExecScan(CustomScanState *node)
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
 		Query *jobQuery = workerJob->jobQuery;
-		elog(WARNING, "query %s", nodeToString(distributedPlan->masterQuery));
 
 		ErrorIfTransactionAccessedPlacementsLocally();
 		DisableLocalExecution();

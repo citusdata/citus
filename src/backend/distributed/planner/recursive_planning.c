@@ -331,6 +331,16 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanAllSubqueries(query->havingQual, context);
 	}
 
+	if (query->limitCount != NULL)
+	{
+		RecursivelyPlanAllSubqueries(query->limitCount, context);
+	}
+
+	if (query->limitOffset != NULL)
+	{
+		RecursivelyPlanAllSubqueries(query->limitOffset, context);
+	}
+
 	/*
 	 * If the query doesn't have distribution key equality,
 	 * recursively plan some of its subqueries.

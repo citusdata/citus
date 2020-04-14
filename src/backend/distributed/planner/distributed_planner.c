@@ -258,14 +258,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			planContext.plan = standard_planner(planContext.query,
 												planContext.cursorOptions,
 												planContext.boundParams);
-
 			if (needsDistributedPlanning)
 			{
-				/*
-				 * standard_planner rewrites simple queries like 'select 10' to PARAM_EXEC nodes,
-				 * which we're unable to handle. Meanwhile we only optimize rewrites to Const.
-				 * So deoptimize non-Const LIMIT/OFFSET, standard_planner will handle it again later.
-				 */
 				result = PlanDistributedStmt(&planContext, rteIdCounter);
 			}
 			else if ((result = TryToDelegateFunctionCall(&planContext)) == NULL)
