@@ -48,11 +48,9 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
-static const char * CreateQueryArray(List *stmts);
 static char * CreateCreateOrAlterRoleCommand(const char *roleName,
 											 CreateRoleStmt *createRoleStmt,
-											 AlterRoleStmt *alterRoleStmt,
-											 List *grantRoleStmts);
+											 AlterRoleStmt *alterRoleStmt);
 static DefElem * makeDefElemInt(char *name, int value);
 static List * GenerateRoleOptionsList(Form_pg_authid role, HeapTuple tuple);
 
@@ -273,31 +271,6 @@ WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role)
 }
 
 
-static const char *
-CreateQueryArray(List *stmts)
-{
-	StringInfoData queryArrayBuffer = { 0 };
-	initStringInfo(&queryArrayBuffer);
-	appendStringInfo(&queryArrayBuffer, "ARRAY [");
-
-	ListCell *cell = NULL;
-
-	foreach(cell, stmts)
-	{
-		Node *stmt = (Node *) lfirst(cell);
-		char *query = DeparseTreeNode(stmt);
-		appendStringInfoString(&queryArrayBuffer, quote_literal_cstr(query));
-		if (cell != list_tail(stmts))
-		{
-			appendStringInfo(&queryArrayBuffer, ", ");
-		}
-	}
-
-	appendStringInfo(&queryArrayBuffer, "]");
-	return queryArrayBuffer.data;
-}
-
-
 /*
  * CreateCreateOrAlterRoleCommand creates ALTER ROLE command, from the alter role node
  *  using the alter_role_if_exists() UDF.
@@ -305,13 +278,11 @@ CreateQueryArray(List *stmts)
 static char *
 CreateCreateOrAlterRoleCommand(const char *roleName,
 							   CreateRoleStmt *createRoleStmt,
-							   AlterRoleStmt *alterRoleStmt,
-							   List *grantRoleStmts)
+							   AlterRoleStmt *alterRoleStmt)
 {
 	StringInfoData createOrAlterRoleQueryBuffer = { 0 };
 	const char *createRoleQuery = "null";
 	const char *alterRoleQuery = "null";
-	const char *grantRoleQueries = "null";
 
 	if (createRoleStmt != NULL)
 	{
@@ -323,19 +294,12 @@ CreateCreateOrAlterRoleCommand(const char *roleName,
 		alterRoleQuery = quote_literal_cstr(DeparseTreeNode((Node *) alterRoleStmt));
 	}
 
-	if (grantRoleStmts != NULL)
-	{
-		grantRoleQueries = CreateQueryArray(grantRoleStmts);
-	}
-
-
 	initStringInfo(&createOrAlterRoleQueryBuffer);
 	appendStringInfo(&createOrAlterRoleQueryBuffer,
-					 "SELECT worker_create_or_alter_role(%s, %s, %s, %s)",
+					 "SELECT worker_create_or_alter_role(%s, %s, %s)",
 					 quote_literal_cstr(roleName),
 					 createRoleQuery,
-					 alterRoleQuery,
-					 grantRoleQueries);
+					 alterRoleQuery);
 
 	return createOrAlterRoleQueryBuffer.data;
 }
@@ -537,12 +501,10 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 
 	ReleaseSysCache(roleTuple);
 
-	List *grantRoleStmts = NULL;
 	char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
 		pstrdup(NameStr(role->rolname)),
 		createRoleStmt,
-		alterRoleStmt,
-		grantRoleStmts);
+		alterRoleStmt);
 
 	List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(roleOid);
 

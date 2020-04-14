@@ -113,33 +113,5 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 							None_Receiver, NULL);
 	}
 
-	if (PG_ARGISNULL(3))
-	{
-		PG_RETURN_BOOL(true);
-	}
-
-	ArrayType *grantRoleQueriesArray = PG_GETARG_ARRAYTYPE_P(3);
-	int grantQueryCount = ArrayObjectCount(grantRoleQueriesArray);
-	Datum *grantRoleQueries = DeconstructArrayObject(grantRoleQueriesArray);
-
-	for (int queryIndex = 0; queryIndex < grantQueryCount; queryIndex++)
-	{
-		text *grantQueryText = DatumGetTextP(grantRoleQueries[queryIndex]);
-		char *grantQuery = text_to_cstring(grantQueryText);
-		Node *parseTree = ParseTreeNode(grantQuery);
-		if (nodeTag(parseTree) != T_GrantRoleStmt)
-		{
-			ereport(ERROR, (errmsg("cannot grant role"),
-							errdetail("%s is not a correct GRANT ROLE query",
-									  quote_literal_cstr(grantQuery))));
-		}
-		CitusProcessUtility(parseTree,
-							grantQuery,
-							PROCESS_UTILITY_TOPLEVEL,
-							NULL,
-							None_Receiver,
-							NULL);
-	}
-
 	PG_RETURN_BOOL(true);
 }
