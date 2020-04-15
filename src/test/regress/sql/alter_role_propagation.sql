@@ -60,4 +60,14 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
 
+-- make sure alter role set is not propagated when the feature is deliberately turned off
+SET citus.enable_alter_role_set_propagation TO off;
+-- remove 1 node to verify settings are NOT copied when the node gets added back
+SELECT master_remove_node('localhost', :worker_1_port);
+ALTER ROLE ALL SET enable_hashjoin TO FALSE;
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+ALTER ROLE ALL RESET enable_hashjoin;
+SELECT run_command_on_workers('SHOW enable_hashjoin');
+
 DROP SCHEMA alter_role CASCADE;

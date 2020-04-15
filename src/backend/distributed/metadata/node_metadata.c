@@ -438,7 +438,7 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 	/* collect all commands */
 	List *ddlCommands = NIL;
 
-	if (EnableAlterRolePropagation)
+	if (EnableAlterRoleSetPropagation)
 	{
 		/*
 		 * Get commands for database and postgres wide settings. Since these settings are not

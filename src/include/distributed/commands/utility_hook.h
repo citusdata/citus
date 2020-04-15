@@ -31,6 +31,7 @@ extern bool EnableDDLPropagation;
 extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
+extern bool EnableAlterRoleSetPropagation;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or

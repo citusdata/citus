@@ -67,7 +67,8 @@ static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
 static ObjectAddress RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
 
 /* controlled via GUC */
-bool EnableAlterRolePropagation = false;
+bool EnableAlterRolePropagation = true;
+bool EnableAlterRoleSetPropagation = true;
 
 
 /*
@@ -184,7 +185,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	if (!EnableAlterRolePropagation)
+	if (!EnableAlterRoleSetPropagation)
 	{
 		return NIL;
 	}
@@ -497,15 +498,25 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 
 	ReleaseSysCache(roleTuple);
 
-	char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
-		pstrdup(NameStr(role->rolname)),
-		createRoleStmt,
-		alterRoleStmt);
+	List *completeRoleList = NIL;
+	if (createRoleStmt != NULL || alterRoleStmt != NULL)
+	{
+		/* add a worker_create_or_alter_role command if any of them are set */
+		char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
+			pstrdup(NameStr(role->rolname)),
+			createRoleStmt,
+			alterRoleStmt);
 
-	List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(roleOid);
+		completeRoleList = lappend(completeRoleList, createOrAlterRoleQuery);
+	}
 
-	List *completeRoleList = list_make1(createOrAlterRoleQuery);
-	completeRoleList = list_concat(completeRoleList, alterRoleSetCommands);
+	if (EnableAlterRoleSetPropagation)
+	{
+		/* append ALTER ROLE ... SET commands fot this specific user */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(roleOid);
+		completeRoleList = list_concat(completeRoleList, alterRoleSetCommands);
+	}
+
 	return completeRoleList;
 }
 
