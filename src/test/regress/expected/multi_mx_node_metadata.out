@@ -98,7 +98,7 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 END;
 -- wait until maintenance daemon does the next metadata sync, and then
 -- check if metadata is synced again
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -139,7 +139,7 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 
 END;
 -- maintenace daemon metadata sync should fail, because node is still unwriteable.
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -158,7 +158,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
         1
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -233,7 +233,7 @@ SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
  t
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -261,7 +261,7 @@ SELECT count(*) FROM dist_table_2;
 (1 row)
 
 END;
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -274,7 +274,7 @@ SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
  t
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -323,7 +323,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -345,7 +345,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -403,7 +403,7 @@ SELECT master_update_node(:nodeid_2, 'localhost', 1);
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -441,7 +441,7 @@ SELECT master_update_node(:nodeid_2, 'localhost', :worker_2_port);
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -469,7 +469,7 @@ SELECT master_update_node(:nodeid_1, 'localhost', 1);
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -502,7 +502,7 @@ SELECT master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 

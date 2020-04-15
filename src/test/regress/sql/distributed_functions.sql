@@ -381,7 +381,7 @@ SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test');
 
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
 
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
@@ -449,7 +449,7 @@ SET citus.shard_count TO 55;
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1');
 
 -- sync metadata to workers for consistent results when clearing objects
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
 
 
 SET citus.shard_replication_factor TO 1;

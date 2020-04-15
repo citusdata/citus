@@ -34,7 +34,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('colocation_table','id');
 
 SELECT create_distributed_function('raise_info(text)', '$1', colocate_with := 'colocation_table');
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');

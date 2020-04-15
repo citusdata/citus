@@ -300,7 +300,7 @@ SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func';
 SELECT run_command_on_workers($$SELECT typowner::regrole FROM pg_type WHERE typname = 'usage_access_type'$$);
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func'$$);
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 CREATE TABLE colocation_table(id text);
 SELECT create_distributed_table('colocation_table','id');

@@ -660,7 +660,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1'
 ERROR:  cannot colocate function "eq_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
 HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -788,7 +788,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val
 ERROR:  cannot distribute the function "eq_with_param_names" since there is no table to colocate with
 HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
 -- sync metadata to workers for consistent results when clearing objects
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 

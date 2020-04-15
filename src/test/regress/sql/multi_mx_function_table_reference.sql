@@ -44,7 +44,7 @@ SELECT create_distributed_function('zoop(int)', '$1');
 
 -- now add the worker back, this triggers function distribution which should not fail.
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
 
 
 -- clean up after testing
