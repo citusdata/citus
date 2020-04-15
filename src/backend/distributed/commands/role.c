@@ -52,7 +52,7 @@ static char * CreateCreateOrAlterRoleCommand(const char *roleName,
 											 CreateRoleStmt *createRoleStmt,
 											 AlterRoleStmt *alterRoleStmt);
 static DefElem * makeDefElemInt(char *name, int value);
-static List * GenerateRoleOptionsList(Form_pg_authid role, HeapTuple tuple);
+static List * GenerateRoleOptionsList(HeapTuple tuple);
 
 static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
 										   TupleDesc DbRoleSettingDescription);
@@ -416,62 +416,58 @@ MakeVariableSetStmt(const char *config)
 
 
 /*
- *
+ * GenerateRoleOptionsList returns the list of options set on a user based on the record
+ * in pg_authid. It requires the HeapTuple for a user entry to access both its fixed
+ * length and variable length fields.
  */
 static List *
-GenerateRoleOptionsList(Form_pg_authid role, HeapTuple tuple)
+GenerateRoleOptionsList(HeapTuple tuple)
 {
-	bool isNull = true;
+	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
+
 	List *options = NIL;
-	char *rolPassword = "";
-	char *rolValidUntil = "infinity";
 	options = lappend(options, makeDefElemInt("superuser", role->rolsuper));
-
 	options = lappend(options, makeDefElemInt("createdb", role->rolcreatedb));
-
 	options = lappend(options, makeDefElemInt("createrole", role->rolcreaterole));
-
 	options = lappend(options, makeDefElemInt("inherit", role->rolinherit));
-
 	options = lappend(options, makeDefElemInt("canlogin", role->rolcanlogin));
-
 	options = lappend(options, makeDefElemInt("isreplication", role->rolreplication));
-
 	options = lappend(options, makeDefElemInt("bypassrls", role->rolbypassrls));
-
-
 	options = lappend(options, makeDefElemInt("connectionlimit", role->rolconnlimit));
-
 
 	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
 	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
 	heap_close(pgAuthId, AccessShareLock);
 
+	/* load password from heap tuple, use NULL if not set */
+	bool isNull = true;
 	Datum rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 										  pgAuthIdDescription, &isNull);
 	if (!isNull)
 	{
-		rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
-		options = lappend(options, makeDefElem("password",
-											   (Node *) makeString(
-												   rolPassword),
-											   -1));
+		char *rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
+		Node *passwordStringNode = (Node *) makeString(rolPassword);
+		DefElem *passwordOption = makeDefElem("password", passwordStringNode, -1);
+		options = lappend(options, passwordOption);
 	}
 	else
 	{
 		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
+	/* load valid unitl data from the heap tuple, use default of infinity if not set */
 	Datum rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
 											pgAuthIdDescription, &isNull);
+	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
 		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 	}
 
-	options = lappend(options, makeDefElem("validUntil",
-										   (Node *) makeString(rolValidUntil),
-										   -1));
+	Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
+	DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
+	options = lappend(options, validUntilOption);
+
 	return options;
 }
 
@@ -496,7 +492,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		alterRoleStmt->role->location = -1;
 		alterRoleStmt->role->rolename = pstrdup(NameStr(role->rolname));
 		alterRoleStmt->action = 1;
-		alterRoleStmt->options = GenerateRoleOptionsList(role, roleTuple);
+		alterRoleStmt->options = GenerateRoleOptionsList(roleTuple);
 	}
 
 	ReleaseSysCache(roleTuple);
