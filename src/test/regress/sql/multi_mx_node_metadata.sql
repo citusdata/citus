@@ -140,6 +140,30 @@ SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
 
 --------------------------------------------------------------------------
+-- Test that master_update_node invalidates the plan cache
+--------------------------------------------------------------------------
+
+PREPARE foo AS SELECT COUNT(*) FROM dist_table_1 WHERE a = 1;
+
+SET citus.log_remote_commands = ON;
+-- trigger caching for prepared statements
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+
+SELECT master_update_node(:nodeid_1, '127.0.0.1', :worker_1_port);
+SELECT wait_until_metadata_sync(30000);
+
+-- make sure the nodename changed.
+EXECUTE foo;
+
+SET citus.log_remote_commands TO OFF;
+
+--------------------------------------------------------------------------
 -- Test that master_update_node can appear in a prepared transaction.
 --------------------------------------------------------------------------
 BEGIN;
