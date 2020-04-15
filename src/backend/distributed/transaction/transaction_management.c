@@ -135,7 +135,16 @@ UseCoordinatedTransaction(void)
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
-	AssignDistributedTransactionId();
+
+	/*
+	 * If assign_distributed_transaction_id() has been called, we should reuse
+	 * that identifier so distributed deadlock detection works properly.
+	 */
+	DistributedTransactionId *transactionId = GetCurrentDistributedTransactionId();
+	if (transactionId->transactionNumber == 0)
+	{
+		AssignDistributedTransactionId();
+	}
 }
 
 

@@ -634,6 +634,25 @@ SET search_path TO replicate_reference_table;
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
+--
+-- The following case used to get stuck on create_distributed_table() instead
+-- of detecting the distributed deadlock.
+--
+SET citus.replicate_reference_tables_on_activate TO off;
+SET citus.shard_replication_factor TO 1;
+
+select master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE ref (a int primary key, b int);
+SELECT create_reference_table('ref');
+CREATE TABLE test (x int, y int references ref(a));
+select 1 FROM master_add_node('localhost', :worker_2_port);
+BEGIN;
+DROP TABLE test;
+CREATE TABLE test (x int, y int references ref(a));
+SELECT create_distributed_table('test','x');
+END;
+
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
 -- OS-dependent host name resolution warnings
