@@ -54,6 +54,9 @@ SELECT pg_reload_conf();
 \c - - - :master_port
 SET search_path TO ensure_no_shared_connection_leak;
 
+-- invalidate inactive shared connections
+SELECT invalidate_inactive_shared_connections();
+
 -- ensure that we only have at most citus.max_cached_conns_per_worker
 -- connections per node
 select
