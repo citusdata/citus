@@ -558,14 +558,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
 			OBJECT_ROLE && EnableAlterRolePropagation)
 		{
-			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
-									"distributed databases"),
-
-							 errdetail(
-								 "Citus does not propagate ALTER ROLE ... RENAME TO "
-								 "commands to workers"),
-
-							 errhint("You can manually alter roles on workers.")));
+			ereport(NOTICE, (errmsg("not propagating ALTER ROLE ... RENAME TO commands "
+									"to worker nodes"),
+							 errhint("Connect to worker nodes directly to manually "
+									 "rename the role")));
 		}
 	}
 

@@ -390,9 +390,9 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	{
 		EnsureNoModificationsHaveBeenDone();
 
-		PropagateNodeWideObjects(newWorkerNode);
-		if (EnableDependencyCreation)
+		if (ShouldPropagate())
 		{
+			PropagateNodeWideObjects(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
 		}
@@ -435,12 +435,6 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 static void
 PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 {
-	if (!ShouldPropagate())
-	{
-		/* dependency propagation has been turned off, do nothing. */
-		return;
-	}
-
 	/* collect all commands */
 	List *ddlCommands = NIL;
 

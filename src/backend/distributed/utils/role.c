@@ -49,10 +49,26 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_create_or_alter_role checks if the role, whose name is given
- * in the first parameter exists and then runs the query, which is the second
- * parameter. This UDF is particularly used for ALTER ROLE queries, how ever it
- * can run any other query too.
+ * worker_create_or_alter_role(
+ *   role_name text,
+ *   create_role_utility_query text,
+ *   alter_role_utility_query text)
+ *
+ * This UDF checks if the role, whose name is given in role_name exists.
+ *
+ * If the role does not exist it will run the query provided in create_role_utility_query
+ * which is expected to be a CreateRoleStmt. If a different statement is provided the call
+ * will raise an error,
+ *
+ * If the role does exist it will run the query provided in alter_role_utility_query to
+ * change the existing user in such a way that it is compatible with the user on the
+ * coordinator. This query is expected to be a AlterRoleStmt, if a different statement is
+ * provdided the function will raise an error.
+ *
+ * For both queries a NULL value can be passed to omit the execution of that condition.
+ *
+ * The function returns true if a command has been successfully executed, false if no
+ * command was executed, and raises an error if something went wrong.
  */
 Datum
 worker_create_or_alter_role(PG_FUNCTION_ARGS)
@@ -64,7 +80,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 	{
 		if (PG_ARGISNULL(1))
 		{
-			PG_RETURN_BOOL(true);
+			PG_RETURN_BOOL(false);
 		}
 
 		text *createRoleUtilityQueryText = PG_GETARG_TEXT_P(1);
@@ -85,12 +101,14 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 							PROCESS_UTILITY_TOPLEVEL,
 							NULL,
 							None_Receiver, NULL);
+
+		PG_RETURN_BOOL(true);
 	}
 	else
 	{
 		if (PG_ARGISNULL(2))
 		{
-			PG_RETURN_BOOL(true);
+			PG_RETURN_BOOL(false);
 		}
 
 		text *alterRoleUtilityQueryText = PG_GETARG_TEXT_P(2);
@@ -111,7 +129,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 							PROCESS_UTILITY_TOPLEVEL,
 							NULL,
 							None_Receiver, NULL);
-	}
 
-	PG_RETURN_BOOL(true);
+		PG_RETURN_BOOL(true);
+	}
 }
