@@ -34,6 +34,7 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_log_messages.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -263,6 +264,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_ABORT:
 		{
+			/* stop propagating notices from workers, we know the query is failed */
+			DisableWorkerMessagePropagation();
+
 			/*
 			 * FIXME: Add warning for the COORD_TRANS_COMMITTED case. That
 			 * can be reached if this backend fails after the
@@ -328,7 +332,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			SubPlanLevel = 0;
 			UnSetDistributedTransactionId();
-			UnsetCitusNoticeLevel();
 			break;
 		}
 
@@ -451,6 +454,8 @@ ResetGlobalVariables()
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
 	TransactionModifiedNodeMetadata = false;
+
+	ResetWorkerErrorIndication();
 }
 
 
@@ -511,13 +516,23 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
+			/*
+			 * Stop showing message for now, will re-enable when executing
+			 * the next statement.
+			 */
+			DisableWorkerMessagePropagation();
+
+			/*
+			 * Given that we aborted, worker error indications can be ignored.
+			 */
+			ResetWorkerErrorIndication();
+
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
 			PopSubXact(subId);
 
-			UnsetCitusNoticeLevel();
 			break;
 		}
 

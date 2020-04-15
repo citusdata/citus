@@ -461,6 +461,7 @@ if ($followercluster)
 # shard_count to 4 to speed up the tests.
 if($isolationtester)
 {
+   push(@pgOptions, '-c', "citus.worker_min_messages='warning'");
    push(@pgOptions, '-c', "citus.log_distributed_deadlock_detection=on");
    push(@pgOptions, '-c', "citus.distributed_deadlock_detection_factor=-1");
    push(@pgOptions, '-c', "citus.shard_count=4");

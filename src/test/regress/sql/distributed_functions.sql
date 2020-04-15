@@ -9,6 +9,29 @@ CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
 SET citus.shard_count TO 4;
 
+-- test notice
+CREATE TABLE notices (
+    id int primary key,
+    message text
+);
+SELECT create_distributed_table('notices', 'id');
+INSERT INTO notices VALUES (1, 'hello world');
+
+CREATE FUNCTION notice(text)
+RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE NOTICE '%', $1;
+END;
+$$;
+SELECT create_distributed_function('notice(text)');
+SELECT notice(message) FROM notices WHERE id = 1;
+
+-- should not see a NOTICE if worker_min_messages is WARNING
+SET citus.worker_min_messages TO WARNING;
+SELECT notice(message) FROM notices WHERE id = 1;
+RESET citus.worker_min_messages;
+
 -- Create and distribute a simple function
 CREATE FUNCTION eq(macaddr, macaddr) RETURNS bool
     AS 'select $1 = $2;'

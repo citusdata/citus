@@ -385,7 +385,7 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 \set VERBOSITY terse
 call multi_mx_call.mx_call_proc_raise(2);
 DEBUG:  pushing down the procedure
-DEBUG:  warning
+WARNING:  warning
 ERROR:  error
 \set VERBOSITY default
 -- Test that we don't propagate to non-metadata worker nodes

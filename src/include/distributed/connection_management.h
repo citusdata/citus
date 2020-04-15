@@ -27,9 +27,6 @@
 /* used for libpq commands that get an error buffer. Postgres docs recommend 256. */
 #define ERROR_BUFFER_SIZE 256
 
-/* default notice level */
-#define DEFAULT_CITUS_NOTICE_LEVEL DEBUG1
-
 /* application name used for internal connections in Citus */
 #define CITUS_APPLICATION_NAME "citus"
 
@@ -246,11 +243,6 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-
-/* dealing with notice handler */
-extern void SetCitusNoticeProcessor(MultiConnection *connection);
-extern char * TrimLogLevel(const char *message);
-extern void UnsetCitusNoticeLevel(void);
 
 /* time utilities */
 extern double MillisecondsPassedSince(instr_time moment);

@@ -51,6 +51,12 @@ FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares',
 WHERE user_id = 'jon' OR true
 ORDER BY x;
 
+SET client_min_messages TO DEBUG;
+SELECT x, x2
+FROM interesting_squares JOIN (SELECT * FROM read_intermediate_result('squares', 'binary') AS res (x text, x2 int)) squares ON (x = interested_in)
+WHERE user_id = 'jon'
+ORDER BY x;
+
 RESET client_min_messages;
 -- try to read the file as text, will fail because of binary encoding
 BEGIN;

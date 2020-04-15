@@ -988,7 +988,7 @@ FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
 AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
-		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
+		  s.logicalrelid = 'hash_modifying_xacts'::regclass)
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
        logicalrelid        | shardstate | count
@@ -1035,7 +1035,7 @@ FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
 AND      (s.logicalrelid = 'reference_modifying_xacts'::regclass OR
-		  s.logicalrelid = 'hash_modifying_xacts'::regclass)	
+		  s.logicalrelid = 'hash_modifying_xacts'::regclass)
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
        logicalrelid        | shardstate | count
@@ -1200,7 +1200,7 @@ SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
 WHERE    sp.shardid = s.shardid
-AND      s.logicalrelid = 'reference_failure_test'::regclass	
+AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
       logicalrelid      | shardstate | count

@@ -67,6 +67,7 @@
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
@@ -164,14 +165,20 @@ static const struct config_enum_entry shard_commit_protocol_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry multi_task_query_log_level_options[] = {
-	{ "off", MULTI_TASK_QUERY_INFO_OFF, false },
-	{ "debug", DEBUG2, false },
-	{ "log", LOG, false },
-	{ "notice", NOTICE, false },
-	{ "warning", WARNING, false },
-	{ "error", ERROR, false },
-	{ NULL, 0, false }
+static const struct config_enum_entry log_level_options[] = {
+	{ "off", CITUS_LOG_LEVEL_OFF, false },
+	{ "debug5", DEBUG5, false},
+	{ "debug4", DEBUG4, false},
+	{ "debug3", DEBUG3, false},
+	{ "debug2", DEBUG2, false},
+	{ "debug1", DEBUG1, false},
+	{ "debug", DEBUG2, true},
+	{ "log", LOG, false},
+	{ "info", INFO, true},
+	{ "notice", NOTICE, false},
+	{ "warning", WARNING, false},
+	{ "error", ERROR, false},
+	{ NULL, 0, false}
 };
 
 static const struct config_enum_entry multi_shard_modify_connection_options[] = {
@@ -622,6 +629,18 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.worker_min_messages",
+		gettext_noop("Log messages from workers only if their log level is at or above "
+					 "the configured level"),
+		NULL,
+		&WorkerMinMessages,
+		NOTICE,
+		log_level_options,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1248,7 +1267,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the level of multi task query execution log messages"),
 		NULL,
 		&MultiTaskQueryLogLevel,
-		MULTI_TASK_QUERY_INFO_OFF, multi_task_query_log_level_options,
+		CITUS_LOG_LEVEL_OFF, log_level_options,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
