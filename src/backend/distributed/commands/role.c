@@ -436,14 +436,10 @@ GenerateRoleOptionsList(HeapTuple tuple)
 	options = lappend(options, makeDefElemInt("bypassrls", role->rolbypassrls));
 	options = lappend(options, makeDefElemInt("connectionlimit", role->rolconnlimit));
 
-	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
-	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
-	heap_close(pgAuthId, AccessShareLock);
-
 	/* load password from heap tuple, use NULL if not set */
 	bool isNull = true;
-	Datum rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
-										  pgAuthIdDescription, &isNull);
+	Datum rolPasswordDatum = SysCacheGetAttr(AUTHNAME, tuple, Anum_pg_authid_rolpassword,
+											 &isNull);
 	if (!isNull)
 	{
 		char *rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
@@ -457,8 +453,8 @@ GenerateRoleOptionsList(HeapTuple tuple)
 	}
 
 	/* load valid unitl data from the heap tuple, use default of infinity if not set */
-	Datum rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
-											pgAuthIdDescription, &isNull);
+	Datum rolValidUntilDatum = SysCacheGetAttr(AUTHNAME, tuple,
+											   Anum_pg_authid_rolvaliduntil, &isNull);
 	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
