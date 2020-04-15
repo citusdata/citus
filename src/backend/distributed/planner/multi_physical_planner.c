@@ -1610,6 +1610,8 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->windowClause = windowClause;
 	jobQuery->hasSubLinks = checkExprHasSubLink((Node *) jobQuery);
 
+	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
+
 	return jobQuery;
 }
 
