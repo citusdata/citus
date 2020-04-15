@@ -64,8 +64,8 @@ SELECT COUNT(*) FROM dist_table;
 INSERT INTO ref_table VALUES(2);
 INSERT INTO dist_table VALUES(2);
 
--- However, SELECT would access local placements via remote connections
--- for regular distributed tables, TRUNCATE would also be executed remotely.
+-- SELECT would access local placements via local execution as that is
+-- in a transaction block even though it contains multi local shards.
 BEGIN;
   SELECT COUNT(*) FROM dist_table;
   TRUNCATE dist_table;
@@ -88,9 +88,9 @@ SELECT COUNT(*) FROM dist_table;
 -- insert some data
 INSERT INTO ref_table VALUES(4);
 
--- However, creating a dist. table is handled by remote connections.
+-- Creating a dist. table is handled by local execution inside a transaction block.
 -- Hence, the commands following it (INSERT & TRUNCATE) would also be
--- handled remotely.
+-- handled via local execution.
 BEGIN;
   CREATE TABLE ref_table_1(a int);
   SELECT create_reference_table('ref_table_1');
@@ -104,8 +104,8 @@ COMMIT;
 -- show that TRUNCATE is successfull
 SELECT COUNT(*) FROM ref_table_1;
 
--- However, as SELECT would access local placements via remote parallel
--- connections for regular distributed tables, below TRUNCATE would error
+-- However, as SELECT would access local placements via local execution
+-- for regular distributed tables, below TRUNCATE would error
 -- out
 BEGIN;
   SELECT COUNT(*) FROM dist_table;

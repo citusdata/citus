@@ -60,13 +60,17 @@
  *		Note that for read-only queries, after the local execution, there is no
  *      need to kick in adaptive executor.
  *
+ * (4) Execution of multi shards local queries and
+ *     remote multi-shard queries within a transaction block
+ *
+ *      We prefer local execution when we are inside a transaction block, because not using
+ *      local execution might create some limitations for other commands in the transaction
+ *      block. To simplify things, whenever we are inside a transaction block, we prefer local
+ *      execution if possible.
+ *
  *  There are also a few limitations/trade-offs that are worth mentioning.
  *  - The local execution on multiple shards might be slow because the execution
  *  has to happen one task at a time (e.g., no parallelism).
- *  - If a transaction block/CTE starts with a multi-shard command, we do not
- *  use local query execution since local execution is sequential. Basically,
- *  we do not want to lose parallelism across local tasks by switching to local
- *  execution.
  *  - The local execution cannot be mixed with the executors other than adaptive,
  *  namely task-tracker executor.
  *  - Related with the previous item, COPY command cannot be mixed with local
