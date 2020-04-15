@@ -36,6 +36,7 @@
  */
 
 #include "distributed/citus_local_planner.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
@@ -43,6 +44,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_utils.h"
 
 /* make_ands_explicit */
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -51,8 +53,10 @@
 #include "optimizer/clauses.h"
 #endif
 
-static Job * CreateCitusLocalPlanJob(Query *query, List *noDistKeyTableRTEList);
-static List * CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList);
+static Job * CreateCitusLocalPlanJob(Query *query, List *localRelationRTEList);
+static void UpdateRelationOidsWithLocalShardOids(Query *query,
+												 List *localRelationRTEList);
+static List * CitusLocalPlanTaskList(Query *query, List *localRelationRTEList);
 
 /*
  * CreateCitusLocalPlan creates the distributed plan to process given query
@@ -60,39 +64,43 @@ static List * CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList);
  * the only appropriate planner function.
  */
 DistributedPlan *
-CreateCitusLocalPlan(Query *query, PlannerRestrictionContext *plannerRestrictionContext)
+CreateCitusLocalPlan(Query *query)
 {
 	ereport(DEBUG2, (errmsg("Creating citus local plan")));
 
+	ErrorIfUnsupportedQueryWithCitusLocalTables(query);
+
 	List *rangeTableList = ExtractRangeTableEntryList(query);
 
-	List *noDistKeyTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
-																  CITUS_LOCAL_TABLE);
+	List *citusLocalTableRTEList =
+		ExtractTableRTEListByDistMethod(rangeTableList, CITUS_LOCAL_TABLE);
+	List *referenceTableRTEList =
+		ExtractTableRTEListByDistMethod(rangeTableList, DISTRIBUTE_BY_NONE);
 
-	if (plannerRestrictionContext->citusLocalPlanRestrictionContext->isLocalReferenceJoin)
-	{
-		List *referenceTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
-																	  DISTRIBUTE_BY_NONE);
+	List *localRelationRTEList = list_concat(citusLocalTableRTEList,
+											 referenceTableRTEList);
 
-		noDistKeyTableRTEList = list_concat(noDistKeyTableRTEList,
-											referenceTableRTEList);
-	}
-
-	Assert(noDistKeyTableRTEList != NIL);
+	Assert(localRelationRTEList != NIL);
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
-	distributedPlan->workerJob = CreateCitusLocalPlanJob(query,
-														 noDistKeyTableRTEList);
+
+
+	int resultRelationId = IsModifyCommand(query) ? ResultRelationOidForQuery(query) :
+						   InvalidOid;
+
+	if (IsCitusTable(resultRelationId))
+	{
+		distributedPlan->targetRelationId = resultRelationId;
+	}
+
+	distributedPlan->routerExecutable = true;
+
+	distributedPlan->workerJob =
+		CreateCitusLocalPlanJob(query, localRelationRTEList);
 
 	/* make the final changes on the query */
-
-	/*
-	 * Replace citus local tables with their local shards and acquire necessary
-	 * locks
-	 */
-	UpdateTablesWithoutDistKeysWithShards(query, noDistKeyTableRTEList);
 
 	/* convert list of expressions into expression tree for further processing */
 	FromExpr *joinTree = query->jointree;
@@ -103,6 +111,73 @@ CreateCitusLocalPlan(Query *query, PlannerRestrictionContext *plannerRestriction
 	}
 
 	return distributedPlan;
+}
+
+
+/*
+ * UpdateRelationOidsWithLocalShardOids replaces OID fields of the given range
+ * table entries with their local shard relation OID's and acquires necessary
+ * locks for those local shard relations.
+ *
+ * Callers of this function are responsible to provide range table entries only
+ * for citus tables without distribution keys, i.e reference tables or citus
+ * local tables.
+ */
+static void
+UpdateRelationOidsWithLocalShardOids(Query *query, List *localRelationRTEList)
+{
+#if PG_VERSION_NUM < PG_VERSION_12
+
+	/*
+	 * We cannot infer the required lock mode per range table entries as they
+	 * do not have rellockmode field if PostgreSQL version < 12.0, but we can
+	 * deduce it from the query itself for all the range table entries.
+	 */
+	LOCKMODE localShardLockMode = GetQueryLockMode(query);
+#endif
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, localRelationRTEList)
+	{
+		Oid relationId = rangeTableEntry->relid;
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+
+		/* given OID should belong to a valid reference table */
+		Assert(cacheEntry != NULL &&
+			   CitusTableWithoutDistributionKey(cacheEntry->partitionMethod));
+
+		/*
+		 * It is callers reponsibility to pass relations that has single shards,
+		 * namely citus local tables or reference tables.
+		 */
+		Assert(cacheEntry->shardIntervalArrayLength == 1);
+
+		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+		uint64 localShardId = shardInterval->shardId;
+
+		Oid tableLocalShardOid = GetTableLocalShardOid(relationId, localShardId);
+
+		/* it is callers reponsibility to pass relations that has local placements */
+		Assert(OidIsValid(tableLocalShardOid));
+
+		/* override the relation id with the shard's relation id */
+		rangeTableEntry->relid = tableLocalShardOid;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+
+		/*
+		 * We can infer the required lock mode from the rte itself if PostgreSQL
+		 * version >= 12.0
+		 */
+		LOCKMODE localShardLockMode = rangeTableEntry->rellockmode;
+#endif
+
+		/*
+		 * Parser locks relations in addRangeTableEntry(). So we should lock the
+		 * modified ones too.
+		 */
+		LockRelationOid(tableLocalShardOid, localShardLockMode);
+	}
 }
 
 
@@ -122,43 +197,52 @@ CreateCitusLocalPlanJob(Query *query, List *noDistKeyTableRTEList)
 	return job;
 }
 
+static List *
+ActiveShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 
 /*
  * CitusLocalPlanTaskList returns a single element task list including the
  * task to execute the given query with citus local table(s) properly.
  */
 static List *
-CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList)
+CitusLocalPlanTaskList(Query *query, List *localRelationRTEList)
 {
+	uint64 anchorShardId = INVALID_SHARD_ID;
+
+	List *shardIntervalList = NIL;
 	List *taskPlacementList = NIL;
 
 	/* extract shard placements & shardIds for citus local tables in the query */
-	RangeTblEntry *rte = NULL;
-	foreach_ptr(rte, noDistKeyTableRTEList)
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, localRelationRTEList)
 	{
-		Oid tableOid = rte->relid;
+		Oid tableOid = rangeTableEntry->relid;
 
-		Assert(IsCitusTable(tableOid) && CitusTableWithoutDistributionKey(PartitionMethod(
-																			  tableOid)));
+		if (!IsCitusTable(tableOid))
+		{
+			continue;
+		}
 
 		const CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableOid);
 
-		Assert(cacheEntry != NULL && CitusTableWithoutDistributionKey(
-				   cacheEntry->partitionMethod));
+		Assert(cacheEntry != NULL &&
+			   CitusTableWithoutDistributionKey(cacheEntry->partitionMethod));
 
-		const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+		shardIntervalList = lappend(shardIntervalList, shardInterval);
+
 		uint64 localShardId = shardInterval->shardId;
 
-		List *shardPlacements = ActiveShardPlacementList(localShardId);
+		List *shardPlacements = ActiveShardPlacementsForTableOnGroup(tableOid, COORDINATOR_GROUP_ID);
 
 		taskPlacementList = list_concat(taskPlacementList, shardPlacements);
+
+		/* save it for now, we will override for modifications below */
+		anchorShardId = localShardId;
 	}
 
 	/* prevent possible self dead locks */
 	taskPlacementList = SortList(taskPlacementList, CompareShardPlacementsByShardId);
-
-	/* pick the shard having the lowest shardId as the anchor shard */
-	uint64 anchorShardId = ((ShardPlacement *) linitial(taskPlacementList))->shardId;
 
 	TaskType taskType = TASK_TYPE_INVALID_FIRST;
 
@@ -175,121 +259,123 @@ CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList)
 		Assert(false);
 	}
 
+	bool shardsPresent = false;
+
 	Task *task = CreateTask(taskType);
+
+	if (IsModifyCommand(query))
+	{
+		/* only required for INSERTs */
+		int resultRelationId = ResultRelationOidForQuery(query);
+
+		if (IsCitusTable(resultRelationId))
+		{
+			task->anchorDistributedTableId = ResultRelationOidForQuery(query);
+
+			List *anchorShardInvervalList = LoadShardIntervalList(
+				task->anchorDistributedTableId);
+
+			ShardInterval *anchorShardInterval = (ShardInterval *) linitial(
+				anchorShardInvervalList);
+			anchorShardId = anchorShardInterval->shardId;
+		}
+	}
 
 	task->anchorShardId = anchorShardId;
 	task->taskPlacementList = taskPlacementList;
+	task->relationShardList =
+		RelationShardListForShardIntervalList(list_make1(shardIntervalList),
+											  &shardsPresent);
+
+	/*
+	 * Replace citus local tables with their local shards and acquire necessary
+	 * locks
+	 */
+	UpdateRelationOidsWithLocalShardOids(query, localRelationRTEList);
 	SetTaskQueryIfShouldLazyDeparse(task, query);
 
 	return list_make1(task);
+}
+/*
+ * ActiveShardPlacementsForTableOnGroup accepts a relationId and a group and
+ * returns a list of ShardPlacement's representing all of the placements for
+ * the table which reside on the group.
+ */
+static List *
+ActiveShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
+{
+	List *groupActivePlacementList = NIL;
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		uint64 shardId = shardInterval->shardId;
+
+		List *activeShardPlacementList = ActiveShardPlacementList(shardId);
+		ShardPlacement *shardPlacement = NULL;
+		foreach_ptr(shardPlacement, activeShardPlacementList)
+		{
+			if (shardPlacement->groupId == groupId)
+			{
+				groupActivePlacementList = lappend(groupActivePlacementList, shardPlacement);
+			}
+		}
+	}
+
+	return groupActivePlacementList;
+}
+
+
+bool
+ShouldUseCitusLocalPlanner(RTEListProperties *rteListProperties)
+{
+	if (!rteListProperties->hasCitusTable)
+	{
+		/* only postgres local tables should never come here, but be defensive anyway */
+		return false;
+	}
+
+	if (rteListProperties->hasDistributedTable)
+	{
+		/* local planner doesn't know how to handle distributed tables */
+		return false;
+	}
+
+	if (!(IsCoordinator() && CoordinatorAddedAsWorkerNode()))
+	{
+		/*
+		 * Local planner is only intended to work locally on the tables
+		 * that are on coordinator.
+		 */
+		return false;
+	}
+
+
+	/*
+	 * As long as
+	 */
+	return rteListProperties->hasCitusLocalTable || rteListProperties->hasLocalTable;
 }
 
 
 /*
  * ErrorIfUnsupportedQueryWithCitusLocalTables errors out if the given query
  * is an unsupported "citus local table" query.
- *
- * A query involving citus local table is unsupported if it is:
- *  - an UPDATE/DELETE command involving reference tables or distributed
- *    tables, or
- *  - an INSERT .. SELECT query on a citus local table which selects from
- *    reference tables or distributed tables, or
- *  - a SELECT query involving distributed tables, or
- *  - a non-simple SELECT query involving reference tables
- * or:
- *  - we are not in the coordinator, or
- *  - coordinator has no placements for citus local tables.
  */
 void
-ErrorIfUnsupportedQueryWithCitusLocalTables(Query *parse,
-											RTEListProperties *rteListProperties)
+ErrorIfUnsupportedQueryWithCitusLocalTables(Query *query)
 {
-	if (!rteListProperties->hasCitusLocalTable)
-	{
-		return;
-	}
-
-	bool hasNoDistKeyTableCoordinatorPlacements = (IsCoordinator() &&
-												   CoordinatorAddedAsWorkerNode());
-
-	if (!hasNoDistKeyTableCoordinatorPlacements)
-	{
-		ereport(ERROR, (errmsg("citus can plan queries involving citus local tables "
-							   "only via coordinator")));
-	}
-
-	bool isModifyCommand = IsModifyCommand(parse);
+	bool isModifyCommand = IsModifyCommand(query);
 
 	if (isModifyCommand)
 	{
-		/* modifying queries */
+		Oid targetRelation = ResultRelationOidForQuery(query);
 
-		if (!rteListProperties->hasReferenceTable &&
-			!rteListProperties->hasDistributedTable)
+		if (IsCitusTable(targetRelation) && IsReferenceTable(targetRelation))
 		{
-			return;
-		}
-
-		if (IsUpdateOrDelete(parse))
-		{
-			/*
-			 * If query is an UPDATE / DELETE query involving a citus local
-			 * table and a reference table or a distributed table, error out.
-			 */
-			ereport(ERROR, (errmsg(
-								"cannot plan UPDATE/DELETE queries with citus local tables "
-								"involving reference tables or distributed tables")));
-		}
-
-		bool queryModifiesCitusLocalTable = false;
-		Oid resultRelationOid = ResultRelationOidForQuery(parse);
-
-		if (IsCitusTable(resultRelationOid))
-		{
-			queryModifiesCitusLocalTable = (PartitionMethod(resultRelationOid) ==
-											CITUS_LOCAL_TABLE);
-		}
-
-		if (CheckInsertSelectQuery(parse) && queryModifiesCitusLocalTable)
-		{
-			/*
-			 * If query is an INSERT .. SELECT query on a citus local table
-			 * selecting from a reference table or a distributed table error
-			 * out here.
-			 */
-			ereport(ERROR, (errmsg(
-								"cannot plan INSERT .. SELECT queries to citus local tables "
-								"selecting from reference tables or distributed tables")));
-		}
-	}
-	else
-	{
-		/* select queries */
-
-		if (rteListProperties->hasDistributedTable)
-		{
-			/*
-			 * We do not allow even simple select queries with distributed tables
-			 * and local tables, hence should do so for citus local tables.
-			 */
-			ereport(ERROR, (errmsg(
-								"cannot plan SELECT queries with citus local tables and "
-								"distributed tables")));
-		}
-
-		bool queryIsNotSimpleSelect = FindNodeCheck((Node *) parse,
-													QueryIsNotSimpleSelect);
-
-		if (rteListProperties->hasReferenceTable && queryIsNotSimpleSelect)
-		{
-			/*
-			 * If query is not a simple select query involving a citus local table
-			 * and a reference, error out here. This is because, in that case, we
-			 * will not be able to replace reference table with its local shard.
-			 */
-			ereport(ERROR, (errmsg(
-								"cannot plan non-simple SELECT queries with citus local "
-								"tables and reference tables or distributed tables")));
+			ereport(ERROR, (errmsg("cannot plan modification queries with local tables "
+								   "which modifies reference tables")));
 		}
 	}
 }

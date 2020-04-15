@@ -36,27 +36,3 @@ GetTableLocalShardOid(Oid citusTableOid, uint64 shardId)
 
 	return shardRelationOid;
 }
-
-
-/*
- * GetLocalShardOidOfTableWithoutDistributionKey returns OID of the local shard
- * of the given citus table without distribution keys.
- *
- * Callers of this function must ensure that noDistKeyTableOid is owned either
- * by a reference table or a citus local table. Note that this function returns
- * InvalidOid if the given table does not have a local shard.
- */
-Oid
-GetLocalShardOidOfTableWithoutDistributionKey(Oid noDistKeyTableOid)
-{
-	const CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(noDistKeyTableOid);
-
-	/* given OID should belong to a valid reference table */
-	Assert(cacheEntry != NULL && CitusTableWithoutDistributionKey(
-			   cacheEntry->partitionMethod));
-
-	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 localShardId = shardInterval->shardId;
-
-	return GetTableLocalShardOid(noDistKeyTableOid, localShardId);
-}
