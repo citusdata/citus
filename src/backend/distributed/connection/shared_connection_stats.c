@@ -110,7 +110,6 @@ static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
 
-
 /*
  * citus_remote_connection_stats returns all the avaliable information about all
  * the remote connections (a.k.a., connections to remote nodes).

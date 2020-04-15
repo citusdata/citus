@@ -5,6 +5,11 @@
 CREATE SCHEMA ensure_no_shared_connection_leak;
 SET search_path TO ensure_no_shared_connection_leak;
 
+CREATE OR REPLACE FUNCTION invalidate_inactive_shared_connections()
+RETURNS VOID
+LANGUAGE C STRICT
+AS 'citus', $$invalidate_inactive_shared_connections$$;
+
 -- set the cached connections to zero
 -- and execute a distributed query so that
 -- we end up with zero cached connections afterwards
@@ -53,6 +58,9 @@ SELECT pg_reload_conf();
 
 \c - - - :master_port
 SET search_path TO ensure_no_shared_connection_leak;
+
+-- invalidate inactive shared connections
+SELECT invalidate_inactive_shared_connections();
 
 -- ensure that we only have at most citus.max_cached_conns_per_worker
 -- connections per node
