@@ -5,11 +5,6 @@
 CREATE SCHEMA ensure_no_shared_connection_leak;
 SET search_path TO ensure_no_shared_connection_leak;
 
-CREATE OR REPLACE FUNCTION invalidate_inactive_shared_connections()
-RETURNS VOID
-LANGUAGE C STRICT
-AS 'citus', $$invalidate_inactive_shared_connections$$;
-
 -- set the cached connections to zero
 -- and execute a distributed query so that
 -- we end up with zero cached connections afterwards
