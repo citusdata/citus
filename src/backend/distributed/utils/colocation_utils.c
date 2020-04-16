@@ -629,13 +629,8 @@ GetNextColocationId()
 void
 CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
 {
-	CitusTableCacheEntryRef *sourceTableRef = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceReplicationModel = sourceTableRef->cacheEntry->replicationModel;
-	ReleaseTableCacheEntry(sourceTableRef);
-
-	CitusTableCacheEntryRef *targetTableRef = GetCitusTableCacheEntry(targetRelationId);
-	char targetReplicationModel = targetTableRef->cacheEntry->replicationModel;
-	ReleaseTableCacheEntry(targetTableRef);
+	char sourceReplicationModel = TableReplicationModel(sourceRelationId);
+	char targetReplicationModel = TableReplicationModel(targetRelationId);
 
 	if (sourceReplicationModel != targetReplicationModel)
 	{
