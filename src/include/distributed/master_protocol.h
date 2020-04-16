@@ -52,6 +52,7 @@
 #define TRANSFER_MODE_AUTOMATIC 'a'
 #define TRANSFER_MODE_FORCE_LOGICAL 'l'
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
+#define TRANSFER_MODE_PREFER_LOGICAL 'p'
 
 /* Name of columnar foreign data wrapper */
 #define CSTORE_FDW_NAME "cstore_fdw"

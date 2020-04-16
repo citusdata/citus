@@ -111,6 +111,15 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 							   "Enterprise")));
 	}
 
+	/*
+	 * We don't support logical replication in the community edition, so
+	 * fall back to block writes mode.
+	 */
+	else if (shardReplicationMode == TRANSFER_MODE_PREFER_LOGICAL)
+	{
+		shardReplicationMode = TRANSFER_MODE_BLOCK_WRITES;
+	}
+
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
 
@@ -245,6 +254,10 @@ LookupShardTransferMode(Oid shardReplicationModeOid)
 	else if (strncmp(enumLabel, "block_writes", NAMEDATALEN) == 0)
 	{
 		shardReplicationMode = TRANSFER_MODE_BLOCK_WRITES;
+	}
+	else if (strncmp(enumLabel, "prefer_logical", NAMEDATALEN) == 0)
+	{
+		shardReplicationMode = TRANSFER_MODE_PREFER_LOGICAL;
 	}
 	else
 	{
