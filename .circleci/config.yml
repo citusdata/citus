@@ -1,7 +1,4 @@
 version: 2.1
-orbs:
-  codecov: codecov/codecov@1.0.5
-  azure-cli: circleci/azure-cli@1.0.0  
 
 jobs:
   build:
@@ -237,20 +234,22 @@ jobs:
 
   ch_benchmark:
     docker:
-      - image: buildpack-deps:trusty
+      - image: buildpack-deps:stretch
     working_directory: /home/circleci/project  
     steps:
+      - checkout
       - azure-cli/install
       - azure-cli/login-with-service-principal
-      - checkout
       - run:
           command: |
             cd ./src/test/hammerdb
-            sh run_hammerdb.sh ch_benchmark
+            sh run_hammerdb.sh ch_benchmark_rg
           name: install dependencies and run ch_benchmark tests
-          no_output_timeout: 40m    
+          no_output_timeout: 20m    
 
-
+orbs:
+  codecov: codecov/codecov@1.0.5
+  azure-cli: circleci/azure-cli@1.0.0  
 
 workflows:
   version: 2

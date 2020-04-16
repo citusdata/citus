@@ -4,6 +4,8 @@
 set -u
 # exit immediately if a command fails
 set -e
+# echo commands
+set -x
 
 rg=$1
 
@@ -11,7 +13,16 @@ export RESOURCE_GROUP_NAME="${rg}"
 export AZURE_REGION=westus2
 # the branch name is stored in CIRCLE_BRANCH env variable in CI jobs.
 export BRANCH="${CIRCLE_BRANCH}"
-git clone https://github.com/citusdata/test-automation.git
+
+# add github to known hosts
+echo "github.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==" >> ~/.ssh/known_hosts
+
+set +x
+git config --global credential.helper store
+#TODO:: after hammerdbChanges is merged, use master.
+git clone -b hammerdbChanges https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/test-automation
+set -x 
+
 cd test-automation
 
 test_automation_dir=$(pwd)
@@ -26,15 +37,24 @@ new_branch_name=delete_me/"${rg}"/"${now}"
 git checkout -b "${new_branch_name}"
 
 cd ./fabfile/hammerdb_confs
-branch_config="${BRANCH}".ini
+branch_config=current_branch.ini
 # create a config for this branch
 cp master.ini "${branch_config}"
+
+# escape / in branch name otherwise sed won't work.
+BRANCH_ESCAPED=$(echo "$BRANCH" | sed 's/[\/\.]/\\&/g')
 # put the branch name to the config file.
-sed -i "s/master/${BRANCH}/g" "${branch_config}"
+sed -i "s/master/${BRANCH_ESCAPED}/g" "${branch_config}"
+
+cd "${test_automation_dir}"
+cd ./hammerdb
 
 # TODO:: change this, for testing purposes.
 sed -i "s/pg_duration 200/pg_duration 10/g" run.tcl
 
+
+git config --global user.email "citus-bot@microsoft.com" 
+git config --global user.name "citus bot" 
 git add -A
 git commit -m "test hammerdb: ${rg} vs master"
 git push origin "${new_branch_name}"
