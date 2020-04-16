@@ -1085,6 +1085,11 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
+	/* remove inactive entries in the shared connection stats */
+	const char *invalidateConnectionStats =
+		"SELECT invalidate_inactive_shared_connections()";
+	SendCommandToWorkersWithMetadata(invalidateConnectionStats);
+
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 }
 
@@ -1191,6 +1196,11 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
+	/* remove inactive entries in the shared connection stats */
+	const char *invalidateConnectionStats =
+		"SELECT invalidate_inactive_shared_connections()";
+	SendCommandToWorkersWithMetadata(invalidateConnectionStats);
+
 	/* send the delete command to all primary nodes with metadata */
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
@@ -1271,6 +1281,11 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 
 	heap_close(pgDistNode, NoLock);
+
+	/* remove inactive entries in the shared connection stats */
+	const char *invalidateConnectionStats =
+		"SELECT invalidate_inactive_shared_connections()";
+	SendCommandToWorkersWithMetadata(invalidateConnectionStats);
 
 	/* we also update the column at worker nodes */
 	SendCommandToWorkersWithMetadata(metadataSyncCommand);

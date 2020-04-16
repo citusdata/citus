@@ -254,6 +254,9 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 {
 	char *extensionOwner = CitusExtensionOwnerName();
 
+	/* remove inactive entries in the shared connection stats */
+	char *invalidateConnectionStats = "SELECT invalidate_inactive_shared_connections()";
+
 	/* generate and add the local group id's update query */
 	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
@@ -263,7 +266,11 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	/* generate the queries which create the metadata from scratch */
 	List *createMetadataCommandList = MetadataCreateCommands();
 
-	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
+	List *recreateMetadataSnapshotCommandList = list_make1(invalidateConnectionStats);
+
+	recreateMetadataSnapshotCommandList =
+		lappend(recreateMetadataSnapshotCommandList, localGroupIdUpdateCommand);
+
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
 													  dropMetadataCommandList);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
