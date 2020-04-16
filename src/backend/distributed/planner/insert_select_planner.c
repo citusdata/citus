@@ -432,9 +432,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
-	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
-	char replicationModel = cacheRef->cacheEntry->replicationModel;
-	ReleaseTableCacheEntry(cacheRef);
+	char replicationModel = TableReplicationModel(distributedTableId);
 
 	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));

@@ -2390,11 +2390,7 @@ IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
 			continue;
 		}
 
-		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(
-			rangeTableEntry->relid);
-		char partitionMethod = cacheRef->cacheEntry->partitionMethod;
-		ReleaseTableCacheEntry(cacheRef);
-
+		char partitionMethod = PartitionMethod(rangeTableEntry->relid);
 		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			hasReferenceTable = true;

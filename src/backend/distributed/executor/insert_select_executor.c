@@ -889,9 +889,7 @@ CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
 bool
 IsSupportedRedistributionTarget(Oid targetRelationId)
 {
-	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(targetRelationId);
-	char partitionMethod = tableRef->cacheEntry->partitionMethod;
-	ReleaseTableCacheEntry(tableRef);
+	char partitionMethod = PartitionMethod(targetRelationId);
 
 	/* only range and hash-distributed tables are currently supported */
 	if (partitionMethod != DISTRIBUTE_BY_HASH &&
