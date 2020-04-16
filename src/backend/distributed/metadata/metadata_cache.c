@@ -273,8 +273,7 @@ DecrementCacheEntryRefCount(CitusTableCacheEntry *cacheEntry)
 
 
 /*
- * ReleaseTableCacheEntry releases a pointer loaned out by cache.
- * This only asserts correctness, without asserts this is a nop.
+ * ReleaseTableCacheEntry releases a reference loaned out by cache.
  */
 void
 ReleaseTableCacheEntry(CitusTableCacheEntryRef *ref)

@@ -55,5 +55,7 @@ GetReferenceTableLocalShardOid(Oid referenceTableOid)
 		tableRef->cacheEntry->sortedShardIntervalArray[0];
 	uint64 referenceTableShardId = shardInterval->shardId;
 
+	ReleaseTableCacheEntry(tableRef);
+
 	return GetTableLocalShardOid(referenceTableOid, referenceTableShardId);
 }

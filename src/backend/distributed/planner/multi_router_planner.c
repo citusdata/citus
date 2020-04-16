@@ -1484,15 +1484,17 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
+	char replicationModel = cacheRef->cacheEntry->replicationModel;
 
 	ErrorIfNoShardsExist(cacheRef->cacheEntry);
+
+	ReleaseTableCacheEntry(cacheRef);
 
 	Assert(query->commandType == CMD_INSERT);
 
 	List *modifyRouteList = BuildRoutesForInsert(query, planningError);
 	if (*planningError != NULL)
 	{
-		ReleaseTableCacheEntry(cacheRef);
 		return NIL;
 	}
 
@@ -1501,7 +1503,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 	{
 		Task *modifyTask = CreateTask(MODIFY_TASK);
 		modifyTask->anchorShardId = modifyRoute->shardId;
-		modifyTask->replicationModel = cacheRef->cacheEntry->replicationModel;
+		modifyTask->replicationModel = replicationModel;
 		modifyTask->rowValuesLists = modifyRoute->rowValuesLists;
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
@@ -1515,7 +1517,6 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
 
-	ReleaseTableCacheEntry(cacheRef);
 	return insertTaskList;
 }
 
