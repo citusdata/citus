@@ -263,8 +263,8 @@ workflows:
               only:
                 - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
 
-  build_and_test:
-    jobs:
+  # build_and_test:
+  #   jobs:
       # - build
       # - check-style
       # - check-sql-snapshots
