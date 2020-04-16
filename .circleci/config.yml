@@ -264,35 +264,35 @@ workflows:
 
   build_and_test:
     jobs:
-      - build
-      - check-style
-      - check-sql-snapshots
+      # - build
+      # - check-style
+      # - check-sql-snapshots
 
-      - test-11_check-multi:
-          requires: [build]
-      - test-11_check-tt-van-mx:
-          requires: [build]
-      - test-11_check-iso-work-fol:
-          requires: [build]
-      - test-11_check-fol:
-          requires: [build]
-      - test-11_check-failure:
-          requires: [build]
+      # - test-11_check-multi:
+      #     requires: [build]
+      # - test-11_check-tt-van-mx:
+      #     requires: [build]
+      # - test-11_check-iso-work-fol:
+      #     requires: [build]
+      # - test-11_check-fol:
+      #     requires: [build]
+      # - test-11_check-failure:
+      #     requires: [build]
 
-      - test-12_check-multi:
-          requires: [build]
-      - test-12_check-tt-van-mx:
-          requires: [build]
-      - test-12_check-iso-work-fol:
-          requires: [build]
-      - test-12_check-fol:
-          requires: [build]
-      - test-12_check-failure:
-          requires: [build]
+      # - test-12_check-multi:
+      #     requires: [build]
+      # - test-12_check-tt-van-mx:
+      #     requires: [build]
+      # - test-12_check-iso-work-fol:
+      #     requires: [build]
+      # - test-12_check-fol:
+      #     requires: [build]
+      # - test-12_check-failure:
+      #     requires: [build]
 
-      - test-11-12_check-pg-upgrade:
-          requires: [build]
+      # - test-11-12_check-pg-upgrade:
+      #     requires: [build]
 
-      - test-11_check-citus-upgrade:
-          requires: [build]
+      # - test-11_check-citus-upgrade:
+      #     requires: [build]
 
