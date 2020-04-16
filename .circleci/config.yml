@@ -234,12 +234,34 @@ jobs:
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
           no_output_timeout: 2m
 
-
+  ch_benchmark:
+    docker:
+      - image: buildpack-deps:trusty
+    working_directory: /home/circleci/project  
+    steps:
+      - azure-cli/install
+      - azure-cli/login-with-service-principal
+      - checkout
+      - run:
+          command: |
+            cd ./src/test/hammerdb
+            sh run_hammerdb.sh ch_benchmark
+          name: install dependencies and run ch_benchmark tests
+          no_output_timeout: 40m    
 
 
 
 workflows:
   version: 2
+
+  performance_tests:
+    jobs:
+      - ch_benchmark:
+          filters:
+            branches:
+              only:
+                - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
+
   build_and_test:
     jobs:
       - build
