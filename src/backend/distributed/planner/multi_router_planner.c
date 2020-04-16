@@ -1480,7 +1480,6 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 					 DeferredErrorMessage **planningError)
 {
 	List *insertTaskList = NIL;
-	ListCell *modifyRouteCell = NULL;
 
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
@@ -1495,10 +1494,9 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		return NIL;
 	}
 
-	foreach(modifyRouteCell, modifyRouteList)
+	ModifyRoute *modifyRoute = NULL;
+	foreach_ptr(modifyRoute, modifyRouteList)
 	{
-		ModifyRoute *modifyRoute = (ModifyRoute *) lfirst(modifyRouteCell);
-
 		Task *modifyTask = CreateTask(MODIFY_TASK);
 		modifyTask->anchorShardId = modifyRoute->shardId;
 		modifyTask->replicationModel = cacheEntry->replicationModel;
@@ -2319,9 +2317,9 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 	if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
 	{
 		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(relationId);
-		ShardInterval *shardInterval =
+		ShardInterval *cachedShardInterval =
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
-		if (shardInterval == NULL)
+		if (cachedShardInterval == NULL)
 		{
 			ereport(ERROR, (errmsg(
 								"could not find shardinterval to which to send the query")));
@@ -2332,6 +2330,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 			/* set the outgoing partition column value if requested */
 			*outputPartitionValueConst = inputDistributionKeyValue;
 		}
+		ShardInterval *shardInterval = CopyShardInterval(cachedShardInterval);
 		List *shardIntervalList = list_make1(shardInterval);
 
 		return list_make1(shardIntervalList);

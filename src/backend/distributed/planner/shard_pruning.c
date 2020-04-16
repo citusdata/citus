@@ -76,15 +76,16 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
-#include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
-#include "distributed/log_utils.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
@@ -1358,16 +1359,12 @@ static List *
 DeepCopyShardIntervalList(List *originalShardIntervalList)
 {
 	List *copiedShardIntervalList = NIL;
-	ListCell *shardIntervalCell = NULL;
 
-	foreach(shardIntervalCell, originalShardIntervalList)
+	ShardInterval *originalShardInterval = NULL;
+	foreach_ptr(originalShardInterval, originalShardIntervalList)
 	{
-		ShardInterval *originalShardInterval =
-			(ShardInterval *) lfirst(shardIntervalCell);
-		ShardInterval *copiedShardInterval =
-			(ShardInterval *) palloc0(sizeof(ShardInterval));
+		ShardInterval *copiedShardInterval = CopyShardInterval(originalShardInterval);
 
-		CopyShardInterval(originalShardInterval, copiedShardInterval);
 		copiedShardIntervalList = lappend(copiedShardIntervalList, copiedShardInterval);
 	}
 

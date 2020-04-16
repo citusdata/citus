@@ -377,8 +377,7 @@ LoadShardInterval(uint64 shardId)
 		tableEntry->sortedShardIntervalArray[shardEntry->shardIndex];
 
 	/* copy value to return */
-	ShardInterval *shardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
-	CopyShardInterval(sourceShardInterval, shardInterval);
+	ShardInterval *shardInterval = CopyShardInterval(sourceShardInterval);
 
 	return shardInterval;
 }
@@ -1172,10 +1171,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 																intervalTypeMod);
 			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
-			ShardInterval *newShardInterval = (ShardInterval *) palloc0(
-				sizeof(ShardInterval));
-			CopyShardInterval(shardInterval, newShardInterval);
-			shardIntervalArray[arrayIndex] = newShardInterval;
+			shardIntervalArray[arrayIndex] = CopyShardInterval(shardInterval);
 
 			MemoryContextSwitchTo(oldContext);
 
@@ -3388,7 +3384,7 @@ InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
  * key graph cache, we use pg_dist_colocation, which is never invalidated for
  * other purposes.
  *
- * We acknowledge that it is not a very intiutive way of implementing this cache
+ * We acknowledge that it is not a very intuitive way of implementing this cache
  * invalidation, but, seems acceptable for now. If this becomes problematic, we
  * could try using a magic oid where we're sure that no relation would ever use
  * that oid.
@@ -3744,8 +3740,8 @@ LookupDistShardTuples(Oid relationId)
 /*
  * LookupShardRelation returns the logical relation oid a shard belongs to.
  *
- * Errors out if the shardId does not exist and missingOk is false. Returns
- * InvalidOid if the shardId does not exist and missingOk is true.
+ * Errors out if the shardId does not exist and missingOk is false.
+ * Returns InvalidOid if the shardId does not exist and missingOk is true.
  */
 Oid
 LookupShardRelation(int64 shardId, bool missingOk)
