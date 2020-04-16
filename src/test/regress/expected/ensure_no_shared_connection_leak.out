@@ -4,10 +4,6 @@
 -- in the shared memory
 CREATE SCHEMA ensure_no_shared_connection_leak;
 SET search_path TO ensure_no_shared_connection_leak;
-CREATE OR REPLACE FUNCTION invalidate_inactive_shared_connections()
-RETURNS VOID
-LANGUAGE C STRICT
-AS 'citus', $$invalidate_inactive_shared_connections$$;
 -- set the cached connections to zero
 -- and execute a distributed query so that
 -- we end up with zero cached connections afterwards
@@ -168,6 +164,4 @@ SELECT pg_reload_conf();
 (1 row)
 
 DROP SCHEMA ensure_no_shared_connection_leak CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function invalidate_inactive_shared_connections()
-drop cascades to table test
+NOTICE:  drop cascades to table test
