@@ -29,7 +29,6 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"

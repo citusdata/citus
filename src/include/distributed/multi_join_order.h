@@ -103,11 +103,6 @@ extern OpExpr * SinglePartitionJoinClause(List *partitionColumnList,
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
 extern Var * LeftColumnOrNULL(OpExpr *joinClause);
 extern Var * RightColumnOrNULL(OpExpr *joinClause);
-extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
-extern Var * DistPartitionKey(Oid relationId);
-extern Var * ForceDistPartitionKey(Oid relationId);
-extern char PartitionMethod(Oid relationId);
-extern char TableReplicationModel(Oid relationId);
 
 
 #endif   /* MULTI_JOIN_ORDER_H */

@@ -17,7 +17,6 @@
 #include "catalog/pg_type.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/shardinterval_utils.h"

@@ -24,8 +24,6 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/master_protocol.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/version_compat.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"

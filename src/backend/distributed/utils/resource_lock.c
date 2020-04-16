@@ -26,7 +26,6 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/relay_utility.h"

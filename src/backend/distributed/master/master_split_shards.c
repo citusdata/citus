@@ -19,7 +19,6 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"

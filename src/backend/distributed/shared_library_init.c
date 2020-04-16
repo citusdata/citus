@@ -45,7 +45,6 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_master_planner.h"

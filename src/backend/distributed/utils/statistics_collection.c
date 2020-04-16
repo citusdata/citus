@@ -26,7 +26,6 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #include "access/xact.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"

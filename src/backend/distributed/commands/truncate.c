@@ -19,7 +19,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"

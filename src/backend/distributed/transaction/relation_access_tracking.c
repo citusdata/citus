@@ -22,7 +22,6 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"

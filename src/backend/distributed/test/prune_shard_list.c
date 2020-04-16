@@ -24,7 +24,6 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/master_metadata_utility.h"
-#include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"

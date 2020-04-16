@@ -21,6 +21,7 @@
 
 #include "postgres.h"
 
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
