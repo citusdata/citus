@@ -24,6 +24,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
 #include "miscadmin.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
@@ -528,6 +529,20 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		case OCLASS_PROC:
 		{
 			return true;
+		}
+
+		case OCLASS_ROLE:
+		{
+			/*
+			 * Community only supports the extension owner as a distributed object to
+			 * propagate alter statements for this user
+			 */
+			if (address->objectId == CitusExtensionOwner())
+			{
+				return true;
+			}
+
+			return false;
 		}
 
 		case OCLASS_EXTENSION:

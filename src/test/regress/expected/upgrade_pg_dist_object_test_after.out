@@ -25,9 +25,10 @@ SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, obj
       type      | object_names | object_args
 ---------------------------------------------------------------------
   extension      | {isn}               | {}
+  role           | {postgres}          | {}
   schema         | {fooschema}         | {}
   schema         | {new_schema}        | {}
   schema         | {public}            | {}
   type           | {fooschema.footype} | {}
- (5 rows)
+ (6 rows)
 

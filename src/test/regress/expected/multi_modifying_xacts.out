@@ -1173,6 +1173,7 @@ SELECT create_distributed_table('numbers_hash_failure_test', 'key');
 -- and rename the existing user
 \c - :default_user - :worker_1_port
 ALTER USER test_user RENAME TO test_user_new;
+NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
 -- connect back to master and query the reference table
  \c - test_user - :master_port
 -- should fail since the worker doesn't have test_user anymore
@@ -1307,6 +1308,7 @@ WARNING:  connection error: localhost:xxxxx
 -- break the other node as well
 \c - :default_user - :worker_2_port
 ALTER USER test_user RENAME TO test_user_new;
+NOTICE:  not propagating ALTER ROLE ... RENAME TO commands to worker nodes
 \c - test_user - :master_port
 -- fails on all shard placements
 INSERT INTO numbers_hash_failure_test VALUES (2,2);

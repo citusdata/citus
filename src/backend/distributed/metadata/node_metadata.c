@@ -96,6 +96,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
@@ -388,8 +389,22 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	if (NodeIsPrimary(newWorkerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
-		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
-									   newWorkerNode->workerPort);
+
+		if (ShouldPropagate())
+		{
+			PropagateNodeWideObjects(newWorkerNode);
+			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
+										   newWorkerNode->workerPort);
+		}
+		else
+		{
+			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
+									 "creating distributed objects on worker"),
+							  errdetail("distributed objects are only kept in sync when "
+										"citus.enable_object_propagation is set to on. "
+										"Newly activated nodes will not get these "
+										"objects created")));
+		}
 
 		if (ReplicateReferenceTablesOnActivate)
 		{
@@ -413,27 +428,38 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 
 
 /*
- * PropagateRolesToNewNode copies the roles' attributes in the new node. Roles that do
- * not exist in the workers are not created and simply skipped.
+ * PropagateNodeWideObjects is called during node activation to propagate any object that
+ * should be propagated for every node. These are generally not linked to any distributed
+ * object but change system wide behaviour.
  */
 static void
-PropagateRolesToNewNode(WorkerNode *newWorkerNode)
+PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 {
-	if (!EnableAlterRolePropagation)
+	/* collect all commands */
+	List *ddlCommands = NIL;
+
+	if (EnableAlterRoleSetPropagation)
 	{
-		return;
+		/*
+		 * Get commands for database and postgres wide settings. Since these settings are not
+		 * linked to any role that can be distributed we need to distribute them seperately
+		 */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
+		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
 
-	List *ddlCommands = NIL;
-	List *alterRoleCommands = GenerateAlterRoleIfExistsCommandAllRoles();
-	List *alterRoleSetCommands = GenerateAlterRoleSetIfExistsCommands();
+	if (list_length(ddlCommands) > 0)
+	{
+		/* if there are command wrap them in enable_ddl_propagation off */
+		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	ddlCommands = list_concat(ddlCommands, alterRoleCommands);
-	ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
-
-	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
-											   newWorkerNode->workerPort,
-											   CitusExtensionOwnerName(), ddlCommands);
+		/* send commands to new workers*/
+		SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+												   newWorkerNode->workerPort,
+												   CitusExtensionOwnerName(),
+												   ddlCommands);
+	}
 }
 
 
@@ -616,7 +642,6 @@ ActivateNode(char *nodeName, int nodePort)
 
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
-	PropagateRolesToNewNode(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }

@@ -29,7 +29,6 @@ test: isolation_drop_shards isolation_copy_placement_vs_modification
 test: isolation_insert_vs_vacuum isolation_transaction_recovery
 test: isolation_progress_monitoring
 test: isolation_dump_local_wait_edges
-test: isolation_alter_role_propagation
 
 test: isolation_replace_wait_function
 test: isolation_distributed_deadlock_detection

@@ -15,6 +15,7 @@ SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');
 (2 rows)
 
 SET citus.enable_alter_role_propagation TO ON;
+-- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
  ?column?
@@ -50,14 +51,14 @@ ALTER ROLE reprefuser WITH CREATEROLE;
 select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
  rolcreatedb | rolcreaterole
 ---------------------------------------------------------------------
- t           | t
+ f           | t
 (1 row)
 
 \c - - - :worker_2_port
 select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
  rolcreatedb | rolcreaterole
 ---------------------------------------------------------------------
- t           | f
+ f           | f
 (1 row)
 
 \c - - - :master_port

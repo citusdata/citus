@@ -332,6 +332,7 @@ CREATE DATABASE another;
 
 \c another
 CREATE EXTENSION citus;
+SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
