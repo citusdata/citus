@@ -124,8 +124,12 @@ static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
+<<<<<<< HEAD
 static bool CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties);
 static bool IsLocalReferenceJoin(Query *parse, RTEListProperties *rteListProperties);
+=======
+static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
+>>>>>>> 624fb69... Onur WIP
 static PlannedStmt * PlanCitusLocalStmt(DistributedPlanningContext *planContext,
 										List *rangeTableList, bool IsLocalReferenceJoin);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
@@ -321,41 +325,6 @@ ExtractRangeTableEntryList(Query *query)
 	ExtractRangeTableEntryWalker((Node *) query, &rteList);
 
 	return rteList;
-}
-
-
-/*
- * ExtractTableRTEListByDistMethod extracts and returns citus table rte's from
- * the given rte list acoording to distributionMethod.
- */
-List *
-ExtractTableRTEListByDistMethod(List *rteList, char distributionMethod)
-{
-	List *distMethodTableRTEList = NIL;
-
-	RangeTblEntry *rte = NULL;
-	foreach_ptr(rte, rteList)
-	{
-		if (rte->rtekind != RTE_RELATION || rte->relkind != RELKIND_RELATION)
-		{
-			continue;
-		}
-
-		Oid relationOid = rte->relid;
-
-		if (!IsCitusTable(relationOid))
-		{
-			continue;
-		}
-
-		char partititonMethod = PartitionMethod(relationOid);
-		if (partititonMethod == distributionMethod)
-		{
-			distMethodTableRTEList = lappend(distMethodTableRTEList, rte);
-		}
-	}
-
-	return distMethodTableRTEList;
 }
 
 
@@ -621,12 +590,8 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 
 
 /*
- * PlanCitusLocalStmt creates a distributed planned statement using
- * CitusLocalPlanner for the queries involving citus log tables.
- * Before calling CreateDistributedPlannedStmt, here we first extract range
- * table entries for citus local tables. This is because, as we do not pass
- * rangeTableRTEList into planner methods, we should extract citus local
- * table entries here to prevent another recursive pass on query tree.
+ * PlanCitusLocalStmt creates a distributed planned statement using CitusLocalPlanner.
+ * See CreateCitusLocalPlan & ShouldUseCitusLocalPlanner.
  */
 static PlannedStmt *
 PlanCitusLocalStmt(DistributedPlanningContext *planContext, List *rangeTableList, bool
@@ -959,10 +924,9 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
  * CreateDistributedPlan generates a distributed plan for a query following
  * below steps.
  *
- * 0. Prefer CitusLocalPlanner if query has citus local tables to replace them
- *    with their local shard relations. Then goes through below 3 steps.
- *
- * 1. Try router planner
+ * 0. Prefer CitusLocalPlanner if query should be planned locally.
+ *    - (see ShouldUseCitusLocalPlanner)
+ * 1. Try router planner.
  * 2. Generate subplans for CTEs and complex subqueries
  *    - If any, go back to step 1 by calling itself recursively
  * 3. Logical planner
@@ -974,8 +938,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 {
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
-	List *rangeTableList = ExtractRangeTableEntryList(originalQuery);
 
+	List *rangeTableList = ExtractRangeTableEntryList(originalQuery);
 	RTEListProperties *rteListProperties = GetRTEListProperties(rangeTableList);
 
 	if (ShouldUseCitusLocalPlanner(rteListProperties))
@@ -2371,7 +2335,7 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
  * GetRTEListProperties returns RTEListProperties struct processing the given
  * rangeTableList.
  */
-static RTEListProperties *
+RTEListProperties *
 GetRTEListProperties(List *rangeTableList)
 {
 	RTEListProperties *rteListProperties = palloc0(sizeof(RTEListProperties));
@@ -2379,20 +2343,8 @@ GetRTEListProperties(List *rangeTableList)
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
-		if (rangeTableEntry->rtekind == RTE_FUNCTION)
-		{
-			rteListProperties->hasFunction = true;
-			continue;
-		}
-
 		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
-			continue;
-		}
-
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
-		{
-			rteListProperties->hasView = true;
 			continue;
 		}
 
@@ -2422,22 +2374,4 @@ GetRTEListProperties(List *rangeTableList)
 										rteListProperties->hasCitusLocalTable);
 
 	return rteListProperties;
-}
-
-
-/*
- * QueryIsNotSimpleSelect returns true if node is a query which modifies or
- * marks for modifications.
- * TODO: needs a better name
- */
-bool
-QueryIsNotSimpleSelect(Node *node)
-{
-	if (!IsA(node, Query))
-	{
-		return false;
-	}
-
-	Query *query = (Query *) node;
-	return (query->commandType != CMD_SELECT) || (query->rowMarks != NIL);
 }

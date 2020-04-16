@@ -185,13 +185,11 @@ typedef struct CitusCustomScanPath
 /*
  * Parameters to be set according to range table entries of a query to decide
  * which planner to use or error out for some cases.
- * (see ErrorIfUnsupportedQueryWithCitusLocalTables and its usage)
+ * (see ErrorIfUnsupportedCitusLocalQuery and its usage)
  */
 typedef struct RTEListProperties
 {
 	bool hasLocalTable;
-	bool hasFunction;
-	bool hasView;
 
 	bool hasReferenceTable;
 	bool hasCitusLocalTable;
@@ -204,12 +202,11 @@ typedef struct RTEListProperties
 extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
 										 ParamListInfo boundParams);
 extern List * ExtractRangeTableEntryList(Query *query);
-extern List * ExtractTableRTEListByDistMethod(List *rteList, char distributionMethod);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);
-extern bool QueryIsNotSimpleSelect(Node *node);
+extern RTEListProperties * GetRTEListProperties(List *rangeTableList);
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,

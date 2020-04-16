@@ -115,7 +115,7 @@ InsertSelectIntoLocalTable(Query *query)
 	if (insertSelectQuery)
 	{
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(query);
-		if (!IsCitusTable(insertRte->relid) )
+		if (!IsCitusTable(insertRte->relid))
 		{
 			return true;
 		}
@@ -126,7 +126,6 @@ InsertSelectIntoLocalTable(Query *query)
 		{
 			return true;
 		}
-
 	}
 
 	return false;
