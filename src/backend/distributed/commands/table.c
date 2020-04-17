@@ -169,10 +169,12 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 			char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 			bool viaDeprecatedAPI = false;
+			char replicationModel = AppropriateReplicationModel(parentDistributionMethod,
+																viaDeprecatedAPI);
 
 			CreateDistributedTable(relationId, parentDistributionColumn,
 								   parentDistributionMethod, parentRelationName,
-								   viaDeprecatedAPI);
+								   replicationModel, viaDeprecatedAPI);
 		}
 	}
 
@@ -246,10 +248,12 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
+				char replicationModel = AppropriateReplicationModel(distributionMethod,
+																	viaDeprecatedAPI);
 
 				CreateDistributedTable(partitionRelationId, distributionColumn,
 									   distributionMethod, parentRelationName,
-									   viaDeprecatedAPI);
+									   replicationModel, viaDeprecatedAPI);
 			}
 		}
 	}
@@ -883,7 +887,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 	 * and citus local tables given that they only consist of a single shard
 	 * and we can simply rely on Postgres.
 	 */
-	if (CitusTableWithoutDistributionKey(distributionMethod))
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return;
 	}

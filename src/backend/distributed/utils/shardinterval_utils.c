@@ -364,7 +364,7 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 			}
 		}
 	}
-	else if (CitusTableWithoutDistributionKey(partitionMethod))
+	else if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		Assert(shardCount == 1);
 

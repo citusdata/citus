@@ -54,10 +54,6 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
 #define DISTRIBUTE_BY_RANGE 'r'
 #define DISTRIBUTE_BY_NONE 'n'
 #define REDISTRIBUTE_BY_HASH 'x'
-#define CITUS_LOCAL_TABLE 'l'
-
-#define CitusTableWithoutDistributionKey(x) \
-	((x) == DISTRIBUTE_BY_NONE || (x) == CITUS_LOCAL_TABLE)
 
 /*
  * Valid values for repmodel are 'c' for coordinator, 's' for streaming

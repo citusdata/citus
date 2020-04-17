@@ -134,7 +134,8 @@ extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
-								   bool viaDeprecatedAPI);
+								   char replicationModel, bool viaDeprecatedAPI);
+extern char AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);

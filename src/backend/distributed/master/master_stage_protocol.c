@@ -596,7 +596,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 			continue;
 		}
 
-		if (CitusTableWithoutDistributionKey(PartitionMethod(fkeyRelationid)))
+		if (PartitionMethod(fkeyRelationid) == DISTRIBUTE_BY_NONE)
 		{
 			fkeyShardId = GetFirstShardId(fkeyRelationid);
 		}
@@ -717,7 +717,7 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 		{
 			referencedShardId = shardId;
 		}
-		else if (CitusTableWithoutDistributionKey(PartitionMethod(referencedRelationId)))
+		else if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
 		}

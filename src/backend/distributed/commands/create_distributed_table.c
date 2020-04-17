@@ -86,10 +86,9 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
 /* local function forward declarations */
 static void create_citus_table_internal(Oid relationOid, text *distributionColumnText,
-										char distributionMethodOid,
+										char distributionMethod,
 										text *colocateWithTableNameText,
-										bool viaDeprecatedApi);
-static char AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
+										char replicationModel, bool viaDeprecatedApi);
 static void CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 											 bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -139,16 +138,19 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 {
 	Oid relationOid = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
-	text *colocateWithTableNameText = NULL;
-
 	Oid distributionMethodOid = PG_GETARG_OID(2);
-	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+
+	text *colocateWithTableNameText = NULL;
 
 	const bool viaDeprecatedApi = true;
 
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	char replicationModel = AppropriateReplicationModel(distributionMethod,
+														viaDeprecatedApi);
+
 	create_citus_table_internal(relationOid, distributionColumnText,
 								distributionMethod, colocateWithTableNameText,
-								viaDeprecatedApi);
+								replicationModel, viaDeprecatedApi);
 
 	PG_RETURN_VOID();
 }
@@ -164,16 +166,18 @@ create_distributed_table(PG_FUNCTION_ARGS)
 {
 	Oid relationOid = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
-	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
-
 	Oid distributionMethodOid = PG_GETARG_OID(2);
-	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
 	const bool viaDeprecatedApi = false;
 
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	char replicationModel = AppropriateReplicationModel(distributionMethod,
+														viaDeprecatedApi);
+
 	create_citus_table_internal(relationOid, distributionColumnText,
 								distributionMethod, colocateWithTableNameText,
-								viaDeprecatedApi);
+								replicationModel, viaDeprecatedApi);
 
 	PG_RETURN_VOID();
 }
@@ -193,13 +197,14 @@ create_reference_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = NULL;
 	text *colocateWithTableNameText = NULL;
 
-	char distributionMethod = DISTRIBUTE_BY_NONE;
-
 	const bool viaDeprecatedApi = false;
+
+	char distributionMethod = DISTRIBUTE_BY_NONE;
+	char replicationModel = REPLICATION_MODEL_2PC;
 
 	create_citus_table_internal(relationOid, distributionColumnText,
 								distributionMethod, colocateWithTableNameText,
-								viaDeprecatedApi);
+								replicationModel, viaDeprecatedApi);
 
 	PG_RETURN_VOID();
 }
@@ -220,13 +225,15 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = NULL;
 	text *colocateWithTableNameText = NULL;
 
-	char distributionMethod = CITUS_LOCAL_TABLE;
-
 	const bool viaDeprecatedApi = false;
+
+	char distributionMethod = DISTRIBUTE_BY_NONE;
+	char replicationModel = AppropriateReplicationModel(distributionMethod,
+														viaDeprecatedApi);
 
 	create_citus_table_internal(relationOid, distributionColumnText,
 								distributionMethod, colocateWithTableNameText,
-								viaDeprecatedApi);
+								replicationModel, viaDeprecatedApi);
 
 	PG_RETURN_VOID();
 }
@@ -239,7 +246,7 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 static void
 create_citus_table_internal(Oid relationOid, text *distributionColumnText,
 							char distributionMethod, text *colocateWithTableNameText,
-							bool viaDeprecatedApi)
+							char replicationModel, bool viaDeprecatedApi)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -280,56 +287,61 @@ create_citus_table_internal(Oid relationOid, text *distributionColumnText,
 	Var *distributionColumn;
 	char *colocateWithTableName;
 
-	if (distributionMethod == CITUS_LOCAL_TABLE)
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		/* create citus local table */
-
-		/* no path via deprecated api to create citus local tables */
-		Assert(viaDeprecatedApi == false);
-
-		/* following should be NULL when creating citus local table */
-		Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
-
-		if (!(IsCoordinator() && CoordinatorAddedAsWorkerNode()))
+		if (replicationModel != REPLICATION_MODEL_2PC)
 		{
-			const char *relationName = get_rel_name(relationOid);
+			/* create citus local table */
 
-			Assert(relationName != NULL);
+			/* no path via deprecated api to create citus local tables */
+			Assert(viaDeprecatedApi == false);
 
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("cannot create citus local table \"%s\", citus local "
-								   "tables can only be created from coordinator node if "
-								   "it is added to pg_dist_node", relationName)));
+			/* following should be NULL when creating citus local table */
+			Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
+
+			if (!(IsCoordinator() && CoordinatorAddedAsWorkerNode()))
+			{
+				const char *relationName = get_rel_name(relationOid);
+
+				Assert(relationName != NULL);
+
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg(
+									"cannot create citus local table \"%s\", citus local "
+									"tables can only be created from coordinator node if "
+									"it is added to pg_dist_node", relationName)));
+			}
+
+			distributionColumn = NULL;
+			colocateWithTableName = NULL;
 		}
-
-		distributionColumn = NULL;
-		colocateWithTableName = NULL;
-	}
-	else if (distributionMethod == DISTRIBUTE_BY_NONE)
-	{
-		/* create reference table */
-
-		/* no path via deprecated api to create reference tables */
-		Assert(viaDeprecatedApi == false);
-
-		/* following should be NULL when creating reference table */
-		Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
-
-		List *workerNodeList = ActivePrimaryNodeList(ShareLock);
-		int workerCount = list_length(workerNodeList);
-
-		/* if there are no workers, error out */
-		if (workerCount == 0)
+		else
 		{
-			char *relationName = get_rel_name(relationOid);
+			/* create reference table */
 
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("cannot create reference table \"%s\"", relationName),
-							errdetail("There are no active worker nodes.")));
+			/* no path via deprecated api to create reference tables */
+			Assert(viaDeprecatedApi == false);
+
+			/* following should be NULL when creating reference table */
+			Assert(colocateWithTableNameText == NULL && distributionColumnText == NULL);
+
+			List *workerNodeList = ActivePrimaryNodeList(ShareLock);
+			int workerCount = list_length(workerNodeList);
+
+			/* if there are no workers, error out */
+			if (workerCount == 0)
+			{
+				char *relationName = get_rel_name(relationOid);
+
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("cannot create reference table \"%s\"",
+									   relationName),
+								errdetail("There are no active worker nodes.")));
+			}
+
+			distributionColumn = NULL;
+			colocateWithTableName = NULL;
 		}
-
-		distributionColumn = NULL;
-		colocateWithTableName = NULL;
 	}
 	else
 	{
@@ -358,7 +370,7 @@ create_citus_table_internal(Oid relationOid, text *distributionColumnText,
 	}
 
 	CreateDistributedTable(relationOid, distributionColumn, distributionMethod,
-						   colocateWithTableName, viaDeprecatedApi);
+						   colocateWithTableName, replicationModel, viaDeprecatedApi);
 
 	relation_close(relation, NoLock);
 }
@@ -378,11 +390,9 @@ create_citus_table_internal(Oid relationOid, text *distributionColumnText,
  */
 void
 CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
-					   char *colocateWithTableName, bool viaDeprecatedAPI)
+					   char *colocateWithTableName, char replicationModel, bool
+					   viaDeprecatedAPI)
 {
-	char replicationModel = AppropriateReplicationModel(distributionMethod,
-														viaDeprecatedAPI);
-
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
 	 * our caller already acquired lock on relationId.
@@ -433,9 +443,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		CreateHashDistributedTableShards(relationId, colocatedTableId, localTableEmpty);
 	}
-	else if (CitusTableWithoutDistributionKey(distributionMethod))
+	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		CreateSingleShardTableWithoutDistKey(relationId, distributionMethod);
+		CreateSingleShardTableWithoutDistKey(relationId, replicationModel);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))
@@ -461,7 +471,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		{
 			CreateDistributedTable(partitionRelationId, distributionColumn,
 								   distributionMethod, colocateWithTableName,
-								   viaDeprecatedAPI);
+								   replicationModel, viaDeprecatedAPI);
 		}
 	}
 
@@ -474,7 +484,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * and making sure that we do these accurately for indexes, constraints etc.
 	 */
 	if (distributionMethod == DISTRIBUTE_BY_HASH ||
-		CitusTableWithoutDistributionKey(distributionMethod))
+		distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		if (RegularTable(relationId))
 		{
@@ -489,8 +499,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
  * used depending on given distribution configuration and global ReplicationModel
  * variable. If ReplicationModel conflicts with distribution configuration, this
  * function errors out.
+ * Note that as we will always be using REPLICATION_MODEL_2PC for reference tables,
+ * this function assumes tables with DISTRIBUTE_BY_NONE to be citus local and chooses
+ * replication model accordingly.
  */
-static char
+char
 AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
 {
 	if (viaDeprecatedAPI)
@@ -507,12 +520,8 @@ AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
 
 		return REPLICATION_MODEL_COORDINATOR;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_NONE)
-	{
-		return REPLICATION_MODEL_2PC;
-	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH || distributionMethod ==
-			 CITUS_LOCAL_TABLE)
+	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
+			 distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return ReplicationModel;
 	}
@@ -609,12 +618,15 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		return CreateReferenceTableColocationId();
-	}
-	else if (distributionMethod == CITUS_LOCAL_TABLE)
-	{
-		/* citus local tables have no colocation id's for now */
-		return INVALID_COLOCATION_ID;
+		if (replicationModel == REPLICATION_MODEL_2PC)
+		{
+			return CreateReferenceTableColocationId();
+		}
+		else
+		{
+			/* citus local tables have no colocation id's for now */
+			return INVALID_COLOCATION_ID;
+		}
 	}
 	else
 	{
@@ -738,7 +750,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	}
 
 	/* verify target relation is not distributed by a generated columns */
-	if (!CitusTableWithoutDistributionKey(distributionMethod) &&
+	if (distributionMethod != DISTRIBUTE_BY_NONE &&
 		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -924,7 +936,7 @@ EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
 
 	bool distributionMethodRequiresEmptyTable =
 		(distributionMethod != DISTRIBUTE_BY_HASH &&
-		 !CitusTableWithoutDistributionKey(distributionMethod));
+		 distributionMethod != DISTRIBUTE_BY_NONE);
 
 	/* we only support hash, reference and citus local tables for initial data loading */
 	shouldEnsureLocalTableEmpty |= distributionMethodRequiresEmptyTable;

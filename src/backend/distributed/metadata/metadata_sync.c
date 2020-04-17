@@ -229,7 +229,7 @@ ShouldSyncTableMetadata(Oid relationId)
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
 	bool mxTable = (streamingReplicated && hashDistributed);
-	bool noDistKeyTable = CitusTableWithoutDistributionKey(tableEntry->partitionMethod);
+	bool noDistKeyTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
 
 	if (mxTable || noDistKeyTable)
 	{
@@ -630,7 +630,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
 
-	if (CitusTableWithoutDistributionKey(distributionMethod))
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
 	}

@@ -1236,7 +1236,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	 * A citus table without distribution key would have a single and
 	 * uninitialized shard
 	 */
-	if (CitusTableWithoutDistributionKey(cacheEntry->partitionMethod))
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		cacheEntry->hasUninitializedShardInterval = true;
 		cacheEntry->hasOverlappingShardInterval = true;
@@ -3616,16 +3616,22 @@ ReferenceTableOidList()
 	while (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		Datum relationIdDatum = heap_getattr(heapTuple,
-											 Anum_pg_dist_partition_logicalrelid,
-											 tupleDescriptor, &isNull);
-		Oid relationId = DatumGetObjectId(relationIdDatum);
 		char partitionMethod = heap_getattr(heapTuple,
 											Anum_pg_dist_partition_partmethod,
 											tupleDescriptor, &isNull);
+		char replicationModel = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_repmodel,
+											 tupleDescriptor, &isNull);
 
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		if (partitionMethod == DISTRIBUTE_BY_NONE && replicationModel ==
+			REPLICATION_MODEL_2PC)
 		{
+			Datum relationIdDatum = heap_getattr(heapTuple,
+												 Anum_pg_dist_partition_logicalrelid,
+												 tupleDescriptor, &isNull);
+
+			Oid relationId = DatumGetObjectId(relationIdDatum);
+
 			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
 		}
 
@@ -3832,7 +3838,6 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		}
 
 		case DISTRIBUTE_BY_NONE:
-		case CITUS_LOCAL_TABLE:
 		{
 			break;
 		}

@@ -331,10 +331,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
  * creating a reference table.
  */
 void
-CreateSingleShardTableWithoutDistKey(Oid distributedTableId, char distributionMethod)
+CreateSingleShardTableWithoutDistKey(Oid distributedTableId, char replicationModel)
 {
-	Assert(CitusTableWithoutDistributionKey(distributionMethod));
-
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
 	 * require ownership privileges - shards for reference tables are
@@ -362,8 +360,10 @@ CreateSingleShardTableWithoutDistKey(Oid distributedTableId, char distributionMe
 	List *nodeList = NIL;
 	int replicationFactor = 0;
 
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (replicationModel == REPLICATION_MODEL_2PC)
 	{
+		/* reference table */
+
 		/*
 		 * load and sort the worker node list for deterministic placements
 		 * create_reference_table has already acquired pg_dist_node lock
@@ -373,8 +373,10 @@ CreateSingleShardTableWithoutDistKey(Oid distributedTableId, char distributionMe
 
 		replicationFactor = ReferenceTableReplicationFactor();
 	}
-	else if (distributionMethod == CITUS_LOCAL_TABLE)
+	else
 	{
+		/* citus local table */
+
 		nodeList = CitusLocalTablePlacementNodeList();
 
 		/* would always have a single placement */

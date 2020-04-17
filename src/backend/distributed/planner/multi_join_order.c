@@ -1382,7 +1382,7 @@ DistPartitionKey(Oid relationId)
 {
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
-	if (CitusTableWithoutDistributionKey(partitionEntry->partitionMethod))
+	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return NULL;
 	}
