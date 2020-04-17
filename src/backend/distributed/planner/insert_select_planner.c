@@ -53,6 +53,7 @@ static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
+											   CitusTableCacheEntry *targetTableCacheEntry,
 											   ShardInterval *shardInterval,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext,
@@ -259,6 +260,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 			targetCacheEntry->sortedShardIntervalArray[shardOffset];
 
 		Task *modifyTask = RouterModifyTaskForShardInterval(originalQuery,
+															targetCacheEntry,
 															targetShardInterval,
 															plannerRestrictionContext,
 															taskIdIndex,
@@ -415,7 +417,9 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
  * subqueries with non equi-joins.).
  */
 static Task *
-RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
+RouterModifyTaskForShardInterval(Query *originalQuery,
+								 CitusTableCacheEntry *targetTableCacheEntry,
+								 ShardInterval *shardInterval,
 								 PlannerRestrictionContext *plannerRestrictionContext,
 								 uint32 taskIdIndex,
 								 bool safeToPushdownSubquery,
@@ -428,7 +432,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 
 	PlannerRestrictionContext *copyOfPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
@@ -584,7 +587,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->relationShardList = relationShardList;
-	modifyTask->replicationModel = cacheEntry->replicationModel;
+	modifyTask->replicationModel = targetTableCacheEntry->replicationModel;
 
 	return modifyTask;
 }
