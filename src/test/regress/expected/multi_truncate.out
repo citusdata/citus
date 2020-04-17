@@ -4,6 +4,16 @@
 SET citus.next_shard_id TO 1210000;
 CREATE SCHEMA multi_truncate;
 SET search_path TO multi_truncate;
+-- helper view that prints out local table names and sizes in the schema
+CREATE VIEW table_sizes AS
+SELECT
+  c.relname as name,
+  pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) as size
+FROM pg_catalog.pg_class c
+     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'r'
+      AND n.nspname = 'multi_truncate'
+ORDER BY 1;
 --
 -- truncate for append distribution
 -- expect all shards to be dropped
@@ -314,7 +324,7 @@ SELECT * FROM test_local_truncate;
 (1 row)
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
+SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
  master_drop_all_shards
 ---------------------------------------------------------------------
                       4
@@ -350,7 +360,7 @@ SELECT * FROM test_local_truncate;
 (1 row)
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
+SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
  master_drop_all_shards
 ---------------------------------------------------------------------
                       4
@@ -364,5 +374,169 @@ SELECT * FROM test_local_truncate;
  1 | 2
 (1 row)
 
+DROP TABLE test_local_truncate;
+-- Test truncate_local_data_after_distributing_table UDF
+CREATE TABLE referenced_table(id int UNIQUE, test_column int);
+INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10000) x;
+CREATE TABLE referencing_table(id int, ref_id int REFERENCES referenced_table(id));
+INSERT INTO referencing_table SELECT * FROM referenced_table;
+-- The following will fail as the table is not distributed
+SELECT truncate_local_data_after_distributing_table('referenced_table');
+ERROR:  supplied parameter is not a distributed relation
+DETAIL:  This UDF only truncates local records of distributed tables.
+-- Test foreign keys from local tables to distributed tables
+-- We can not truncate local tables until all the local foreign keys are removed.
+SELECT create_distributed_table('referenced_table', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- The following will fail, as local referencing_table has fk references
+SELECT truncate_local_data_after_distributing_table('referenced_table');
+ERROR:  cannot truncate a table referenced in a foreign key constraint by a local table
+DETAIL:  Table "referencing_table" references "referenced_table"
+-- Test foreign keys between distributed tables
+SELECT create_distributed_table('referencing_table', 'ref_id');
+NOTICE:  Copying data from local table...
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+-- The following will no longer fail as the referencing table is now distributed
+SELECT truncate_local_data_after_distributing_table('referenced_table');
+NOTICE:  truncate cascades to table "referencing_table"
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM table_sizes;
+       name        |  size
+---------------------------------------------------------------------
+ referenced_table  | 0 bytes
+ referencing_table | 0 bytes
+(2 rows)
+
+ROLLBACK;
+-- observe that none of the tables are truncated
+SELECT * FROM table_sizes;
+       name        |  size
+---------------------------------------------------------------------
+ referenced_table  | 384 kB
+ referencing_table | 384 kB
+(2 rows)
+
+-- test that if we truncate the referencing table, only said table is affected
+BEGIN;
+SELECT truncate_local_data_after_distributing_table('referencing_table');
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM table_sizes;
+       name        |  size
+---------------------------------------------------------------------
+ referenced_table  | 384 kB
+ referencing_table | 0 bytes
+(2 rows)
+
+ROLLBACK;
+-- however if we truncate referenced table, both of the tables get truncated
+-- because we supply the CASCADE option
+-- test that if we truncate the referencing table, only said table is affected
+BEGIN;
+SELECT truncate_local_data_after_distributing_table('referenced_table');
+NOTICE:  truncate cascades to table "referencing_table"
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM table_sizes;
+       name        |  size
+---------------------------------------------------------------------
+ referenced_table  | 0 bytes
+ referencing_table | 0 bytes
+(2 rows)
+
+ROLLBACK;
+DROP TABLE referencing_table;
+DROP TABLE referenced_table;
+-- test truncating reference tables
+CREATE TABLE ref(id int UNIQUE, data int);
+INSERT INTO ref SELECT x,x FROM generate_series(1,10000) x;
+SELECT create_reference_table('ref');
+NOTICE:  Copying data from local table...
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist(id int, ref_id int REFERENCES ref(id));
+INSERT INTO dist SELECT x,x FROM generate_series(1,10000) x;
+-- test that we do not cascade truncates to local referencing tables
+SELECT truncate_local_data_after_distributing_table('ref');
+ERROR:  cannot truncate a table referenced in a foreign key constraint by a local table
+DETAIL:  Table "dist" references "ref"
+-- distribute the table and start testing allowed truncation queries
+SELECT create_distributed_table('dist','id');
+ERROR:  cannot distribute "dist" in sequential mode because it is not empty
+HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+-- the following should truncate ref and dist
+BEGIN;
+SELECT truncate_local_data_after_distributing_table('ref');
+ERROR:  cannot truncate a table referenced in a foreign key constraint by a local table
+DETAIL:  Table "dist" references "ref"
+SELECT * FROM table_sizes;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- the following should truncate dist table only
+BEGIN;
+SELECT truncate_local_data_after_distributing_table('dist');
+ERROR:  supplied parameter is not a distributed relation
+DETAIL:  This UDF only truncates local records of distributed tables.
+SELECT * FROM table_sizes;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+DROP TABLE ref, dist;
+-- tests for issue 1770
+CREATE TABLE t1(a int, b int);
+INSERT INTO t1 VALUES(1,1);
+SELECT create_distributed_table('t1', 'a');
+NOTICE:  Copying data from local table...
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t1 ADD CONSTRAINT t1_a_check CHECK(a > 2) NOT VALID;
+-- will error out with "ERROR:  CHECK CONSTRAINT "t1_a_check" is violated by some row"
+ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
+ERROR:  check constraint "t1_a_check" is violated by some row
+-- remove violating row
+DELETE FROM t1 where a = 1;
+-- verify no rows in t1
+SELECT * FROM t1;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+-- this will still error out
+ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
+ERROR:  check constraint "t1_a_check" is violated by some row
+-- The check will pass when the local copies are truncated
+SELECT truncate_local_data_after_distributing_table('t1');
+ truncate_local_data_after_distributing_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
+DROP VIEW table_sizes;
+DROP TABLE t1;
 DROP SCHEMA multi_truncate CASCADE;
-NOTICE:  drop cascades to table test_local_truncate
