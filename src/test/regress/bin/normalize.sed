@@ -114,3 +114,5 @@ s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_contai
 
 # ignore referene table replication messages
 /replicating reference table.*$/d
+
+s/Citus.*currently supports/Citus currently supports/g

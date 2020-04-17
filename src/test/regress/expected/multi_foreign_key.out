@@ -42,7 +42,7 @@ DROP TABLE referencing_table;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id), FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id));
 SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE self_referencing_table;
 CREATE TABLE self_referencing_table(id int, ref_id int, PRIMARY KEY (id, ref_id));
@@ -54,7 +54,7 @@ SELECT create_distributed_table('self_referencing_table', 'id', 'hash');
 
 ALTER TABLE self_referencing_table ADD CONSTRAINT fkey FOREIGN KEY(id,ref_id) REFERENCES self_referencing_table(id, ref_id);
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE self_referencing_table;
 -- test foreign constraint creation on NOT co-located tables
@@ -81,7 +81,7 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;

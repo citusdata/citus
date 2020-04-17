@@ -157,7 +157,7 @@ ADD CONSTRAINT
 REFERENCES
 	fkey_test(key) ON DELETE CASCADE;
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 -- we should be able to attach and detach partitions
 -- given that those DDLs are on the parent table

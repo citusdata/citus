@@ -318,7 +318,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
  name | relid | refd_relid
@@ -336,7 +336,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenced_table(id) ON DELETE SET NULL;
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
  name | relid | refd_relid
