@@ -62,6 +62,16 @@ git push origin "${new_branch_name}"
 cd "${test_automation_dir}"
 cd ./hammerdb
 
+if [ "$rg" = "citusbot_ch_benchmark_rg" ]; then
+    export IS_CH=true
+    export IS_TPCC=true
+fi 
+
+if [ "$rg" = "citusbot_tpcc_benchmark_rg" ]; then
+    export IS_CH=false
+    export IS_TPCC=true
+fi 
+
 # create cluster and run the hammerd benchmark
 ./create-run.sh
 
