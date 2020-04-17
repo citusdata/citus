@@ -242,35 +242,95 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - build
-      - check-style
-      - check-sql-snapshots
+      - build:
+          filters:
+            branches:
+              ignore:
+                - master
+      - check-style:
+          filters:
+            branches:
+              ignore:
+                - master
+      - check-sql-snapshots:
+          filters:
+            branches:
+              ignore:
+                - master
 
       - test-11_check-multi:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-11_check-tt-van-mx:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-11_check-iso-work-fol:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-11_check-fol:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-11_check-failure:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
 
       - test-12_check-multi:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-12_check-tt-van-mx:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-12_check-iso-work-fol:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-12_check-fol:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
       - test-12_check-failure:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
 
       - test-11-12_check-pg-upgrade:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
 
       - test-11_check-citus-upgrade:
           requires: [build]
+          filters:
+            branches:
+              ignore:
+                - master
 
