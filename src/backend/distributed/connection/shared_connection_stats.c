@@ -100,6 +100,7 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 /* local function declarations */
 static void StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc
 										  tupleDescriptor);
+static bool IsInactiveEntry(SharedConnStatsHashEntry *connectionEntry);
 static void LockConnectionSharedMemory(LWLockMode lockMode);
 static void UnLockConnectionSharedMemory(void);
 static void SharedConnectionStatsShmemInit(void);
@@ -109,19 +110,6 @@ static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
-PG_FUNCTION_INFO_V1(invalidate_inactive_shared_connections);
-
-/*
- * invalidate_inactive_shared_connections invalidates inactive
- * and not used shared connections by removing from the global hash.
- */
-Datum
-invalidate_inactive_shared_connections(PG_FUNCTION_ARGS)
-{
-	RemoveInactiveNodesFromSharedConnections();
-	PG_RETURN_VOID();
-}
-
 
 /*
  * citus_remote_connection_stats returns all the avaliable information about all
@@ -177,6 +165,12 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 			continue;
 		}
 
+		if (IsInactiveEntry(connectionEntry))
+		{
+			continue;
+		}
+
+
 		values[0] = PointerGetDatum(cstring_to_text(connectionEntry->key.hostname));
 		values[1] = Int32GetDatum(connectionEntry->key.port);
 		values[2] = PointerGetDatum(cstring_to_text(databaseName));
@@ -188,6 +182,25 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 	UnLockConnectionSharedMemory();
 }
 
+
+/*
+ * IsInactiveEntry returns true if the given entry has 0 connection count
+ * and the corresponding node is inactive.
+ */
+static bool
+IsInactiveEntry(SharedConnStatsHashEntry *connectionEntry)
+{
+	SharedConnStatsHashKey connectionKey = connectionEntry->key;
+	WorkerNode *workerNode =
+		FindWorkerNode(connectionKey.hostname, connectionKey.port);
+
+	if (connectionEntry->connectionCount == 0 &&
+		(workerNode == NULL || !workerNode->isActive))
+	{
+		return true;
+	}
+	return false;
+}
 
 /*
  * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
