@@ -216,7 +216,7 @@ EnsureReferenceTablesExistOnAllNodes(void)
 			StringInfo placementCopyCommand =
 				CopyShardPlacementToWorkerNodeQuery(sourceShardPlacement,
 													newWorkerNode,
-													TRANSFER_MODE_AUTOMATIC);
+													TRANSFER_MODE_BLOCK_WRITES);
 			ExecuteCriticalRemoteCommand(connection, placementCopyCommand->data);
 			RemoteTransactionCommit(connection);
 		}
