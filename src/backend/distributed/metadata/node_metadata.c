@@ -7,6 +7,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 #include "funcapi.h"
+#include "utils/plancache.h"
 
 
 #include "access/genam.h"
@@ -739,6 +740,12 @@ master_update_node(PG_FUNCTION_ARGS)
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
+
+	/*
+	 * if we have planned statements such as prepared statements, we should clear the cache so that
+	 * the planned cache doesn't return the old nodename/nodepost.
+	 */
+	ResetPlanCache();
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
