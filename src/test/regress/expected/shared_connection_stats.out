@@ -60,9 +60,7 @@ ORDER BY
 	hostname, port;
  connection_count_to_node
 ---------------------------------------------------------------------
-                        0
-                        0
-(2 rows)
+(0 rows)
 
 -- single shard queries require single connection per node
 BEGIN;
@@ -106,9 +104,7 @@ ORDER BY
 	hostname, port;
  connection_count_to_node
 ---------------------------------------------------------------------
-                        0
-                        0
-(2 rows)
+(0 rows)
 
 -- executor is only allowed to establish a single connection per node
 BEGIN;
@@ -147,9 +143,7 @@ ORDER BY
 	hostname, port;
  connection_count_to_node
 ---------------------------------------------------------------------
-                        0
-                        0
-(2 rows)
+(0 rows)
 
 -- sequential mode is allowed to establish a single connection per node
 BEGIN;
@@ -188,9 +182,7 @@ ORDER BY
 	hostname, port;
  connection_count_to_node
 ---------------------------------------------------------------------
-                        0
-                        0
-(2 rows)
+(0 rows)
 
 -- now, decrease the shared pool size, and still force
 -- one connection per placement

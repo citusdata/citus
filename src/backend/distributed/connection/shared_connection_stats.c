@@ -178,73 +178,6 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 
 
 /*
- * RemoveInactiveNodesFromSharedConnections goes over the SharedConnStatsHash
- * and removes the inactive entries.
- */
-void
-RemoveInactiveNodesFromSharedConnections(void)
-{
-	/* we're modifying connections, prevent any changes */
-	LockConnectionSharedMemory(LW_EXCLUSIVE);
-
-	HASH_SEQ_STATUS status;
-	SharedConnStatsHashEntry *connectionEntry = NULL;
-
-	/*
-	 * In the first iteration, try to remove worker nodes that doesn't have any active
-	 * conections and the node does not exits in the metadata anymore.
-	 */
-	hash_seq_init(&status, SharedConnStatsHash);
-	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
-	{
-		SharedConnStatsHashKey connectionKey = connectionEntry->key;
-		WorkerNode *workerNode =
-			FindWorkerNode(connectionKey.hostname, connectionKey.port);
-
-		if (connectionEntry->connectionCount == 0 &&
-			(workerNode == NULL || !workerNode->isActive))
-		{
-			hash_search(SharedConnStatsHash, &connectionKey, HASH_REMOVE, NULL);
-		}
-	}
-
-	int entryCount = hash_get_num_entries(SharedConnStatsHash);
-	if (entryCount + 1 < MaxWorkerNodesTracked)
-	{
-		/* we're good, we have at least one more space for a new worker */
-		UnLockConnectionSharedMemory();
-
-		return;
-	}
-
-	/*
-	 * We aimed to remove nodes that don't have any open connections. If we
-	 * failed to find one, we have to be more aggressive and remove at least
-	 * one of the inactive ones.
-	 */
-	hash_seq_init(&status, SharedConnStatsHash);
-	while ((connectionEntry = (SharedConnStatsHashEntry *) hash_seq_search(&status)) != 0)
-	{
-		SharedConnStatsHashKey connectionKey = connectionEntry->key;
-		WorkerNode *workerNode =
-			FindWorkerNode(connectionKey.hostname, connectionKey.port);
-
-		if (workerNode == NULL || !workerNode->isActive)
-		{
-			hash_search(SharedConnStatsHash, &connectionKey, HASH_REMOVE, NULL);
-
-			hash_seq_term(&status);
-
-			break;
-		}
-	}
-
-
-	UnLockConnectionSharedMemory();
-}
-
-
-/*
  * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
  * via a GUC.
  *  "0" means adjust MaxSharedPoolSize automatically by using MaxConnections
@@ -477,6 +410,18 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 	Assert(connectionEntry->connectionCount > 0);
 
 	connectionEntry->connectionCount -= 1;
+
+	if (connectionEntry->connectionCount == 0)
+	{
+		/*
+		 * We don't have to remove at this point as the node might be still active
+		 * and will have new connections open to it. Still, this seems like a convenient
+		 * place to remove the entry, as connectionCount == 0 implies that the server is
+		 * not busy, and given the default value of MaxCachedConnectionsPerWorker = 1,
+		 * we're unlikely to trigger this often.
+		 */
+		hash_search(SharedConnStatsHash, &connKey, HASH_REMOVE, &entryFound);
+	}
 
 	UnLockConnectionSharedMemory();
 

@@ -295,9 +295,6 @@ master_disable_node(PG_FUNCTION_ARGS)
 	bool onlyConsiderActivePlacements = false;
 	MemoryContext savedContext = CurrentMemoryContext;
 
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	PG_TRY();
 	{
 		if (NodeIsPrimary(workerNode))
@@ -634,9 +631,6 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -677,9 +671,6 @@ master_update_node(PG_FUNCTION_ARGS)
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
-
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
 
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
@@ -1049,9 +1040,6 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{
