@@ -43,6 +43,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -107,6 +108,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 */
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	EnsureReferenceTablesExistOnAllNodes();
 
 	/* don't allow the table to be dropped */
 	LockRelationOid(relationId, AccessShareLock);

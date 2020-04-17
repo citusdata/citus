@@ -560,6 +560,19 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 
+-- verify that master_create_empty_shard replicates reference table shards
+CREATE TABLE range_table(a int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
+SELECT 1 FROM master_create_empty_shard('range_table');
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
+
+DROP TABLE range_table;
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+
 -- test setting citus.replicate_reference_tables_on_activate to on
 -- master_add_node
 SET citus.replicate_reference_tables_on_activate TO on;
