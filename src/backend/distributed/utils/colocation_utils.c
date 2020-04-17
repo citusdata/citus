@@ -929,8 +929,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	if ((partitionMethod == DISTRIBUTE_BY_APPEND) ||
 		(partitionMethod == DISTRIBUTE_BY_RANGE))
 	{
-		ShardInterval *copyShardInterval = CitusMakeNode(ShardInterval);
-		CopyShardInterval(shardInterval, copyShardInterval);
+		ShardInterval *copyShardInterval = CopyShardInterval(shardInterval);
 
 		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
 
@@ -959,8 +958,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		ShardInterval *colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
 
-		ShardInterval *copyShardInterval = CitusMakeNode(ShardInterval);
-		CopyShardInterval(colocatedShardInterval, copyShardInterval);
+		ShardInterval *copyShardInterval = CopyShardInterval(colocatedShardInterval);
 
 		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
 	}
