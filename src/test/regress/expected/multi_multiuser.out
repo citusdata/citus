@@ -378,6 +378,9 @@ INSERT INTO my_table_with_data VALUES (1,2);
 RESET ROLE;
 SELECT create_distributed_table('my_table_with_data', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.my_table_with_data$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -405,6 +408,9 @@ RESET ROLE;
 SET ROLE read_access;
 SELECT create_distributed_table('my_role_table_with_data', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.my_role_table_with_data$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -561,6 +567,9 @@ RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$full_access_user_schema.t1$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

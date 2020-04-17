@@ -145,6 +145,9 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
 NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -178,6 +181,9 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
 NOTICE:  executing the copy locally for shard xxxxx
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

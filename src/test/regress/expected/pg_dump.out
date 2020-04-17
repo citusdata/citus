@@ -58,6 +58,9 @@ drop cascades to table "weird.table"
 -- redistribute the schema
 SELECT create_distributed_table('data', 'key');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$dumper.data$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -65,6 +68,9 @@ NOTICE:  Copying data from local table...
 
 SELECT create_distributed_table('"weird.table"', 'key,');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$dumper."weird.table"$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

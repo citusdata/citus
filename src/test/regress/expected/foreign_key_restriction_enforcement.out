@@ -1272,6 +1272,9 @@ BEGIN;
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_fkey_to_ref_in_tx.test_table_1$$)
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -1296,6 +1299,9 @@ BEGIN;
 	INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 	SELECT create_reference_table('test_table_1');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_fkey_to_ref_in_tx.test_table_1$$)
  create_reference_table
 ---------------------------------------------------------------------
 

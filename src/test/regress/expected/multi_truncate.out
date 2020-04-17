@@ -307,6 +307,9 @@ CREATE TABLE test_local_truncate (x int, y int);
 INSERT INTO test_local_truncate VALUES (1,2);
 SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.test_local_truncate$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -343,6 +346,9 @@ CREATE TABLE test_local_truncate (x int, y int);
 INSERT INTO test_local_truncate VALUES (1,2);
 SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.test_local_truncate$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -388,6 +394,9 @@ DETAIL:  This UDF only truncates local records of distributed tables.
 -- We can not truncate local tables until all the local foreign keys are removed.
 SELECT create_distributed_table('referenced_table', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.referenced_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -400,6 +409,9 @@ DETAIL:  Table "referencing_table" references "referenced_table"
 -- Test foreign keys between distributed tables
 SELECT create_distributed_table('referencing_table', 'ref_id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.referencing_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -472,6 +484,9 @@ CREATE TABLE ref(id int UNIQUE, data int);
 INSERT INTO ref SELECT x,x FROM generate_series(1,10000) x;
 SELECT create_reference_table('ref');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.ref$$)
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -509,6 +524,9 @@ CREATE TABLE t1(a int, b int);
 INSERT INTO t1 VALUES(1,1);
 SELECT create_distributed_table('t1', 'a');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.t1$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

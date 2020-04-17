@@ -5,6 +5,9 @@ INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 -- create the reference table
 SELECT create_reference_table('reference_table_test');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.reference_table_test$$)
  create_reference_table
 ---------------------------------------------------------------------
 

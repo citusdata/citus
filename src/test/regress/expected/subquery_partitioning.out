@@ -18,7 +18,13 @@ INSERT INTO partitioning_test_2010 VALUES (4, 4, '2010-03-03');
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$subquery_and_partitioning.partitioning_test_2010$$)
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$subquery_and_partitioning.partitioning_test_2017$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
