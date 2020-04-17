@@ -534,7 +534,9 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 		 * metadata) will be copied to workers after all reference table changed
 		 * are finished.
 		 */
-		if (ShouldSyncTableMetadata(shardInterval->relationId))
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryFromInterval(
+			shardInterval);
+		if (ShouldSyncTableMetadataForCache(cacheEntry))
 		{
 			char *placementCommand = PlacementUpsertCommand(shardId, placementId,
 															SHARD_STATE_ACTIVE, 0,

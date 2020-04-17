@@ -806,6 +806,24 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
 
 
 /*
+ * GetCitusTableCacheEntryFromInterval returns CitusTableCacheEntry for shardInterval.
+ * It's important to call this rather than GetCitusTableCacheEntry as the latter may
+ * invalidate the shardInterval pointer if that shardInterval is part of the cache entry.
+ */
+CitusTableCacheEntry *
+GetCitusTableCacheEntryFromInterval(ShardInterval *shardInterval)
+{
+	if (shardInterval->tableEntry != NULL)
+	{
+		return (CitusTableCacheEntry *) shardInterval->tableEntry;
+	}
+
+	/* do not store to tableEntry, as shardInterval may outlive cache entry */
+	return GetCitusTableCacheEntry(shardInterval->relationId);
+}
+
+
+/*
  * GetCitusTableCacheEntry returns the distributed table metadata for the
  * passed relationId. For efficiency it caches lookups.
  */
@@ -1171,7 +1189,9 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 																intervalTypeMod);
 			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
-			shardIntervalArray[arrayIndex] = CopyShardInterval(shardInterval);
+			ShardInterval *newShardInterval = CopyShardInterval(shardInterval);
+			newShardInterval->tableEntry = cacheEntry;
+			shardIntervalArray[arrayIndex] = newShardInterval;
 
 			MemoryContextSwitchTo(oldContext);
 

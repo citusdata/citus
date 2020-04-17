@@ -45,7 +45,7 @@
 
 /* local function forward declarations */
 static char LookupShardTransferMode(Oid shardReplicationModeOid);
-static void ErrorIfTableCannotBeReplicated(Oid relationId);
+static void ErrorIfTableCannotBeReplicated(CitusTableCacheEntry *tableEntry);
 static void RepairShardPlacement(int64 shardId, const char *sourceNodeName,
 								 int32 sourceNodePort, const char *targetNodeName,
 								 int32 targetNodePort);
@@ -112,7 +112,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntryFromInterval(shardInterval);
+	ErrorIfTableCannotBeReplicated(tableEntry);
 
 	if (doRepair)
 	{
@@ -174,9 +175,11 @@ BlockWritesToShardList(List *shardList)
 	 * calculating shouldSyncMetadata for a single table is sufficient.
 	 */
 	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardList);
-	Oid firstDistributedTableId = firstShardInterval->relationId;
+	CitusTableCacheEntry *firstDistributedTableCacheEntry =
+		GetCitusTableCacheEntryFromInterval(firstShardInterval);
 
-	bool shouldSyncMetadata = ShouldSyncTableMetadata(firstDistributedTableId);
+	bool shouldSyncMetadata = ShouldSyncTableMetadataForCache(
+		firstDistributedTableCacheEntry);
 	if (shouldSyncMetadata)
 	{
 		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
@@ -190,20 +193,17 @@ BlockWritesToShardList(List *shardList)
  * since RF=1 is a must MX tables.
  */
 static void
-ErrorIfTableCannotBeReplicated(Oid relationId)
+ErrorIfTableCannotBeReplicated(CitusTableCacheEntry *tableEntry)
 {
 	/*
 	 * Note that ShouldSyncTableMetadata() returns true for both MX tables
 	 * and reference tables.
 	 */
-	bool shouldSyncMetadata = ShouldSyncTableMetadata(relationId);
+	bool shouldSyncMetadata = ShouldSyncTableMetadataForCache(tableEntry);
 	if (!shouldSyncMetadata)
 	{
 		return;
 	}
-
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-	char *relationName = get_rel_name(relationId);
 
 	/*
 	 * ShouldSyncTableMetadata() returns true also for reference table,
@@ -214,6 +214,8 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
 	 */
 	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
 	{
+		char *relationName = get_rel_name(tableEntry->relationId);
+
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						(errmsg("Table %s is streaming replicated. Shards "
 								"of streaming replicated tables cannot "
@@ -440,7 +442,9 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
 								groupId);
 
-		if (ShouldSyncTableMetadata(colocatedShard->relationId))
+		CitusTableCacheEntry *colocatedShardTableEntry =
+			GetCitusTableCacheEntryFromInterval(colocatedShard);
+		if (ShouldSyncTableMetadataForCache(colocatedShardTableEntry))
 		{
 			char *placementCommand = PlacementUpsertCommand(colocatedShardId, placementId,
 															SHARD_STATE_ACTIVE, 0,

@@ -565,6 +565,9 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->shardId = srcInterval->shardId;
 	destInterval->shardIndex = srcInterval->shardIndex;
 
+	/* tableEntry should only be set when cacheEntry points at the shardInterval */
+	destInterval->tableEntry = NULL;
+
 	destInterval->minValue = 0;
 	if (destInterval->minValueExists)
 	{

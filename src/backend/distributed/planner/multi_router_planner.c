@@ -303,8 +303,8 @@ CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuer
 List *
 ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 {
-	Oid relationId = shardInterval->relationId;
-	char partitionMethod = PartitionMethod(shardInterval->relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryFromInterval(shardInterval);
+	char partitionMethod = cacheEntry->partitionMethod;
 	Var *partitionColumn = NULL;
 
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -315,7 +315,7 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 			 DISTRIBUTE_BY_APPEND)
 	{
 		Assert(rteIndex > 0);
-		partitionColumn = PartitionColumn(relationId, rteIndex);
+		partitionColumn = PartitionColumnFromCache(cacheEntry, rteIndex);
 	}
 	else
 	{
@@ -2608,7 +2608,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		return modifyRouteList;
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = PartitionColumnFromCache(cacheEntry, rangeTableId);
 
 	/* get full list of insert values and iterate over them to prune */
 	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);

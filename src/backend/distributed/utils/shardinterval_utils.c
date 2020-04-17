@@ -236,10 +236,9 @@ int
 ShardIndex(ShardInterval *shardInterval)
 {
 	int shardIndex = INVALID_SHARD_INDEX;
-	Oid distributedTableId = shardInterval->relationId;
 	Datum shardMinValue = shardInterval->minValue;
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryFromInterval(shardInterval);
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*

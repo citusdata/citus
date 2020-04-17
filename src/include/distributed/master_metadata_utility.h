@@ -50,6 +50,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	void *tableEntry;   /* a possibly NULL pointer for reverse cache lookup */
 } ShardInterval;
 
 

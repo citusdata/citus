@@ -1345,6 +1345,29 @@ RightColumnOrNULL(OpExpr *joinClause)
 
 
 /*
+ * PartitionColumnFromCache is like PartitionColumn, but uses a caller supplied
+ * CitusTableCacheEntry. This can be used to avoid a GetCitusTableCacheEntry
+ * call, which may otherwise invalidate pointers the caller depends on.
+ */
+Var *
+PartitionColumnFromCache(CitusTableCacheEntry *cacheEntry, uint32 rangeTableId)
+{
+	if (cacheEntry == NULL ||
+		!cacheEntry->isCitusTable ||
+		cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return NULL;
+	}
+
+	Var *partitionColumn = copyObject(cacheEntry->partitionColumn);
+	partitionColumn->varno = rangeTableId;
+	partitionColumn->varnoold = rangeTableId;
+
+	return partitionColumn;
+}
+
+
+/*
  * PartitionColumn builds the partition column for the given relation, and sets
  * the partition column's range table references to the given table identifier.
  *

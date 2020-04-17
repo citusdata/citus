@@ -79,7 +79,9 @@ RebuildQueryStrings(Job *workerJob)
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
 			/* there are no restrictions to add for reference tables */
-			char partitionMethod = PartitionMethod(shardInterval->relationId);
+			CitusTableCacheEntry *cacheEntry =
+				GetCitusTableCacheEntryFromInterval(shardInterval);
+			char partitionMethod = cacheEntry->partitionMethod;
 			if (partitionMethod != DISTRIBUTE_BY_NONE)
 			{
 				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);

@@ -19,6 +19,7 @@
 
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
+#include "metadata_cache.h"
 
 
 /*
@@ -103,6 +104,8 @@ extern OpExpr * SinglePartitionJoinClause(List *partitionColumnList,
 extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
 extern Var * LeftColumnOrNULL(OpExpr *joinClause);
 extern Var * RightColumnOrNULL(OpExpr *joinClause);
+extern Var * PartitionColumnFromCache(CitusTableCacheEntry *cacheEntry, uint32
+									  rangeTableId);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * DistPartitionKey(Oid relationId);
 extern Var * ForceDistPartitionKey(Oid relationId);

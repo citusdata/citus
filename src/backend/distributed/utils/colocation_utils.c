@@ -48,6 +48,7 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
+static List * ColocatedTableListForCacheEntry(CitusTableCacheEntry *cacheEntry);
 static List * ColocationGroupTableList(Oid colocationId);
 static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
@@ -413,18 +414,20 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 static bool
 ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
 {
-	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
-	char rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
-
 	/* if both shards are the same, return true */
 	if (leftShardInterval->shardId == rightShardInterval->shardId)
 	{
 		return true;
 	}
 
+	CitusTableCacheEntry *leftShardIntervalCacheEntry =
+		GetCitusTableCacheEntryFromInterval(leftShardInterval);
+	CitusTableCacheEntry *rightShardIntervalCacheEntry =
+		GetCitusTableCacheEntryFromInterval(rightShardInterval);
+	char leftIntervalPartitionMethod = leftShardIntervalCacheEntry->partitionMethod;
+	char rightIntervalPartitionMethod = rightShardIntervalCacheEntry->partitionMethod;
+
 	/* if partition methods are not the same, shards cannot be considered as co-located */
-	leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
-	rightIntervalPartitionMethod = PartitionMethod(rightShardInterval->relationId);
 	if (leftIntervalPartitionMethod != rightIntervalPartitionMethod)
 	{
 		return false;
@@ -817,8 +820,28 @@ TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId)
 bool
 ShardsColocated(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
 {
-	bool tablesColocated = TablesColocated(leftShardInterval->relationId,
-										   rightShardInterval->relationId);
+	bool tablesColocated = false;
+
+	if (leftShardInterval->relationId == rightShardInterval->relationId)
+	{
+		tablesColocated = true;
+	}
+	else
+	{
+		CitusTableCacheEntry *leftShardIntervalCacheEntry =
+			GetCitusTableCacheEntryFromInterval(leftShardInterval);
+		CitusTableCacheEntry *rightShardIntervalCacheEntry =
+			GetCitusTableCacheEntryFromInterval(rightShardInterval);
+		uint32 leftColocationId = leftShardIntervalCacheEntry->colocationId;
+		uint32 rightColocationId = rightShardIntervalCacheEntry->colocationId;
+
+		if (leftColocationId != INVALID_COLOCATION_ID &&
+			rightColocationId != INVALID_COLOCATION_ID &&
+			leftColocationId == rightColocationId)
+		{
+			tablesColocated = true;
+		}
+	}
 
 	if (tablesColocated)
 	{
@@ -839,20 +862,32 @@ ShardsColocated(ShardInterval *leftShardInterval, ShardInterval *rightShardInter
 List *
 ColocatedTableList(Oid distributedTableId)
 {
-	uint32 tableColocationId = TableColocationId(distributedTableId);
+	return ColocatedTableListForCacheEntry(GetCitusTableCacheEntry(distributedTableId));
+}
+
+
+/*
+ * ColocatedTableListForCacheEntry is like ColocatedTableList, but takes a
+ * CitusTableCacheEntry from the caller to avoid calling GetCitusTableCacheEntry
+ * which may invalidate pointers for the caller.
+ */
+static List *
+ColocatedTableListForCacheEntry(CitusTableCacheEntry *cacheEntry)
+{
+	uint32 colocationId = cacheEntry->colocationId;
 	List *colocatedTableList = NIL;
 
 	/*
 	 * If distribution type of the table is not hash, the table is only co-located
 	 * with itself.
 	 */
-	if (tableColocationId == INVALID_COLOCATION_ID)
+	if (colocationId == INVALID_COLOCATION_ID)
 	{
-		colocatedTableList = lappend_oid(colocatedTableList, distributedTableId);
+		colocatedTableList = lappend_oid(colocatedTableList, cacheEntry->relationId);
 		return colocatedTableList;
 	}
 
-	colocatedTableList = ColocationGroupTableList(tableColocationId);
+	colocatedTableList = ColocationGroupTableList(colocationId);
 
 	return colocatedTableList;
 }
@@ -916,10 +951,9 @@ ColocationGroupTableList(Oid colocationId)
 List *
 ColocatedShardIntervalList(ShardInterval *shardInterval)
 {
-	Oid distributedTableId = shardInterval->relationId;
 	List *colocatedShardList = NIL;
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryFromInterval(shardInterval);
 	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
@@ -937,7 +971,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	}
 
 	int shardIntervalIndex = ShardIndex(shardInterval);
-	List *colocatedTableList = ColocatedTableList(distributedTableId);
+	List *colocatedTableList = ColocatedTableListForCacheEntry(cacheEntry);
 
 	/* ShardIndex have to find index of given shard */
 	Assert(shardIntervalIndex >= 0);
@@ -945,7 +979,12 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	Oid colocatedTableId = InvalidOid;
 	foreach_oid(colocatedTableId, colocatedTableList)
 	{
+		/*
+		 * Avoid calling GetCitusTableCacheEntry with same relationId as existing cacheEntry,
+		 * as that may invalidate its out of band data.
+		 */
 		CitusTableCacheEntry *colocatedTableCacheEntry =
+			colocatedTableId == cacheEntry->relationId ? cacheEntry :
 			GetCitusTableCacheEntry(colocatedTableId);
 
 		/*

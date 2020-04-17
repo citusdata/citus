@@ -223,7 +223,18 @@ bool
 ShouldSyncTableMetadata(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	return ShouldSyncTableMetadataForCache(tableEntry);
+}
 
+
+/*
+ * ShouldSyncTableMetadataForCache is like ShouldSyncTableMetadata except the caller
+ * supplies a CitusTableCacheEntry to avoid calling GetCitusTableCacheEntry which
+ * might otherwise invalidate pointers for the caller.
+ */
+bool
+ShouldSyncTableMetadataForCache(CitusTableCacheEntry *tableEntry)
+{
 	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
@@ -374,7 +385,7 @@ MetadataCreateCommands(void)
 	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		if (ShouldSyncTableMetadataForCache(cacheEntry))
 		{
 			propagatedTableList = lappend(propagatedTableList, cacheEntry);
 		}
