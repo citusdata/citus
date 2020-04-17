@@ -1566,3 +1566,11 @@ GROUP BY 1 ORDER BY 1;
        5 | {675,675,816,816,987,987,1104,1104,1104}
 (6 rows)
 
+-- https://github.com/citusdata/citus/issues/3754
+select null = sum(null::int2) over ()
+from public.users_table as ut limit 1;
+ ?column?
+---------------------------------------------------------------------
+
+(1 row)
+

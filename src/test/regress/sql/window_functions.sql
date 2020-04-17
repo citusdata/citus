@@ -612,3 +612,7 @@ FROM events_table
 JOIN users_ref_test_table uref ON uref.id = events_table.user_id) sq
 GROUP BY 1 ORDER BY 1;
 
+-- https://github.com/citusdata/citus/issues/3754
+select null = sum(null::int2) over ()
+from public.users_table as ut limit 1;
+
