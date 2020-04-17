@@ -100,7 +100,6 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 /* local function declarations */
 static void StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc
 										  tupleDescriptor);
-static bool IsInactiveEntry(SharedConnStatsHashEntry *connectionEntry);
 static void LockConnectionSharedMemory(LWLockMode lockMode);
 static void UnLockConnectionSharedMemory(void);
 static void SharedConnectionStatsShmemInit(void);
@@ -165,12 +164,6 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 			continue;
 		}
 
-		if (IsInactiveEntry(connectionEntry))
-		{
-			continue;
-		}
-
-
 		values[0] = PointerGetDatum(cstring_to_text(connectionEntry->key.hostname));
 		values[1] = Int32GetDatum(connectionEntry->key.port);
 		values[2] = PointerGetDatum(cstring_to_text(databaseName));
@@ -182,25 +175,6 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 	UnLockConnectionSharedMemory();
 }
 
-
-/*
- * IsInactiveEntry returns true if the given entry has 0 connection count
- * and the corresponding node is inactive.
- */
-static bool
-IsInactiveEntry(SharedConnStatsHashEntry *connectionEntry)
-{
-	SharedConnStatsHashKey connectionKey = connectionEntry->key;
-	WorkerNode *workerNode =
-		FindWorkerNode(connectionKey.hostname, connectionKey.port);
-
-	if (connectionEntry->connectionCount == 0 &&
-		(workerNode == NULL || !workerNode->isActive))
-	{
-		return true;
-	}
-	return false;
-}
 
 /*
  * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
