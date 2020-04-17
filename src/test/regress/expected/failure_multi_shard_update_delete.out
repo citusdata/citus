@@ -436,6 +436,9 @@ SELECT citus.mitmproxy('conn.allow()');
 CREATE TABLE t3 AS SELECT * FROM t2;
 SELECT create_distributed_table('t3', 'a');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_shard.t3$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -534,6 +537,9 @@ DROP TABLE t3;
 CREATE TABLE t3 AS SELECT * FROM t2;
 SELECT create_distributed_table('t3', 'a');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_shard.t3$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

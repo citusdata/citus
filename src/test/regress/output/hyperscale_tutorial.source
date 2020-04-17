@@ -205,6 +205,9 @@ CREATE TABLE impressions (
 \copy impressions from '@abs_srcdir@/data/impressions.csv' with csv
 SELECT create_distributed_table('companies',   'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.companies$$)
  create_distributed_table 
 --------------------------
  
@@ -212,6 +215,9 @@ NOTICE:  Copying data from local table...
 
 SELECT create_distributed_table('campaigns',   'company_id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.campaigns$$)
  create_distributed_table 
 --------------------------
  
@@ -219,6 +225,9 @@ NOTICE:  Copying data from local table...
 
 SELECT create_distributed_table('ads',         'company_id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.ads$$)
  create_distributed_table 
 --------------------------
  
@@ -226,6 +235,9 @@ NOTICE:  Copying data from local table...
 
 SELECT create_distributed_table('clicks',      'company_id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.clicks$$)
  create_distributed_table 
 --------------------------
  
@@ -233,6 +245,9 @@ NOTICE:  Copying data from local table...
 
 SELECT create_distributed_table('impressions', 'company_id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.impressions$$)
  create_distributed_table 
 --------------------------
  

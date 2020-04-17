@@ -89,7 +89,7 @@ ALTER TABLE products_append ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
---- Error out since first and third rows have the same product_no		
+--- Error out since first and third rows have the same product_no
 \COPY products_append FROM STDIN DELIMITER AS ',';
 ERROR:  duplicate key value violates unique constraint "p_key_1450033"
 DETAIL:  Key (product_no)=(1) already exists.
@@ -176,8 +176,8 @@ ALTER TABLE unique_test_table_append ADD CONSTRAINT unn_id UNIQUE(id);
 WARNING:  table "unique_test_table_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
--- Error out. Table can not have two rows with the same id.		
-\COPY unique_test_table_append FROM STDIN DELIMITER AS ',';		
+-- Error out. Table can not have two rows with the same id.
+\COPY unique_test_table_append FROM STDIN DELIMITER AS ',';
 ERROR:  duplicate key value violates unique constraint "unn_id_1450067"
 DETAIL:  Key (id)=(X) already exists.
 DROP TABLE unique_test_table_append;
@@ -336,7 +336,7 @@ ALTER TABLE products_append ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (pro
 WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
--- Error out since first and third can not pass the exclusion check.		
+-- Error out since first and third can not pass the exclusion check.
 \COPY products_append FROM STDIN DELIMITER AS ',';
 ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450135"
 DETAIL:  Key (product_no, name)=(1,  Product_1) conflicts with existing key (product_no, name)=(1,  Product_1).
@@ -560,6 +560,9 @@ INSERT INTO sc3.alter_add_prim_key(x) SELECT generate_series(1,100);
 SET search_path TO 'sc3';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc3.alter_add_prim_key$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

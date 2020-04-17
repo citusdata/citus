@@ -7,6 +7,7 @@
 #include "udfs/replicate_reference_tables/9.3-2.sql"
 #include "udfs/citus_remote_connection_stats/9.3-2.sql"
 #include "udfs/worker_create_or_alter_role/9.3-2.sql"
+#include "udfs/truncate_local_data_after_distributing_table/9.3-2.sql"
 
 -- add citus extension owner as a distributed object, if not already in there
 INSERT INTO citus.pg_dist_object SELECT

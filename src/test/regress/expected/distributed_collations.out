@@ -35,6 +35,9 @@ CREATE TABLE test_propagate(id int, t1 text COLLATE german_phonebook,
 INSERT INTO test_propagate VALUES (1, 'aesop', U&'\00E4sop'), (2, U&'Vo\1E9Er', 'Vossr');
 SELECT create_distributed_table('test_propagate', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$collation_tests.test_propagate$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

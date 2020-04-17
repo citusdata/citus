@@ -502,6 +502,9 @@ SELECT create_reference_table('ref_table');
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1330000, 'local_shard_copy', 'CREATE TABLE local_shard_copy.ref_table (a integer)');SELECT worker_apply_shard_ddl_command (1330000, 'local_shard_copy', 'ALTER TABLE local_shard_copy.ref_table OWNER TO postgres')
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_shard_copy.ref_table$$)
  create_reference_table
 ---------------------------------------------------------------------
 

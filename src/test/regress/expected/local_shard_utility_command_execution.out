@@ -698,7 +698,9 @@ INSERT INTO partitioning_test VALUES (6, '2012-07-07');
 INSERT INTO partitioning_test VALUES (5, '2013-06-06');
 SELECT create_distributed_table('partitioning_test', 'id', colocate_with:='dist_table');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
  create_distributed_table
 ---------------------------------------------------------------------
 

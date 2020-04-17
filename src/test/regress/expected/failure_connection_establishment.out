@@ -61,6 +61,9 @@ INSERT INTO r1 (id, name) VALUES
 (3,'baz');
 SELECT create_reference_table('r1');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$fail_connect.r1$$)
  create_reference_table
 ---------------------------------------------------------------------
 
