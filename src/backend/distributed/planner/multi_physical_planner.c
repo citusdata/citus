@@ -73,6 +73,7 @@
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
+#include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -1968,10 +1969,21 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 			 RANGE_PARTITION_TYPE)
 	{
 		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
-		uint32 shardCount = cache->shardIntervalArrayLength;
-		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
+		int shardCount = cache->shardIntervalArrayLength;
+		ShardInterval **cachedSortedShardIntervalArray =
+			cache->sortedShardIntervalArray;
+		bool hasUninitializedShardInterval =
+			cache->hasUninitializedShardInterval;
 
-		bool hasUninitializedShardInterval = cache->hasUninitializedShardInterval;
+		ShardInterval **sortedShardIntervalArray =
+			palloc0(sizeof(ShardInterval) * shardCount);
+
+		for (int shardIndex = 0; shardIndex < shardCount; shardIndex++)
+		{
+			sortedShardIntervalArray[shardIndex] =
+				CopyShardInterval(cachedSortedShardIntervalArray[shardIndex]);
+		}
+
 		if (hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errmsg("cannot range repartition shard with "
@@ -1979,7 +1991,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 		}
 
 		mapMergeJob->partitionType = partitionType;
-		mapMergeJob->partitionCount = shardCount;
+		mapMergeJob->partitionCount = (uint32) shardCount;
 		mapMergeJob->sortedShardIntervalArray = sortedShardIntervalArray;
 		mapMergeJob->sortedShardIntervalArrayLength = shardCount;
 	}
@@ -2507,11 +2519,13 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			anchorShardId = shardInterval->shardId;
 		}
 
-		taskShardList = lappend(taskShardList, list_make1(shardInterval));
+		ShardInterval *copiedShardInterval = CopyShardInterval(shardInterval);
+
+		taskShardList = lappend(taskShardList, list_make1(copiedShardInterval));
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = shardInterval->relationId;
-		relationShard->shardId = shardInterval->shardId;
+		relationShard->relationId = copiedShardInterval->relationId;
+		relationShard->shardId = copiedShardInterval->shardId;
 
 		relationShardList = lappend(relationShardList, relationShard);
 	}
@@ -2573,6 +2587,11 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
+	if (firstRelationId == secondRelationId)
+	{
+		return true;
+	}
+
 	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
 	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
 
@@ -3472,8 +3491,12 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Const *minConstant = (Const *) minNode;
 	Const *maxConstant = (Const *) maxNode;
 
-	minConstant->constvalue = shardInterval->minValue;
-	maxConstant->constvalue = shardInterval->maxValue;
+	minConstant->constvalue = datumCopy(shardInterval->minValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
+	maxConstant->constvalue = datumCopy(shardInterval->maxValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
 
 	minConstant->constisnull = false;
 	maxConstant->constisnull = false;

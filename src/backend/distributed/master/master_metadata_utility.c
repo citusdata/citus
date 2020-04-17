@@ -263,10 +263,10 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 		for (int placementIndex = 0; placementIndex < numberOfPlacements;
 			 placementIndex++)
 		{
-			GroupShardPlacement *placement = &placementArray[placementIndex];
-
-			if (placement->groupId == groupId)
+			if (placementArray[placementIndex].groupId == groupId)
 			{
+				GroupShardPlacement *placement = palloc0(sizeof(GroupShardPlacement));
+				*placement = placementArray[placementIndex];
 				resultList = lappend(resultList, placement);
 			}
 		}
@@ -279,9 +279,6 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 /*
  * ShardIntervalsOnWorkerGroup accepts a WorkerNode and returns a list of the shard
  * intervals of the given table which are placed on the group the node is a part of.
- *
- * DO NOT modify the shard intervals returned by this function, they are not copies but
- * pointers.
  */
 static List *
 ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
@@ -304,8 +301,9 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 
 			if (placement->groupId == workerNode->groupId)
 			{
-				ShardInterval *shardInterval =
+				ShardInterval *cachedShardInterval =
 					distTableCacheEntry->sortedShardIntervalArray[shardIndex];
+				ShardInterval *shardInterval = CopyShardInterval(cachedShardInterval);
 				shardIntervalList = lappend(shardIntervalList, shardInterval);
 			}
 		}
@@ -481,11 +479,8 @@ LoadShardIntervalList(Oid relationId)
 
 	for (int i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
 	{
-		ShardInterval *newShardInterval = (ShardInterval *) palloc0(
-			sizeof(ShardInterval));
-
-		CopyShardInterval(cacheEntry->sortedShardIntervalArray[i], newShardInterval);
-
+		ShardInterval *newShardInterval =
+			CopyShardInterval(cacheEntry->sortedShardIntervalArray[i]);
 		shardList = lappend(shardList, newShardInterval);
 	}
 
@@ -552,12 +547,13 @@ AllocateUint64(uint64 value)
 
 
 /*
- * CopyShardInterval copies fields from the specified source ShardInterval
- * into the fields of the provided destination ShardInterval.
+ * CopyShardInterval creates a copy of the specified source ShardInterval.
  */
-void
-CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval)
+ShardInterval *
+CopyShardInterval(ShardInterval *srcInterval)
 {
+	ShardInterval *destInterval = palloc0(sizeof(ShardInterval));
+
 	destInterval->type = srcInterval->type;
 	destInterval->relationId = srcInterval->relationId;
 	destInterval->storageType = srcInterval->storageType;
@@ -584,6 +580,8 @@ CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval)
 										   srcInterval->valueByVal,
 										   srcInterval->valueTypeLen);
 	}
+
+	return destInterval;
 }
 
 
@@ -1403,10 +1401,6 @@ bool
 IsHashDistributedTable(Oid relationId)
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
-	if (sourceTableEntry == NULL)
-	{
-		return false;
-	}
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	return sourceDistributionMethod == DISTRIBUTE_BY_HASH;
 }
