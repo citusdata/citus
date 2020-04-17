@@ -205,6 +205,7 @@ typedef struct TaskExecution TaskExecution;
 
 typedef enum TaskQueryType
 {
+	TASK_QUERY_NULL,
 	TASK_QUERY_TEXT,
 	TASK_QUERY_OBJECT,
 	TASK_QUERY_TEXT_PER_PLACEMENT,
