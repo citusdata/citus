@@ -44,8 +44,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -102,8 +101,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -159,8 +157,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -433,8 +430,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE").after(2).kill()');
 (1 row)
 
 TRUNCATE reference_table CASCADE;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -577,8 +573,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -635,8 +630,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -692,8 +686,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE TABLE truncate_failure.tes
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -956,8 +949,7 @@ SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -1014,8 +1006,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
@@ -1071,8 +1062,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="TRUNCATE TABLE truncate_failure.test
 (1 row)
 
 TRUNCATE test_table;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');

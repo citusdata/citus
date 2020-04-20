@@ -227,7 +227,7 @@ RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT get_global_active_transactions();
 WARNING:  could not establish connection after 400 ms
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed
  get_global_active_transactions
 ---------------------------------------------------------------------
 (0 rows)

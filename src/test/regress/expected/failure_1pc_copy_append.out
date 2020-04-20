@@ -168,8 +168,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT|COPY").kill()');
 (1 row)
 
 SELECT count(1) FROM copy_test;
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
  count

@@ -88,8 +88,7 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo
 	  WHERE foo.user_id = cte.user_id;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- kill at the third copy (pull)
@@ -122,8 +121,7 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo
 	  WHERE foo.user_id = cte.user_id;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- cancel at the first copy (push)
@@ -262,8 +260,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
 
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify contents are the same
@@ -378,8 +375,7 @@ BEGIN;
 SET LOCAL citus.multi_shard_modify_mode = 'sequential';
 WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 END;

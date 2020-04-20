@@ -64,8 +64,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
 
 -- issue a multi shard delete
 DELETE FROM t2 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -83,8 +82,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").
 (1 row)
 
 DELETE FROM t2 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -146,8 +144,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
 
 -- issue a multi shard update
 UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -165,8 +162,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill(
 (1 row)
 
 UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -222,8 +218,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
 
 -- issue a multi shard delete
 DELETE FROM t2 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -241,8 +236,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").
 (1 row)
 
 DELETE FROM t2 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -304,8 +298,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
 
 -- issue a multi shard update
 UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -323,8 +316,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill(
 (1 row)
 
 UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -397,8 +389,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
 (1 row)
 
 DELETE FROM r1 WHERE a = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -415,8 +406,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
 (1 row)
 
 DELETE FROM t2 WHERE b = 2;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is deleted
@@ -500,8 +490,7 @@ UPDATE t3 SET c = q.c FROM (
 	SELECT b, max(c) as c FROM t2  GROUP BY b) q
 WHERE t3.b = q.b
 RETURNING *;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 --- verify nothing is updated
@@ -559,8 +548,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t3_201013").kill(
 (1 row)
 
 UPDATE t3 SET b = 2 WHERE b = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -594,8 +582,7 @@ SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FRO
 
 -- following will fail
 UPDATE t3 SET b = 2 WHERE b = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 END;
@@ -613,8 +600,7 @@ SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FRO
 (1 row)
 
 UPDATE t3 SET b = 1 WHERE b = 2 RETURNING *;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -633,8 +619,7 @@ SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FRO
 (1 row)
 
 UPDATE t3 SET b = 2 WHERE b = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- verify nothing is updated
@@ -668,8 +653,7 @@ SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FRO
 
 -- following will fail
 UPDATE t3 SET b = 2 WHERE b = 1;
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 END;

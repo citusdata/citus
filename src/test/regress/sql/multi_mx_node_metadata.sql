@@ -13,6 +13,8 @@ SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
 SET citus.replicate_reference_tables_on_activate TO off;
 
+\set VERBOSITY terse
+
 -- Simulates a readonly node by setting default_transaction_read_only.
 CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
     RETURNS TEXT

@@ -277,10 +277,23 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 		messageDetail = pchomp(PQerrorMessage(pgConn));
 	}
 
-	ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
-					 errmsg("connection error: %s:%d", nodeName, nodePort),
-					 messageDetail != NULL ?
-					 errdetail("%s", ApplyLogRedaction(messageDetail)) : 0));
+	if (messageDetail)
+	{
+		/*
+		 * We don't use ApplyLogRedaction(messageDetail) as we expect any error
+		 * detail that requires log reduction should have done it locally.
+		 */
+		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("connection to the remote node %s:%d failed with the "
+								"following error: %s", nodeName, nodePort,
+								messageDetail)));
+	}
+	else
+	{
+		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("connection to the remote node %s:%d failed",
+								nodeName, nodePort)));
+	}
 }
 
 

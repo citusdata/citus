@@ -43,8 +43,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO distributed_table VALUES (1,1), (1,2), (1,3);
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- this test is broken, see https://github.com/citusdata/citus/issues/2460
@@ -58,8 +57,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO distributed_table VALUES (1,7), (5,8);
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 -- this test is broken, see https://github.com/citusdata/citus/issues/2460
@@ -73,8 +71,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO distributed_table VALUES (1,11), (6,12);
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
@@ -93,8 +90,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).kill()');
 (1 row)
 
 INSERT INTO distributed_table VALUES (1,15), (6,16);
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").after(1).cancel(' || :pid || ')');
@@ -113,8 +109,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").kill()');
 (1 row)
 
 INSERT INTO distributed_table VALUES (2,19),(1,20);
-ERROR:  connection error: localhost:xxxxx
-DETAIL:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT").cancel(' || :pid || ')');
