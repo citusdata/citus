@@ -21,7 +21,7 @@ set +x
 git config --global credential.helper store
 #TODO:: after hammerdbChanges is merged, use master.
 git clone -b hammerdbChanges https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/test-automation
-set -x 
+set -x
 
 cd test-automation
 
@@ -41,10 +41,8 @@ branch_config=current_branch.ini
 # create a config for this branch
 cp master.ini "${branch_config}"
 
-# escape / in branch name otherwise sed won't work.
-BRANCH_ESCAPED=$(echo "$BRANCH" | sed 's/[\/\.]/\\&/g')
 # put the branch name to the config file.
-sed -i "s/master/${BRANCH_ESCAPED}/g" "${branch_config}"
+sed -i "s@master@${BRANCH}@g" "${branch_config}"
 
 cd "${test_automation_dir}"
 cd ./hammerdb
@@ -53,8 +51,8 @@ cd ./hammerdb
 sed -i "s/pg_duration 200/pg_duration 10/g" run.tcl
 
 
-git config --global user.email "citus-bot@microsoft.com" 
-git config --global user.name "citus bot" 
+git config --global user.email "citus-bot@microsoft.com"
+git config --global user.name "citus bot"
 git add -A
 git commit -m "test hammerdb: ${rg} vs master"
 git push origin "${new_branch_name}"
@@ -65,12 +63,12 @@ cd ./hammerdb
 if [ "$rg" = "citusbot_ch_benchmark_rg" ]; then
     export IS_CH=true
     export IS_TPCC=true
-fi 
+fi
 
 if [ "$rg" = "citusbot_tpcc_benchmark_rg" ]; then
     export IS_CH=false
     export IS_TPCC=true
-fi 
+fi
 
 # create cluster and run the hammerd benchmark
 ./create-run.sh

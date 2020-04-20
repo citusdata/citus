@@ -235,7 +235,7 @@ jobs:
   ch_benchmark:
     docker:
       - image: buildpack-deps:stretch
-    working_directory: /home/circleci/project  
+    working_directory: /home/circleci/project
     steps:
       - checkout
       - azure-cli/install
@@ -245,11 +245,11 @@ jobs:
             cd ./src/test/hammerdb
             sh run_hammerdb.sh citusbot_ch_benchmark_rg
           name: install dependencies and run ch_benchmark tests
-          no_output_timeout: 20m    
+          no_output_timeout: 20m
   tpcc_benchmark:
     docker:
       - image: buildpack-deps:stretch
-    working_directory: /home/circleci/project  
+    working_directory: /home/circleci/project
     steps:
       - checkout
       - azure-cli/install
@@ -259,11 +259,11 @@ jobs:
             cd ./src/test/hammerdb
             sh run_hammerdb.sh citusbot_tpcc_benchmark_rg
           name: install dependencies and run ch_benchmark tests
-          no_output_timeout: 20m         
+          no_output_timeout: 20m
 
 orbs:
   codecov: codecov/codecov@1.0.5
-  azure-cli: circleci/azure-cli@1.0.0  
+  azure-cli: circleci/azure-cli@1.0.0
 
 workflows:
   version: 2
@@ -279,39 +279,114 @@ workflows:
           filters:
             branches:
               only:
-                - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix          
+                - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix
 
-  # build_and_test:
-  #   jobs:
-      # - build
-      # - check-style
-      # - check-sql-snapshots
+  build_and_test:
+    jobs:
+      - build:
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - check-style:
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - check-sql-snapshots:
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
 
-      # - test-11_check-multi:
-      #     requires: [build]
-      # - test-11_check-tt-van-mx:
-      #     requires: [build]
-      # - test-11_check-iso-work-fol:
-      #     requires: [build]
-      # - test-11_check-fol:
-      #     requires: [build]
-      # - test-11_check-failure:
-      #     requires: [build]
+      - test-11_check-multi:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-11_check-tt-van-mx:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-11_check-iso-work-fol:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-11_check-fol:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-11_check-failure:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
 
-      # - test-12_check-multi:
-      #     requires: [build]
-      # - test-12_check-tt-van-mx:
-      #     requires: [build]
-      # - test-12_check-iso-work-fol:
-      #     requires: [build]
-      # - test-12_check-fol:
-      #     requires: [build]
-      # - test-12_check-failure:
-      #     requires: [build]
+      - test-12_check-multi:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-12_check-tt-van-mx:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-12_check-iso-work-fol:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-12_check-fol:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
+      - test-12_check-failure:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
 
-      # - test-11-12_check-pg-upgrade:
-      #     requires: [build]
+      - test-11-12_check-pg-upgrade:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
 
-      # - test-11_check-citus-upgrade:
-      #     requires: [build]
+      - test-11_check-citus-upgrade:
+          requires: [build]
+          filters:
+            branches:
+              ignore:
+                - /tpcc_benchmark\/.*/ # ignore tpcc_benchmark/
+                - /ch_benchmark\/.*/ # ignore ch_benchmark/
 
