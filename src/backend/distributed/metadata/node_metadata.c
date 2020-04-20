@@ -380,6 +380,9 @@ master_set_node_property(PG_FUNCTION_ARGS)
  * - All dependencies (e.g., types, schemas)
  * - Reference tables, because they are needed to handle queries efficiently.
  * - Distributed functions
+ *
+ * Note that we do not create the distributed dependencies on the coordinator
+ * since all the dependencies should be present in the coordinator already.
  */
 static void
 SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
@@ -388,13 +391,13 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	{
 		EnsureNoModificationsHaveBeenDone();
 
-		if (ShouldPropagate())
+		if (ShouldPropagate() && !NodeIsCoordinator(newWorkerNode))
 		{
 			PropagateNodeWideObjects(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
 		}
-		else
+		else if (!NodeIsCoordinator(newWorkerNode))
 		{
 			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
 									 "creating distributed objects on worker"),
