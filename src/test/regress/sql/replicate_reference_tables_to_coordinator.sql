@@ -250,6 +250,12 @@ ROLLBACK;
 -- see https://github.com/citusdata/citus/issues/3279
 ALTER TABLE squares DROP COLUMN b;
 
+-- verify that we replicate the reference tables that are distributed before
+-- adding the coordinator as a worker.
+SELECT master_remove_node('localhost', :master_port);
+
+-- add the coordinator as a worker node and verify that the reference tables are replicated
+SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
 
 -- clean-up
 SET client_min_messages TO ERROR;
