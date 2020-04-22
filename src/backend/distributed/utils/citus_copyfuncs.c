@@ -12,8 +12,8 @@
 #include "postgres.h"
 
 
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/multi_server_executor.h"
+#include "distributed/utils/citus_nodefuncs.h"
+#include "distributed/executor/multi_server_executor.h"
 #include "utils/datum.h"
 
 

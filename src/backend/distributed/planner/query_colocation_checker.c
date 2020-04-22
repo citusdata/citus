@@ -21,11 +21,11 @@
 
 #include "postgres.h"
 
-#include "distributed/multi_logical_planner.h"
-#include "distributed/query_colocation_checker.h"
+#include "distributed/planner/multi_logical_planner.h"
+#include "distributed/planner/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/relation_restriction_equivalence.h"
-#include "distributed/multi_logical_planner.h" /* only to access utility functions */
+#include "distributed/planner/relation_restriction_equivalence.h"
+#include "distributed/planner/multi_logical_planner.h" /* only to access utility functions */
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"

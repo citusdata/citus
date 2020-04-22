@@ -14,13 +14,13 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodes.h"
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/errormessage.h"
-#include "distributed/log_utils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/multi_router_planner.h"
-#include "distributed/multi_server_executor.h"
+#include "distributed/utils/citus_nodefuncs.h"
+#include "distributed/utils/errormessage.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/planner/distributed_planner.h"
+#include "distributed/planner/multi_router_planner.h"
+#include "distributed/executor/multi_server_executor.h"
 
 static const char *CitusNodeTagNamesD[] = {
 	"MultiNode",

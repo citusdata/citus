@@ -15,7 +15,7 @@
 #include "funcapi.h"
 
 #include "commands/defrem.h"
-#include "distributed/listutils.h"
+#include "distributed/utils/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"

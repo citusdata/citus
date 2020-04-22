@@ -14,8 +14,8 @@
 #include "miscadmin.h"
 #include "fmgr.h"
 
-#include "distributed/shared_connection_stats.h"
-#include "distributed/listutils.h"
+#include "distributed/connection/shared_connection_stats.h"
+#include "distributed/utils/listutils.h"
 #include "nodes/parsenodes.h"
 #include "utils/guc.h"
 

@@ -31,11 +31,11 @@
 #include "commands/copy.h"
 #include "commands/tablecmds.h"
 #include "common/string.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "distributed/task_tracker_protocol.h"
-#include "distributed/task_tracker.h"
+#include "distributed/worker/task_tracker_protocol.h"
+#include "distributed/worker/task_tracker.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -45,7 +45,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "commands/schemacmds.h"
-#include "distributed/resource_lock.h"
+#include "distributed/utils/resource_lock.h"
 
 
 /* Local functions forward declarations */

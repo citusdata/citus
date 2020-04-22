@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/tuplestore.h"
+#include "distributed/utils/tuplestore.h"
 #include "miscadmin.h"
 
 /*

@@ -16,9 +16,9 @@
 #include <unistd.h>
 
 #include "commands/defrem.h"
-#include "distributed/listutils.h"
+#include "distributed/utils/listutils.h"
 #include "distributed/relay_utility.h"
-#include "distributed/transmit.h"
+#include "distributed/commands/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "libpq/libpq.h"

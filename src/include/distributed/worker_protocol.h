@@ -17,7 +17,7 @@
 #include "postgres.h"
 
 #include "fmgr.h"
-#include "distributed/shardinterval_utils.h"
+#include "distributed/utils/shardinterval_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "storage/fd.h"

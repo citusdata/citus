@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/connection_management.h"
+#include "distributed/connection/connection_management.h"
 #include "distributed/memutils.h"
 #include "distributed/worker_protocol.h"
 #include "libpq/libpq.h"

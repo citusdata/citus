@@ -10,7 +10,7 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
-#include "distributed/function_utils.h"
+#include "distributed/utils/function_utils.h"
 #include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "utils/builtins.h"

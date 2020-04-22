@@ -15,8 +15,8 @@
 
 #include "utils/lsyscache.h"
 #include "lib/stringinfo.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/listutils.h"
+#include "distributed/utils/citus_safe_lib.h"
+#include "distributed/utils/listutils.h"
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
 

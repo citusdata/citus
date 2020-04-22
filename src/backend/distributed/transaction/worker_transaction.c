@@ -19,17 +19,17 @@
 #include <unistd.h>
 
 #include "access/xact.h"
-#include "distributed/connection_management.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/remote_commands.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/utils/resource_lock.h"
+#include "distributed/metadata/metadata_sync.h"
+#include "distributed/connection/remote_commands.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_transaction.h"
-#include "distributed/transaction_recovery.h"
+#include "distributed/transaction/transaction_recovery.h"
 #include "distributed/worker_manager.h"
-#include "distributed/worker_transaction.h"
+#include "distributed/transaction/worker_transaction.h"
 #include "utils/memutils.h"
 
 

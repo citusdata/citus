@@ -14,7 +14,7 @@
 #include "postgres.h"
 
 #include "distributed/deparser.h"
-#include "distributed/multi_executor.h"
+#include "distributed/executor/multi_executor.h"
 #include "utils/builtins.h"
 
 /* declarations for dynamic loading */

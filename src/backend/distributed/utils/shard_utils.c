@@ -11,9 +11,9 @@
 
 #include "postgres.h"
 #include "utils/lsyscache.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "distributed/relay_utility.h"
-#include "distributed/shard_utils.h"
+#include "distributed/utils/shard_utils.h"
 
 /*
  * GetTableLocalShardOid returns the oid of the shard from the given distributed

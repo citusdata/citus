@@ -23,9 +23,9 @@
 #include "access/table.h"
 #endif
 #include "catalog/pg_constraint.h"
-#include "distributed/foreign_key_relationship.h"
-#include "distributed/hash_helpers.h"
-#include "distributed/listutils.h"
+#include "distributed/utils/foreign_key_relationship.h"
+#include "distributed/utils/hash_helpers.h"
+#include "distributed/utils/listutils.h"
 #include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"

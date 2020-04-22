@@ -16,7 +16,7 @@
 #include "tcop/utility.h"
 
 #include "distributed/version_compat.h"
-#include "distributed/worker_transaction.h"
+#include "distributed/transaction/worker_transaction.h"
 
 typedef enum
 {

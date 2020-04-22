@@ -23,7 +23,7 @@
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
 
-#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 

@@ -19,10 +19,10 @@
 #include "pgstat.h"
 
 #include "distributed/commands/multi_copy.h"
-#include "distributed/connection_management.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/multi_executor.h"
-#include "distributed/remote_commands.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/executor/intermediate_results.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/connection/remote_commands.h"
 
 PG_FUNCTION_INFO_V1(store_intermediate_result_on_node);
 

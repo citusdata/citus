@@ -10,7 +10,7 @@
 
 #include "postgres.h"
 
-#include "distributed/hash_helpers.h"
+#include "distributed/utils/hash_helpers.h"
 #include "utils/hsearch.h"
 
 

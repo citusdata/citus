@@ -12,10 +12,10 @@
 #include "miscadmin.h"
 
 #include "distributed/commands/utility_hook.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/master/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
-#include "distributed/metadata_sync.h"
-#include "distributed/worker_transaction.h"
+#include "distributed/metadata/metadata_sync.h"
+#include "distributed/transaction/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 

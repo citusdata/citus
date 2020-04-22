@@ -13,9 +13,9 @@
 #include "fmgr.h"
 
 #include "catalog/pg_type.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/reference_table_utils.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/utils/multi_partitioning_utils.h"
+#include "distributed/utils/reference_table_utils.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"

@@ -29,7 +29,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/metadata/distobject.h"
-#include "distributed/worker_create_or_replace.h"
+#include "distributed/worker/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
 static const char * CreateStmtByObjectAddress(const ObjectAddress *address);

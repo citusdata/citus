@@ -15,8 +15,8 @@
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "distributed/commands.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "nodes/parsenodes.h"
 
 /* Local functions forward declarations for helper functions */

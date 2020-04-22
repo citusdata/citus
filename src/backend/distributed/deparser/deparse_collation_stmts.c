@@ -18,7 +18,7 @@
 #include "utils/builtins.h"
 
 #include "distributed/deparser.h"
-#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser/citus_ruleutils.h"
 
 static void AppendDropCollationStmt(StringInfo buf, DropStmt *stmt);
 static void AppendRenameCollationStmt(StringInfo buf, RenameStmt *stmt);

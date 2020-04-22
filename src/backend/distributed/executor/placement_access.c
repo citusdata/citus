@@ -8,9 +8,9 @@
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
-#include "distributed/placement_access.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/executor/placement_access.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
 
 static List * BuildPlacementSelectList(int32 groupId, List *relationShardList);
 static List * BuildPlacementDDLList(int32 groupId, List *relationShardList);

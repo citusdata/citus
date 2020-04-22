@@ -28,12 +28,12 @@
 #include "safe_lib.h"
 #include <netinet/in.h> /* for htons */
 
-#include "distributed/transmit.h"
+#include "distributed/commands/transmit.h"
 #include "distributed/commands/multi_copy.h"
-#include "distributed/multi_partitioning_utils.h"
-#include "distributed/local_executor.h"
-#include "distributed/local_multi_copy.h"
-#include "distributed/shard_utils.h"
+#include "distributed/utils/multi_partitioning_utils.h"
+#include "distributed/executor/local_executor.h"
+#include "distributed/commands/local_multi_copy.h"
+#include "distributed/utils/shard_utils.h"
 
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,

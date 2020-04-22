@@ -18,9 +18,9 @@
 
 #include <unistd.h>
 
-#include "distributed/listutils.h"
-#include "distributed/multi_progress.h"
-#include "distributed/tuplestore.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/progress/multi_progress.h"
+#include "distributed/utils/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "utils/tuplestore.h"
 

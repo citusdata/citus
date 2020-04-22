@@ -22,7 +22,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/version_compat.h"

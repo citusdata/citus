@@ -20,7 +20,7 @@
 
 #include <limits.h>
 
-#include "distributed/citus_safe_lib.h"
+#include "distributed/utils/citus_safe_lib.h"
 #include "lib/stringinfo.h"
 
 /*

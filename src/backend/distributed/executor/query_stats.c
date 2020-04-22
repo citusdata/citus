@@ -11,7 +11,7 @@
 
 #include "fmgr.h"
 
-#include "distributed/query_stats.h"
+#include "distributed/executor/query_stats.h"
 #include "utils/builtins.h"
 
 PG_FUNCTION_INFO_V1(citus_stat_statements_reset);

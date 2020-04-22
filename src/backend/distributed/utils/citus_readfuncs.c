@@ -11,7 +11,7 @@
  */
 #include "postgres.h"
 
-#include "distributed/citus_nodefuncs.h"
+#include "distributed/utils/citus_nodefuncs.h"
 
 void
 ReadUnsupportedCitusNode(READFUNC_ARGS)

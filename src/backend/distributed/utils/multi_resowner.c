@@ -16,11 +16,11 @@
 
 #include "postgres.h"
 
-#include "distributed/multi_server_executor.h"
+#include "distributed/executor/multi_server_executor.h"
 #include "utils/memutils.h"
 #include "utils/resowner_private.h"
-#include "distributed/multi_resowner.h"
-#include "distributed/subplan_execution.h"
+#include "distributed/utils/multi_resowner.h"
+#include "distributed/executor/subplan_execution.h"
 
 
 typedef struct JobDirectoryEntry

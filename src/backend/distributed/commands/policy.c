@@ -13,7 +13,7 @@
 #include "catalog/namespace.h"
 #include "commands/policy.h"
 #include "distributed/commands.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "utils/builtins.h"
 
 

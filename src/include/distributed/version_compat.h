@@ -17,7 +17,7 @@
 
 #include "commands/explain.h"
 #include "catalog/namespace.h"
-#include "distributed/citus_safe_lib.h"
+#include "distributed/utils/citus_safe_lib.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"
 #if (PG_VERSION_NUM >= PG_VERSION_12)

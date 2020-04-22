@@ -13,7 +13,7 @@
 
 #include "postgres.h"
 
-#include "distributed/citus_ruleutils.h"
+#include "distributed/deparser/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"

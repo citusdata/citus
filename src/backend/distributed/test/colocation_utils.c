@@ -14,9 +14,9 @@
 #include "fmgr.h"
 
 #include "catalog/pg_type.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/utils/colocation_utils.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
 
 
 /* declarations for dynamic loading */

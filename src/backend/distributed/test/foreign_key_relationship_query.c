@@ -14,7 +14,7 @@
 #include "fmgr.h"
 #include "funcapi.h"
 
-#include "distributed/metadata_cache.h"
+#include "distributed/metadata/metadata_cache.h"
 
 
 /* these functions are only exported in the regression tests */

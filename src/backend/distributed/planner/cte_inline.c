@@ -16,7 +16,7 @@
 #include "postgres.h"
 #include "distributed/pg_version_constants.h"
 
-#include "distributed/cte_inline.h"
+#include "distributed/planner/cte_inline.h"
 #include "nodes/nodeFuncs.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"

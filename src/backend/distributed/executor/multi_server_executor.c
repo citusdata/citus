@@ -19,15 +19,15 @@
 
 #include <unistd.h>
 
-#include "distributed/listutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/multi_client_executor.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/multi_resowner.h"
-#include "distributed/multi_server_executor.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/executor/multi_client_executor.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/planner/multi_physical_planner.h"
+#include "distributed/utils/multi_resowner.h"
+#include "distributed/executor/multi_server_executor.h"
 #include "distributed/master_protocol.h"
-#include "distributed/subplan_execution.h"
+#include "distributed/executor/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
 

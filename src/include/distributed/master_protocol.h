@@ -18,10 +18,10 @@
 #include "c.h"
 #include "fmgr.h"
 
-#include "distributed/connection_management.h"
-#include "distributed/shardinterval_utils.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/utils/shardinterval_utils.h"
 #include "nodes/pg_list.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/master/master_metadata_utility.h"
 
 
 /*

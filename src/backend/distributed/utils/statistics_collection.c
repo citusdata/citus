@@ -24,11 +24,11 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #include <sys/utsname.h>
 
 #include "access/xact.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_join_order.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/statistics_collection.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/planner/multi_join_order.h"
+#include "distributed/utils/shardinterval_utils.h"
+#include "distributed/utils/statistics_collection.h"
 #include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"

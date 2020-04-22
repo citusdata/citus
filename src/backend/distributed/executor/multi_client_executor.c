@@ -18,14 +18,14 @@
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/connection_management.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_client_executor.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/placement_connection.h"
-#include "distributed/remote_commands.h"
-#include "distributed/subplan_execution.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/executor/multi_client_executor.h"
+#include "distributed/executor/multi_server_executor.h"
+#include "distributed/connection/placement_connection.h"
+#include "distributed/connection/remote_commands.h"
+#include "distributed/executor/subplan_execution.h"
 
 #include <errno.h>
 #include <unistd.h>

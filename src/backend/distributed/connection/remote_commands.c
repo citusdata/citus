@@ -13,12 +13,12 @@
 
 #include "libpq-fe.h"
 
-#include "distributed/connection_management.h"
-#include "distributed/errormessage.h"
-#include "distributed/listutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/remote_commands.h"
-#include "distributed/cancel_utils.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/utils/errormessage.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/connection/remote_commands.h"
+#include "distributed/utils/cancel_utils.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"

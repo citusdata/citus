@@ -12,13 +12,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "distributed/citus_custom_scan.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/intermediate_result_pruning.h"
-#include "distributed/listutils.h"
-#include "distributed/log_utils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/query_utils.h"
+#include "distributed/executor/citus_custom_scan.h"
+#include "distributed/deparser/citus_ruleutils.h"
+#include "distributed/planner/intermediate_result_pruning.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/utils/query_utils.h"
 #include "distributed/worker_manager.h"
 #include "utils/builtins.h"
 

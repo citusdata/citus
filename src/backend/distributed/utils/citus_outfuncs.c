@@ -22,15 +22,15 @@
 
 #include <ctype.h>
 
-#include "distributed/citus_nodefuncs.h"
+#include "distributed/utils/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
-#include "distributed/errormessage.h"
-#include "distributed/log_utils.h"
-#include "distributed/multi_logical_planner.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/distributed_planner.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/utils/errormessage.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/planner/multi_logical_planner.h"
+#include "distributed/planner/multi_physical_planner.h"
+#include "distributed/planner/distributed_planner.h"
+#include "distributed/executor/multi_server_executor.h"
+#include "distributed/master/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12

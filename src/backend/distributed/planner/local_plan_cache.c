@@ -11,12 +11,12 @@
 
 #include "distributed/pg_version_constants.h"
 
-#include "distributed/listutils.h"
-#include "distributed/local_executor.h"
-#include "distributed/local_plan_cache.h"
-#include "distributed/deparse_shard_query.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/executor/local_executor.h"
+#include "distributed/planner/local_plan_cache.h"
+#include "distributed/planner/deparse_shard_query.h"
+#include "distributed/deparser/citus_ruleutils.h"
+#include "distributed/metadata/metadata_cache.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else

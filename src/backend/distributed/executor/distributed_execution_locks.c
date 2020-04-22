@@ -8,14 +8,14 @@
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
-#include "distributed/distributed_execution_locks.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_partitioning_utils.h"
+#include "distributed/executor/distributed_execution_locks.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/utils/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/resource_lock.h"
-#include "distributed/transaction_management.h"
+#include "distributed/utils/resource_lock.h"
+#include "distributed/transaction/transaction_management.h"
 
 
 static bool RequiresConsistentSnapshot(Task *task);

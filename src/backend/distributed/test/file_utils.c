@@ -1,8 +1,8 @@
 #include "postgres.h"
 
 #include "distributed/worker_protocol.h"
-#include "distributed/transmit.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/commands/transmit.h"
+#include "distributed/master/master_metadata_utility.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 

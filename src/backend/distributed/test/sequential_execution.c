@@ -13,7 +13,7 @@
 #include "postgres.h"
 #include "fmgr.h"
 
-#include "distributed/multi_executor.h"
+#include "distributed/executor/multi_executor.h"
 
 
 /* exports for SQL callable functions */

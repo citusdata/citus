@@ -8,10 +8,10 @@
 
 #include "postgres.h"
 
-#include "distributed/citus_clauses.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
+#include "distributed/utils/citus_clauses.h"
+#include "distributed/planner/insert_select_planner.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/planner/multi_router_planner.h"
 
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"

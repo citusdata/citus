@@ -14,16 +14,16 @@
 #include "common/string.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
-#include "distributed/transaction_management.h"
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/utils/resource_lock.h"
+#include "distributed/transaction/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "lib/ilist.h"
 #include "utils/varlena.h"
-#include "distributed/remote_commands.h"
+#include "distributed/connection/remote_commands.h"
 
 
 static bool IsSettingSafeToPropagate(char *name);

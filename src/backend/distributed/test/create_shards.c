@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-#include "distributed/listutils.h"
+#include "distributed/utils/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 

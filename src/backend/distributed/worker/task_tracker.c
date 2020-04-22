@@ -30,12 +30,12 @@
 #include <unistd.h>
 
 #include "commands/dbcommands.h"
-#include "distributed/citus_safe_lib.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_client_executor.h"
-#include "distributed/multi_server_executor.h"
-#include "distributed/task_tracker.h"
-#include "distributed/transmit.h"
+#include "distributed/utils/citus_safe_lib.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/executor/multi_client_executor.h"
+#include "distributed/executor/multi_server_executor.h"
+#include "distributed/worker/task_tracker.h"
+#include "distributed/commands/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "libpq/hba.h"

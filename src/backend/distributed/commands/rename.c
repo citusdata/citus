@@ -14,7 +14,7 @@
 #include "catalog/namespace.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "nodes/parsenodes.h"
 
 

@@ -13,7 +13,7 @@
 #include "c.h"
 #include "fmgr.h"
 
-#include "distributed/relation_access_tracking.h"
+#include "distributed/transaction/relation_access_tracking.h"
 
 
 /* declarations for dynamic loading */

@@ -10,11 +10,11 @@
 
 #include "postgres.h"
 
-#include "distributed/connection_management.h"
+#include "distributed/connection/connection_management.h"
 #include "distributed/error_codes.h"
-#include "distributed/errormessage.h"
-#include "distributed/log_utils.h"
-#include "distributed/worker_log_messages.h"
+#include "distributed/utils/errormessage.h"
+#include "distributed/utils/log_utils.h"
+#include "distributed/connection/worker_log_messages.h"
 #include "utils/elog.h"
 
 

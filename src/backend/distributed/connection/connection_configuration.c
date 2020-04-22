@@ -10,11 +10,11 @@
 
 #include "postgres.h"
 
-#include "distributed/citus_safe_lib.h"
-#include "distributed/connection_management.h"
-#include "distributed/metadata_cache.h"
+#include "distributed/utils/citus_safe_lib.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/metadata/metadata_cache.h"
 #include "distributed/worker_manager.h"
-#include "distributed/task_tracker.h"
+#include "distributed/worker/task_tracker.h"
 #include "postmaster/postmaster.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"

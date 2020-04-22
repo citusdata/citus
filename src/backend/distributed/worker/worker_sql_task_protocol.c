@@ -14,8 +14,8 @@
 #include "pgstat.h"
 
 #include "distributed/commands/multi_copy.h"
-#include "distributed/multi_executor.h"
-#include "distributed/transmit.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/commands/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"

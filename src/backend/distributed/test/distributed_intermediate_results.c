@@ -20,13 +20,13 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/commands/multi_copy.h"
-#include "distributed/connection_management.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_executor.h"
-#include "distributed/remote_commands.h"
-#include "distributed/tuplestore.h"
-#include "distributed/listutils.h"
+#include "distributed/connection/connection_management.h"
+#include "distributed/executor/intermediate_results.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/connection/remote_commands.h"
+#include "distributed/utils/tuplestore.h"
+#include "distributed/utils/listutils.h"
 #include "tcop/tcopprot.h"
 
 PG_FUNCTION_INFO_V1(partition_task_list_results);

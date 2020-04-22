@@ -36,14 +36,14 @@
 
 #include "distributed/pg_version_constants.h"
 
-#include "distributed/distributed_planner.h"
-#include "distributed/insert_select_planner.h"
-#include "distributed/multi_physical_planner.h" /* only to use some utility functions */
-#include "distributed/metadata_cache.h"
-#include "distributed/multi_router_planner.h"
+#include "distributed/planner/distributed_planner.h"
+#include "distributed/planner/insert_select_planner.h"
+#include "distributed/planner/multi_physical_planner.h" /* only to use some utility functions */
+#include "distributed/metadata/metadata_cache.h"
+#include "distributed/planner/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/shard_pruning.h"
+#include "distributed/utils/shardinterval_utils.h"
+#include "distributed/planner/shard_pruning.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/makefuncs.h"
 #endif

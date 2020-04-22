@@ -10,14 +10,14 @@
 
 #include "postgres.h"
 
-#include "distributed/intermediate_result_pruning.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_executor.h"
-#include "distributed/multi_physical_planner.h"
-#include "distributed/recursive_planning.h"
-#include "distributed/subplan_execution.h"
-#include "distributed/transaction_management.h"
+#include "distributed/planner/intermediate_result_pruning.h"
+#include "distributed/executor/intermediate_results.h"
+#include "distributed/utils/listutils.h"
+#include "distributed/executor/multi_executor.h"
+#include "distributed/planner/multi_physical_planner.h"
+#include "distributed/planner/recursive_planning.h"
+#include "distributed/executor/subplan_execution.h"
+#include "distributed/transaction/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "executor/executor.h"
 

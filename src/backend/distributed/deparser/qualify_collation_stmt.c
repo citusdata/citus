@@ -21,7 +21,7 @@
 #include "utils/syscache.h"
 
 #include "distributed/deparser.h"
-#include "distributed/listutils.h"
+#include "distributed/utils/listutils.h"
 
 static Node * QualifyCollationName(List *func);
 
