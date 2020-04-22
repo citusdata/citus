@@ -29,6 +29,8 @@ OBJS += \
 
 # be explicit about the default target
 all:
+$(EXTENSION)--9.4-1.sql: $(EXTENSION)--.sql $(EXTENSION)----9.4-1.sql
+    cat $^ > $@
 
 NO_PGXS = 1
 
