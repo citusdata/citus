@@ -70,7 +70,7 @@ typedef enum CitusNodeTag
 } CitusNodeTag;
 
 
-const char** CitusNodeTagNames;
+extern const char** CitusNodeTagNames;
 
 
 typedef struct CitusNode
