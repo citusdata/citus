@@ -90,10 +90,10 @@ step s2-begin:
   BEGIN;
 
 step s1-set-2pc:
- set citus.multi_shard_commit_protocol TO '2pc';
+	set citus.multi_shard_commit_protocol TO '2pc';
 
 step s2-set-2pc:
- set citus.multi_shard_commit_protocol TO '2pc';
+	set citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
@@ -152,7 +152,7 @@ check_distributed_deadlocks
 
 f
 step s2-upsert-select-all:
- INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
+	INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
  <waiting ...>
 step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
@@ -193,7 +193,7 @@ check_distributed_deadlocks
 
 f
 step s2-ddl:
- ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
+	ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
  <waiting ...>
 step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
@@ -239,6 +239,41 @@ t
 step s2-insert-dist-10: <... completed>
 step s1-insert-local-10: <... completed>
 error in steps deadlock-checker-call s2-insert-dist-10 s1-insert-local-10: ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step s1-commit:
+  COMMIT;
+
+step s2-commit:
+  COMMIT;
+
+
+starting permutation: s1-begin s2-begin s2-insert-ref-10 s1-insert-ref-11 s1-insert-ref-10 s2-insert-ref-11 deadlock-checker-call s1-commit s2-commit
+step s1-begin:
+  BEGIN;
+
+step s2-begin:
+  BEGIN;
+
+step s2-insert-ref-10:
+  INSERT INTO deadlock_detection_reference VALUES (10, 10);
+
+step s1-insert-ref-11:
+  INSERT INTO deadlock_detection_reference VALUES (11, 11);
+
+step s1-insert-ref-10:
+  INSERT INTO deadlock_detection_reference VALUES (10, 10);
+ <waiting ...>
+step s2-insert-ref-11:
+  INSERT INTO deadlock_detection_reference VALUES (11, 11);
+ <waiting ...>
+step deadlock-checker-call:
+  SELECT check_distributed_deadlocks();
+
+check_distributed_deadlocks
+
+t
+step s1-insert-ref-10: <... completed>
+step s2-insert-ref-11: <... completed>
+error in steps deadlock-checker-call s1-insert-ref-10 s2-insert-ref-11: ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-commit:
   COMMIT;
 
