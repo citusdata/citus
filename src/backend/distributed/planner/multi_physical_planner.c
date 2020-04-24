@@ -2130,12 +2130,29 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 		List *assignedSqlTaskList = AssignTaskList(sqlTaskList);
 		AssignDataFetchDependencies(assignedSqlTaskList);
 
-		/* now assign merge task's data fetch dependencies */
+		/* if the parameters has not been resolved, record it */
+		job->parametersInJobQueryResolved =
+			!HasUnresolvedExternParamsWalker((Node *) job->jobQuery, NULL);
+
+		/*
+		 * Make final adjustments for the assigned tasks.
+		 *
+		 * First, update SELECT tasks' parameters resolved field.
+		 *
+		 * Second, assign merge task's data fetch dependencies.
+		 */
 		foreach(assignedSqlTaskCell, assignedSqlTaskList)
 		{
 			Task *assignedSqlTask = (Task *) lfirst(assignedSqlTaskCell);
-			List *assignedMergeTaskList = FindDependentMergeTaskList(assignedSqlTask);
 
+			/* we don't support parameters in the physical planner */
+			if (assignedSqlTask->taskType == SELECT_TASK)
+			{
+				assignedSqlTask->parametersInQueryStringResolved =
+					job->parametersInJobQueryResolved;
+			}
+
+			List *assignedMergeTaskList = FindDependentMergeTaskList(assignedSqlTask);
 			AssignDataFetchDependencies(assignedMergeTaskList);
 		}
 
