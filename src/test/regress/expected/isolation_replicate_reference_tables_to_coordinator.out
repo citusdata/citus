@@ -67,13 +67,13 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, master_query_host_name, master_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname
 
@@ -84,7 +84,7 @@ coordinator_host57636          coordinator_host57636          idle in transactio
     update ref_table set a = a + 1;
 localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
 step s2-view-worker:
- SELECT query, query_hostname, query_hostport, master_query_host_name,
+	SELECT query, query_hostname, query_hostport, master_query_host_name,
            master_query_host_port, state, wait_event_type, wait_event, usename, datname
     FROM citus_worker_stat_activity
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
@@ -94,10 +94,10 @@ step s2-view-worker:
 
 query          query_hostname query_hostport master_query_host_namemaster_query_host_portstate          wait_event_typewait_event     usename        datname
 
-UPDATE public.ref_table_1400154 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400154 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400154 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
-UPDATE public.ref_table_1400154 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57638          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57637          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)coordinator_host57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
+UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)localhost      57636          coordinator_host57636          idle in transactionClient         ClientRead     postgres       regression
 step s2-end:
     END;
 
@@ -122,9 +122,9 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-active-transactions:
- -- Admin should be able to see all transactions
- SELECT count(*) FROM get_all_active_transactions();
- SELECT count(*) FROM get_global_active_transactions();
+	-- Admin should be able to see all transactions
+	SELECT count(*) FROM get_all_active_transactions();
+	SELECT count(*) FROM get_global_active_transactions();
 
 count
 
