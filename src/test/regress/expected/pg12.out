@@ -47,6 +47,7 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 select create_distributed_table('gen2', 'val2');
 ERROR:  cannot distribute relation: gen2
 DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) STORED.
+copy gen1 to :'temp_dir''pg12_copy_test_generated';
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 select * from gen1 order by 1,2,3;
@@ -74,6 +75,17 @@ select * from gen2 order by 1,2,3;
   7 |    2 |    4
   8 |    2 |    4
 (8 rows)
+
+truncate gen1;
+copy gen1 from :'temp_dir''pg12_copy_test_generated';
+select * from gen1 order by 1,2,3;
+ id | val2 | val1
+---------------------------------------------------------------------
+  1 |    6 |    4
+  3 |    8 |    6
+  5 |    4 |    2
+  7 |    4 |    2
+(4 rows)
 
 -- Test new VACUUM/ANALYZE options
 analyze (skip_locked) gen1;
