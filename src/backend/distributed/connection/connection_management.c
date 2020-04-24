@@ -41,7 +41,7 @@
 #include "utils/memutils.h"
 
 
-int NodeConnectionTimeout = 5000;
+int NodeConnectionTimeout = 30000;
 int MaxCachedConnectionsPerWorker = 1;
 
 HTAB *ConnectionHash = NULL;
