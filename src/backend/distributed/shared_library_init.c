@@ -450,7 +450,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the maximum duration to connect to worker nodes."),
 		NULL,
 		&NodeConnectionTimeout,
-		5 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
+		30 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
 		PGC_USERSET,
 		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
