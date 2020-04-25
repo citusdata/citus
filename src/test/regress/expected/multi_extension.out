@@ -439,7 +439,7 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM print_extension_changes();
-                           previous_object                           |               current_object
+                           previous_object                           |                           current_object
 ---------------------------------------------------------------------
  function master_drop_sequences(text[])                              |
  function task_tracker_assign_task(bigint,integer,text)              |
@@ -450,7 +450,8 @@ SELECT * FROM print_extension_changes();
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
                                                                      | function create_citus_local_table(regclass)
                                                                      | function undistribute_table(regclass)
-(9 rows)
+                                                                     | function worker_record_sequence_dependency(regclass,regclass,name)
+(10 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

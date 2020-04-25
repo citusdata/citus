@@ -26,6 +26,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP FUNCTION worker_record_sequence_dependency(regclass, regclass, name);
+
 --  task_tracker_* functions
 
 CREATE FUNCTION task_tracker_assign_task(bigint, integer, text)

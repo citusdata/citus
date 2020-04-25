@@ -464,6 +464,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
+-- check that pg_depend records exist on the worker
+SELECT refobjsubid FROM pg_depend
+WHERE objid = 'mx_table_with_sequence_b_seq'::regclass AND refobjid = 'mx_table_with_sequence'::regclass;
+
+SELECT refobjsubid FROM pg_depend
+WHERE objid = 'mx_table_with_sequence_c_seq'::regclass AND refobjid = 'mx_table_with_sequence'::regclass;
+
 -- Check that the sequences on the worker have their own space
 SELECT nextval('mx_table_with_sequence_b_seq');
 SELECT nextval('mx_table_with_sequence_c_seq');

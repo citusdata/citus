@@ -22,6 +22,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
@@ -60,8 +61,6 @@ static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetExplicitIndexNameList(Oid relationId);
 static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 												 Oid targetRelationId);
-static void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
-										  List **ownedSequenceIdList);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
@@ -721,60 +720,6 @@ DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
 			TransferSequenceOwnership(ownedSequenceId, targetRelationId, columnName);
 		}
 	}
-}
-
-
-/*
- * ExtractColumnsOwningSequences finds each column of relation with relationId
- * defaulting to an owned sequence. Then, appends the column name and id of the
- * owned sequence -that the column defaults- to the lists passed as NIL initially.
- */
-static void
-ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
-							  List **ownedSequenceIdList)
-{
-	Assert(*columnNameList == NIL && *ownedSequenceIdList == NIL);
-
-	Relation relation = relation_open(relationId, AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-
-	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
-		 attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
-		if (attributeForm->attisdropped || !attributeForm->atthasdef)
-		{
-			/*
-			 * If this column has already been dropped or it has no DEFAULT
-			 * definition, skip it.
-			 */
-			continue;
-		}
-
-		char *columnName = NameStr(attributeForm->attname);
-		*columnNameList = lappend(*columnNameList, columnName);
-
-		List *columnOwnedSequences =
-			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
-
-		Oid ownedSequenceId = InvalidOid;
-		if (list_length(columnOwnedSequences) != 0)
-		{
-			/*
-			 * A column might only own one sequence. We intentionally use
-			 * GetSequencesOwnedByColumn macro and pick initial oid from the
-			 * list instead of using getOwnedSequence. This is both because
-			 * getOwnedSequence is removed in pg13 and is also because it
-			 * errors out if column does not have any sequences.
-			 */
-			Assert(list_length(columnOwnedSequences) == 1);
-			ownedSequenceId = linitial_oid(columnOwnedSequences);
-		}
-
-		*ownedSequenceIdList = lappend_oid(*ownedSequenceIdList, ownedSequenceId);
-	}
-
-	relation_close(relation, NoLock);
 }
 
 
