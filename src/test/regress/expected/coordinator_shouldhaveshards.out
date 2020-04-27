@@ -375,13 +375,48 @@ NOTICE:  executing the command locally: SELECT a.count, b.x, b.y, c.a, c.b, d.co
    100 | 3 | 2 | 3 | 2 |     1
 (1 row)
 
+-- issue #3801
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE dist_table(a int);
+ERROR:  relation "dist_table" already exists
+SELECT create_distributed_table('dist_table', 'a');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+-- this will use perPlacementQueryStrings, make sure it works correctly with
+-- copying task
+INSERT INTO dist_table SELECT a + 1 FROM dist_table;
+ROLLBACK;
+BEGIN;
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE dist_table1(a int);
+-- this will use queryStringList, make sure it works correctly with
+-- copying task
+SELECT create_distributed_table('dist_table1', 'a');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503023, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table1 (a integer)');SELECT worker_apply_shard_ddl_command (1503023, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table1 OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503025, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table1 (a integer)');SELECT worker_apply_shard_ddl_command (1503025, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table1 OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503026, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table1 (a integer)');SELECT worker_apply_shard_ddl_command (1503026, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table1 OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1503028, 'coordinator_shouldhaveshards', 'CREATE TABLE coordinator_shouldhaveshards.dist_table1 (a integer)');SELECT worker_apply_shard_ddl_command (1503028, 'coordinator_shouldhaveshards', 'ALTER TABLE coordinator_shouldhaveshards.dist_table1 OWNER TO postgres')
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 RESET citus.enable_cte_inlining;
 DELETE FROM test;
 DROP TABLE test;
+DROP TABLE dist_table;
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table dist_table
-drop cascades to table ref
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table ref
 drop cascades to table ref_1503016
 drop cascades to table local
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);

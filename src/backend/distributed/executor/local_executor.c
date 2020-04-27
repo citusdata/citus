@@ -468,43 +468,40 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		/* either the local or the remote should be non-nil */
 		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
 
-		if (list_length(localTaskPlacementList) > 0)
+		if (localTaskPlacementList == NIL)
 		{
-			if (list_length(task->taskPlacementList) == 1)
-			{
-				*localTaskList = lappend(*localTaskList, task);
-			}
-			else
-			{
-				/*
-				 * At this point, we're dealing with reference tables or intermediate
-				 * results where the task has placements on both local and remote
-				 * nodes. We always prefer to use local placement, and require remote
-				 * placements only for modifications.
-				 */
-				task->partiallyLocalOrRemote = true;
-
-				Task *localTask = copyObject(task);
-
-				localTask->taskPlacementList = localTaskPlacementList;
-				*localTaskList = lappend(*localTaskList, localTask);
-
-				if (readOnly)
-				{
-					/* read-only tasks should only be executed on the local machine */
-				}
-				else
-				{
-					Task *remoteTask = copyObject(task);
-					remoteTask->taskPlacementList = remoteTaskPlacementList;
-
-					*remoteTaskList = lappend(*remoteTaskList, remoteTask);
-				}
-			}
+			*remoteTaskList = lappend(*remoteTaskList, task);
+		}
+		else if (remoteTaskPlacementList == NIL)
+		{
+			*localTaskList = lappend(*localTaskList, task);
 		}
 		else
 		{
-			*remoteTaskList = lappend(*remoteTaskList, task);
+			/*
+			 * At this point, we're dealing with a task that has placements on both
+			 * local and remote nodes.
+			 */
+			task->partiallyLocalOrRemote = true;
+
+			Task *localTask = copyObject(task);
+
+			localTask->taskPlacementList = localTaskPlacementList;
+			*localTaskList = lappend(*localTaskList, localTask);
+
+			if (readOnly)
+			{
+				/* read-only tasks should only be executed on the local machine */
+			}
+			else
+			{
+				/* since shard replication factor > 1, we should have at least 1 remote task */
+				Assert(remoteTaskPlacementList != NIL);
+				Task *remoteTask = copyObject(task);
+				remoteTask->taskPlacementList = remoteTaskPlacementList;
+
+				*remoteTaskList = lappend(*remoteTaskList, remoteTask);
+			}
 		}
 	}
 }
