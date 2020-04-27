@@ -5,7 +5,7 @@ INSERT INTO tt1 VALUES(1,2),(2,3),(3,4);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$cte_prepared_modify.tt1$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -17,7 +17,7 @@ INSERT INTO tt2 VALUES(3,3),(4,4),(5,5);
 SELECT create_distributed_table('tt2','id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$cte_prepared_modify.tt2$$)
  create_distributed_table
 ---------------------------------------------------------------------
