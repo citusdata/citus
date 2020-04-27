@@ -468,48 +468,43 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		/* either the local or the remote should be non-nil */
 		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
 
-		if (list_length(task->taskPlacementList) == 1)
+		if (list_length(localTaskPlacementList) > 0)
 		{
-			/*
-			 * At this point, the task has a single placement (e.g,. anchor shard
-			 * is distributed table's shard). So, it is either added to local or
-			 * remote taskList.
-			 */
-			if (localTaskPlacementList == NIL)
+			if (list_length(task->taskPlacementList) == 1)
 			{
-				*remoteTaskList = lappend(*remoteTaskList, task);
+				*localTaskList = lappend(*localTaskList, task);
 			}
 			else
 			{
-				*localTaskList = lappend(*localTaskList, task);
+				/*
+				 * At this point, we're dealing with reference tables or intermediate
+				 * results where the task has placements on both local and remote
+				 * nodes. We always prefer to use local placement, and require remote
+				 * placements only for modifications.
+				 */
+				task->partiallyLocalOrRemote = true;
+
+				Task *localTask = copyObject(task);
+
+				localTask->taskPlacementList = localTaskPlacementList;
+				*localTaskList = lappend(*localTaskList, localTask);
+
+				if (readOnly)
+				{
+					/* read-only tasks should only be executed on the local machine */
+				}
+				else
+				{
+					Task *remoteTask = copyObject(task);
+					remoteTask->taskPlacementList = remoteTaskPlacementList;
+
+					*remoteTaskList = lappend(*remoteTaskList, remoteTask);
+				}
 			}
 		}
 		else
 		{
-			/*
-			 * At this point, we're dealing with reference tables or intermediate
-			 * results where the task has placements on both local and remote
-			 * nodes. We always prefer to use local placement, and require remote
-			 * placements only for modifications.
-			 */
-			task->partiallyLocalOrRemote = true;
-
-			Task *localTask = copyObject(task);
-
-			localTask->taskPlacementList = localTaskPlacementList;
-			*localTaskList = lappend(*localTaskList, localTask);
-
-			if (readOnly)
-			{
-				/* read-only tasks should only be executed on the local machine */
-			}
-			else
-			{
-				Task *remoteTask = copyObject(task);
-				remoteTask->taskPlacementList = remoteTaskPlacementList;
-
-				*remoteTaskList = lappend(*remoteTaskList, remoteTask);
-			}
+			*remoteTaskList = lappend(*remoteTaskList, task);
 		}
 	}
 }

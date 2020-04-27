@@ -1012,6 +1012,11 @@ EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY 
 HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
 ORDER BY 1;
 
+WITH a as (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2)
+SELECT ct.value_1, count(*) FROM colocated_table_test ct join a on ct.value_1 = a.value_2
+WHERE exists (select * from a)
+GROUP BY 1 ORDER BY 1;
+
 -- clean up tables, ...
 SET client_min_messages TO ERROR;
 DROP SEQUENCE example_ref_value_seq;
