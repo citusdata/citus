@@ -1345,7 +1345,7 @@ DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 		char *qualifiedRelationName =
 			generate_qualified_relation_name(RelationGetRelid(distributedRelation));
 		ereport(NOTICE, (errmsg("copying the data has completed"),
-						 errdetail("The local data in the table is longer visible, "
+						 errdetail("The local data in the table is no longer visible, "
 								   "but is still on disk."),
 						 errhint("To remove the local data, run: SELECT "
 								 "truncate_local_data_after_distributing_table($$%s$$)",

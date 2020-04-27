@@ -561,7 +561,7 @@ SET search_path TO 'sc3';
 SELECT create_distributed_table('alter_add_prim_key', 'x');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc3.alter_add_prim_key$$)
  create_distributed_table
 ---------------------------------------------------------------------

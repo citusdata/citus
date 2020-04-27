@@ -981,7 +981,7 @@ SELECT 1 AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM gener
 SELECT create_distributed_table('trigger_flush','a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.trigger_flush$$)
  create_distributed_table
 ---------------------------------------------------------------------

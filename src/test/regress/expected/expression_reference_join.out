@@ -14,7 +14,7 @@ INSERT INTO test VALUES
 SELECT create_reference_table('ref');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$expression_reference_join.ref$$)
  create_reference_table
 ---------------------------------------------------------------------
@@ -24,7 +24,7 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 SELECT create_distributed_table('test', 'x');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$expression_reference_join.test$$)
  create_distributed_table
 ---------------------------------------------------------------------

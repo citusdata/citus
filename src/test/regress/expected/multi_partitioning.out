@@ -29,11 +29,11 @@ INSERT INTO partitioning_hash_test VALUES (4, 4);
 SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2009$$)
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2010$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -43,11 +43,11 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 SELECT create_distributed_table('partitioning_hash_test', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_hash_test_0$$)
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_hash_test_1$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -170,7 +170,7 @@ INSERT INTO partitioning_test_2012 VALUES (6, '2012-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES FROM ('2012-01-01') TO ('2013-01-01');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2012$$)
 -- attached partition is distributed as well
 SELECT
@@ -215,7 +215,7 @@ INSERT INTO partitioning_hash_test_2 VALUES (8, 5);
 ALTER TABLE partitioning_hash_test ATTACH PARTITION partitioning_hash_test_2 FOR VALUES WITH (MODULUS 3, REMAINDER 2);
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_hash_test_2$$)
 INSERT INTO partitioning_hash_test VALUES (9, 12);
 -- see the data is loaded to shards
@@ -711,7 +711,7 @@ INSERT INTO partitioning_test_reference SELECT a, a FROM generate_series(1, 50) 
 SELECT create_reference_table('partitioning_test_reference');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_reference$$)
  create_reference_table
 ---------------------------------------------------------------------
