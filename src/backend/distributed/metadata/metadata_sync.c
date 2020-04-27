@@ -36,6 +36,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_node.h"
@@ -54,6 +55,7 @@
 #include "utils/syscache.h"
 
 
+static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
@@ -384,6 +386,12 @@ MetadataCreateCommands(void)
 		Oid relationId = cacheEntry->relationId;
 		ObjectAddress tableAddress = { 0 };
 
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip table creation when the Citus table is owned by an extension */
+			continue;
+		}
+
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
@@ -407,8 +415,16 @@ MetadataCreateCommands(void)
 	/* construct the foreign key constraints after all tables are created */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
+		Oid relationId = cacheEntry->relationId;
+
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip foreign key creation when the Citus table is owned by an extension */
+			continue;
+		}
+
 		List *foreignConstraintCommands =
-			GetReferencingForeignConstaintCommands(cacheEntry->relationId);
+			GetReferencingForeignConstaintCommands(relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  foreignConstraintCommands);
@@ -417,10 +433,18 @@ MetadataCreateCommands(void)
 	/* construct partitioning hierarchy after all tables are created */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		if (PartitionTable(cacheEntry->relationId))
+		Oid relationId = cacheEntry->relationId;
+
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip partition creation when the Citus table is owned by an extension */
+			continue;
+		}
+
+		if (PartitionTable(relationId))
 		{
 			char *alterTableAttachPartitionCommands =
-				GenerateAlterTableAttachPartitionCommand(cacheEntry->relationId);
+				GenerateAlterTableAttachPartitionCommand(relationId);
 
 			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 												  alterTableAttachPartitionCommands);
@@ -461,7 +485,7 @@ MetadataCreateCommands(void)
  * sequences, setting the owner of the table, inserting table and shard metadata,
  * setting the truncate trigger and foreign key constraints.
  */
-List *
+static List *
 GetDistributedTableDDLEvents(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
@@ -469,17 +493,22 @@ GetDistributedTableDDLEvents(Oid relationId)
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
 
-	/* commands to create sequences */
-	List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-	commandList = list_concat(commandList, sequenceDDLCommands);
+	/* if the table is owned by an extension we only propagate pg_dist_* records */
+	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
+	if (!tableOwnedByExtension)
+	{
+		/* commands to create sequences */
+		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		commandList = list_concat(commandList, sequenceDDLCommands);
 
-	/* commands to create the table */
-	List *tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
-	commandList = list_concat(commandList, tableDDLCommands);
+		/* commands to create the table */
+		List *tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
+		commandList = list_concat(commandList, tableDDLCommands);
 
-	/* command to reset the table owner */
-	char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-	commandList = lappend(commandList, tableOwnerResetCommand);
+		/* command to reset the table owner */
+		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
+		commandList = lappend(commandList, tableOwnerResetCommand);
+	}
 
 	/* command to insert pg_dist_partition entry */
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
@@ -494,17 +523,20 @@ GetDistributedTableDDLEvents(Oid relationId)
 	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
 
-	/* commands to create foreign key constraints */
-	List *foreignConstraintCommands =
-		GetReferencingForeignConstaintCommands(relationId);
-	commandList = list_concat(commandList, foreignConstraintCommands);
-
-	/* commands to create partitioning hierarchy */
-	if (PartitionTable(relationId))
+	if (!tableOwnedByExtension)
 	{
-		char *alterTableAttachPartitionCommands =
-			GenerateAlterTableAttachPartitionCommand(relationId);
-		commandList = lappend(commandList, alterTableAttachPartitionCommands);
+		/* commands to create foreign key constraints */
+		List *foreignConstraintCommands =
+			GetReferencingForeignConstaintCommands(relationId);
+		commandList = list_concat(commandList, foreignConstraintCommands);
+
+		/* commands to create partitioning hierarchy */
+		if (PartitionTable(relationId))
+		{
+			char *alterTableAttachPartitionCommands =
+				GenerateAlterTableAttachPartitionCommand(relationId);
+			commandList = lappend(commandList, alterTableAttachPartitionCommands);
+		}
 	}
 
 	return commandList;

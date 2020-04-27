@@ -32,7 +32,6 @@ extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
-extern List * GetDistributedTableDDLEvents(Oid relationId);
 extern List * MetadataDropCommands(void);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,

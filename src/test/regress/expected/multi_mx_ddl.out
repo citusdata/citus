@@ -243,3 +243,65 @@ SELECT :worker_1_lastval = :worker_2_lastval;
 -- the type of sequences can't be changed
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;
 ALTER TABLE mx_sequence ALTER value TYPE INT;
+-- test distributed tables owned by extension
+CREATE TABLE seg_test (x int);
+INSERT INTO seg_test VALUES (42);
+-- pretend this table belongs to an extension
+CREATE EXTENSION seg;
+ALTER EXTENSION seg ADD TABLE seg_test;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+\c - - - :worker_1_port
+-- pretend the extension created the table on the worker as well
+CREATE TABLE seg_test (x int);
+ALTER EXTENSION seg ADD TABLE seg_test;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+\c - - - :worker_2_port
+-- pretend the extension created the table on the worker as well
+CREATE TABLE seg_test (x int);
+ALTER EXTENSION seg ADD TABLE seg_test;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+\c - - - :master_port
+-- sync table metadata, but skip CREATE TABLE
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+SET citus.replication_model TO streaming;
+SELECT create_distributed_table('seg_test', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.seg_test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+-- should be able to see contents from worker
+SELECT * FROM seg_test;
+ x
+---------------------------------------------------------------------
+ 42
+(1 row)
+
+\c - - - :master_port
+-- test metadata sync in the presence of an extension-owned table
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+-- should be able to see contents from worker
+SELECT * FROM seg_test;
+ x
+---------------------------------------------------------------------
+ 42
+(1 row)
+
+\c - - - :master_port
+-- also drops table on both worker and master
+DROP EXTENSION seg CASCADE;

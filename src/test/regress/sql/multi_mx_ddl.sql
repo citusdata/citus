@@ -129,3 +129,50 @@ SELECT :worker_1_lastval = :worker_2_lastval;
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;
 ALTER TABLE mx_sequence ALTER value TYPE INT;
 
+-- test distributed tables owned by extension
+CREATE TABLE seg_test (x int);
+INSERT INTO seg_test VALUES (42);
+
+-- pretend this table belongs to an extension
+CREATE EXTENSION seg;
+ALTER EXTENSION seg ADD TABLE seg_test;
+
+\c - - - :worker_1_port
+
+-- pretend the extension created the table on the worker as well
+CREATE TABLE seg_test (x int);
+ALTER EXTENSION seg ADD TABLE seg_test;
+
+\c - - - :worker_2_port
+
+-- pretend the extension created the table on the worker as well
+CREATE TABLE seg_test (x int);
+ALTER EXTENSION seg ADD TABLE seg_test;
+
+\c - - - :master_port
+
+-- sync table metadata, but skip CREATE TABLE
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+SET citus.replication_model TO streaming;
+SELECT create_distributed_table('seg_test', 'x');
+
+\c - - - :worker_1_port
+
+-- should be able to see contents from worker
+SELECT * FROM seg_test;
+
+\c - - - :master_port
+
+-- test metadata sync in the presence of an extension-owned table
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+\c - - - :worker_1_port
+
+-- should be able to see contents from worker
+SELECT * FROM seg_test;
+
+\c - - - :master_port
+
+-- also drops table on both worker and master
+DROP EXTENSION seg CASCADE;
