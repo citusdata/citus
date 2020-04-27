@@ -238,7 +238,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -255,7 +255,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -271,7 +271,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -289,7 +289,7 @@ ALTER TABLE data_load_test DROP COLUMN col1;
 SELECT create_distributed_table('data_load_test', 'col3');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -384,7 +384,7 @@ INSERT INTO rollback_table VALUES(3, 'Name_3');
 SELECT create_distributed_table('rollback_table','id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.rollback_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -514,7 +514,7 @@ INSERT INTO tt1 VALUES(1);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.tt1$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -573,7 +573,7 @@ CREATE TABLE stage_table (LIKE sample_table);
 SELECT create_distributed_table('stage_table', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.stage_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -647,7 +647,7 @@ insert into sc.ref SELECT s FROM generate_series(0, 100) s;
 SELECT create_reference_table('sc.ref');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc.ref$$)
  create_reference_table
 ---------------------------------------------------------------------
@@ -659,7 +659,7 @@ insert into sc.hash SELECT s FROM generate_series(0, 100) s;
 SELECT create_distributed_table('sc.hash', 'a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc.hash$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -675,7 +675,7 @@ insert into sc2.hash SELECT s FROM generate_series(0, 100) s;
 SELECT create_distributed_table('sc2.hash', 'a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc2.hash$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -687,7 +687,7 @@ insert into sc2.ref SELECT s FROM generate_series(0, 100) s;
 SELECT create_reference_table('sc2.ref');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc2.ref$$)
  create_reference_table
 ---------------------------------------------------------------------
@@ -731,7 +731,7 @@ ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX alter_replica_table
 SELECT create_distributed_table('alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc4.alter_replica_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -759,7 +759,7 @@ ALTER TABLE sc5.alter_replica_table REPLICA IDENTITY FULL;
 SELECT create_distributed_table('sc5.alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc5.alter_replica_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -787,7 +787,7 @@ ALTER TABLE sc6.alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
 SELECT create_distributed_table('sc6.alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sc6.alter_replica_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -814,7 +814,7 @@ ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
 SELECT create_distributed_table('alter_replica_table', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.alter_replica_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
