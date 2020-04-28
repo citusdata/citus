@@ -43,11 +43,17 @@ insert into gen2 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 select create_distributed_table('gen1', 'id');
 select create_distributed_table('gen2', 'val2');
 
+copy gen1 to :'temp_dir''pg12_copy_test_generated';
+
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 
 select * from gen1 order by 1,2,3;
 select * from gen2 order by 1,2,3;
+
+truncate gen1;
+copy gen1 from :'temp_dir''pg12_copy_test_generated';
+select * from gen1 order by 1,2,3;
 
 -- Test new VACUUM/ANALYZE options
 analyze (skip_locked) gen1;
