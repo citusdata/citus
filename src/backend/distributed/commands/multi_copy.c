@@ -264,6 +264,7 @@ static void EndPlacementStateCopyCommand(CopyPlacementState *placementState,
 static void UnclaimCopyConnections(List *connectionStateList);
 static void ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 										CitusCopyDestReceiver *copyDest);
+static SelectStmt * CitusCopySelect(CopyStmt *copyStatement);
 static void CitusCopyTo(CopyStmt *copyStatement, char *completionTag);
 static int64 ForwardCopyDataFromConnection(CopyOutState copyOutState,
 										   MultiConnection *connection);
@@ -2760,22 +2761,9 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			{
 				/*
 				 * COPY table TO PROGRAM / file is handled by wrapping the table
-				 * in a SELECT * FROM table and going through the result COPY logic.
+				 * in a SELECT and going through the resulting COPY logic.
 				 */
-				ColumnRef *allColumns = makeNode(ColumnRef);
-				SelectStmt *selectStmt = makeNode(SelectStmt);
-				ResTarget *selectTarget = makeNode(ResTarget);
-
-				allColumns->fields = list_make1(makeNode(A_Star));
-				allColumns->location = -1;
-
-				selectTarget->name = NULL;
-				selectTarget->indirection = NIL;
-				selectTarget->val = (Node *) allColumns;
-				selectTarget->location = -1;
-
-				selectStmt->targetList = list_make1(selectTarget);
-				selectStmt->fromClause = list_make1(copyObject(copyStatement->relation));
+				SelectStmt *selectStmt = CitusCopySelect(copyStatement);
 
 				/* replace original statement */
 				copyStatement = copyObject(copyStatement);
@@ -2834,6 +2822,53 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 
 
 	return (Node *) copyStatement;
+}
+
+
+/*
+ * CitusCopySelect generates a SelectStmt such that table may be replaced in
+ * "COPY table FROM" for an equivalent result.
+ */
+static SelectStmt *
+CitusCopySelect(CopyStmt *copyStatement)
+{
+	SelectStmt *selectStmt = makeNode(SelectStmt);
+	selectStmt->fromClause = list_make1(copyObject(copyStatement->relation));
+
+	Relation distributedRelation = heap_openrv(copyStatement->relation, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+	List *targetList = NIL;
+
+	for (int i = 0; i < tupleDescriptor->natts; i++)
+	{
+		Form_pg_attribute attr = &tupleDescriptor->attrs[i];
+
+		if (attr->attisdropped
+#if PG_VERSION_NUM >= PG_VERSION_12
+			|| attr->attgenerated
+#endif
+			)
+		{
+			continue;
+		}
+
+		ColumnRef *column = makeNode(ColumnRef);
+		column->fields = list_make1(makeString(pstrdup(attr->attname.data)));
+		column->location = -1;
+
+		ResTarget *selectTarget = makeNode(ResTarget);
+		selectTarget->name = NULL;
+		selectTarget->indirection = NIL;
+		selectTarget->val = (Node *) column;
+		selectTarget->location = -1;
+
+		targetList = lappend(targetList, selectTarget);
+	}
+
+	heap_close(distributedRelation, NoLock);
+
+	selectStmt->targetList = targetList;
+	return selectStmt;
 }
 
 
@@ -3061,6 +3096,10 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 		{
 			if (TupleDescAttr(tupDesc, i)->attisdropped)
 				continue;
+#if PG_VERSION_NUM >= PG_VERSION_12
+			if (TupleDescAttr(tupDesc, i)->attgenerated)
+				continue;
+#endif
 			attnums = lappend_int(attnums, i + 1);
 		}
 	}
@@ -3085,6 +3124,14 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 					continue;
 				if (namestrcmp(&(att->attname), name) == 0)
 				{
+#if PG_VERSION_NUM >= PG_VERSION_12
+					if (att->attgenerated)
+						ereport(ERROR,
+								(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+								 errmsg("column \"%s\" is a generated column",
+										name),
+								 errdetail("Generated columns cannot be used in COPY.")));
+#endif
 					attnum = att->attnum;
 					break;
 				}
