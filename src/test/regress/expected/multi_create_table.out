@@ -202,7 +202,7 @@ HINT:  Empty your table before distributing it.
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -264,7 +264,7 @@ INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -288,7 +288,7 @@ INSERT INTO data_load_test1 VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test1', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test1$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -300,7 +300,7 @@ INSERT INTO data_load_test2 VALUES (132, 'world');
 SELECT create_distributed_table('data_load_test2', 'col1');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.data_load_test2$$)
  create_distributed_table
 ---------------------------------------------------------------------

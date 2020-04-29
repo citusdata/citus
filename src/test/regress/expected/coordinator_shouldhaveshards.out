@@ -146,7 +146,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -182,7 +182,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -382,7 +382,7 @@ ERROR:  relation "dist_table" already exists
 SELECT create_distributed_table('dist_table', 'a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$coordinator_shouldhaveshards.dist_table$$)
  create_distributed_table
 ---------------------------------------------------------------------

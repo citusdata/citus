@@ -228,7 +228,7 @@ INSERT INTO tt1 VALUES (1,11), (3,15), (5,17), (6,19), (8,17), (2,12);
 SELECT create_distributed_table('tt1','id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.tt1_1120$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -345,7 +345,7 @@ INSERT INTO test_table_1 VALUES(3, '2111-01-12 08:35:19', 9);
 SELECT create_distributed_table('test_table_1', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_table_1$$)
  create_distributed_table
 ---------------------------------------------------------------------
@@ -800,7 +800,7 @@ INSERT INTO test_table_2 VALUES(3, random());
 SELECT create_distributed_table('test_table_2', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_table_2$$)
  create_distributed_table
 ---------------------------------------------------------------------

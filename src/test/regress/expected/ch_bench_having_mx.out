@@ -324,7 +324,7 @@ insert into stock VALUES
 SELECT create_distributed_table('stock','s_w_id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is longer visible, but is still on disk.
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$ch_bench_having.stock$$)
  create_distributed_table
 ---------------------------------------------------------------------
