@@ -25,14 +25,11 @@ cd citus-enterprise
 git config user.email "citus-bot@microsoft.com"
 git config user.name "citus bot"
 
-# reset repostiroy into usable state if script ran before
+# reset repository into usable state if script ran before
 git fetch origin
 git reset --hard
 git checkout enterprise-master
 git reset --hard origin/enterprise-master
-
-# echo commands
-set -x
 
 branch_name="${CIRCLE_BRANCH}"
 
