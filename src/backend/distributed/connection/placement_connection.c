@@ -294,6 +294,13 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
 														   userName, NULL);
 
+		/*
+		 * chosenConnection can only be NULL for optional connections, which we
+		 * don't support in this codepath.
+		 */
+		Assert((flags & OPTIONAL_CONNECTION) == 0);
+		Assert(chosenConnection != NULL);
+
 		if ((flags & CONNECTION_PER_PLACEMENT) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
@@ -313,6 +320,13 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 															   FORCE_NEW_CONNECTION,
 															   nodeName, nodePort,
 															   userName, NULL);
+
+			/*
+			 * chosenConnection can only be NULL for optional connections,
+			 * which we don't support in this codepath.
+			 */
+			Assert((flags & OPTIONAL_CONNECTION) == 0);
+			Assert(chosenConnection != NULL);
 
 			Assert(!ConnectionAccessedDifferentPlacement(chosenConnection, placement));
 		}

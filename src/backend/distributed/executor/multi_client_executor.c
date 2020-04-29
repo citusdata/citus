@@ -150,6 +150,13 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																  nodeName, nodePort,
 																  userName, nodeDatabase);
+
+	/*
+	 * connection can only be NULL for optional connections, which we don't
+	 * support in this codepath.
+	 */
+	Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
+	Assert(connection != NULL);
 	ConnStatusType connStatusType = PQstatus(connection->pgConn);
 
 	/*
