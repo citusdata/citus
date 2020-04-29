@@ -14,6 +14,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/listutils.h"
 #include "utils/datum.h"
 
 
@@ -70,6 +71,18 @@ CitusSetTag(Node *node, int tag)
 		{ \
 			newnode->fldname[i] = from->fldname[i]; \
 		} \
+	} \
+	while (0)
+
+#define COPY_STRING_LIST(fldname) \
+	do { \
+		char *curString = NULL; \
+		List *newList = NIL; \
+		foreach_ptr(curString, from->fldname) { \
+			char *newString = curString ? pstrdup(curString) : (char *) NULL; \
+			newList = lappend(newList, newString); \
+		} \
+		newnode->fldname = newList; \
 	} \
 	while (0)
 
@@ -271,13 +284,13 @@ CopyTaskQuery(Task *newnode, Task *from)
 
 		case TASK_QUERY_TEXT_PER_PLACEMENT:
 		{
-			COPY_NODE_FIELD(taskQuery.data.perPlacementQueryStrings);
+			COPY_STRING_LIST(taskQuery.data.perPlacementQueryStrings);
 			break;
 		}
 
 		case TASK_QUERY_TEXT_LIST:
 		{
-			COPY_NODE_FIELD(taskQuery.data.queryStringList);
+			COPY_STRING_LIST(taskQuery.data.queryStringList);
 			break;
 		}
 

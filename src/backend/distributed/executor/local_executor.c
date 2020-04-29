@@ -468,29 +468,19 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		/* either the local or the remote should be non-nil */
 		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
 
-		if (list_length(task->taskPlacementList) == 1)
+		if (localTaskPlacementList == NIL)
 		{
-			/*
-			 * At this point, the task has a single placement (e.g,. anchor shard
-			 * is distributed table's shard). So, it is either added to local or
-			 * remote taskList.
-			 */
-			if (localTaskPlacementList == NIL)
-			{
-				*remoteTaskList = lappend(*remoteTaskList, task);
-			}
-			else
-			{
-				*localTaskList = lappend(*localTaskList, task);
-			}
+			*remoteTaskList = lappend(*remoteTaskList, task);
+		}
+		else if (remoteTaskPlacementList == NIL)
+		{
+			*localTaskList = lappend(*localTaskList, task);
 		}
 		else
 		{
 			/*
-			 * At this point, we're dealing with reference tables or intermediate
-			 * results where the task has placements on both local and remote
-			 * nodes. We always prefer to use local placement, and require remote
-			 * placements only for modifications.
+			 * At this point, we're dealing with a task that has placements on both
+			 * local and remote nodes.
 			 */
 			task->partiallyLocalOrRemote = true;
 
@@ -505,6 +495,8 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			}
 			else
 			{
+				/* since shard replication factor > 1, we should have at least 1 remote task */
+				Assert(remoteTaskPlacementList != NIL);
 				Task *remoteTask = copyObject(task);
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 

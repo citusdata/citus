@@ -155,11 +155,29 @@ SELECT * FROM ref JOIN local ON (a = x);
 -- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
 WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
 
+-- issue #3801
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE dist_table(a int);
+SELECT create_distributed_table('dist_table', 'a');
+BEGIN;
+-- this will use perPlacementQueryStrings, make sure it works correctly with
+-- copying task
+INSERT INTO dist_table SELECT a + 1 FROM dist_table;
+ROLLBACK;
+
+BEGIN;
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE dist_table1(a int);
+-- this will use queryStringList, make sure it works correctly with
+-- copying task
+SELECT create_distributed_table('dist_table1', 'a');
+ROLLBACK;
 
 RESET citus.enable_cte_inlining;
 
 DELETE FROM test;
 DROP TABLE test;
+DROP TABLE dist_table;
 
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
 
