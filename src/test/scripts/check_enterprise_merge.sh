@@ -16,32 +16,43 @@ try_merge() {
 
 }
 
-git config --global user.email "citus-bot@microsoft.com" 
-git config --global user.name "citus bot" 
+cd /tmp
+if [ ! -d citus-enterprise ]; then
+    git clone https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise
+fi
 
-cd ~
-git clone https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise
 cd citus-enterprise
-git fetch --all
+git config user.email "citus-bot@microsoft.com"
+git config user.name "citus bot"
+
+# reset repostiroy into usable state if script ran before
+git fetch origin
+git reset --hard
+git checkout enterprise-master
+git reset --hard origin/enterprise-master
 
 # echo commands
 set -x
-git branch -r --list
 
 branch_name="${CIRCLE_BRANCH}"
 
 # check if the branch on community exists on enterprise
 # the output will not be empty if it does
 if [ `git branch -r --list origin/$branch_name` ]
-then 
+then
     try_merge enterprise-master origin/$branch_name
 else
-    # add community as a remote 
-    git remote add --no-tags community git@github.com:citusdata/citus.git
-    # prevent pushes to community
+    # add community as a remote if not already added
+    set +e
+    if ! git ls-remote community > /dev/null; then
+        set -e
+        git remote add --no-tags community git@github.com:citusdata/citus.git
+    fi
+    set -e
+
+    # prevent pushes to community and update branch we care about
     git remote set-url --push community no-pushing
-    git fetch --all
+    git fetch community $branch_name
+
     try_merge enterprise-master community/$branch_name
 fi
-
-
