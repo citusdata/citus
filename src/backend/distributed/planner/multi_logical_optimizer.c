@@ -1951,6 +1951,66 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
+//	else if (aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE)
+//	{
+//		/* tdigest of column */
+//		/* TODO read from catalog */
+//		Oid tdigestType = 16831; /* tdigest type */
+//		Oid unionFunctionId = 16844; /* tdigest_percentile(tdigest, double) */
+//
+//		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
+//		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
+//
+//		/* create first argument for tdigest_precentile(tdigest, double) */
+//		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
+//									 tdigestReturnTypeMod, tdigestTypeCollationId, columnLevelsUp);
+//		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn, 1,
+//													   NULL, false);
+//		walkerContext->columnId++;
+//
+//		/* construct the master tdigest_precentile(tdigest, double) expression */
+//		Aggref *unionAggregate = makeNode(Aggref);
+//		unionAggregate->aggfnoid = unionFunctionId;
+//		unionAggregate->aggtype = originalAggregate->aggtype;
+//		unionAggregate->args = list_make2(tdigestTargetEntry, list_nth(originalAggregate->args, 2));
+//		unionAggregate->aggkind = AGGKIND_NORMAL;
+//		unionAggregate->aggfilter = NULL;
+//		unionAggregate->aggtranstype = InvalidOid;
+//		unionAggregate->aggargtypes = list_make2_oid(tdigestType, list_nth_oid(originalAggregate->aggargtypes, 2));
+//		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+//
+//		newMasterExpression = (Expr *) unionAggregate;
+//	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE)
+	{
+		/* tdigest of column */
+		/* TODO read from catalog */
+		Oid tdigestType = 16831; /* tdigest type */
+		Oid unionFunctionId = 16844; /* tdigest_percentile(tdigest, double) */
+
+		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
+
+		/* create first argument for tdigest_precentile(tdigest, double) */
+		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
+									 tdigestReturnTypeMod, tdigestTypeCollationId, columnLevelsUp);
+		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn, 1,
+														  NULL, false);
+		walkerContext->columnId++;
+
+		/* construct the master tdigest_precentile(tdigest, double) expression */
+		Aggref *unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = originalAggregate->aggtype;
+		unionAggregate->args = list_make2(tdigestTargetEntry, list_nth(originalAggregate->args, 2));
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make2_oid(tdigestType, list_nth_oid(originalAggregate->aggargtypes, 2));
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
 	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		HeapTuple aggTuple =
@@ -3079,6 +3139,24 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE)
+	{
+		/* tdigest(var) */
+		Aggref *newWorkerAggregate = copyObject(originalAggregate);
+		newWorkerAggregate->aggfnoid = 16838;g
+		newWorkerAggregate->aggtype = 16831;
+		newWorkerAggregate->args = list_make2(
+			list_nth(newWorkerAggregate->args, 0),
+			list_nth(newWorkerAggregate->args, 1));
+		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+		newWorkerAggregate->aggtranstype = InvalidOid;
+		newWorkerAggregate->aggargtypes = list_make2_oid(
+			list_nth_oid(newWorkerAggregate->aggargtypes,0),
+			list_nth_oid(newWorkerAggregate->aggargtypes,1));
+		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
+	}
 	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		HeapTuple aggTuple =
@@ -3176,6 +3254,17 @@ GetAggregateType(Aggref *aggregateExpression)
 		{
 			return aggregateIndex;
 		}
+	}
+
+	/* TODO read from catalog */
+	if (aggFunctionId == 16838)
+	{
+		return AGGREGATE_TDIGEST_ADD_DOUBLE;
+	}
+
+	if (aggFunctionId == 16827)
+	{
+		return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE;
 	}
 
 	if (AggregateEnabledCustom(aggregateExpression))
